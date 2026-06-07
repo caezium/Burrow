@@ -51,7 +51,7 @@ struct RootView: View {
             SoftwareView(isActive: pane == .tool(.apps)).tabVisible(pane == .tool(.apps))
             CleanView().tabVisible(pane == .tool(.clean))
             StreamingToolView(action: .purge).tabVisible(pane == .tool(.purge))
-            StreamingToolView(action: .installer).tabVisible(pane == .tool(.installer))
+            InstallerView(isActive: pane == .tool(.installer)).tabVisible(pane == .tool(.installer))
             OptimizeView().tabVisible(pane == .tool(.optimize))
 
             if pane == .settings {
