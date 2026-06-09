@@ -161,30 +161,20 @@ final class UpdatesModel: ObservableObject {
     private struct BrewResult { let out: String; let err: String; let code: Int32 }
 
     private static func runBrew(_ brew: String, _ args: [String], timeout: TimeInterval = 120) -> BrewResult {
-        let t = Process()
-        t.executableURL = URL(fileURLWithPath: brew)
-        t.arguments = args
         var env = Foundation.ProcessInfo.processInfo.environment
         let dir = (brew as NSString).deletingLastPathComponent
         env["PATH"] = "\(dir):/usr/bin:/bin:/usr/sbin:/sbin:" + (env["PATH"] ?? "")
-        t.environment = env
-        let outPipe = Pipe(); let errPipe = Pipe()
-        t.standardOutput = outPipe; t.standardError = errPipe
-        do { try t.run() } catch { return BrewResult(out: "", err: "\(error)", code: -1) }
-
-        // Read both pipes concurrently so neither fills and deadlocks.
-        var errData = Data()
-        let errQ = DispatchQueue(label: "dev.caezium.burrow.brew.err")
-        errQ.async { errData = errPipe.fileHandleForReading.readDataToEndOfFile() }
-        let killer = DispatchWorkItem { if t.isRunning { t.terminate() } }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: killer)
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        t.waitUntilExit()
-        killer.cancel()
-        errQ.sync {}
-        return BrewResult(out: String(data: outData, encoding: .utf8) ?? "",
-                          err: String(data: errData, encoding: .utf8) ?? "",
-                          code: t.terminationStatus)
+        do {
+            let result = try MoleProcess.capture(
+                executable: brew,
+                args: args,
+                environment: env,
+                timeout: timeout
+            )
+            return BrewResult(out: result.stdout, err: result.stderr, code: result.exitCode)
+        } catch {
+            return BrewResult(out: "", err: "\(error)", code: -1)
+        }
     }
 
     /// Pure parser for `brew outdated --json=v2` — unit-tested against captured
