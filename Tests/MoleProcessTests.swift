@@ -132,4 +132,43 @@ final class MoleProcessTests: XCTestCase {
         XCTAssertEqual(fake.receivedStdin, "yes\n")
         XCTAssertEqual(fake.receivedTimeout, 3)
     }
+
+    /// The point of draining stderr concurrently with stdout: a child can emit
+    /// far more than the ~64 KB pipe buffer without deadlocking. Reading stdout
+    /// AFTER waitUntilExit (the old `MoleCLI.run`) would hang until the timeout
+    /// killed the child and return truncated output. This locks the fix in.
+    func testSystemCapture_capturesLargeOutputWithoutDeadlockOrTruncation() throws {
+        let start = Date()
+        // seq 1…30000 is ~166 KB of stdout — well past one pipe buffer.
+        let result = try SystemMoleProcess().capture(
+            executable: "/usr/bin/seq", args: ["1", "30000"],
+            stdin: nil, environment: nil, timeout: 10)
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(result.exitCode, 0, "seq must complete, not be killed by the timeout")
+        XCTAssertLessThan(elapsed, 5.0, "must not hang until the timeout")
+        XCTAssertGreaterThan(result.stdout.utf8.count, 100_000, "full output, not a one-buffer truncation")
+        XCTAssertEqual(result.stdout.split(separator: "\n").last.map(String.init), "30000")
+    }
+
+    func testSystemCapture_appliesProvidedEnvironment() throws {
+        // The brew path's whole reason for passing environment is its augmented
+        // PATH — assert the child actually sees the env we pass.
+        let result = try SystemMoleProcess().capture(
+            executable: "/bin/sh", args: ["-c", "printf %s \"$BURROW_TEST\""],
+            stdin: nil, environment: ["BURROW_TEST": "applied", "PATH": "/usr/bin:/bin"], timeout: 5)
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stdout, "applied")
+    }
+
+    func testSystemCapture_separatesStdoutAndStderr() throws {
+        let result = try SystemMoleProcess().capture(
+            executable: "/bin/sh", args: ["-c", "echo to-out; echo to-err 1>&2"],
+            stdin: nil, environment: nil, timeout: 5)
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "to-out")
+        XCTAssertEqual(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines), "to-err")
+    }
 }

@@ -107,14 +107,16 @@ enum MoleCLI {
         let exitCode: Int32
     }
 
+    /// The subprocess runner. Production uses `SystemMoleProcess`; tests inject
+    /// a fake (reset in `tearDown`). Test-only seam — not a configuration point.
     internal static var processPort: MoleProcessPort = SystemMoleProcess()
 
     /// Run an executable with the given args, capturing stdout + stderr.
     /// Blocks until the process exits — callers are responsible for
     /// running this on a background queue. Times out after `timeout`
-    /// seconds; on timeout the process is terminated and we throw, rather
-    /// than returning a partial result, because callers always want
-    /// either a complete snapshot or to retry.
+    /// seconds; on timeout the process is terminated and the call returns a
+    /// non-zero `exitCode` (it does NOT throw). Callers treat any non-zero
+    /// exit as failure rather than distinguishing timeout from other errors.
     ///
     /// `stdin` feeds the child's standard input then closes it (EOF). This
     /// is how the uninstall flow answers Mole's `Proceed? [y/N]` and

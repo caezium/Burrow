@@ -22,11 +22,13 @@ protocol MoleProcessPort {
 }
 
 struct SystemMoleProcess: MoleProcessPort {
+    // Defaults live on `MoleProcess.capture`; the protocol witness takes every
+    // argument explicitly (concrete defaults would be unreachable through the port).
     func capture(executable: String,
                  args: [String],
                  stdin: String?,
-                 environment: [String: String]? = nil,
-                 timeout: TimeInterval = 10) throws -> MoleProcessResult {
+                 environment: [String: String]?,
+                 timeout: TimeInterval) throws -> MoleProcessResult {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: executable)
         task.arguments = args
@@ -56,6 +58,13 @@ struct SystemMoleProcess: MoleProcessPort {
 
         // Write canned input and close the write end so the child sees EOF.
         // Ignore failures: a child that exits early can make this EPIPE.
+        //
+        // NOTE: stdin is written here on the caller's thread, BEFORE stdout is
+        // drained below. That's safe only while `stdin` is small relative to the
+        // OS pipe buffer (~64 KB) — every caller today feeds a few bytes (e.g.
+        // "y\n"). A large stdin to a child that echoes it could deadlock (child
+        // blocks writing stdout while we block writing stdin); if that's ever
+        // needed, move this write onto its own queue too.
         if let inPipe, let stdin, let data = stdin.data(using: .utf8) {
             let handle = inPipe.fileHandleForWriting
             try? handle.write(contentsOf: data)
