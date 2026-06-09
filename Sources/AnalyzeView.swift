@@ -117,6 +117,11 @@ struct AnalyzeView: View {
         }
         .buttonStyle(.plain)
         .disabled(!e.isDir)
+        .contextMenu {
+            Button(NSLocalizedString("Reveal in Finder", comment: "")) { AnalyzeIcons.reveal(e.path) }
+            Divider()
+            Button(NSLocalizedString("Move to Trash", comment: ""), role: .destructive) { model.trash(e) }
+        }
     }
 
     // MARK: Main
@@ -137,7 +142,9 @@ struct AnalyzeView: View {
                             .multilineTextAlignment(.center).frame(maxWidth: 340)
                     }
                 } else {
-                    TreemapView(entries: model.entries) { e in model.drill(into: e) }
+                    TreemapView(entries: model.entries,
+                                onOpen: { e in model.drill(into: e) },
+                                onTrash: { e in model.trash(e) })
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,6 +154,14 @@ struct AnalyzeView: View {
 
     private var toolbar: some View {
         HStack(spacing: 6) {
+            Button { model.goUp() } label: {
+                Image(systemName: "arrow.up").font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(model.canGoUp ? Brand.textSecondary : Brand.textTertiary.opacity(0.35))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).disabled(!model.canGoUp)
+            .help(NSLocalizedString("Go up", comment: ""))
             ForEach(Array(model.crumbs.enumerated()), id: \.offset) { idx, crumb in
                 if idx > 0 {
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
@@ -175,7 +190,8 @@ struct AnalyzeView: View {
 struct TreemapView: View {
     let entries: [DiskScanEntry]
     let onOpen: (DiskScanEntry) -> Void
-    @State private var hovered: String?
+    var onTrash: (DiskScanEntry) -> Void = { _ in }
+    @State private var hoveredID: String?
 
     private static let palette: [Color] = [
         Color(hex: 0x4FA3E3), Color(hex: 0x57C2A5), Color(hex: 0xE6A93C),
@@ -188,31 +204,39 @@ struct TreemapView: View {
             let shown = Array(entries.filter { $0.size > 0 }.prefix(120))
             let rects = Treemap.layout(weights: shown.map { Double($0.size) },
                                        in: CGRect(x: 0, y: 0, width: geo.size.width, height: geo.size.height))
-            ZStack(alignment: .topLeading) {
+            ZStack {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, e in
-                    block(e, rects[i], color: Self.palette[i % Self.palette.count])
+                    block(e, rects[i], color: Self.palette[i % Self.palette.count], isHover: hoveredID == e.id)
                 }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
     @ViewBuilder
-    private func block(_ e: DiskScanEntry, _ r: CGRect, color: Color) -> some View {
+    private func block(_ e: DiskScanEntry, _ r: CGRect, color: Color, isHover: Bool) -> some View {
         let w = max(0, r.width - 2)
         let h = max(0, r.height - 2)
-        let isHover = hovered == e.id
         RoundedRectangle(cornerRadius: 4, style: .continuous)
             .fill(LinearGradient(colors: [color.opacity(isHover ? 0.95 : 0.8), color.opacity(isHover ? 0.7 : 0.55)],
                                  startPoint: .top, endPoint: .bottom))
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.black.opacity(0.25), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(isHover ? Color.white.opacity(0.6) : Color.black.opacity(0.25), lineWidth: 1))
             .overlay(label(e, w: w, h: h))
             .frame(width: w, height: h)
-            .offset(x: r.minX + 1, y: r.minY + 1)
-            .onHover { hovered = $0 ? e.id : (hovered == e.id ? nil : hovered) }
+            // `.position` (not `.offset`) so each cell's hit-test region tracks
+            // its drawn rect — `.offset` left hit-testing at the layout origin,
+            // which both lit the wrong square AND made only the first cell
+            // clickable.
+            .position(x: r.midX, y: r.midY)
+            .onHover { inside in
+                if inside { hoveredID = e.id } else if hoveredID == e.id { hoveredID = nil }
+            }
             .onTapGesture { onOpen(e) }
             .contextMenu {
-                Button("Reveal in Finder") { AnalyzeIcons.reveal(e.path) }
-                if e.isDir { Button("Open here") { onOpen(e) } }
+                Button(NSLocalizedString("Reveal in Finder", comment: "")) { AnalyzeIcons.reveal(e.path) }
+                if e.isDir { Button(NSLocalizedString("Open here", comment: "")) { onOpen(e) } }
+                Divider()
+                Button(NSLocalizedString("Move to Trash", comment: ""), role: .destructive) { onTrash(e) }
             }
     }
 
@@ -291,6 +315,52 @@ final class AnalyzeModel: ObservableObject {
         guard let last = crumbs.last else { return }
         cache[last.path] = nil   // drop the cached walk so we re-scan
         scan(last.path, name: last.name, push: false, force: true)
+    }
+
+    /// Whether there's a parent to climb to (Home isn't the ceiling — you can
+    /// go up to /Users, /, external volumes, …). False only at the filesystem root.
+    var canGoUp: Bool {
+        guard let p = crumbs.first?.path, !p.isEmpty else { return false }
+        return p != "/"
+    }
+
+    /// Climb to the parent of the current root, making it the new breadcrumb root.
+    func goUp() {
+        guard let root = crumbs.first else { return }
+        let parent = (root.path as NSString).deletingLastPathComponent
+        guard !parent.isEmpty, parent != root.path else { return }
+        let name = parent == "/" ? "/" : (parent as NSString).lastPathComponent
+        crumbs = []
+        scan(parent, name: name.isEmpty ? "/" : name, push: true)
+    }
+
+    /// Move an item to the Trash (recoverable), after an explicit confirm. The
+    /// treemap is exactly where you spot a forgotten 8 GB folder, so removing it
+    /// shouldn't mean leaving for Finder. Updates the view in place and drops the
+    /// current folder's cached walk so a later refresh recomputes honestly.
+    func trash(_ e: DiskScanEntry) {
+        let alert = NSAlert()
+        alert.messageText = String(format: NSLocalizedString("Move \u{201C}%@\u{201D} to Trash?", comment: ""), e.name)
+        alert.informativeText = String(format: NSLocalizedString("This moves %@ (%@) to the Trash, where you can restore it.", comment: ""),
+                                       e.isDir ? NSLocalizedString("this folder", comment: "") : NSLocalizedString("this file", comment: ""),
+                                       Fmt.bytes(e.size))
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: NSLocalizedString("Move to Trash", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        do {
+            try FileManager.default.trashItem(at: URL(fileURLWithPath: e.path), resultingItemURL: nil)
+            entries.removeAll { $0.id == e.id }
+            total = max(0, total - e.size)
+            if let last = crumbs.last { cache[last.path] = nil }
+        } catch {
+            let err = NSAlert()
+            err.messageText = NSLocalizedString("Couldn't move to Trash", comment: "")
+            err.informativeText = error.localizedDescription
+            err.alertStyle = .warning
+            err.runModal()
+        }
     }
 
     private func scan(_ path: String, name: String, push: Bool, force: Bool = false) {

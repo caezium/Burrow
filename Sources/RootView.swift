@@ -16,7 +16,7 @@ struct RootView: View {
 
     @State private var pane: Pane
 
-    init(db: DB, sampler: Sampler, delegate: AppDelegate?, initialPane: Pane = .tool(.status)) {
+    init(db: DB, sampler: Sampler, delegate: AppDelegate?, initialPane: Pane = .home) {
         self.db = db
         self.sampler = sampler
         self.delegate = delegate
@@ -45,18 +45,17 @@ struct RootView: View {
         .onDisappear { sampler.setForeground(false) }
     }
 
-    /// Panes whose charts want live, high-cadence data.
+    /// Panes whose charts want live, high-cadence data. Home's Overview /
+    /// History both do.
     static func isMetricsPane(_ p: Pane) -> Bool {
-        p == .tool(.status) || p == .history
+        p == .home
     }
 
-    // Tools stay alive (preserving in-flight `mo` jobs); the two utility
-    // panes carry no session, so they're created on demand and torn down
-    // when you leave — same lightweight pattern, fewer live timers.
+    // Tools stay alive (preserving in-flight `mo` jobs); Home and Settings
+    // carry live timers we'd rather not run off-screen, so they're created on
+    // demand and torn down when you leave.
     private var content: some View {
         ZStack {
-            StatusView(db: db, sampler: sampler, onNavigate: { pane = $0 })
-                .tabVisible(pane == .tool(.status))
             AnalyzeView(isActive: pane == .tool(.analyze)).tabVisible(pane == .tool(.analyze))
             SoftwareView(isActive: pane == .tool(.apps)).tabVisible(pane == .tool(.apps))
             CleanView().tabVisible(pane == .tool(.clean))
@@ -64,14 +63,11 @@ struct RootView: View {
             MoInteractiveView(.installer, isActive: pane == .tool(.installer)).tabVisible(pane == .tool(.installer))
             OptimizeView().tabVisible(pane == .tool(.optimize))
 
+            if pane == .home {
+                HomeView(db: db, sampler: sampler, onNavigate: { pane = $0 })
+            }
             if pane == .settings {
                 SettingsView(onRunMaintenance: { [weak delegate] in delegate?.maintenance?.runNow() })
-            }
-            if pane == .history {
-                HistoryView(db: db)
-            }
-            if pane == .activity {
-                ActivityView()
             }
         }
     }

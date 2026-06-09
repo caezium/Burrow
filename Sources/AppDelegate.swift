@@ -39,12 +39,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// across the window-creation boundary; cleared once the window's
     /// content view reads it.
     private var mainWC: NSWindowController?
-    fileprivate var pendingInitialPane: Pane = .tool(.status)
+    fileprivate var pendingInitialPane: Pane = .home
 
     private var installWC: NSWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+
+        // Anonymous, opt-out, once-per-day. Fired before the `mo` gate so a
+        // launch with the engine missing still counts (a useful signal).
+        Telemetry.ping()
 
         // No engine yet → guided install instead of a dead-end quit. The
         // window's Recheck calls startServices() once `mo` is found.
@@ -109,6 +113,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.sampler = sampler
         sampler.start()
 
+        // Always-on 1 s network + disk reader: feeds the live Home tiles AND the
+        // History charts so both update at the same (fast) cadence. (We're on the
+        // main thread at launch; assumeIsolated satisfies the @MainActor reader.)
+        MainActor.assumeIsolated { IOMonitor.shared.start() }
+
         let maintenance = Maintenance(db: db)
         self.maintenance = maintenance
         maintenance.start()
@@ -123,15 +132,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // open the window on launch so it stays reachable (issue #4).
         if !Store.showMenuBarIcon, #available(macOS 14, *) {
             NSApp.setActivationPolicy(.regular)
-            self.openMainWindow(initial: .tool(.status))
+            self.openMainWindow(initial: .home)
         }
 
         // Dev affordance: launch with BURROW_OPEN_ON_LAUNCH=1 to pop the
         // main window straight away (used for screenshot/verify loops).
         if let tab = Foundation.ProcessInfo.processInfo.environment["BURROW_OPEN_ON_LAUNCH"],
            #available(macOS 14, *) {
-            let pane: Pane = (tab == "settings") ? .settings : (tab == "history") ? .history
-                : .tool(Tool(rawValue: tab) ?? .status)
+            let pane: Pane
+            if tab == "settings" { pane = .settings }
+            else if tab == "home" || tab == "status" || tab == "history" || tab == "activity" { pane = .home }
+            else if let tool = Tool(rawValue: tab), Tool.navOrder.contains(tool) { pane = .tool(tool) }
+            else { pane = .home }
             self.openMainWindow(initial: pane)
         }
     }
@@ -152,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// window forward. Used by every popover action button —
     /// `openMainWindow(initial: .cleanup)` etc.
     @available(macOS 14.0, *)
-    func openMainWindow(initial: Pane = .tool(.status)) {
+    func openMainWindow(initial: Pane = .home) {
         // If already open, just switch to the requested pane and bring
         // the window forward.
         if let wc = self.mainWC, let window = wc.window {
@@ -226,7 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// its default raise-windows behaviour rather than us suppressing it.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         guard !hasVisibleWindows else { return false }
-        if #available(macOS 14, *) { self.openMainWindow(initial: .tool(.status)) }
+        if #available(macOS 14, *) { self.openMainWindow(initial: .home) }
         return true
     }
 
@@ -248,7 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 // mainWC is retained (isReleasedWhenClosed = false), so its
                 // window is non-nil even when closed — check visibility, not nil,
                 // so hiding the menu bar always leaves a visible window.
-                if mainWC?.window?.isVisible != true { openMainWindow(initial: .tool(.status)) }
+                if mainWC?.window?.isVisible != true { openMainWindow(initial: .home) }
             }
         }
     }

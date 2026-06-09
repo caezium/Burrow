@@ -29,6 +29,7 @@ final class LocalMetrics {
     private var lastDiskRead: UInt64 = 0
     private var lastDiskWrite: UInt64 = 0
     private var lastDiskAt: Date?
+    private let sensors = SensorReader()
 
     init() {}
 
@@ -137,6 +138,29 @@ final class LocalMetrics {
                 root["gpu"] = gpus
                 changed = true
             }
+        }
+
+        // Thermal — fans + die temps Mole reports as 0 on Apple Silicon, read
+        // natively from the SMC. Only patch when Mole actually emitted a thermal
+        // object (never synthesize one — an empty {} would fail to decode), and
+        // only fill the holes, keeping Mole's values (e.g. battery_temp).
+        if var thermal = root["thermal"] as? [String: Any] {
+            var thermalChanged = false
+            if (thermal["fan_count"] as? NSNumber)?.intValue ?? 0 == 0 {
+                let f = sensors.fans()
+                if f.count > 0 {
+                    thermal["fan_count"] = f.count
+                    thermal["fan_speed"] = f.rpm.max() ?? 0
+                    thermalChanged = true
+                }
+            }
+            if (thermal["cpu_temp"] as? NSNumber)?.doubleValue ?? 0 == 0, let c = sensors.temps().cpu {
+                thermal["cpu_temp"] = c; thermalChanged = true
+            }
+            if (thermal["gpu_temp"] as? NSNumber)?.doubleValue ?? 0 == 0, let g = sensors.temps().gpu {
+                thermal["gpu_temp"] = g; thermalChanged = true
+            }
+            if thermalChanged { root["thermal"] = thermal; changed = true }
         }
 
         guard changed,

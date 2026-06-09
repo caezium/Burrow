@@ -38,6 +38,7 @@ struct MoleStatus: Codable {
     let topProcesses: [ProcessInfo]?
     let gpu: [GPUStatus]?
     let proxy: ProxyStatus?
+    let bluetooth: [BluetoothDevice]?
 
     // Mole emits ISO8601 with sub-second precision (`2026-05-31T01:33:40.112723-07:00`).
     // The default ISO formatter rejects fractional seconds, so we configure
@@ -53,7 +54,7 @@ struct MoleStatus: Codable {
         case diskIO = "disk_io"
         case disks, network, batteries, thermal
         case topProcesses = "top_processes"
-        case gpu, proxy
+        case gpu, proxy, bluetooth
     }
 
     init(from decoder: Decoder) throws {
@@ -82,6 +83,7 @@ struct MoleStatus: Codable {
         self.topProcesses = try c.decodeIfPresent([ProcessInfo].self, forKey: .topProcesses)
         self.gpu = try c.decodeIfPresent([GPUStatus].self, forKey: .gpu)
         self.proxy = try c.decodeIfPresent(ProxyStatus.self, forKey: .proxy)
+        self.bluetooth = try c.decodeIfPresent([BluetoothDevice].self, forKey: .bluetooth)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -107,6 +109,7 @@ struct MoleStatus: Codable {
         try c.encodeIfPresent(topProcesses, forKey: .topProcesses)
         try c.encodeIfPresent(gpu, forKey: .gpu)
         try c.encodeIfPresent(proxy, forKey: .proxy)
+        try c.encodeIfPresent(bluetooth, forKey: .bluetooth)
     }
 
     private static let iso8601: ISO8601DateFormatter = {
@@ -307,4 +310,17 @@ struct ProxyStatus: Codable {
     let enabled: Bool
     let type: String
     let host: String
+}
+
+struct BluetoothDevice: Codable {
+    let name: String
+    let connected: Bool
+    /// Mole reports battery as a string ("85%" or empty). Parse the percent
+    /// when present.
+    let battery: String
+
+    var batteryPercent: Int? {
+        let digits = battery.filter(\.isNumber)
+        return digits.isEmpty ? nil : Int(digits)
+    }
 }

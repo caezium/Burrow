@@ -15,17 +15,13 @@
 import SwiftUI
 import AppKit
 
+/// The Overview section of Home: live metric cards + the process table.
 struct StatusView: View {
     @StateObject private var model: StatusModel
-    private let db: DB
-    var onNavigate: (Pane) -> Void
+    @ObservedObject private var io = IOMonitor.shared
 
-    @State private var showExplain = false
-
-    init(db: DB, sampler: Sampler, onNavigate: @escaping (Pane) -> Void = { _ in }) {
+    init(db: DB, sampler: Sampler) {
         _model = StateObject(wrappedValue: StatusModel(db: db, sampler: sampler))
-        self.db = db
-        self.onNavigate = onNavigate
     }
 
     private let row1H: CGFloat = 150
@@ -35,7 +31,6 @@ struct StatusView: View {
         ScrollView {
             VStack(spacing: 13) {
                 if let s = model.snap {
-                    if Store.aiEnabled { explainBar }
                     HStack(spacing: 13) {
                         HealthCard(s: s, minHeight: row1H)
                         cpuTile(s).frame(minHeight: row1H)
@@ -43,9 +38,12 @@ struct StatusView: View {
                         gpuTile(s).frame(minHeight: row1H)
                     }
                     HStack(spacing: 13) {
-                        DiskCard(s: s, minHeight: row2H)
+                        DiskCard(s: s, liveRead: io.readMBs, liveWrite: io.writeMBs, minHeight: row2H)
                         netTile(s).frame(minHeight: row2H)
                         BatteryCard(s: s, minHeight: row2H)
+                    }
+                    if let bt = s.bluetooth?.filter({ $0.connected }), !bt.isEmpty {
+                        BluetoothStrip(devices: bt)
                     }
                     ProcessCard(model: model)
                 } else {
@@ -60,27 +58,6 @@ struct StatusView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { model.start() }
         .onDisappear { model.stop() }
-        .sheet(isPresented: $showExplain) {
-            ExplainView(db: db,
-                        onNavigate: { showExplain = false; onNavigate($0) },
-                        onClose: { showExplain = false })
-        }
-    }
-
-    /// Opt-in "Explain" entry point (Status pane). Hidden unless the AI
-    /// lens is enabled in Settings.
-    private var explainBar: some View {
-        HStack {
-            Spacer()
-            Button { showExplain = true } label: {
-                Label("Explain", systemImage: "sparkles")
-                    .font(Brand.mono(11, .semibold)).foregroundStyle(Tool.status.accent)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Capsule().fill(Tool.status.accent.opacity(0.12)))
-                    .overlay(Capsule().strokeBorder(Tool.status.accent.opacity(0.30), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     private var waiting: some View {
@@ -140,9 +117,12 @@ struct StatusView: View {
     }
 
     private func netTile(_ s: MoleStatus) -> MetricTile {
-        let net = s.network.first(where: { !$0.ip.isEmpty }) ?? s.network.first
-        let rx = net?.rxRateMbs ?? 0
-        let tx = net?.txRateMbs ?? 0
+        let snapNet = s.network.first(where: { !$0.ip.isEmpty }) ?? s.network.first
+        // Prefer the native 1 s monitor (catches bursts the mo poll misses); the
+        // mo snapshot is the fallback before the monitor has any samples.
+        let useLive = !io.samples.isEmpty
+        let rx = useLive ? io.rxMBs : (snapNet?.rxRateMbs ?? 0)
+        let tx = useLive ? io.txMBs : (snapNet?.txRateMbs ?? 0)
         let total = rx + tx
         let value: String
         let unit: String
@@ -153,8 +133,8 @@ struct StatusView: View {
         return MetricTile(
             eyebrow: "Network", glyph: "network", accent: Brand.green,
             value: value, unit: unit, chip: chip,
-            values: model.netHist, chartStyle: .area,
-            footnote: "↓ \(rate(rx))  ↑ \(rate(tx)) · \(net?.name ?? "—") · \(net?.ip ?? "—")")
+            values: useLive ? io.netHistory : model.netHist, chartStyle: .area,
+            footnote: "↓ \(rate(rx))  ↑ \(rate(tx)) · \(snapNet?.name ?? "—") · \(snapNet?.ip ?? "—")")
     }
 
     private func rate(_ mbs: Double) -> String {
@@ -271,6 +251,9 @@ struct HealthRing: View {
 
 struct DiskCard: View {
     let s: MoleStatus
+    /// Live 1 s disk throughput from IOMonitor; falls back to the mo snapshot.
+    var liveRead: Double? = nil
+    var liveWrite: Double? = nil
     var minHeight: CGFloat? = nil
 
     var body: some View {
@@ -294,7 +277,7 @@ struct DiskCard: View {
                 ProgressBar(fraction: pct / 100, color: barColor)
                 Spacer(minLength: 2)
                 Text(String(format: NSLocalizedString("%.0f%% used · R %.0f · W %.0f MB/s", comment: ""),
-                            pct, s.diskIO.readRate, s.diskIO.writeRate))
+                            pct, liveRead ?? s.diskIO.readRate, liveWrite ?? s.diskIO.writeRate))
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary).lineLimit(1)
             }
         }
@@ -356,6 +339,51 @@ struct ProgressBar: View {
             }
         }
         .frame(height: 6)
+    }
+}
+
+// MARK: - Bluetooth
+
+/// Connected Bluetooth devices with their battery — surfaced from mo's
+/// `bluetooth` array (AirPods, mouse, keyboard, controller, …).
+struct BluetoothStrip: View {
+    let devices: [BluetoothDevice]
+
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Eyebrow(text: "Bluetooth", glyph: "dot.radiowaves.right", color: Brand.blue)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(devices.enumerated()), id: \.offset) { _, d in chip(d) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func chip(_ d: BluetoothDevice) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: Self.glyph(d.name)).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+            Text(d.name).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary).lineLimit(1)
+            if let p = d.batteryPercent {
+                Text("\(p)%").font(Brand.mono(11, .semibold))
+                    .foregroundStyle(p <= 20 ? Brand.red : (p <= 40 ? Brand.gold : Brand.green))
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Capsule().fill(Color.white.opacity(0.05)))
+        .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
+    }
+
+    private static func glyph(_ name: String) -> String {
+        let n = name.lowercased()
+        if n.contains("airpod") || n.contains("headphone") || n.contains("buds") || n.contains("momentum") || n.contains("wh-") { return "headphones" }
+        if n.contains("mouse") { return "magicmouse" }
+        if n.contains("keyboard") || n.contains("keychron") { return "keyboard" }
+        if n.contains("controller") || n.contains("dualsense") || n.contains("xbox") { return "gamecontroller" }
+        if n.contains("trackpad") { return "trackpad" }
+        return "dot.radiowaves.right"
     }
 }
 

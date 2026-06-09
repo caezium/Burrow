@@ -111,7 +111,7 @@ private struct HistorySnapshot {
 // MARK: - Loader (off-main)
 
 private enum HistoryLoader {
-    static func load(db: DB, rangeMinutes: Int) -> HistorySnapshot {
+    static func load(db: DB, rangeMinutes: Int, ioSamples: [IOMonitor.Sample] = []) -> HistorySnapshot {
         let now = Int(Date().timeIntervalSince1970)
         let since = now - rangeMinutes * 60
         var snap = HistorySnapshot()
@@ -141,7 +141,9 @@ private enum HistoryLoader {
                 if thermal.cpuTemp > 0 { snap.thermalCPU.append(.init(time: t, value: thermal.cpuTemp)) }
                 if thermal.gpuTemp > 0 { snap.thermalGPU.append(.init(time: t, value: thermal.gpuTemp)) }
                 if let bt = thermal.batteryTemp, bt > 0 { snap.thermalBattery.append(.init(time: t, value: bt)) }
-                if thermal.fanSpeed > 0 { snap.fanSpeed.append(.init(time: t, value: Double(thermal.fanSpeed))) }
+                // Plot fan RPM whenever fans are detected — including 0 (parked),
+                // so an idle Mac shows a flat line, not "no samples".
+                if (thermal.fanCount ?? 0) > 0 { snap.fanSpeed.append(.init(time: t, value: Double(thermal.fanSpeed))) }
                 snap.fanCount = max(snap.fanCount, thermal.fanCount ?? 0)
             }
             if let b = s.batteries?.first { snap.batteryPercent.append(.init(time: t, value: b.percent)) }
@@ -154,6 +156,19 @@ private enum HistoryLoader {
                 if let mb = p.memoryBytes, mb > (peakMemBytes[p.name] ?? 0) { peakMemBytes[p.name] = mb }
             }
             snap.memoryPressure = s.memory.pressure
+        }
+
+        // Overlay the dense 1 s net/disk ring on the recent portion so these two
+        // charts update at the same cadence as the Home tiles. The coarse
+        // snapshot points are kept only for the window BEFORE the ring begins.
+        if let ringStart = ioSamples.first?.time {
+            func splice(_ pts: [ChartPoint], _ ring: [ChartPoint]) -> [ChartPoint] {
+                pts.filter { $0.time < ringStart } + ring
+            }
+            snap.netRx     = splice(snap.netRx,     ioSamples.map { .init(time: $0.time, value: $0.rxMBs) })
+            snap.netTx     = splice(snap.netTx,     ioSamples.map { .init(time: $0.time, value: $0.txMBs) })
+            snap.diskRead  = splice(snap.diskRead,  ioSamples.map { .init(time: $0.time, value: $0.readMBs) })
+            snap.diskWrite = splice(snap.diskWrite, ioSamples.map { .init(time: $0.time, value: $0.writeMBs) })
         }
 
         let topByCPU = peakCPU.sorted { $0.value > $1.value }.prefix(20).map(\.key)
@@ -207,7 +222,7 @@ struct HistoryView: View {
     @State private var loadGen: Int = 0
     @State private var procMetric: ProcMetric = .cpu
 
-    private let autoRefreshTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    private let autoRefreshTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -419,13 +434,23 @@ struct HistoryView: View {
         loadGen += 1
         let myGen = loadGen
         let r = self.range
+        // Grab the dense net/disk ring on the main actor (the loader runs off it),
+        // trimmed to the window and downsampled so a 1 h range isn't 3600 points.
+        let since = Date().addingTimeInterval(-Double(r.minutes * 60))
+        let ring = Self.downsample(IOMonitor.shared.samples.filter { $0.time >= since }, max: 900)
         DispatchQueue.global(qos: .userInitiated).async {
-            let snap = HistoryLoader.load(db: self.db, rangeMinutes: r.minutes)
+            let snap = HistoryLoader.load(db: self.db, rangeMinutes: r.minutes, ioSamples: ring)
             DispatchQueue.main.async {
                 if myGen != self.loadGen { return }
                 self.snapshot = snap
                 self.loading = false
             }
         }
+    }
+
+    private static func downsample(_ s: [IOMonitor.Sample], max: Int) -> [IOMonitor.Sample] {
+        guard s.count > max else { return s }
+        let step = Double(s.count) / Double(max)
+        return (0..<max).map { s[Int(Double($0) * step)] }
     }
 }

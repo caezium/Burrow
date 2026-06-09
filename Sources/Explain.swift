@@ -28,6 +28,7 @@ import Foundation
 /// The compact, privacy-conscious set of facts we hand the model. Built
 /// from the latest snapshot only — no raw history, no file contents.
 struct ExplainContext {
+    // Live snapshot.
     let healthScore: Int
     let healthMsg: String
     let cpuUsage: Double
@@ -36,27 +37,67 @@ struct ExplainContext {
     let diskUsedPercent: Double?
     let topProcesses: [(name: String, cpu: Double, mem: Double)]
     let ageSeconds: Int
+    // Recent trend, summarised from the history window.
+    let windowMinutes: Int
+    let cpuAvg: Double
+    let cpuPeak: Double
+    let memPeak: Double
+    let diskDeltaPercent: Double?
+    let heaviestRecently: [String]
+    // Most recent Mole cleanup sessions. Set by the engine (needs a subprocess),
+    // so `build` stays DB-only and testable.
+    var recentCleanups: [String] = []
 
     // (No Equatable: the tuple-array property can't synthesize it, and a
     // hand-written one that ignored fields would be a misleading footgun.
     // Nothing compares contexts today.)
 
-    /// Build from the most recent snapshot in the DB, or nil if none yet.
+    /// Build from the latest snapshot plus a short history window, or nil if
+    /// there's no snapshot yet. So the model sees a trend, not just an instant.
     static func build(db: DB) -> ExplainContext? {
         guard let stored = SnapshotStore.latest(db) else { return nil }
         let s = stored.status
         let now = Int(Date().timeIntervalSince1970)
         let top = (s.topProcesses ?? []).sorted { $0.cpu > $1.cpu }.prefix(5)
             .map { (name: $0.name, cpu: $0.cpu, mem: $0.memory) }
+
+        let windowMin = 60
+        let rows = SnapshotStore.range(db, since: now - windowMin * 60, until: now, maxPoints: 240)
+        var cpuVals: [Double] = [], memVals: [Double] = []
+        var peakCPU: [String: Double] = [:]
+        var firstDisk: Double?, lastDisk: Double?
+        for r in rows {
+            cpuVals.append(r.status.cpu.usage)
+            memVals.append(r.status.memory.usedPercent)
+            if let d = r.status.disks.first?.usedPercent {
+                if firstDisk == nil { firstDisk = d }
+                lastDisk = d
+            }
+            for p in (r.status.topProcesses ?? []) where p.cpu > (peakCPU[p.name] ?? 0) {
+                peakCPU[p.name] = p.cpu
+            }
+        }
+        let cpuAvg = cpuVals.isEmpty ? s.cpu.usage : cpuVals.reduce(0, +) / Double(cpuVals.count)
+        let diskDelta: Double? = (firstDisk != nil && lastDisk != nil) ? (lastDisk! - firstDisk!) : nil
+        let heaviest = peakCPU.sorted { $0.value > $1.value }.prefix(5).map(\.key)
+
         return ExplainContext(
-            healthScore: s.healthScore,
-            healthMsg: s.healthScoreMsg,
-            cpuUsage: s.cpu.usage,
-            memUsedPercent: s.memory.usedPercent,
-            memPressure: s.memory.pressure,
-            diskUsedPercent: s.disks.first?.usedPercent,
-            topProcesses: Array(top),
-            ageSeconds: max(0, now - stored.ts))
+            healthScore: s.healthScore, healthMsg: s.healthScoreMsg,
+            cpuUsage: s.cpu.usage, memUsedPercent: s.memory.usedPercent, memPressure: s.memory.pressure,
+            diskUsedPercent: s.disks.first?.usedPercent, topProcesses: Array(top),
+            ageSeconds: max(0, now - stored.ts),
+            windowMinutes: windowMin, cpuAvg: cpuAvg,
+            cpuPeak: cpuVals.max() ?? s.cpu.usage, memPeak: memVals.max() ?? s.memory.usedPercent,
+            diskDeltaPercent: diskDelta, heaviestRecently: Array(heaviest))
+    }
+
+    /// Compact recent cleanup sessions (`mo history`). Spawns a subprocess, so
+    /// it's separate from `build` and the engine attaches it.
+    static func recentCleanups(limit: Int = 3) -> [String] {
+        MoleClient.history().prefix(limit).map { s in
+            let freed = (!s.size.isEmpty && s.size != "0B") ? "freed \(s.size), " : ""
+            return "\(s.command): \(freed)\(s.items) items"
+        }
     }
 
     /// Human-readable fact block for the prompt body.
@@ -72,6 +113,17 @@ struct ExplainContext {
             lines.append("top_processes: " + procs.joined(separator: ", "))
         }
         lines.append("snapshot_age_seconds: \(ageSeconds)")
+        lines.append(String(format: "last_%dmin_cpu: avg %.0f%%, peak %.0f%%", windowMinutes, cpuAvg, cpuPeak))
+        lines.append(String(format: "last_%dmin_memory_peak: %.0f%%", windowMinutes, memPeak))
+        if let d = diskDeltaPercent, abs(d) >= 0.1 {
+            lines.append(String(format: "disk_trend: %@%.1f%% over %dmin", (d > 0 ? "+" : ""), d, windowMinutes))
+        }
+        if !heaviestRecently.isEmpty {
+            lines.append("heaviest_recently: " + heaviestRecently.joined(separator: ", "))
+        }
+        if !recentCleanups.isEmpty {
+            lines.append("recent_cleanups: " + recentCleanups.joined(separator: "; "))
+        }
         return lines.joined(separator: "\n")
     }
 }
@@ -131,18 +183,31 @@ struct ExplainResult: Equatable {
 // MARK: - Prompt
 
 enum ExplainPrompt {
+    /// Whether the running UI language is Chinese (explicit override or system).
+    static func isChinese() -> Bool {
+        switch Store.appLanguage {
+        case "zh-Hans": return true
+        case "en":      return false
+        default:        return (Bundle.main.preferredLocalizations.first ?? Locale.current.identifier).hasPrefix("zh")
+        }
+    }
+
     static func make(_ ctx: ExplainContext) -> (system: String, user: String) {
+        let language = isChinese()
+            ? "\n\nWrite the explanation in Simplified Chinese (简体中文). Keep the final ACTION line exactly as specified, in English."
+            : ""
         let system = """
-        You explain a macOS user's current system health in plain, calm English. \
-        You are given a single snapshot of metrics. Be concise (2–4 sentences). \
-        Name the most likely cause of anything unusual and say whether it's normal \
-        or worth acting on. Only recommend an action when the data clearly warrants \
-        it. End your reply with exactly one line of the form `ACTION: clean`, \
-        `ACTION: purge`, `ACTION: installer`, or `ACTION: none` — \
-        clean = system/app caches, purge = old project build artifacts, \
+        You are Burrow's assistant. Explain a macOS user's system health in plain, \
+        calm English from the data below — a live snapshot, a short recent trend, and \
+        the latest cleanup activity. Give a brief briefing (3–5 sentences): the overall \
+        state, anything unusual and its most likely cause, and whether it's worth acting \
+        on. Prefer the trend over the instant when they disagree. Only recommend an \
+        action when the data clearly warrants it. End your reply with exactly one line of \
+        the form `ACTION: clean`, `ACTION: purge`, `ACTION: installer`, or `ACTION: none` \
+        — clean = system/app caches, purge = old project build artifacts, \
         installer = leftover .dmg/.pkg files. Use `none` if nothing is needed.
-        """
-        let user = "Current snapshot:\n\(ctx.factSheet)"
+        """ + language
+        let user = "System data:\n\(ctx.factSheet)"
         return (system, user)
     }
 }
@@ -309,7 +374,8 @@ struct ExplainEngine {
     }
 
     func explain(db: DB) async throws -> ExplainResult {
-        guard let ctx = ExplainContext.build(db: db) else { throw ExplainError.noData }
+        guard var ctx = ExplainContext.build(db: db) else { throw ExplainError.noData }
+        ctx.recentCleanups = ExplainContext.recentCleanups()   // brief the whole picture
         let (system, user) = ExplainPrompt.make(ctx)
         let raw = try await provider.complete(system: system, user: user)
         return ExplainResult.parse(raw)

@@ -288,5 +288,108 @@
 "Minimize" = "最小化";
 "Close" = "关闭";
 "Mole CLI not found" = "未找到 Mole CLI";
+
+/* Home (Overview / History / Activity) + Explain */
+"Overview" = "概览";
+"Explain" = "解读";
+
+/* Language switch */
+"Language" = "语言";
+"App language" = "应用语言";
+"System" = "跟随系统";
+"Relaunch to change language?" = "重启以切换语言？";
+"Burrow needs to relaunch to apply the new language." = "Burrow 需要重新启动以应用新语言。";
+"Relaunch Now" = "立即重启";
+"Later" = "稍后";
+"Burrow ships English and 中文. A language change takes effect after a relaunch." = "Burrow 提供英文和中文。语言更改将在重新启动后生效。";
+
+/* Analyze — move to Trash */
+"Move “%@” to Trash?" = "将“%@”移到废纸篓？";
+"This moves %@ (%@) to the Trash, where you can restore it." = "这会将 %@（%@）移到废纸篓，可在那里恢复。";
+"this folder" = "此文件夹";
+"this file" = "此文件";
+"Couldn't move to Trash" = "无法移到废纸篓";
+
+/* Settings sections */
+"Mole engine" = "Mole 引擎";
+"Menu bar" = "菜单栏";
+"Show menu bar icon" = "显示菜单栏图标";
+
+/* Tools — purge / installer labels + taglines */
+"purge" = "清除";
+"installer" = "安装包";
+"Purge" = "清除";
+"Installers" = "安装包";
+"Clear the diggings dev work leaves behind." = "清走开发工作留下的挖掘残渣。";
+"Sweep out the crates you unpacked." = "扫走拆封后留下的箱子。";
+
+/* Common actions / labels */
+"Scan" = "扫描";
+"Rescan" = "重新扫描";
+"Back" = "返回";
+"Stop" = "停止";
+"Stopped." = "已停止。";
+"Go up" = "上一级";
+"Fans" = "风扇";
+"Bluetooth" = "蓝牙";
+"GPU usage" = "GPU 使用率";
+"RAM" = "内存";
+"Version" = "版本";
+"incomplete" = "未完成";
+"Reading your Mac…" = "正在读取你的 Mac…";
+
+/* Activity (cleanup history) */
+"Recent Mole cleanup sessions" = "最近的 Mole 清理记录";
+"No cleanup history yet" = "暂无清理历史";
+"Run a Clean or Optimize and it'll show up here." = "运行一次清理或优化，记录就会显示在这里。";
+
+/* Settings — AI / MCP / server */
+"Mole engine required" = "需要 Mole 引擎";
+"Touch ID for sudo" = "用于 sudo 的触控 ID";
+"Explain (AI) — experimental" = "解读（AI）— 实验性";
+"Ask your AI about your Mac (MCP)" = "用 AI 了解你的 Mac（MCP）";
+"Local HTTP query server" = "本地 HTTP 查询服务器";
+"Enable the Explain lens" = "启用解读功能";
+"Enable HTTP query server" = "启用 HTTP 查询服务器";
+"Let agents run cleanups for real" = "允许 AI 真正执行清理";
+"Backend" = "后端";
+"Base URL" = "基础 URL";
+"Model" = "模型";
+"API key (optional)" = "API 密钥（可选）";
+"Ollama model" = "Ollama 模型";
+"Local · Ollama" = "本地 · Ollama";
+"LM Studio / API" = "LM Studio / API";
+"Read tools" = "读取工具";
+"Cleanup tools" = "清理工具";
+"Try asking" = "试试这样问";
+"Copy prompt" = "复制提示词";
+"Endpoint" = "端点";
+"Preview what a cleanup would free, then clean it up." = "预览清理能释放多少空间，然后执行清理。";
+"Uninstall Slack and remove its leftovers." = "卸载 Slack 并清除它的残留文件。";
+"What's my Mac's CPU and memory usage right now?" = "我的 Mac 现在的 CPU 和内存使用率是多少？";
+"What's taking up space in my home folder?" = "我的主目录里什么占用了空间？";
+"AI read of one snapshot — it can be wrong, and never acts on its own." = "AI 对单次快照的解读 — 可能出错，且永不自行执行操作。";
+"Adds an “Explain” button to Status that reads your latest snapshot and explains it in plain English, optionally suggesting Clean/Purge/Installers." = "在首页添加一个“解读”按钮，读取你最新的快照并用通俗语言解释，必要时建议清理/清除/安装包。";
+"Burrow exposes your Mac's recorded history to coding agents — Claude Code, Cursor, Codex, Cline — over MCP. Add the config below, then ask in plain language. The server starts on demand over stdio; there's no port and no always-on listener." = "Burrow 通过 MCP 把你 Mac 的历史记录开放给编码智能体（Claude Code、Cursor、Codex、Cline）。添加下面的配置后，就能用自然语言提问。该服务按需通过 stdio 启动；没有端口，也没有常驻监听。";
+"OFF by default. Agents can always read metrics and run dry-run previews. With this on, an agent can run a real `mo clean` / `optimize` / `uninstall` — but ONLY when it also passes an explicit confirm flag, so a deletion is never one stray sentence away. Turn it off and agents are read-only again. Data stays on this Mac." = "默认关闭。智能体始终可以读取指标并运行试运行预览。开启后，智能体可以真正执行 `mo clean` / `optimize` / `uninstall` — 但仅当它同时传入明确的确认标志时，因此删除绝不会因一句话而发生。关闭后智能体恢复只读。数据始终留在这台 Mac 上。";
+"Runs against a local Ollama model — nothing leaves this Mac. Start it with `ollama run <model>`." = "在本地 Ollama 模型上运行 — 不会离开这台 Mac。用 `ollama run <model>` 启动。";
+"Any OpenAI-compatible server. For LM Studio: load a model, open Developer ▸ Start Server, and leave the key blank — the default URL is already LM Studio's. A hosted endpoint (e.g. OpenAI) needs a key and sends the metrics summary off-device (never file contents)." = "任何兼容 OpenAI 的服务器。LM Studio：加载模型，打开 Developer ▸ Start Server，密钥留空 — 默认 URL 已是 LM Studio 的。托管端点（如 OpenAI）需要密钥，并会把指标摘要发送到设备外（绝不发送文件内容）。";
+"Runs `mo update` to update the Mole CLI engine Burrow drives. This is separate from Burrow's own app updates. If it needs a password or a confirmation it can't show here, run `mo update` in a terminal instead." = "运行 `mo update` 来更新 Burrow 驱动的 Mole CLI 引擎。这与 Burrow 自身的应用更新无关。如果它需要密码或这里无法显示的确认，请改在终端运行 `mo update`。";
+"Lets `sudo` and admin prompts accept your fingerprint instead of a password, where macOS supports it. Configured via `mo touchid`; turning it on or off needs your password once." = "在 macOS 支持的情况下，让 `sudo` 和管理员提示接受你的指纹而非密码。通过 `mo touchid` 配置；开启或关闭需要输入一次密码。";
+"Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch." = "供仪表盘或 curl 使用的可选 REST 接口：在本机提供 /health、/info、/snapshot、/metrics。与上面的 MCP stdio 服务器相互独立；开关与端口更改在重新启动后生效。";
+"Applies immediately. When off, Burrow shows a Dock icon instead so it stays reachable — a Dock click reopens the window." = "立即生效。关闭后，Burrow 会改为显示 Dock 图标以便随时可达 — 点击 Dock 图标即可重新打开窗口。";
+
+/* Onboarding / Full Disk Access */
+"Burrow is a GUI for the Mole CLI (`mo`) — it does the scanning and cleanup. Install it, then Recheck." = "Burrow 是 Mole CLI（`mo`）的图形界面 — 扫描和清理都由它完成。请先安装，然后重新检查。";
+"WITH HOMEBREW" = "使用 HOMEBREW";
+"No Homebrew? Other install options →" = "没有 Homebrew？其他安装方式 →";
+"Still not finding `mo` on PATH. If you just installed it, open a new terminal first, or relaunch Burrow." = "仍未在 PATH 中找到 `mo`。如果你刚安装，请先打开一个新终端，或重新启动 Burrow。";
+"Grant Full Disk Access to scan" = "授予完全磁盘访问权限以扫描";
+"Skip the macOS permission prompts" = "跳过 macOS 权限弹窗";
+"Open Full Disk Access settings" = "打开完全磁盘访问设置";
+"Don't ask again" = "不再询问";
+"Scan anyway" = "仍然扫描";
+"Scanning system & app caches makes macOS ask once per protected folder. Grant Burrow Full Disk Access to scan smoothly — it only reads sizes through Mole and never opens that data itself." = "扫描系统和应用缓存会让 macOS 对每个受保护的文件夹各询问一次。授予 Burrow 完全磁盘访问权限即可顺畅扫描 — 它只通过 Mole 读取大小，绝不自行打开这些数据。";
+"Still blocked? macOS only applies Full Disk Access the next time Burrow launches. Quit and reopen, then scan." = "仍被阻止？macOS 只在 Burrow 下次启动时才应用完全磁盘访问权限。请退出并重新打开，然后再扫描。";
 "Burrow uses the Mole CLI (`mo`) for system metrics and cleanup. Install it with:\n\n    brew install mole\n\nThen relaunch Burrow." = "Burrow 使用 Mole CLI（`mo`）获取系统指标并执行清理。请安装：\n\n    brew install mole\n\n然后重新启动 Burrow。";
 "Quit" = "退出";

@@ -14,6 +14,7 @@ import AppKit
 import LocalAuthentication
 
 struct SettingsView: View {
+    @State private var appLanguage: String = Store.appLanguage
     @State private var sampleIntervalSeconds: Int = Store.sampleIntervalSeconds
     @State private var retentionDays: Int = Store.retentionDays
     @State private var autoVacuum: Bool = Store.autoVacuum
@@ -131,6 +132,24 @@ struct SettingsView: View {
                             Store.mcpActionsEnabled = $0
                         }
                         footnote("OFF by default. Agents can always read metrics and run dry-run previews. With this on, an agent can run a real `mo clean` / `optimize` / `uninstall` — but ONLY when it also passes an explicit confirm flag, so a deletion is never one stray sentence away. Turn it off and agents are read-only again. Data stays on this Mac.")
+                    }
+
+                    section("Language", "globe") {
+                        HStack {
+                            Text(NSLocalizedString("App language", comment: "")).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary)
+                            Spacer()
+                            Picker("", selection: $appLanguage) {
+                                Text(NSLocalizedString("System", comment: "")).tag("")
+                                Text(verbatim: "English").tag("en")
+                                Text(verbatim: "中文").tag("zh-Hans")
+                            }
+                            .labelsHidden().pickerStyle(.menu).tint(Brand.textSecondary).fixedSize()
+                            .onChange(of: appLanguage) { _, v in
+                                Store.appLanguage = v
+                                promptRelaunch()
+                            }
+                        }
+                        footnote("Burrow ships English and 中文. A language change takes effect after a relaunch.")
                     }
 
                     section("Menu bar", "menubar.rectangle") {
@@ -256,6 +275,21 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Language relaunch
+
+    private func promptRelaunch() {
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("Relaunch to change language?", comment: "")
+        alert.informativeText = NSLocalizedString("Burrow needs to relaunch to apply the new language.", comment: "")
+        alert.addButton(withTitle: NSLocalizedString("Relaunch Now", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { _, _ in }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NSApp.terminate(nil) }
     }
 
     // MARK: - Section + row helpers

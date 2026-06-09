@@ -43,6 +43,16 @@ final class ExplainTests: XCTestCase {
         XCTAssertTrue(ctx.factSheet.contains("hot"))
     }
 
+    func testContextBuild_includesRecentTrendFromHistory() throws {
+        let now = Int(Date().timeIntervalSince1970)
+        // Two snapshots in the window so the summary has something to average.
+        try db.insert(prefix: Sampler.snapshotPrefix, ts: now - 120, json: snapshot())
+        try db.insert(prefix: Sampler.snapshotPrefix, ts: now, json: snapshot())
+        let ctx = try XCTUnwrap(ExplainContext.build(db: db))
+        XCTAssertEqual(ctx.cpuPeak, 91.0, accuracy: 0.001, "window peak comes from the snapshots")
+        XCTAssertTrue(ctx.factSheet.contains("last_60min_cpu"), "fact sheet carries the trend")
+    }
+
     // MARK: - Parse
 
     func testParse_extractsActionAndStripsDirective() {

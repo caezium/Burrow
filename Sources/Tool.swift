@@ -18,8 +18,9 @@ enum Tool: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     /// Display order in the top nav. Cleanup family (clean → purge →
-    /// installer → optimize) leads, then apps / analyze / status.
-    static let navOrder: [Tool] = [.clean, .purge, .installer, .optimize, .apps, .analyze, .status]
+    /// installer → optimize) leads, then apps / analyze. The live dashboard
+    /// isn't a tool anymore — it's Home, reached by the Burrow mark.
+    static let navOrder: [Tool] = [.clean, .purge, .installer, .optimize, .apps, .analyze]
 
     /// Lowercase tab label (matches the instrument-panel voice).
     var label: String { NSLocalizedString(rawValue, comment: "") }
@@ -100,18 +101,19 @@ enum Tool: String, CaseIterable, Identifiable {
 /// extras (Settings, History) — all navigated from the same top bar, in
 /// the same window, so there's exactly one navigation model in the app.
 enum Pane: Equatable, Hashable {
+    case home          // the live dashboard: Overview · History · Activity
     case tool(Tool)
     case settings
-    case history
-    case activity
 
-    /// Window tint scrim. Tools carry their own colour; the utilities use
-    /// a neutral dark so they read as "chrome", not a sixth tool.
+    /// Window tint scrim. Home wears the dashboard's gold; tools carry their
+    /// own colour; Settings uses a neutral dark so it reads as "chrome".
     var scrim: LinearGradient {
         switch self {
+        case .home:
+            return Tool.status.scrim
         case .tool(let t):
             return t.scrim
-        case .settings, .history, .activity:
+        case .settings:
             return LinearGradient(colors: [Color(hex: 0x16150F).opacity(0.90), Brand.nearBlack.opacity(0.97)],
                                   startPoint: .top, endPoint: .bottom)
         }

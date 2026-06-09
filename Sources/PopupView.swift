@@ -289,7 +289,7 @@ struct PopupView: View {
                 iconButton("clock.arrow.circlepath") { openHistory() }
                 iconButton("gearshape") { openSettings() }
                 Spacer()
-                Button("Open Burrow") { open(.tool(.status)) }
+                Button(NSLocalizedString("Open Burrow", comment: "")) { open(.home) }
                     .buttonStyle(.plain)
                     .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.textPrimary)
                 iconButton("power") { NSApp.terminate(nil) }
@@ -313,7 +313,7 @@ struct PopupView: View {
         if #available(macOS 14, *) { delegate?.openMainWindow(initial: pane) }
     }
     private func openSettings() { open(.settings) }
-    private func openHistory() { open(.history) }
+    private func openHistory() { open(.home) }   // History lives in Home now
 }
 
 // MARK: - Compact tile

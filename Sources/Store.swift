@@ -79,6 +79,25 @@ enum Store {
         set { write(newValue, "show_menu_bar_icon") }
     }
 
+    // MARK: - Language
+
+    /// In-app language override. "" follows the system; otherwise a bundle
+    /// language code we ship ("en" / "zh-Hans"). Writing it also sets the
+    /// system `AppleLanguages` key the bundle loader reads at launch, so the
+    /// choice takes effect on the next relaunch.
+    static var appLanguage: String {
+        get { d.string(forKey: "app_language") ?? "" }
+        set {
+            d.set(newValue, forKey: "app_language")
+            if newValue.isEmpty {
+                d.removeObject(forKey: "AppleLanguages")   // follow the system
+            } else {
+                d.set([newValue], forKey: "AppleLanguages")
+            }
+            d.synchronize()
+        }
+    }
+
     // MARK: - AI (Explain lens)
 
     /// Whether the optional "Explain" AI lens is enabled. Off by default —
