@@ -1,6 +1,13 @@
+> Burrow is an independent open-source project built on the same `mo` engine
+> as [mole.fit](https://mole.fit/) (the official Mole for Mac app by `mo`'s author),
+> but it is **not affiliated with or endorsed by mole.fit** — its own name,
+> mark, palette, and copy are original. 
+>
+> If you want it and to fund `mo`'s development — **buy mole.fit ($9)**.
+
 # Burrow
 
-**A free, open-source [mole.fit](https://mole.fit/) — a native macOS GUI for the [Mole](https://github.com/tw93/Mole) CLI (`mo`).**
+**A free, open-source, native macOS GUI for the [Mole](https://github.com/tw93/Mole) CLI (`mo`) — clean, uninstall, optimize, analyze disk, and watch live status. Plus long-range history and an MCP server for AI agents.**
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
@@ -9,15 +16,10 @@
 Burrow wraps the free, open-source `mo` CLI in a native Mac app: clean junk,
 purge dev artifacts, sweep leftover installers, uninstall apps, run safe
 maintenance, map your disk, and watch live system status — all in one
-translucent window. On top of that it adds two things the CLI doesn't have:
+translucent window. On top of that it adds things the CLI doesn't have:
 a **long-running history** of your Mac's metrics in a local SQLite database,
-and an **MCP server** so any AI agent (Claude Code, Cursor, Codex…) can ask
-"what's been happening on this Mac."
-
-> Burrow is an independent open-source project. It's *inspired by* mole.fit's
-> structure and built on the same `mo` engine, but it is **not affiliated
-> with or endorsed by mole.fit** — its own name, mark, palette, and copy are
-> original.
+an **MCP server** so any AI agent (Claude Code, Cursor, Codex…) can ask
+"what's been happening on this Mac.", and a lot more planned features to come!
 
 ## Screenshots
 
@@ -95,12 +97,14 @@ A live, glanceable read of your Mac's vitals, refreshed continuously:
   an optional localhost HTTP API, so any AI agent can query your Mac's recent
   state. See [Use it with your AI agent](#use-it-with-your-ai-agent).
 
-## How Burrow compares
+## How Burrow compares to other tools
 
-|  | **Burrow** | mole.fit | CleanMyMac | Pearcleaner | `mo` / ncdu |
+A factual feature/scope comparison. **mole.fit** is from the original author of mo — buy it ($9) if you want that and to fund `mo`.
+
+|  | Burrow | mole.fit | CleanMyMac | Pearcleaner | `mo` / ncdu |
 |---|:---:|:---:|:---:|:---:|:---:|
-| Price | **Free** | $9 once | Subscription | Free | Free |
-| Open source | **MIT** | – | – | ✅ | ✅ (`mo`) |
+| Price | Free | $9 once | Subscription | Free | Free |
+| Open source | MIT | – | – | ✅ | ✅ (`mo`) |
 | Signed / notarized | in progress | ✅ | ✅ | ✅ | n/a |
 | Junk cleanup | ✅ | ✅ | ✅ | – | ✅ (`mo`) |
 | Dev-artifact purge | ✅ | ✅ | partial | – | ✅ (`mo`) |
@@ -111,11 +115,6 @@ A live, glanceable read of your Mac's vitals, refreshed continuously:
 | Long-term metric history | ✅ | – | – | – | – |
 | MCP / agent API | ✅ | – | – | – | – |
 | GUI | ✅ | ✅ | ✅ | ✅ | – *(terminal)* |
-
-Honest notes: **mole.fit** is more polished, signed, and supported — buy it
-($9) if you want that and to fund `mo`. **Pearcleaner** is an excellent,
-focused open-source uninstaller. **ncdu**/`mo` are terminal tools; Burrow is
-the GUI for people who'd rather not live in the shell.
 
 ## Settings
 
