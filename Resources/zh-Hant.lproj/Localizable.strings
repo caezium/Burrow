@@ -1,0 +1,394 @@
+/* Tools */
+"clean" = "清理";
+"apps" = "軟體";
+"optimize" = "最佳化";
+"analyze" = "分析";
+"status" = "狀態";
+"Clean" = "清理";
+"Software" = "軟體";
+"Optimize" = "最佳化";
+"Analyze" = "分析";
+"Status" = "狀態";
+"Settings" = "設定";
+"History" = "歷史";
+"Fresh air through old tunnels." = "讓老隧道重新透氣。";
+"Shed what you've outgrown." = "卸下不再需要的東西。";
+"Small turns, a smoother run." = "小幅調整，跑得更順。";
+"Map every chamber below." = "描繪地底每一個洞室。";
+"Every pulse of the den." = "洞穴裡的每一次脈動。";
+
+/* Shared */
+"Burrow" = "Burrow";
+"Couldn't open Burrow's history database" = "無法開啟 Burrow 的歷史資料庫";
+"%@\n\nThe app will quit." = "%@\n\nApp 將會結束。";
+"Mole CLI (`mo`) not found on PATH." = "在 PATH 中找不到 Mole CLI（`mo`）。";
+"mo analyze exited %d: %@" = "mo analyze 結束代碼 %d：%@";
+"Couldn't parse mo analyze output: %@" = "無法解析 mo analyze 的輸出：%@";
+"CPU" = "CPU";
+"GPU" = "GPU";
+"Memory" = "記憶體";
+"Network" = "網路";
+"Disk" = "磁碟";
+"Battery" = "電池";
+"Power" = "電源";
+"Health" = "健康度";
+"Activity" = "活動";
+"Top processes" = "主要處理程序";
+"Open Burrow" = "打開 Burrow";
+"Preview" = "預覽";
+"Cancel" = "取消";
+"Failed: %@" = "失敗：%@";
+"%d items · %@" = "%d 個項目 · %@";
+"%@ in %d items" = "%@，共 %d 個項目";
+"Scanning…" = "正在掃描…";
+"Home" = "個人資料夾";
+"Homebrew (`brew`) not found on this Mac." = "這台 Mac 上找不到 Homebrew（`brew`）。";
+"formula" = "formula";
+"cask" = "cask";
+
+/* Status and HUD */
+"Waiting for the first sample…" = "正在等待第一筆取樣…";
+"Burrow runs `mo status --json` on a timer; the first row lands within a tick." = "Burrow 會定時執行 `mo status --json`；第一筆資料會在一個取樣週期內出現。";
+"%d cores" = "%d 核心";
+"load %.2f · %.2f · %.2f" = "負載 %.2f · %.2f · %.2f";
+"%.1f / %.1f GB · swap %.1f GB" = "%.1f / %.1f GB · 交換 %.1f GB";
+"normal" = "正常";
+"warning" = "警告";
+"Good" = "良好";
+"Excellent" = "極佳";
+"Fair" = "普通";
+"Poor" = "不佳";
+"Critical" = "嚴重";
+"All checks passed" = "所有檢查均通過";
+"up %@ · since %@" = "已運作 %@ · 自 %@ 起";
+"%@ · %@ · up %@" = "%@ · %@ · 已運作 %@";
+"GB free" = "GB 可用";
+"%.0f%% used · R %.0f · W %.0f MB/s" = "已使用 %.0f%% · 讀 %.0f · 寫 %.0f MB/s";
+"AC Power" = "電源轉接器";
+"charging" = "充電中";
+"%@ left" = "剩餘 %@";
+"%@ left · %d cyc · %d%% cap" = "剩餘 %@ · %d 次循環 · 容量 %d%%";
+"NAME (%d)" = "名稱 (%d)";
+"PID" = "PID";
+"MEM" = "記憶體";
+"↓ %d ↑ %d KB/s" = "↓ %d ↑ %d KB/s";
+"%.0f%% used" = "已使用 %.0f%%";
+"%ds ago" = "%d 秒前";
+"no samples yet" = "尚無取樣";
+
+/* Clean */
+"Clean Now" = "立即清理";
+"Cleaned" = "已清理";
+"Freed up to %@ · %@ items" = "最多釋放 %@ · %@ 個項目";
+"Re-scan" = "重新掃描";
+"Clean for real" = "正式清理";
+"to free" = "可釋放";
+"· %@ items · %@ categories" = "· %@ 個項目 · %@ 個類別";
+"Scanning your Mac…" = "正在掃描你的 Mac…";
+"Cleaning… don't quit." = "正在清理…請勿結束。";
+"Preview — review, then clean for real." = "預覽完成 — 請檢查後再正式清理。";
+"Done — caches cleared." = "完成 — 快取已清理。";
+"Scanning caches" = "正在掃描快取";
+"Cleaning caches" = "正在清理快取";
+"Clean caches for real?" = "確定要正式清理快取嗎？";
+"Burrow will run `mo clean` with administrator rights. Cache files are removed permanently; Mole's whitelist and safety rules still apply." = "Burrow 將以管理者權限執行 `mo clean`。快取檔案會被永久移除；Mole 的白名單與安全規則仍然有效。";
+
+/* Optimize */
+"Run again" = "再執行一次";
+"Maintenance complete" = "維護完成";
+"%d areas refreshed" = "已重新整理 %d 個區域";
+"Optimizing" = "正在最佳化";
+"Optimize preview" = "最佳化預覽";
+"Previewing maintenance…" = "正在預覽維護…";
+"Running maintenance…" = "正在執行維護…";
+"Maintenance complete." = "維護完成。";
+"Preview complete." = "預覽完成。";
+
+/* Task reports from mo */
+"Summary" = "摘要";
+"Performance Diagnosis" = "效能診斷";
+"DNS & Spotlight Check" = "DNS 與 Spotlight 檢查";
+"Finder Cache Refresh" = "Finder 快取重新整理";
+"App State Cleanup" = "App 狀態清理";
+"Broken Config Repair" = "損壞設定修復";
+"Network Cache Refresh" = "網路快取重新整理";
+"Database Optimization" = "資料庫最佳化";
+"LaunchServices Repair" = "LaunchServices 修復";
+"Dock Refresh" = "Dock 重新整理";
+"Prevent Finder .DS_Store" = "防止 Finder 產生 .DS_Store";
+"Memory Optimization" = "記憶體最佳化";
+"Network Stack Refresh" = "網路堆疊重新整理";
+"Permission Repair" = "權限修復";
+"Spotlight Optimization" = "Spotlight 最佳化";
+"Spotlight Orphan Rules" = "Spotlight 孤立規則";
+"Periodic Maintenance" = "定期維護";
+"Shared File Lists" = "共享檔案清單";
+"Disk Health" = "磁碟健康";
+"Login Items" = "登入項目";
+"Quarantine Database Cleanup" = "隔離資料庫清理";
+"Launch Agents Cleanup" = "啟動代理程式清理";
+"Notifications" = "通知";
+"Usage Data" = "使用資料";
+"User Essentials" = "使用者基本項目";
+"App Caches" = "App 快取";
+"System Caches" = "系統快取";
+"Developer Caches" = "開發者快取";
+"Browser Caches" = "瀏覽器快取";
+"Logs" = "記錄檔";
+"DRY RUN MODE, No files will be modified" = "模擬執行模式，不會修改任何檔案";
+"Likely bottleneck: %@" = "可能的瓶頸：%@";
+"Gatekeeper and code-signature assessment activity is elevated." = "Gatekeeper 與程式碼簽署評估活動偏高。";
+"Gatekeeper status: assessments enabled" = "Gatekeeper 狀態：評估已啟用";
+"Only system-managed CoreSimulator images are mounted, informational only, not a detach target" = "僅掛載了系統管理的 CoreSimulator 映像檔，僅供參考，不會作為卸除目標";
+"DNS cache flushed" = "DNS 快取已清除";
+"Spotlight index verified" = "Spotlight 索引已驗證";
+"QuickLook thumbnails refreshed" = "快速查看縮覽圖已重新整理";
+"Icon services cache rebuilt" = "圖示服務快取已重建";
+"App saved states optimized" = "App 儲存狀態已最佳化";
+"All preference files valid" = "所有偏好設定檔案均有效";
+"DNS cache already refreshed" = "DNS 快取已重新整理過";
+"mDNSResponder already restarted" = "mDNSResponder 已重新啟動過";
+"All databases already optimized" = "所有資料庫已是最佳化狀態";
+"LaunchServices repaired" = "LaunchServices 已修復";
+"File associations refreshed" = "檔案關聯已重新整理";
+"Dock refreshed" = "Dock 已重新整理";
+".DS_Store prevention enabled on network & USB volumes" = "已在網路與 USB 卷宗上啟用 .DS_Store 防止功能";
+"Inactive memory released" = "非作用中記憶體已釋放";
+"System responsiveness improved" = "系統反應速度已改善";
+"Network routing table refreshed" = "網路路由表已重新整理";
+"ARP cache cleared" = "ARP 快取已清除";
+"User directory permissions repaired" = "使用者目錄權限已修復";
+"User directory permissions already optimal" = "使用者目錄權限已是最佳狀態";
+"File access issues resolved" = "檔案存取問題已解決";
+"Spotlight index already optimal" = "Spotlight 索引已是最佳狀態";
+"Spotlight search rules already clean" = "Spotlight 搜尋規則已是乾淨狀態";
+"Periodic maintenance skipped (not available on this macOS version)" = "已略過定期維護（此 macOS 版本不支援）";
+"Shared file lists all healthy" = "共享檔案清單均正常";
+"Disk verify skipped (set MOLE_ENABLE_DISK_VERIFY=1 to enable)" = "已略過磁碟驗證（設定 MOLE_ENABLE_DISK_VERIFY=1 可啟用）";
+"Login items all healthy (%@ checked)" = "登入項目均正常（已檢查 %@ 項）";
+"Quarantine database already clean" = "隔離資料庫已是乾淨狀態";
+"Launch Agents all healthy" = "啟動代理程式均正常";
+"Notification Center database not found" = "找不到通知中心資料庫";
+"Knowledge database is healthy (%@)" = "知識資料庫正常（%@）";
+"%@ %@ items, %@ dry" = "%@ %@ 個項目，%@ 可清理";
+"%@ %@ old items, %@ dry" = "%@ %@ 個舊項目，%@ 可清理";
+"%@, %@ dry" = "%@，%@ 可清理";
+"User app cache" = "使用者 App 快取";
+"User app logs" = "使用者 App 記錄檔";
+"Darwin user cache files" = "Darwin 使用者快取檔案";
+"Media analysis cache" = "媒體分析快取";
+"Media analysis temp files" = "媒體分析暫存檔";
+"Wallpaper agent cache" = "桌面背景代理程式快取";
+"Trash · already empty" = "垃圾桶已是空的";
+"System caches need sudo, run sudo -v && mo clean --dry-run for full preview" = "系統快取需要 sudo；執行 sudo -v && mo clean --dry-run 可完整預覽";
+"Dry Run Mode, Preview only, no deletions" = "模擬執行模式，僅預覽，不會刪除";
+
+/* Analyze */
+"Reveal in Finder" = "在 Finder 中顯示";
+"Open here" = "在此打開";
+"Analyzing %@" = "正在分析 %@";
+"scan failed" = "掃描失敗";
+
+/* Software */
+"Size" = "大小";
+"Name" = "名稱";
+"Recent" = "最近";
+"Source" = "來源";
+"Uninstall" = "解除安裝";
+"Updates" = "更新";
+"Search apps" = "搜尋 App";
+"Reading installed apps…" = "正在讀取已安裝的 App…";
+"%d apps" = "%d 個 App";
+"%d selected · %@" = "已選取 %d 個 · %@";
+"Uninstall (%d)" = "解除安裝 (%d)";
+"Uninstall %d app?" = "要解除安裝 %d 個 App 嗎？";
+"Uninstall %d apps?" = "要解除安裝 %d 個 App 嗎？";
+"These move to the Trash (recoverable):\n\n%@" = "這些 App 會移到垃圾桶（可復原）：\n\n%@";
+"Move to Trash" = "移到垃圾桶";
+"Checking Homebrew…" = "正在檢查 Homebrew…";
+"Everything's up to date" = "所有項目都是最新版本";
+"Homebrew formulae & casks" = "Homebrew formulae 與 casks";
+"%d update" = "%d 個更新";
+"%d updates" = "%d 個更新";
+"Update all" = "全部更新";
+"Updating…" = "正在更新…";
+"Update" = "更新";
+
+/* Settings */
+"Storage" = "儲存空間";
+"Currently using" = "目前佔用";
+"Last maintenance" = "上次維護";
+"Run maintenance now" = "立即執行維護";
+"History lives at ~/Library/Application Support/Burrow/burrow.db. Rows past the retention window are pruned hourly." = "歷史資料位於 ~/Library/Application Support/Burrow/burrow.db。超過保留期限的紀錄會每小時清理一次。";
+"History retention" = "歷史保留";
+"Keep history for" = "歷史保留時間";
+"1 day" = "1 天";
+"7 days" = "7 天";
+"14 days" = "14 天";
+"30 days" = "30 天";
+"90 days" = "90 天";
+"180 days" = "180 天";
+"1 year" = "1 年";
+"Vacuum DB after large prunes" = "大量清理後壓縮資料庫";
+"Sampling" = "取樣";
+"Sample every" = "取樣間隔";
+"5 sec" = "5 秒";
+"15 sec" = "15 秒";
+"30 sec" = "30 秒";
+"60 sec" = "60 秒";
+"2 min" = "2 分鐘";
+"5 min" = "5 分鐘";
+"Burrow runs `mo status --json` at this cadence. 60 s is plenty for charts; tighter intervals give finer detail at the cost of more subprocess churn." = "Burrow 會以這個頻率執行 `mo status --json`。60 秒已足夠繪製圖表；更短的間隔能提供更細緻的資料，但會啟動更多子處理程序。";
+"MCP query server" = "MCP 查詢伺服器";
+"Enable MCP query server" = "啟用 MCP 查詢伺服器";
+"Endpoint" = "端點";
+"Toggle + port changes take effect after a relaunch. Exposes /health, /info, /snapshot, /metrics over localhost, plus the `Burrow --mcp` stdio server for Claude Code." = "開關與連接埠變更會在重新啟動後生效。它會在 localhost 提供 /health、/info、/snapshot、/metrics，並提供給 Claude Code 使用的 `Burrow --mcp` stdio 伺服器。";
+"%ds ago · pruned %d rows" = "%d 秒前 · 已清理 %d 筆";
+"not yet run" = "尚未執行";
+
+/* History */
+"CPU usage" = "CPU 使用率";
+"usage" = "使用率";
+"CPU load" = "CPU 負載";
+"1m avg" = "1 分鐘平均";
+"load1" = "1 分鐘負載";
+"% used" = "已使用 %";
+"used" = "已使用";
+"Disk I/O" = "磁碟 I/O";
+"MB/s" = "MB/s";
+"read" = "讀取";
+"write" = "寫入";
+"Network" = "網路";
+"rx" = "接收";
+"tx" = "傳送";
+"Thermal" = "溫度";
+"cpu" = "CPU";
+"gpu" = "GPU";
+"Health score" = "健康分數";
+"0–100" = "0–100";
+"No samples in this window" = "這段時間範圍內沒有取樣";
+"peak across window" = "範圍內峰值";
+"No processes recorded" = "沒有處理程序紀錄";
+"%d samples" = "%d 筆取樣";
+"· latest %ds ago" = "· 最新 %d 秒前";
+
+/* Menus and alerts */
+"About Burrow" = "關於 Burrow";
+"Settings…" = "設定…";
+"Hide Burrow" = "隱藏 Burrow";
+"Quit Burrow" = "結束 Burrow";
+"Edit" = "編輯";
+"Undo" = "還原";
+"Redo" = "重做";
+"Cut" = "剪下";
+"Copy" = "拷貝";
+"Paste" = "貼上";
+"Select All" = "全選";
+"Window" = "視窗";
+"Minimize" = "縮到最小";
+"Close" = "關閉";
+"Mole CLI not found" = "找不到 Mole CLI";
+
+/* Home (Overview / History / Activity) + Explain */
+"Overview" = "總覽";
+"Explain" = "解讀";
+
+/* Language switch */
+"Language" = "語言";
+"App language" = "App 語言";
+"System" = "系統預設";
+"Relaunch to change language?" = "要重新啟動以切換語言嗎？";
+"Burrow needs to relaunch to apply the new language." = "Burrow 需要重新啟動才能套用新語言。";
+"Relaunch Now" = "立即重新啟動";
+"Later" = "稍後";
+"Burrow ships English, 简体中文, and 繁體中文. A language change takes effect after a relaunch." = "Burrow 提供英文、簡體中文與繁體中文。語言變更會在重新啟動後生效。";
+
+/* Analyze — move to Trash */
+"Move “%@” to Trash?" = "要將「%@」移到垃圾桶嗎？";
+"This moves %@ (%@) to the Trash, where you can restore it." = "這會將 %@（%@）移到垃圾桶，之後仍可復原。";
+"this folder" = "此資料夾";
+"this file" = "此檔案";
+"Couldn't move to Trash" = "無法移到垃圾桶";
+
+/* Settings sections */
+"Mole engine" = "Mole 引擎";
+"Menu bar" = "選單列";
+"Show menu bar icon" = "顯示選單列圖示";
+
+/* Tools — purge / installer labels + taglines */
+"purge" = "清除";
+"installer" = "安裝檔";
+"Purge" = "清除";
+"Installers" = "安裝檔";
+"Clear the diggings dev work leaves behind." = "清走開發工作留下的碎土。";
+"Sweep out the crates you unpacked." = "掃走拆封後留下的空箱。";
+
+/* Common actions / labels */
+"Scan" = "掃描";
+"Rescan" = "重新掃描";
+"Back" = "返回";
+"Stop" = "停止";
+"Stopped." = "已停止。";
+"Go up" = "上一層";
+"Fans" = "風扇";
+"Bluetooth" = "藍牙";
+"GPU usage" = "GPU 使用率";
+"RAM" = "記憶體";
+"Version" = "版本";
+"incomplete" = "未完成";
+"Reading your Mac…" = "正在讀取你的 Mac…";
+
+/* Activity (cleanup history) */
+"Recent Mole cleanup sessions" = "最近的 Mole 清理紀錄";
+"No cleanup history yet" = "尚無清理紀錄";
+"Run a Clean or Optimize and it'll show up here." = "執行一次清理或最佳化，紀錄就會顯示在這裡。";
+
+/* Settings — AI / MCP / server */
+"Mole engine required" = "需要 Mole 引擎";
+"Touch ID for sudo" = "以 Touch ID 進行 sudo";
+"Explain (AI) — experimental" = "解讀（AI）— 實驗性功能";
+"Ask your AI about your Mac (MCP)" = "用 AI 了解你的 Mac（MCP）";
+"Local HTTP query server" = "本機 HTTP 查詢伺服器";
+"Enable the Explain lens" = "啟用解讀功能";
+"Enable HTTP query server" = "啟用 HTTP 查詢伺服器";
+"Let agents run cleanups for real" = "允許 AI 代理真正執行清理";
+"Backend" = "後端";
+"Base URL" = "基礎 URL";
+"Model" = "模型";
+"API key (optional)" = "API 金鑰（選填）";
+"Ollama model" = "Ollama 模型";
+"Local · Ollama" = "本機 · Ollama";
+"LM Studio / API" = "LM Studio / API";
+"Read tools" = "讀取工具";
+"Cleanup tools" = "清理工具";
+"Try asking" = "試著這樣問";
+"Copy prompt" = "拷貝提示詞";
+"Preview what a cleanup would free, then clean it up." = "預覽清理能釋放多少空間，然後執行清理。";
+"Uninstall Slack and remove its leftovers." = "解除安裝 Slack 並移除它的殘留檔案。";
+"What's my Mac's CPU and memory usage right now?" = "我的 Mac 現在的 CPU 和記憶體使用率是多少？";
+"What's taking up space in my home folder?" = "我的個人資料夾裡是什麼在佔用空間？";
+"AI read of one snapshot — it can be wrong, and never acts on its own." = "AI 對單次快照的解讀 — 可能出錯，且絕不會自行採取行動。";
+"Adds an “Explain” button to Status that reads your latest snapshot and explains it in plain English, optionally suggesting Clean/Purge/Installers." = "在「狀態」頁面加入「解讀」按鈕，讀取你最新的快照並以白話解釋，必要時建議清理／清除／安裝檔。";
+"Burrow exposes your Mac's recorded history to coding agents — Claude Code, Cursor, Codex, Cline — over MCP. Add the config below, then ask in plain language. The server starts on demand over stdio; there's no port and no always-on listener." = "Burrow 透過 MCP 將你 Mac 的歷史紀錄開放給程式開發代理（Claude Code、Cursor、Codex、Cline）。加入下方設定後，就能用自然語言提問。伺服器會依需求透過 stdio 啟動；沒有連接埠，也沒有常駐監聽。";
+"OFF by default. Agents can always read metrics and run dry-run previews. With this on, an agent can run a real `mo clean` / `optimize` / `uninstall` — but ONLY when it also passes an explicit confirm flag, so a deletion is never one stray sentence away. Turn it off and agents are read-only again. Data stays on this Mac." = "預設為關閉。AI 代理永遠可以讀取指標並執行模擬預覽。開啟後，代理可以真正執行 `mo clean` / `optimize` / `uninstall` — 但必須同時傳入明確的確認旗標，因此絕不會因一句話就誤刪。關閉後代理即恢復唯讀。資料始終留在這台 Mac 上。";
+"Runs against a local Ollama model — nothing leaves this Mac. Start it with `ollama run <model>`." = "在本機的 Ollama 模型上執行 — 資料不會離開這台 Mac。用 `ollama run <model>` 啟動。";
+"Any OpenAI-compatible server. For LM Studio: load a model, open Developer ▸ Start Server, and leave the key blank — the default URL is already LM Studio's. A hosted endpoint (e.g. OpenAI) needs a key and sends the metrics summary off-device (never file contents)." = "任何相容 OpenAI 的伺服器。LM Studio：載入模型，開啟 Developer ▸ Start Server，金鑰留空 — 預設 URL 就是 LM Studio 的。託管端點（例如 OpenAI）需要金鑰，且會將指標摘要送出裝置（絕不會傳送檔案內容）。";
+"Runs `mo update` to update the Mole CLI engine Burrow drives. This is separate from Burrow's own app updates. If it needs a password or a confirmation it can't show here, run `mo update` in a terminal instead." = "執行 `mo update` 來更新 Burrow 所驅動的 Mole CLI 引擎。這與 Burrow 本身的 App 更新無關。如果它需要密碼或此處無法顯示的確認，請改在終端機執行 `mo update`。";
+"Lets `sudo` and admin prompts accept your fingerprint instead of a password, where macOS supports it. Configured via `mo touchid`; turning it on or off needs your password once." = "在 macOS 支援的情況下，讓 `sudo` 與管理者提示可以使用指紋代替密碼。透過 `mo touchid` 設定；開啟或關閉需要輸入一次密碼。";
+"Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch." = "供儀表板或 curl 使用的選用 REST 介面：在 localhost 提供 /health、/info、/snapshot、/metrics。與上方的 MCP stdio 伺服器各自獨立；開關與連接埠變更會在重新啟動後生效。";
+"Applies immediately. When off, Burrow shows a Dock icon instead so it stays reachable — a Dock click reopens the window." = "立即生效。關閉後，Burrow 會改為顯示 Dock 圖示以便隨時開啟 — 點一下 Dock 圖示即可重新打開視窗。";
+
+/* Onboarding / Full Disk Access */
+"Burrow is a GUI for the Mole CLI (`mo`) — it does the scanning and cleanup. Install it, then Recheck." = "Burrow 是 Mole CLI（`mo`）的圖形介面 — 掃描與清理都由它執行。請先安裝，然後重新檢查。";
+"WITH HOMEBREW" = "使用 HOMEBREW";
+"No Homebrew? Other install options →" = "沒有 Homebrew？其他安裝方式 →";
+"Still not finding `mo` on PATH. If you just installed it, open a new terminal first, or relaunch Burrow." = "仍然在 PATH 中找不到 `mo`。如果你剛安裝完成，請先開啟新的終端機視窗，或重新啟動 Burrow。";
+"Grant Full Disk Access to scan" = "授予完整磁碟取用權限以進行掃描";
+"Skip the macOS permission prompts" = "略過 macOS 的權限提示";
+"Open Full Disk Access settings" = "打開完整磁碟取用權限設定";
+"Don't ask again" = "不要再詢問";
+"Scan anyway" = "仍要掃描";
+"Scanning system & app caches makes macOS ask once per protected folder. Grant Burrow Full Disk Access to scan smoothly — it only reads sizes through Mole and never opens that data itself." = "掃描系統與 App 快取時，macOS 會針對每個受保護的資料夾各詢問一次。授予 Burrow 完整磁碟取用權限即可順暢掃描 — 它只透過 Mole 讀取大小，絕不會自行開啟那些資料。";
+"Still blocked? macOS only applies Full Disk Access the next time Burrow launches. Quit and reopen, then scan." = "仍被阻擋？macOS 要等 Burrow 下次啟動才會套用完整磁碟取用權限。請結束並重新開啟 Burrow，再進行掃描。";
+"Burrow uses the Mole CLI (`mo`) for system metrics and cleanup. Install it with:\n\n    brew install mole\n\nThen relaunch Burrow." = "Burrow 使用 Mole CLI（`mo`）取得系統指標並執行清理。請安裝：\n\n    brew install mole\n\n然後重新啟動 Burrow。";
+"Quit" = "結束";
