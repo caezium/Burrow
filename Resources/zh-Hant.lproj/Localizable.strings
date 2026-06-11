@@ -351,6 +351,7 @@
 "Local HTTP query server" = "本機 HTTP 查詢伺服器";
 "Enable the Explain lens" = "啟用解讀功能";
 "Enable HTTP query server" = "啟用 HTTP 查詢伺服器";
+"Endpoint" = "端點";
 "Let agents run cleanups for real" = "允許 AI 代理真正執行清理";
 "Backend" = "後端";
 "Base URL" = "基礎 URL";
