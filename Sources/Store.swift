@@ -86,7 +86,7 @@ enum Store {
     // MARK: - Language
 
     /// In-app language override. "" follows the system; otherwise a bundle
-    /// language code we ship ("en" / "zh-Hans"). Writing it also sets the
+    /// language code we ship ("en" / "zh-Hans" / "zh-Hant"). Writing it also sets the
     /// system `AppleLanguages` key the bundle loader reads at launch, so the
     /// choice takes effect on the next relaunch.
     static var appLanguage: String {
@@ -266,11 +266,11 @@ enum Store {
 
     // MARK: - Telemetry
 
-    /// Anonymous usage ping (active-day counts + app/OS/arch breakdown). ON
-    /// by default and opt-out — flipping it off in Settings sends one final
-    /// opt-out event, then mutes both SDKs. Their local files (random ids,
-    /// queued events) stay on disk but nothing further is sent. No account,
-    /// no PII, no file contents; see `Telemetry.swift` for the exact payload.
+    /// Anonymous usage + crash-reporting opt-in (active-day counts + app/OS/arch
+    /// breakdown). ON by default and opt-out — flipping it off in Settings sends
+    /// one final opt-out event, then mutes both SDKs (PostHog + Sentry). Their
+    /// local files (random ids, queued events) stay on disk but nothing further
+    /// is sent. No account, no PII, no file contents; see `Telemetry.swift`.
     static var telemetryEnabled: Bool {
         get { d.object(forKey: "telemetry_enabled") as? Bool ?? true }
         set { write(newValue, "telemetry_enabled") }

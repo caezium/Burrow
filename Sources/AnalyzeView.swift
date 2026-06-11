@@ -210,6 +210,16 @@ struct TreemapView: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .contentShape(Rectangle())
+            // One hover hit-test over the laid-out rects — per-cell `.onHover`
+            // tracking areas can stick or misfire, a single region can't, and
+            // `.ended` reliably clears the highlight when the mouse leaves.
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let pt): hoveredID = zip(shown, rects).first { _, r in r.contains(pt) }?.0.id
+                case .ended:          hoveredID = nil
+                }
+            }
         }
     }
 
@@ -228,9 +238,6 @@ struct TreemapView: View {
             // which both lit the wrong square AND made only the first cell
             // clickable.
             .position(x: r.midX, y: r.midY)
-            .onHover { inside in
-                if inside { hoveredID = e.id } else if hoveredID == e.id { hoveredID = nil }
-            }
             .onTapGesture { onOpen(e) }
             .contextMenu {
                 Button(NSLocalizedString("Reveal in Finder", comment: "")) { AnalyzeIcons.reveal(e.path) }

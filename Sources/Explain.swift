@@ -183,19 +183,32 @@ struct ExplainResult: Equatable {
 // MARK: - Prompt
 
 enum ExplainPrompt {
-    /// Whether the running UI language is Chinese (explicit override or system).
-    static func isChinese() -> Bool {
+    /// The Chinese variant of the running UI language, if any
+    /// ("zh-Hans" / "zh-Hant", explicit override or system).
+    static func chineseVariant() -> String? {
         switch Store.appLanguage {
-        case "zh-Hans": return true
-        case "en":      return false
-        default:        return (Bundle.main.preferredLocalizations.first ?? Locale.current.identifier).hasPrefix("zh")
+        case "zh-Hans", "zh-Hant": return Store.appLanguage
+        case "en":                 return nil
+        default:
+            let lang = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+            guard lang.hasPrefix("zh") else { return nil }
+            let traditional = lang.contains("Hant") || lang.contains("TW") || lang.contains("HK") || lang.contains("MO")
+            return traditional ? "zh-Hant" : "zh-Hans"
         }
     }
 
+    static func isChinese() -> Bool { chineseVariant() != nil }
+
     static func make(_ ctx: ExplainContext) -> (system: String, user: String) {
-        let language = isChinese()
-            ? "\n\nWrite the explanation in Simplified Chinese (简体中文). Keep the final ACTION line exactly as specified, in English."
-            : ""
+        let language: String
+        switch chineseVariant() {
+        case "zh-Hans":
+            language = "\n\nWrite the explanation in Simplified Chinese (简体中文). Keep the final ACTION line exactly as specified, in English."
+        case "zh-Hant":
+            language = "\n\nWrite the explanation in Traditional Chinese as used in Taiwan (繁體中文，台灣用語). Keep the final ACTION line exactly as specified, in English."
+        default:
+            language = ""
+        }
         let system = """
         You are Burrow's assistant. Explain a macOS user's system health in plain, \
         calm English from the data below — a live snapshot, a short recent trend, and \

@@ -148,7 +148,8 @@ struct SettingsView: View {
                             Picker("", selection: $appLanguage) {
                                 Text(NSLocalizedString("System", comment: "")).tag("")
                                 Text(verbatim: "English").tag("en")
-                                Text(verbatim: "中文").tag("zh-Hans")
+                                Text(verbatim: "简体中文").tag("zh-Hans")
+                                Text(verbatim: "繁體中文").tag("zh-Hant")
                             }
                             .labelsHidden().pickerStyle(.menu).tint(Brand.textSecondary).fixedSize()
                             .onChange(of: appLanguage) { _, v in
@@ -156,7 +157,7 @@ struct SettingsView: View {
                                 promptRelaunch()
                             }
                         }
-                        footnote("Burrow ships English and 中文. A language change takes effect after a relaunch.")
+                        footnote("Burrow ships English, 简体中文, and 繁體中文. A language change takes effect after a relaunch.")
                     }
 
                     section("Menu bar", "menubar.rectangle") {
