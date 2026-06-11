@@ -28,16 +28,18 @@ import SQLite3
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 enum DBError: Error, LocalizedError {
-    case open(String)
+    // open/step carry the SQLite result code so recovery can tell lock
+    // contention (transient, propagate) from corruption (quarantine).
+    case open(Int32, String)
     case prepare(String)
-    case step(String)
+    case step(Int32, String)
     case unsupported(String)
 
     var errorDescription: String? {
         switch self {
-        case .open(let m): return "DB open failed: \(m)"
+        case .open(let c, let m): return "DB open failed (\(c)): \(m)"
         case .prepare(let m): return "DB prepare failed: \(m)"
-        case .step(let m): return "DB step failed: \(m)"
+        case .step(let c, let m): return "DB step failed (\(c)): \(m)"
         case .unsupported(let m): return "DB unsupported: \(m)"
         }
     }
@@ -80,14 +82,34 @@ final class DB {
         do {
             try self.open(at: url)
         } catch {
+            // Lock contention is NOT damage. A concurrent Burrow process
+            // (the GUI vs `Burrow --mcp`) holds this file mid-write by
+            // design; deleting its live -wal or quarantining the healthy
+            // file IS the data-loss path. Propagate and let the caller
+            // fail soft — the busy timeout already absorbed any short lock.
+            if DB.isLockContention(error) { throw error }
             DB.removeSidecars(url)
             DB.restoreWritePermission(url)
             do {
                 try self.open(at: url)
             } catch {
+                if DB.isLockContention(error) { throw error }
                 try DB.quarantine(url)
                 try self.open(at: url)
             }
+        }
+    }
+
+    /// SQLITE_BUSY / SQLITE_LOCKED (or their extended forms) — another
+    /// connection holds the file; nothing about it is broken.
+    private static func isLockContention(_ error: Error) -> Bool {
+        guard let dbError = error as? DBError else { return false }
+        switch dbError {
+        case .open(let code, _), .step(let code, _):
+            let base = code & 0xff   // strip extended-result bits
+            return base == SQLITE_BUSY || base == SQLITE_LOCKED
+        case .prepare, .unsupported:
+            return false
         }
     }
 
@@ -101,13 +123,18 @@ final class DB {
         // the locking, and the cost is a per-call mutex grab — negligible
         // at our query rate.
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
-        if sqlite3_open_v2(url.path, &h, flags, nil) != SQLITE_OK {
+        let rc = sqlite3_open_v2(url.path, &h, flags, nil)
+        if rc != SQLITE_OK {
             let msg = h.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown"
             if h != nil { sqlite3_close(h) }   // close only a real handle
             self.handle = nil
-            throw DBError.open(msg)
+            throw DBError.open(rc, msg)
         }
         self.handle = h
+        // Wait (up to 2 s) on another connection's short write locks instead
+        // of failing instantly with SQLITE_BUSY — the GUI and `Burrow --mcp`
+        // share this file by design.
+        sqlite3_busy_timeout(h, 2000)
 
         do {
             // WAL mode lets readers run concurrently with the writer.
@@ -198,7 +225,7 @@ final class DB {
             sqlite3_bind_int64(stmt, 2, Int64(ts))
             sqlite3_bind_text(stmt, 3, json, -1, SQLITE_TRANSIENT)
             guard sqlite3_step(stmt) == SQLITE_DONE else {
-                throw DBError.step(self.lastErrorMessage())
+                throw DBError.step(sqlite3_errcode(self.handle), self.lastErrorMessage())
             }
         }
     }
@@ -320,7 +347,7 @@ final class DB {
             defer { sqlite3_finalize(stmt) }
             sqlite3_bind_int64(stmt, 1, Int64(cutoff))
             guard sqlite3_step(stmt) == SQLITE_DONE else {
-                throw DBError.step(self.lastErrorMessage())
+                throw DBError.step(sqlite3_errcode(self.handle), self.lastErrorMessage())
             }
             return Int(sqlite3_changes(self.handle))
         }
@@ -335,12 +362,13 @@ final class DB {
 
     // MARK: - Internals
 
-    private func exec(_ sql: String) throws {
+    func exec(_ sql: String) throws {
         var err: UnsafeMutablePointer<CChar>?
-        if sqlite3_exec(self.handle, sql, nil, nil, &err) != SQLITE_OK {
+        let rc = sqlite3_exec(self.handle, sql, nil, nil, &err)
+        if rc != SQLITE_OK {
             let msg = err.map { String(cString: $0) } ?? "unknown"
             sqlite3_free(err)
-            throw DBError.step(msg)
+            throw DBError.step(rc, msg)
         }
     }
 

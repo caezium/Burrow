@@ -177,6 +177,16 @@ final class PTYTask: PTYPort {
     var onOutput: ((String) -> Void)?
     var onExit: ((Int32) -> Void)?
 
+    /// Both the terminationHandler and the EOF branch can observe the same
+    /// exit; the session must hear about it exactly once. Main-confined —
+    /// both reporters dispatch here.
+    private var reportedExit = false
+    private func reportExitOnce(_ code: Int32) {
+        guard !reportedExit else { return }
+        reportedExit = true
+        onExit?(code)
+    }
+
     private let cols: UInt16
     private let rows: UInt16
     /// `rows` controls how many list rows Mole's TUI renders in one frame (it
@@ -189,6 +199,8 @@ final class PTYTask: PTYPort {
         // from a fresh instance each time. (Reusing the old one left the second
         // scan with a dead, never-spawning child — the UI hung on "Scanning…".)
         proc = Process()
+        // New child, new exactly-once exit report.
+        reportedExit = false
         var amaster: Int32 = 0
         var aslave: Int32 = 0
         var ws = winsize(ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0)
@@ -207,7 +219,7 @@ final class PTYTask: PTYPort {
         proc.environment = env
         proc.terminationHandler = { [weak self] p in
             let code = p.terminationStatus
-            DispatchQueue.main.async { self?.onExit?(code) }
+            DispatchQueue.main.async { self?.reportExitOnce(code) }
         }
         let m = FileHandle(fileDescriptor: amaster, closeOnDealloc: true)
         m.readabilityHandler = { [weak self] h in
@@ -224,7 +236,7 @@ final class PTYTask: PTYPort {
                 h.readabilityHandler = nil
                 if !self.proc.isRunning {
                     let code = self.proc.terminationStatus
-                    DispatchQueue.main.async { self.onExit?(code) }
+                    DispatchQueue.main.async { self.reportExitOnce(code) }
                 }
                 return
             }

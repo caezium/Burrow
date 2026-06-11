@@ -135,6 +135,9 @@ final class UpdatesModel: ObservableObject {
 
     func upgrade(_ item: OutdatedItem) {
         guard let brew = Self.brewPath() else { return }
+        // Already upgrading (this row, or an upgrade-all in flight): a
+        // second concurrent `brew` just trips over brew's own lock.
+        guard !upgrading.contains(item.id) else { return }
         upgrading.insert(item.id)
         DispatchQueue.global(qos: .userInitiated).async {
             _ = Self.runBrew(brew, ["upgrade", item.name], timeout: 1800)
@@ -144,6 +147,9 @@ final class UpdatesModel: ObservableObject {
 
     func upgradeAll() {
         guard let brew = Self.brewPath() else { return }
+        // The button stays tappable while showing "Updating…" — don't let
+        // a second press race the first run into brew's lock.
+        guard upgrading.isEmpty else { return }
         let ids = Set(items.map(\.id))
         upgrading.formUnion(ids)
         DispatchQueue.global(qos: .userInitiated).async {

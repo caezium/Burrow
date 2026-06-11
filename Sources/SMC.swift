@@ -84,12 +84,14 @@ final class SMC {
         guard let r = readRaw(key) else { return nil }
         let b = r.bytes
         switch r.type {
-        case "flt ": return Double(b.prefix(4).withUnsafeBytes { $0.load(as: Float.self) })
+        case "flt ": return Double(b.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: Float.self) })
         case "ui8 ": return Double(b[0])
         case "ui16": return Double(UInt16(b[0]) << 8 | UInt16(b[1]))
         case "ui32": return Double(UInt32(b[0]) << 24 | UInt32(b[1]) << 16 | UInt32(b[2]) << 8 | UInt32(b[3]))
         case "fpe2": return Double((Int(b[0]) << 6) + (Int(b[1]) >> 2))
-        case "sp78": return Double(Int(b[0]) * 256 + Int(b[1])) / 256
+        // sp78 is SIGNED 7.8 fixed-point: the high byte must sign-extend,
+        // or a sub-zero sensor reads as ~+128…255 °C.
+        case "sp78": return Double(Int(Int8(bitPattern: b[0])) * 256 + Int(b[1])) / 256
         default:     return nil
         }
     }

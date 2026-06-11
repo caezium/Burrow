@@ -84,7 +84,9 @@ final class SelectionSessionTests: XCTestCase {
         s = SelectionSession.reduce(s, .output(selectedFrame)).0
         s = SelectionSession.reduce(s, .tick).0
         s = SelectionSession.reduce(s, .tick).0
-        precondition(s.phase == .awaitingConfirm)
+        // XCTFail, not precondition: a reducer regression must fail the
+        // calling case, not crash the whole hosted suite.
+        if s.phase != .awaitingConfirm { XCTFail("fixture expected .awaitingConfirm, got \(s.phase)") }
         return s
     }
 
@@ -117,7 +119,7 @@ final class SelectionSessionTests: XCTestCase {
         var s = awaitingConfirm()
         s = SelectionSession.reduce(s, .output("➤ Delete 1 installers, 760KB  Enter confirm, ESC cancel: ")).0
         s = SelectionSession.reduce(s, .tick).0
-        precondition(s.phase == .confirming)
+        if s.phase != .confirming { XCTFail("fixture expected .confirming, got \(s.phase)") }
         return s
     }
 
@@ -178,7 +180,9 @@ final class SelectionSessionTests: XCTestCase {
         s = SelectionSession.reduce(s, .tick).0
         s = SelectionSession.reduce(s, .output(scrolled4)).0
         s = SelectionSession.reduce(s, .tick).0
-        precondition(s.items.count == 4 && s.viewportCount == 3 && s.fullyLoaded)
+        if !(s.items.count == 4 && s.viewportCount == 3 && s.fullyLoaded) {
+            XCTFail("fixture expected 4 items / viewport 3 / fully loaded, got \(s.items.count)/\(s.viewportCount)/\(s.fullyLoaded)")
+        }
         return s
     }
 

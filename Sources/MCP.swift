@@ -96,35 +96,42 @@ final class MCPServer {
     }
 
     private func handleLine(_ data: Data, output: FileHandle) {
+        if let response = self.response(toLine: data) {
+            self.write(output, response)
+        }
+    }
+
+    /// The whole JSON-RPC envelope decision for one input line — nil means
+    /// "send nothing" (notifications). Split from the FileHandle writer so
+    /// the protocol surface (parse errors, notification silence, unknown
+    /// methods, error-code mapping) is unit-testable.
+    func response(toLine data: Data) -> [String: Any]? {
         // Decode the JSON-RPC envelope loosely — we only care about
         // jsonrpc/id/method/params. Use a flexible decode so we can
         // tell notifications (no id) from requests (with id).
         guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            self.write(output, MCPServer.errorResponse(id: nil, code: -32700,
-                                                      message: "parse error"))
-            return
+            return MCPServer.errorResponse(id: nil, code: -32700, message: "parse error")
         }
         let method = (raw["method"] as? String) ?? ""
         let id = raw["id"]   // may be nil for notifications
 
         switch method {
         case "initialize":
-            self.write(output, self.initializeResponse(id: id))
+            return self.initializeResponse(id: id)
         case "notifications/initialized":
             // Notification — no response. The client is just telling us
             // it processed our initialize response.
-            return
+            return nil
         case "tools/list":
-            self.write(output, self.toolsListResponse(id: id))
+            return self.toolsListResponse(id: id)
         case "tools/call":
-            self.handleToolsCall(raw: raw, id: id, output: output)
+            return self.toolsCallResponse(raw: raw, id: id)
         default:
             // Notifications have no id; don't reply with an error to
             // them, that would be malformed JSON-RPC.
-            if id != nil {
-                self.write(output, MCPServer.errorResponse(id: id, code: -32601,
-                                                          message: "method not found: \(method)"))
-            }
+            guard id != nil else { return nil }
+            return MCPServer.errorResponse(id: id, code: -32601,
+                                           message: "method not found: \(method)")
         }
     }
 
@@ -153,14 +160,14 @@ final class MCPServer {
         ]
     }
 
-    private func handleToolsCall(raw: [String: Any], id: Any?, output: FileHandle) {
+    private func toolsCallResponse(raw: [String: Any], id: Any?) -> [String: Any] {
         let params = raw["params"] as? [String: Any] ?? [:]
         let name = params["name"] as? String ?? ""
         let args = params["arguments"] as? [String: Any] ?? [:]
 
         do {
             let resultText = try self.catalog.call(name: name, arguments: args)
-            self.write(output, [
+            return [
                 "jsonrpc": "2.0",
                 "id": id as Any,
                 "result": [
@@ -168,16 +175,16 @@ final class MCPServer {
                         ["type": "text", "text": resultText],
                     ],
                 ],
-            ])
+            ]
         } catch let MCPToolError.unknown(toolName) {
-            self.write(output, MCPServer.errorResponse(id: id, code: -32602,
-                                                      message: "unknown tool: \(toolName)"))
+            return MCPServer.errorResponse(id: id, code: -32602,
+                                           message: "unknown tool: \(toolName)")
         } catch let MCPToolError.badArguments(reason) {
-            self.write(output, MCPServer.errorResponse(id: id, code: -32602,
-                                                      message: "bad arguments: \(reason)"))
+            return MCPServer.errorResponse(id: id, code: -32602,
+                                           message: "bad arguments: \(reason)")
         } catch {
-            self.write(output, MCPServer.errorResponse(id: id, code: -32603,
-                                                      message: "internal error: \(error.localizedDescription)"))
+            return MCPServer.errorResponse(id: id, code: -32603,
+                                           message: "internal error: \(error.localizedDescription)")
         }
     }
 
@@ -212,6 +219,9 @@ enum MCPToolError: Error {
 /// that returns a JSON string — agents read the text and parse it.
 struct ToolCatalog {
     let db: DB
+    /// The one query/aggregation layer — tool handlers parse arguments and
+    /// format the frozen wire JSON; all DB/decode/ranking semantics live here.
+    private var metrics: MetricsStore { MetricsStore(db: db) }
 
     /// Tool descriptors for `tools/list`. The inputSchema mirrors the
     /// JSON-Schema subset MCP expects; we keep them minimal.
@@ -338,7 +348,7 @@ struct ToolCatalog {
             ],
             [
                 "name": "burrow_uninstall",
-                "description": "Uninstall one or more apps and their leftover files via `mo uninstall <app>…`. Get exact names from burrow_list_apps. SAFE BY DEFAULT: without confirm:true it runs `--dry-run` (preview only). A real uninstall needs confirm:true AND the user's Settings opt-in, else it's reported as blocked. Removed files go to the Trash (recoverable) unless `permanent` is true.",
+                "description": "Uninstall one or more apps and their leftover files via `mo uninstall <app>…`. Get exact names from burrow_list_apps. SAFE BY DEFAULT: without confirm:true it runs `--dry-run` (preview only). A real uninstall needs confirm:true AND BOTH Settings opt-ins (cleanups + the dedicated uninstall/permanent switch), else it's reported as blocked; it also aborts unless mo's matcher resolves exactly the requested apps. Removed files go to the Trash (recoverable) unless `permanent` is true.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -415,7 +425,7 @@ struct ToolCatalog {
     // MARK: Tool implementations
 
     private func callSnapshot() -> String {
-        guard let row = self.db.findLatest(prefix: Sampler.snapshotPrefix) else {
+        guard let row = self.metrics.latestRaw() else {
             return "{\"error\":\"no snapshot yet\"}"
         }
         return "{\"ts\":\(row.ts),\"snapshot\":\(row.json)}"
@@ -424,13 +434,18 @@ struct ToolCatalog {
     private func callHistory(_ args: [String: Any]) throws -> String {
         let minutes = (args["minutes"] as? Int) ?? 60
         let samples = max(1, min((args["samples"] as? Int) ?? 60, 720))
-        guard minutes > 0 else { throw MCPToolError.badArguments("minutes must be positive") }
+        // Upper bound guards against Int overflow in `minutes * 60` below
+        // (Swift traps on overflow — an agent-supplied huge value would
+        // kill the MCP process). Same bound as callProcessUsage.
+        guard minutes > 0, minutes <= 1_000_000 else {
+            throw MCPToolError.badArguments("minutes must be between 1 and 1000000")
+        }
 
         let now = Int(Date().timeIntervalSince1970)
         let since = now - minutes * 60
-        let rows = self.db.findRangeSampled(prefix: Sampler.snapshotPrefix,
-                                            since: since, until: now,
-                                            maxPoints: samples)
+        let rows = self.metrics.rawRows(prefix: MetricsStore.snapshotPrefix,
+                                        MetricsStore.Window(since: since, until: now),
+                                        maxPoints: samples)
         var pieces: [String] = []
         pieces.reserveCapacity(rows.count)
         for r in rows {
@@ -442,26 +457,22 @@ struct ToolCatalog {
     private func callTopProcesses(_ args: [String: Any]) throws -> String {
         let minutes = (args["minutes"] as? Int) ?? 60
         let limit = max(1, min((args["limit"] as? Int) ?? 10, 100))
-        guard minutes > 0 else { throw MCPToolError.badArguments("minutes must be positive") }
+        // Same overflow bound as callHistory/callProcessUsage.
+        guard minutes > 0, minutes <= 1_000_000 else {
+            throw MCPToolError.badArguments("minutes must be between 1 and 1000000")
+        }
 
         let now = Int(Date().timeIntervalSince1970)
         let since = now - minutes * 60
         // 720 sampled rows over the window is the same budget the
         // HistoryView uses — enough to catch any process that peaked.
-        var peakCPU: [String: Double] = [:]
-        var peakMem: [String: Double] = [:]
-        for stored in SnapshotStore.range(self.db, since: since, until: now, maxPoints: 720) {
-            for p in (stored.status.topProcesses ?? []) {
-                if p.cpu > (peakCPU[p.name] ?? 0)    { peakCPU[p.name] = p.cpu }
-                if p.memory > (peakMem[p.name] ?? 0) { peakMem[p.name] = p.memory }
-            }
-        }
-        let top = peakCPU.sorted { $0.value > $1.value }.prefix(limit)
+        let top = self.metrics.processWindow(MetricsStore.Window(since: since, until: now))
+            .ranked(by: .peakCPU, limit: limit)
         var pieces: [String] = []
-        for (name, cpu) in top {
-            let escaped = name.replacingOccurrences(of: "\\", with: "\\\\")
-                              .replacingOccurrences(of: "\"", with: "\\\"")
-            pieces.append("{\"name\":\"\(escaped)\",\"peak_cpu\":\(cpu),\"peak_mem\":\(peakMem[name] ?? 0)}")
+        for p in top {
+            let escaped = p.name.replacingOccurrences(of: "\\", with: "\\\\")
+                                .replacingOccurrences(of: "\"", with: "\\\"")
+            pieces.append("{\"name\":\"\(escaped)\",\"peak_cpu\":\(p.peakCPU),\"peak_mem\":\(p.peakMem)}")
         }
         return "{\"window_minutes\":\(minutes),\"processes\":[\(pieces.joined(separator: ","))]}"
     }
@@ -479,69 +490,30 @@ struct ToolCatalog {
         }
         let limit = max(1, min((args["limit"] as? Int) ?? 10, 100))
         let metric = (args["metric"] as? String) ?? "cpu_time"
-        let allowed = ["cpu_time", "peak_cpu", "avg_cpu", "peak_mem"]
-        guard allowed.contains(metric) else {
+        guard let rank = MetricsStore.ProcessRank(rawValue: metric) else {
+            let allowed = MetricsStore.ProcessRank.allCases.map(\.rawValue)
             throw MCPToolError.badArguments("metric must be one of: \(allowed.joined(separator: ", "))")
         }
 
         let now = Int(Date().timeIntervalSince1970)
         let since = now - minutes * 60
-        let snaps = SnapshotStore.range(self.db, since: since, until: now, maxPoints: 720)
-        // The store down-samples wide windows, so each returned snapshot stands
-        // for MORE than one sample period. Estimate CPU-time against the effective
-        // spacing of the snapshots we actually got — using the raw sampler cadence
-        // would badly under-count over long windows.
-        let interval: Double = snaps.count > 1
-            ? Double(max(1, snaps[snaps.count - 1].ts - snaps[0].ts)) / Double(snaps.count - 1)
-            : Double(Store.sampleIntervalSeconds)
-
-        struct Agg { var peakCPU = 0.0; var sumCPU = 0.0; var samples = 0; var peakMem = 0.0 }
-        var agg: [String: Agg] = [:]
-        for stored in snaps {
-            let s = stored.status
-            for p in (s.topProcesses ?? []) {
-                var a = agg[p.name] ?? Agg()
-                a.peakCPU = max(a.peakCPU, p.cpu)
-                a.sumCPU += p.cpu
-                a.samples += 1
-                a.peakMem = max(a.peakMem, p.memory)
-                agg[p.name] = a
-            }
-        }
-
-        func score(_ a: Agg) -> Double {
-            switch metric {
-            case "peak_cpu": return a.peakCPU
-            case "avg_cpu":  return a.samples > 0 ? a.sumCPU / Double(a.samples) : 0
-            case "peak_mem": return a.peakMem
-            default:         return (a.sumCPU / 100.0) * interval   // est. CPU-seconds
-            }
-        }
-
-        let ranked = agg.sorted { score($0.value) > score($1.value) }.prefix(limit)
+        let pw = self.metrics.processWindow(MetricsStore.Window(since: since, until: now))
         var pieces: [String] = []
-        for (name, a) in ranked {
-            let escaped = name.replacingOccurrences(of: "\\", with: "\\\\")
-                              .replacingOccurrences(of: "\"", with: "\\\"")
-            let avg = a.samples > 0 ? a.sumCPU / Double(a.samples) : 0
-            let cpuTime = (a.sumCPU / 100.0) * interval
-            pieces.append("{\"name\":\"\(escaped)\",\"peak_cpu\":\(a.peakCPU),\"avg_cpu\":\(avg),\"est_cpu_time_seconds\":\(cpuTime),\"peak_mem\":\(a.peakMem),\"samples\":\(a.samples)}")
+        for p in pw.ranked(by: rank, limit: limit) {
+            let escaped = p.name.replacingOccurrences(of: "\\", with: "\\\\")
+                                .replacingOccurrences(of: "\"", with: "\\\"")
+            pieces.append("{\"name\":\"\(escaped)\",\"peak_cpu\":\(p.peakCPU),\"avg_cpu\":\(p.avgCPU),\"est_cpu_time_seconds\":\(p.estCPUSeconds),\"peak_mem\":\(p.peakMem),\"samples\":\(p.samples)}")
         }
-        let startTS = snaps.first?.ts ?? since
-        let endTS = snaps.last?.ts ?? now
-        return "{\"metric\":\"\(metric)\",\"window_minutes\":\(minutes),\"start_ts\":\(startTS),\"end_ts\":\(endTS),\"sample_count\":\(snaps.count),\"interval_seconds\":\(Int(interval.rounded())),\"processes\":[\(pieces.joined(separator: ","))]}"
+        return "{\"metric\":\"\(metric)\",\"window_minutes\":\(minutes),\"start_ts\":\(pw.startTS),\"end_ts\":\(pw.endTS),\"sample_count\":\(pw.sampleCount),\"interval_seconds\":\(Int(pw.intervalSeconds.rounded())),\"processes\":[\(pieces.joined(separator: ","))]}"
     }
 
     private func callInfo() -> String {
         let now = Int(Date().timeIntervalSince1970)
-        let prefixes = self.db.listPrefixes()
         var pieces: [String] = []
-        for p in prefixes {
-            if let row = self.db.findLatest(prefix: p) {
-                pieces.append("{\"prefix\":\"\(p)\",\"latest_ts\":\(row.ts),\"age_seconds\":\(max(0, now - row.ts))}")
-            } else {
-                pieces.append("{\"prefix\":\"\(p)\",\"latest_ts\":null,\"age_seconds\":null}")
-            }
+        for r in self.metrics.readers(now: now) {
+            let ts = r.latestTS.map(String.init) ?? "null"
+            let age = r.ageSeconds.map(String.init) ?? "null"
+            pieces.append("{\"prefix\":\"\(r.prefix)\",\"latest_ts\":\(ts),\"age_seconds\":\(age)}")
         }
         return "{\"now\":\(now),\"retention_days\":\(Store.retentionDays),\"sample_interval_seconds\":\(Store.sampleIntervalSeconds),\"readers\":[\(pieces.joined(separator: ","))]}"
     }
@@ -553,12 +525,20 @@ struct ToolCatalog {
     /// object when `mo` isn't installed so the tool never throws.
     private func callCleanupHistory(_ args: [String: Any]) -> String {
         let limit = max(1, min((args["limit"] as? Int) ?? 20, 200))
-        guard let res = try? MoleCLI.run(args: ["history", "--json", "--limit", "\(limit)"],
-                                         timeout: 15),
-              res.exitCode == 0 else {
+        let res = try? MoleCLI.run(args: ["history", "--json", "--limit", "\(limit)"], timeout: 15)
+        return Self.cleanupHistoryResult(exitCode: res?.exitCode ?? 127, stdout: res?.stdout ?? "")
+    }
+
+    /// Shape `mo history --json` output into the tool's reply. Pure so both
+    /// the mo-present and mo-absent (exit 127) branches are deterministically
+    /// testable. Mole-present → its JSON verbatim (or an empty `sessions`);
+    /// otherwise a valid error object — never a throw, so an agent never sees
+    /// -32603 just because Mole isn't installed.
+    static func cleanupHistoryResult(exitCode: Int32, stdout: String) -> String {
+        guard exitCode == 0 else {
             return "{\"error\":\"mo history unavailable\",\"sessions\":[]}"
         }
-        let out = res.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        let out = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         return out.isEmpty ? "{\"sessions\":[]}" : out
     }
 
@@ -570,7 +550,14 @@ struct ToolCatalog {
         let limit = max(1, min((args["limit"] as? Int) ?? 100, 5000))
         let logPath = Self.deletionsLogPath()
         let text = (try? String(contentsOfFile: logPath, encoding: .utf8)) ?? ""
-        let files = Self.parseDeletionLog(text, limit: limit)
+        return Self.deletedFilesResult(logText: text, logPath: logPath, limit: limit)
+    }
+
+    /// Build the deleted-files reply from raw log text. Pure (the only impure
+    /// part — reading the log file — stays in the caller) so the wrapping is
+    /// deterministically testable for both populated and empty logs.
+    static func deletedFilesResult(logText: String, logPath: String, limit: Int) -> String {
+        let files = parseDeletionLog(logText, limit: limit)
         let out: [String: Any] = ["count": files.count, "log": logPath, "files": files]
         if let data = try? JSONSerialization.data(withJSONObject: out,
                                                   options: [.withoutEscapingSlashes]),
@@ -695,13 +682,35 @@ struct ToolCatalog {
         guard Self.realActionAllowed(confirm: confirm, optedIn: Store.mcpActionsEnabled) else {
             return Self.blockedResult(command: "uninstall", extra: ["apps": apps])
         }
+        // Uninstall is irreversible-class (apps disappear; `permanent` even
+        // bypasses the Trash). The cleanup opt-in alone isn't consent for
+        // that — it needs the dedicated second switch.
+        guard Store.mcpIrreversibleEnabled else {
+            return Self.blockedResult(command: "uninstall", extra: [
+                "apps": apps,
+                "reason": "Uninstalls are off for agents. Real `mo uninstall` (and any permanent delete) additionally requires 'Also allow uninstalls & permanent deletes' in Burrow \u{25B8} Settings \u{25B8} Agent. A dry-run preview works without it.",
+            ])
+        }
+        // Pre-flight (audit H4, same interlock as the GUI): pin what mo's
+        // matcher resolves BEFORE answering its prompts. Divergent or
+        // unparseable output aborts — fail closed.
+        let dry = Self.runMo(["uninstall", "--dry-run"] + apps, stdin: "", timeout: 120)
+        guard let matchedApps = UninstallGuard.matchedApps(inDryRunOutput: dry.stdout + "\n" + dry.stderr) else {
+            return Self.jsonString(["command": "uninstall", "ran": false, "apps": apps,
+                                    "error": "aborted: couldn't verify which apps mo matched"])
+        }
+        if let mismatch = UninstallGuard.mismatchDescription(confirmed: apps, matched: matchedApps) {
+            return Self.jsonString(["command": "uninstall", "ran": false, "apps": apps,
+                                    "matched": matchedApps,
+                                    "error": "aborted: mo matched a different set than requested (\(mismatch)). Use exact names from burrow_list_apps."])
+        }
         var moArgs = ["uninstall"]
         if permanent { moArgs.append("--permanent") }
         moArgs += apps
         // mo uninstall is interactive ("Proceed? [y/N]" + "Enter confirm"); feed
-        // yes so it doesn't block forever on a non-TTY. The Settings opt-in +
-        // confirm:true above are the real gate.
-        let res = Self.runMo(moArgs, stdin: String(repeating: "y\n", count: 16), timeout: 600)
+        // yes so it doesn't block forever on a non-TTY. The two Settings
+        // opt-ins + confirm:true + the dry-run match above are the gate.
+        let res = Self.runMo(moArgs, stdin: String(repeating: "y\n", count: 4), timeout: 600)
         return Self.actionResult(command: "uninstall", dryRun: false, ran: res.exitCode == 0, res: res,
                                  extra: ["apps": apps, "permanent": permanent])
     }

@@ -26,19 +26,10 @@ enum MoleCLI {
     /// locations because GUI apps inherit a stripped-down PATH that often
     /// doesn't include Homebrew's bin directory.
     static func findExecutable() -> String? {
-        // Hardcoded fallbacks first — fastest path and works in the GUI-launched
-        // case where PATH is `/usr/bin:/bin:/usr/sbin:/sbin` and Homebrew is
-        // invisible.
-        let candidates = [
-            "/opt/homebrew/bin/mo",      // Apple Silicon Homebrew
-            "/usr/local/bin/mo",          // Intel Homebrew / manual install
-            "/usr/bin/mo",
-        ]
-        for path in candidates {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                return path
-            }
-        }
+        // Hardcoded locations first — fastest path and works in the
+        // GUI-launched case where PATH is `/usr/bin:/bin:/usr/sbin:/sbin`
+        // and Homebrew is invisible.
+        if let trusted = trustedExecutable() { return trusted }
         // Last resort: ask the shell. Will work if the user launched Burrow
         // from a terminal with their PATH set up, but not from Finder.
         if let viaShell = try? run(args: ["which", "mo"], executable: "/usr/bin/env").stdout,
@@ -49,6 +40,39 @@ enum MoleCLI {
             }
         }
         return nil
+    }
+
+    /// The known install locations ONLY — no PATH lookup. ELEVATED runs
+    /// must resolve through this: accepting a user-writable PATH entry
+    /// would hand root to whatever binary shadowed `mo` first.
+    static func trustedExecutable() -> String? {
+        let candidates = [
+            "/opt/homebrew/bin/mo",      // Apple Silicon Homebrew
+            "/usr/local/bin/mo",          // Intel Homebrew / manual install
+            "/usr/bin/mo",
+        ]
+        for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
+            return path
+        }
+        return nil
+    }
+
+    /// Build the `do shell script` source for one elevated invocation:
+    /// every argv element single-quoted for the shell, the whole command
+    /// then escaped for embedding in an AppleScript string literal, and an
+    /// optional output redirect to a (quoted) log file. The ONE builder
+    /// shared by every elevated path, so the two escaping passes can't
+    /// drift apart again (one runner had them, the other didn't).
+    static func elevatedScript(executable: String, args: [String],
+                               redirectTo logPath: String? = nil) -> String {
+        func shQuote(_ s: String) -> String {
+            "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }
+        var raw = ([executable] + args).map(shQuote).joined(separator: " ")
+        if let logPath { raw += " > \(shQuote(logPath)) 2>&1" }
+        let inner = raw.replacingOccurrences(of: "\\", with: "\\\\")
+                       .replacingOccurrences(of: "\"", with: "\\\"")
+        return "do shell script \"\(inner)\" with administrator privileges"
     }
 
     // MARK: - Install / version
@@ -107,6 +131,30 @@ enum MoleCLI {
         let exitCode: Int32
     }
 
+    /// Reads one pipe to EOF on a background thread so the child can keep
+    /// writing while we wait for it. macOS pipes hold ~64 KB; without a
+    /// concurrent drain a chatty child blocks in write(2), the parent blocks
+    /// in waitUntilExit(), and the only exit is the timeout killer plus a
+    /// truncated capture (this silently broke Analyze and the app list on
+    /// real-world output sizes).
+    private final class Drain: @unchecked Sendable {
+        private let done = DispatchSemaphore(value: 0)
+        private var data = Data()
+        init(_ pipe: Pipe) {
+            let handle = pipe.fileHandleForReading
+            DispatchQueue.global(qos: .utility).async {
+                self.data = handle.readDataToEndOfFile()
+                self.done.signal()
+            }
+        }
+        /// EOF arrives once the child exits (the parent holds no write end),
+        /// so after waitUntilExit this returns promptly.
+        func wait() -> Data {
+            done.wait()
+            return data
+        }
+    }
+
     /// Run an executable with the given args, capturing stdout + stderr.
     /// Blocks until the process exits — callers are responsible for
     /// running this on a background queue. Times out after `timeout`
@@ -137,6 +185,12 @@ enum MoleCLI {
 
         try task.run()
 
+        // Start draining BEFORE feeding stdin or waiting: the child may
+        // produce output while still consuming input, and both pipes must
+        // keep flowing for either side to finish.
+        let out = Drain(outPipe)
+        let err = Drain(errPipe)
+
         // Write the canned input and close the write end so the child sees
         // EOF after consuming it. Ignore write failures: if Mole exits before
         // reading everything, the pipe write fails with EPIPE, which is fine.
@@ -157,8 +211,8 @@ enum MoleCLI {
         task.waitUntilExit()
         killer.cancel()
 
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+        let outData = out.wait()
+        let errData = err.wait()
         return Result(
             stdout: String(data: outData, encoding: .utf8) ?? "",
             stderr: String(data: errData, encoding: .utf8) ?? "",
@@ -169,18 +223,10 @@ enum MoleCLI {
     /// Run `mo <args>` ONCE with administrator rights via the macOS auth
     /// dialog (which accepts Touch ID where the system supports it). Blocking
     /// — call off the main thread. For one-shot privileged config like
-    /// `touchid enable/disable`, not for streamed jobs (CommandRunner does those).
+    /// `touchid enable/disable`, not for streamed jobs (OperationFlow does those).
     static func runElevated(args: [String]) -> Int32 {
-        guard let mo = findExecutable() else { return 127 }
-        // Quote each argument for the shell, then escape the whole command for
-        // embedding in an AppleScript string literal. Belt-and-suspenders since
-        // today's callers pass only literal subcommands, but keeps a stray space
-        // or quote in a path from breaking (or injecting into) the script.
-        func shQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
-        let raw = ([mo] + args).map(shQuote).joined(separator: " ")
-        let inner = raw.replacingOccurrences(of: "\\", with: "\\\\")
-                       .replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "do shell script \"\(inner)\" with administrator privileges"
+        guard let mo = trustedExecutable() else { return 127 }
+        let script = elevatedScript(executable: mo, args: args)
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         task.arguments = ["-e", script]

@@ -94,7 +94,38 @@ final class QueryServer {
             }
         }
         conn.start(queue: self.queue)
+        // A client that connects and never completes a request would
+        // otherwise pin its receive chain (and buffer) forever. We serve one
+        // request per connection, so any legitimate client is long done
+        // inside this window; cancelling an already-closed connection is a
+        // no-op.
+        self.queue.asyncAfter(deadline: .now() + 10) { [weak conn] in
+            conn?.cancel()
+        }
         self.receive(conn, accumulated: Data())
+    }
+
+    /// What the receive loop should do next, as a pure function of the bytes
+    /// accumulated so far. Keeps the policy (when to respond, when to give
+    /// up) testable without a socket.
+    enum RequestAction: Equatable {
+        case respond(String)
+        case keepReading
+        case drop
+    }
+
+    /// No legitimate request head is anywhere near this big; a client still
+    /// streaming without the blank-line terminator past this point is broken
+    /// or hostile, and the buffer must not grow with it.
+    static let maxRequestBytes = 64 * 1024
+
+    static func nextAction(buffer: Data, isComplete: Bool) -> RequestAction {
+        if buffer.count > Self.maxRequestBytes { return .drop }
+        if let header = String(data: buffer, encoding: .utf8),
+           header.contains("\r\n\r\n") || isComplete {
+            return .respond(header)
+        }
+        return isComplete ? .drop : .keepReading
     }
 
     private func receive(_ conn: NWConnection, accumulated: Data) {
@@ -103,37 +134,41 @@ final class QueryServer {
             if err != nil { conn.cancel(); return }
             var buf = accumulated
             if let data { buf.append(data) }
-            if let header = String(data: buf, encoding: .utf8),
-               header.contains("\r\n\r\n") || isComplete {
-                let response = self.route(header)
-                self.send(response, on: conn)
-                return
+            switch Self.nextAction(buffer: buf, isComplete: isComplete) {
+            case .respond(let header):
+                self.send(self.route(header), on: conn)
+            case .drop:
+                conn.cancel()
+            case .keepReading:
+                self.receive(conn, accumulated: buf)
             }
-            if isComplete { conn.cancel(); return }
-            self.receive(conn, accumulated: buf)
         }
+    }
+
+    /// Response head for the one shape we ever send (200 + JSON + close).
+    /// Deliberately NO CORS header: the user's browser is also a loopback
+    /// client, and an allow-all grant would let any web page read /snapshot
+    /// (hostname, process command lines) cross-origin. The real clients —
+    /// curl and the stdio MCP bridge — don't need CORS at all.
+    static func httpHead(contentLength: Int) -> String {
+        return "HTTP/1.1 200 OK\r\n"
+            + "Content-Type: application/json; charset=utf-8\r\n"
+            + "Content-Length: \(contentLength)\r\n"
+            + "Cache-Control: no-store\r\n"
+            + "Connection: close\r\n"
+            + "\r\n"
     }
 
     private func send(_ json: String, on conn: NWConnection) {
         let body = Data(json.utf8)
-        let head = """
-HTTP/1.1 200 OK\r
-Content-Type: application/json; charset=utf-8\r
-Content-Length: \(body.count)\r
-Cache-Control: no-store\r
-Access-Control-Allow-Origin: *\r
-Connection: close\r
-\r
-
-"""
-        var payload = Data(head.utf8)
+        var payload = Data(Self.httpHead(contentLength: body.count).utf8)
         payload.append(body)
         conn.send(content: payload, completion: .contentProcessed { _ in conn.cancel() })
     }
 
     // MARK: - Routing
 
-    private func route(_ raw: String) -> String {
+    func route(_ raw: String) -> String {
         guard let first = raw.split(separator: "\r\n", maxSplits: 1).first else {
             return Self.errorJSON("malformed request")
         }
@@ -164,33 +199,31 @@ Connection: close\r
         }
     }
 
+    private var metrics: MetricsStore { MetricsStore(db: db) }
+
     private func routeInfo() -> String {
         let now = Int(Date().timeIntervalSince1970)
-        let prefixes = self.db.listPrefixes()
+        let statuses = self.metrics.readers(now: now)
         var readers: [[String: Any]] = []
-        for p in prefixes {
-            if let latest = self.db.findLatest(prefix: p) {
-                readers.append([
-                    "prefix": p,
-                    "latest_ts": latest.ts,
-                    "age_seconds": max(0, now - latest.ts),
-                ])
-            } else {
-                readers.append(["prefix": p, "latest_ts": NSNull(), "age_seconds": NSNull()])
-            }
+        for r in statuses {
+            readers.append([
+                "prefix": r.prefix,
+                "latest_ts": r.latestTS.map { $0 as Any } ?? NSNull(),
+                "age_seconds": r.ageSeconds.map { $0 as Any } ?? NSNull(),
+            ])
         }
         let payload: [String: Any] = [
             "now": now,
             "app": "Burrow",
             "port": self.port,
-            "prefixes": prefixes,
+            "prefixes": statuses.map(\.prefix),
             "readers": readers,
         ]
         return Self.jsonString(payload)
     }
 
     private func routeSnapshot() -> String {
-        guard let row = self.db.findLatest(prefix: Sampler.snapshotPrefix) else {
+        guard let row = self.metrics.latestRaw() else {
             return Self.errorJSON("no snapshot yet")
         }
         // Inline the stored JSON verbatim under a known key. Callers that
@@ -206,9 +239,9 @@ Connection: close\r
         let since = Int(query["since"] ?? "") ?? (now - 3600)
         let until = Int(query["until"] ?? "") ?? now
         let bucket = Int(query["bucket"] ?? "")
-        let rows = (bucket.map { _ in true } ?? false)
-            ? self.db.findRangeSampled(prefix: prefix, since: since, until: until, maxPoints: 720)
-            : self.db.findRange(prefix: prefix, since: since, until: until)
+        let rows = self.metrics.rawRows(prefix: prefix,
+                                        MetricsStore.Window(since: since, until: until),
+                                        maxPoints: bucket != nil ? 720 : nil)
 
         // Embed stored JSON verbatim, no parse → re-encode roundtrip.
         var pieces: [String] = []

@@ -176,4 +176,40 @@ final class DBTests: XCTestCase {
         let deleted = try db.pruneOlderThan(100)
         XCTAssertEqual(deleted, 0)
     }
+
+    // MARK: - Lock contention is not corruption (audit H3)
+
+    /// `Burrow --mcp` opens the same file while the GUI is writing — by
+    /// design. A busy/locked open must NOT walk the recovery ladder:
+    /// deleting a live `-wal` corrupts the other connection's database,
+    /// and quarantining a healthy file silently discards the history.
+    func testInit_lockedDatabaseIsNeitherStrippedNorQuarantined() throws {
+        let url = tempDir.appendingPathComponent("busy.db")
+        let a = try DB(at: url)
+        try a.insert(prefix: "p", ts: 1, json: "{\"keep\":true}")
+        try a.exec("BEGIN EXCLUSIVE;")   // hold the lock like a mid-write peer
+        defer { try? a.exec("COMMIT;") }
+
+        _ = try? DB(at: url)             // may throw — must not destroy
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path + "-wal"),
+                      "the live WAL of a concurrently-open DB must survive a busy open")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path + ".corrupt"),
+                       "a healthy-but-busy DB must not be quarantined")
+    }
+
+    /// Two connections to the same file (GUI + MCP process) must wait out
+    /// each other's short write locks instead of failing instantly.
+    func testConcurrentConnections_waitOutShortLocks() throws {
+        let url = tempDir.appendingPathComponent("shared.db")
+        let a = try DB(at: url)
+        let b = try DB(at: url)
+        try a.exec("BEGIN IMMEDIATE;")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+            try? a.exec("COMMIT;")
+        }
+        // Without a busy handler this throws SQLITE_BUSY the instant the
+        // lock collides; with one, the 300 ms lock is simply waited out.
+        XCTAssertNoThrow(try b.insert(prefix: "p", ts: 1, json: "{}"))
+    }
 }

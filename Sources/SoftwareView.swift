@@ -306,15 +306,43 @@ final class SoftwareModel: ObservableObject {
         let opId = UUID()
         OperationCenter.shared.begin(opId, label: "Uninstalling \(targets.count) app\(targets.count == 1 ? "" : "s")")
         DispatchQueue.global(qos: .userInitiated).async {
-            // `mo uninstall <app>` is interactive: it prints the matched apps,
-            // asks "Proceed with uninstallation? [y/N]", then a final "Enter
-            // confirm" screen. A GUI app has no TTY/stdin, so without feeding
-            // answers it blocks until the timeout and nothing happens. Burrow
-            // already gated this behind its own confirm sheet above, so it's
-            // safe to auto-answer yes. The repeated lines cover both prompts
-            // (and any per-app variation); extra input is harmless once mo exits.
-            let answers = String(repeating: "y\n", count: 16)
+            // Pre-flight (audit H4): mo does its own name matching, so before
+            // answering any prompt, verify what it MATCHED equals what the
+            // user CONFIRMED. `--dry-run` changes nothing and exits at its
+            // prompt on stdin EOF; an unparseable result aborts (fail closed).
+            let dry = try? MoleCLI.run(args: ["uninstall", "--dry-run"] + names,
+                                       stdin: "", timeout: 120)
+            let dryText = (dry?.stdout ?? "") + "\n" + (dry?.stderr ?? "")
+            let matched = UninstallGuard.matchedApps(inDryRunOutput: dryText)
+            let problem: String?
+            if let matched {
+                problem = UninstallGuard.mismatchDescription(confirmed: names, matched: matched)
+            } else {
+                problem = NSLocalizedString("couldn't verify which apps mo matched", comment: "")
+            }
+            if let problem {
+                Task { @MainActor in
+                    self.loading = false
+                    OperationCenter.shared.end(opId, success: false,
+                                               detail: NSLocalizedString("aborted — matcher mismatch", comment: ""))
+                    let alert = NSAlert()
+                    alert.messageText = NSLocalizedString("Uninstall aborted", comment: "")
+                    alert.informativeText = String(
+                        format: NSLocalizedString("mo's matcher didn't agree with your selection, so nothing was removed.\n\n%@", comment: ""),
+                        problem)
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+                    alert.runModal()
+                }
+                return
+            }
+
+            // Verified — answer mo's two prompts (proceed + final confirm),
+            // with a small margin. The y's only ever apply to the set the
+            // dry run just pinned.
+            let answers = String(repeating: "y\n", count: 4)
             let res = try? MoleCLI.run(args: ["uninstall"] + names, stdin: answers, timeout: 300)
+            let ok = (res?.exitCode ?? 1) == 0
             let parsed = Self.fetch()
             Task { @MainActor in
                 self.apps = parsed
@@ -325,8 +353,9 @@ final class SoftwareModel: ObservableObject {
                 // would silently collapse after an uninstall.
                 self.recentLoaded = false
                 if self.sort == .recent { self.ensureRecentDates() }
-                OperationCenter.shared.end(opId, success: (res?.exitCode ?? 1) == 0,
-                                           detail: "\(targets.count) moved to Trash")
+                OperationCenter.shared.end(opId, success: ok,
+                                           detail: ok ? "\(targets.count) moved to Trash"
+                                                      : NSLocalizedString("uninstall failed", comment: ""))
             }
         }
     }

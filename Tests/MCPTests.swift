@@ -27,13 +27,70 @@ final class MCPTests: XCTestCase {
 
         // Seed a couple of snapshots so tools have something to return.
         let now = Int(Date().timeIntervalSince1970)
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now - 60, json: sampleSnapshot(cpu: 22.5))
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now,      json: sampleSnapshot(cpu: 88.0))
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now - 60, json: sampleSnapshot(cpu: 22.5))
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now,      json: sampleSnapshot(cpu: 88.0))
     }
 
     override func tearDown() {
         db = nil
         try? FileManager.default.removeItem(at: tempDir)
+        Store.d.removePersistentDomain(forName: StoreTests.scratchSuite)
+        Store.d = .standard
+    }
+
+    // MARK: - Argument hardening (audit M1)
+    //
+    // `minutes * 60` traps on Int overflow in all build configs — an
+    // agent-supplied huge value must come back as a tool error, not kill
+    // the MCP process. (No RED run exists for these: the un-guarded code
+    // crashes the test runner instead of failing the assert.)
+
+    func testHistory_rejectsOverflowingMinutes() {
+        XCTAssertThrowsError(try catalog.call(name: "burrow_history",
+                                              arguments: ["minutes": 200_000_000_000_000_000]))
+    }
+
+    func testTopProcesses_rejectsOverflowingMinutes() {
+        XCTAssertThrowsError(try catalog.call(name: "burrow_top_processes",
+                                              arguments: ["minutes": 200_000_000_000_000_000]))
+    }
+
+    func testHistory_acceptsSaneMinutes() throws {
+        let json = try catalog.call(name: "burrow_history", arguments: ["minutes": 120])
+        XCTAssertTrue(json.contains("\"count\""))
+    }
+
+    // MARK: - Irreversible-action gate (audit M2)
+
+    /// The cleanup opt-in alone must NOT unlock uninstalls: they're
+    /// irreversible-class (and `permanent:true` even bypasses the Trash),
+    /// so they need the dedicated second switch. Blocked means blocked —
+    /// no `mo` is spawned, the reply says why.
+    func testUninstall_blockedWithoutIrreversibleOptIn() throws {
+        Store.d = UserDefaults(suiteName: StoreTests.scratchSuite)!
+        Store.d.removePersistentDomain(forName: StoreTests.scratchSuite)
+        Store.mcpActionsEnabled = true   // first key on; second key stays off
+
+        let json = try catalog.call(name: "burrow_uninstall",
+                                    arguments: ["apps": ["Slack"], "confirm": true])
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(obj["blocked"] as? Bool, true)
+        XCTAssertEqual(obj["ran"] as? Bool, false)
+        let reason = try XCTUnwrap(obj["reason"] as? String)
+        XCTAssertTrue(reason.localizedCaseInsensitiveContains("uninstall"),
+                      "the block reason must point at the missing uninstall opt-in")
+    }
+
+    /// With neither key on, confirm:true is still blocked (pre-existing
+    /// behavior, pinned so the gate order can't regress).
+    func testUninstall_blockedWithoutAnyOptIn() throws {
+        Store.d = UserDefaults(suiteName: StoreTests.scratchSuite)!
+        Store.d.removePersistentDomain(forName: StoreTests.scratchSuite)
+
+        let json = try catalog.call(name: "burrow_uninstall",
+                                    arguments: ["apps": ["Slack"], "confirm": true])
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(obj["blocked"] as? Bool, true)
     }
 
     func testDescriptors_listsAllToolsWithSchema() {
@@ -98,7 +155,7 @@ final class MCPTests: XCTestCase {
         XCTAssertNotNil(obj["retention_days"])
         let readers = try XCTUnwrap(obj["readers"] as? [[String: Any]])
         XCTAssertEqual(readers.count, 1)
-        XCTAssertEqual(readers[0]["prefix"] as? String, Sampler.snapshotPrefix)
+        XCTAssertEqual(readers[0]["prefix"] as? String, MetricsStore.snapshotPrefix)
     }
 
     /// The semantic usage tool must re-rank by the requested metric — the
@@ -110,13 +167,13 @@ final class MCPTests: XCTestCase {
         // timestamps off the seed rows so we don't collide on the PK and
         // make `heavy` out-rank it on cumulative load.)
         let now = Int(Date().timeIntervalSince1970)
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now - 300,
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now - 300,
                       json: snapshotJSON([("heavy", 60, 5)]))
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now - 240,
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now - 240,
                       json: snapshotJSON([("heavy", 60, 5)]))
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now - 180,
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now - 180,
                       json: snapshotJSON([("heavy", 60, 5), ("spike", 1, 1)]))
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now - 120,
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now - 120,
                       json: snapshotJSON([("spike", 95, 1)]))
 
         let byCPUTime = try names(from: catalog.call(name: "burrow_process_usage",
@@ -155,22 +212,50 @@ final class MCPTests: XCTestCase {
         XCTAssertFalse(BurrowMain.isMCPInvocation(["Burrow", "status"]))
     }
 
-    // The two issue-#2 tools shell out to `mo`/read its log, which may be
-    // absent on a CI runner. They must still return parseable JSON (real
-    // data when Mole is present, a graceful empty object otherwise) and
-    // never throw — an agent should never get a -32603 for "Mole isn't here".
-    func testCleanupHistory_alwaysReturnsValidJSON() throws {
-        let json = try catalog.call(name: "burrow_cleanup_history", arguments: ["limit": 5])
+    // The two issue-#2 tools shell out to `mo` / read its log, which may be
+    // absent on a CI runner. Rather than a machine-dependent "always valid
+    // JSON" check (which passed whether mo ran, failed, or was missing), the
+    // wrapping logic is now a pure function tested for BOTH branches.
+
+    func testCleanupHistory_moAbsent_yieldsGracefulErrorObject() throws {
+        // exit 127 = mo not found. Must be a valid object an agent can read,
+        // never a throw.
+        let json = ToolCatalog.cleanupHistoryResult(exitCode: 127, stdout: "")
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
-        XCTAssertTrue(obj["sessions"] != nil || obj["error"] != nil,
-                      "must carry sessions (mo present) or an error marker")
+        XCTAssertNotNil(obj["error"])
+        XCTAssertEqual(obj["sessions"] as? [Any] != nil, true)
     }
 
-    func testDeletedFiles_alwaysReturnsValidJSON() throws {
-        let json = try catalog.call(name: "burrow_deleted_files", arguments: ["limit": 10])
+    func testCleanupHistory_moPresent_passesThroughItsJSON() throws {
+        let molesJSON = #"{"sessions":[{"command":"clean","size":"1MB"}]}"#
+        let json = ToolCatalog.cleanupHistoryResult(exitCode: 0, stdout: "  \(molesJSON)\n")
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
-        XCTAssertNotNil(obj["count"] as? Int)
-        XCTAssertNotNil(obj["files"] as? [[String: Any]])
+        let sessions = try XCTUnwrap(obj["sessions"] as? [[String: Any]])
+        XCTAssertEqual(sessions.first?["command"] as? String, "clean")
+        XCTAssertNil(obj["error"], "a successful run must not carry an error marker")
+    }
+
+    func testCleanupHistory_moPresentButEmpty_yieldsEmptySessions() throws {
+        let json = ToolCatalog.cleanupHistoryResult(exitCode: 0, stdout: "   \n")
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual((obj["sessions"] as? [Any])?.count, 0)
+    }
+
+    func testDeletedFiles_emptyLog_yieldsZeroCount() throws {
+        let json = ToolCatalog.deletedFilesResult(logText: "", logPath: "/tmp/x.log", limit: 10)
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(obj["count"] as? Int, 0)
+        XCTAssertEqual((obj["files"] as? [Any])?.count, 0)
+    }
+
+    func testDeletedFiles_populatedLog_countsAndOrdersNewestFirst() throws {
+        let log = "2026\ttrash\tcache\tok\t/a\n2026\tremove\tlog\tok\t/b"
+        let json = ToolCatalog.deletedFilesResult(logText: log, logPath: "/tmp/x.log", limit: 10)
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(obj["count"] as? Int, 2)
+        XCTAssertEqual(obj["log"] as? String, "/tmp/x.log")
+        let files = try XCTUnwrap(obj["files"] as? [[String: Any]])
+        XCTAssertEqual(files.first?["path"] as? String, "/b", "newest first")
     }
 
     func testParseDeletionLog_parsesRowsNewestFirst() {

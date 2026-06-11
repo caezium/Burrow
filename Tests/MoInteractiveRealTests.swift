@@ -18,6 +18,11 @@ final class MoInteractiveRealTests: XCTestCase {
     private var bag = Set<AnyCancellable>()
 
     func testRealInstallerScan_resolvesWithoutHanging() throws {
+        // Opt-in only: the real scan walks Desktop/Documents/Downloads, which
+        // triggers TCC prompts on un-granted machines and can exceed the
+        // timeout on large disks. CI and default local runs skip it.
+        try XCTSkipUnless(Foundation.ProcessInfo.processInfo.environment["BURROW_REAL_MO_TESTS"] == "1",
+                          "set BURROW_REAL_MO_TESTS=1 to run the real `mo installer` scan")
         try XCTSkipUnless(MoleCLI.findExecutable() != nil, "needs `mo` on PATH")
 
         let runner = MoInteractiveRunner(subcommand: "installer", title: "Installers")

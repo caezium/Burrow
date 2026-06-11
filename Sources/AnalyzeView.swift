@@ -363,8 +363,17 @@ final class AnalyzeModel: ObservableObject {
         }
     }
 
+    /// Monotonic token: every navigation (scan start OR instant cache hit)
+    /// bumps it, and a finishing background scan applies its result only if
+    /// it is still the newest — a slow walk must not clobber the folder the
+    /// breadcrumbs have since moved to. (Same pattern as HistoryView's
+    /// `loadGen`.)
+    private var scanGen = 0
+
     private func scan(_ path: String, name: String, push: Bool, force: Bool = false) {
         if push { crumbs.append((name, path)) }
+        scanGen += 1
+        let gen = scanGen
         // Cache hit → show instantly; don't re-run `mo analyze` for a
         // folder we already walked (back/drill is the common navigation).
         if !force, let cached = cache[path] {
@@ -379,7 +388,8 @@ final class AnalyzeModel: ObservableObject {
                 let r = try DiskScanner.scan(path)
                 let sum = r.totalSize > 0 ? r.totalSize : r.entries.reduce(0) { $0 + $1.size }
                 Task { @MainActor in
-                    self.cache[path] = (r.entries, sum)
+                    self.cache[path] = (r.entries, sum)   // cache stays warm either way
+                    guard gen == self.scanGen else { return }
                     self.entries = r.entries
                     self.total = sum
                     self.loading = false
@@ -388,6 +398,7 @@ final class AnalyzeModel: ObservableObject {
                 }
             } catch {
                 Task { @MainActor in
+                    guard gen == self.scanGen else { return }
                     self.error = error.localizedDescription
                     self.loading = false
                     OperationCenter.shared.end(self.opId, success: false, detail: NSLocalizedString("scan failed", comment: ""))

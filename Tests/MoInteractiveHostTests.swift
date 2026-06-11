@@ -5,8 +5,8 @@
 //  Integration test for the host that wires the SelectionSession reducer to a
 //  pseudo-terminal. Uses a scripted FakePTY (records keystrokes, replays canned
 //  frames) and a manual tick so the whole flow runs deterministically with no
-//  real subprocess and no wall-clock. (Requires `mo` on PATH for `start()` to
-//  launch the fake — the portable safety net is SelectionSessionTests.)
+//  real subprocess and no wall-clock. An injected executable path lets it run
+//  on a bare CI runner without `mo` (the FakePTY ignores the path anyway).
 //
 
 import XCTest
@@ -75,13 +75,14 @@ final class MoInteractiveHostTests: XCTestCase {
         wait(for: [second], timeout: 5)
     }
 
-    func testHost_scanSelectConfirm_drivesKeystrokesAndFinishes() throws {
-        try XCTSkipUnless(MoleCLI.findExecutable() != nil, "needs `mo` on PATH to launch the pty")
-
+    func testHost_scanSelectConfirm_drivesKeystrokesAndFinishes() {
         let fake = FakePTY()
         // Large tick interval so the real timer never fires; we step manually.
+        // Injected executable path → no dependency on `mo` being installed;
+        // the FakePTY's launch() ignores the path entirely.
         let runner = MoInteractiveRunner(subcommand: "installer", title: "Installers",
-                                         pty: fake, tickInterval: 999)
+                                         pty: fake, tickInterval: 999,
+                                         executablePath: "/fake/mo")
         runner.start()
         XCTAssertTrue(fake.launched)
 
