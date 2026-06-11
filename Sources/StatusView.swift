@@ -3,12 +3,12 @@
 //  Burrow
 //
 //  The Status dashboard — Burrow's faithful take on mole.fit's Status
-//  ("Sun") screen, built on the data the existing Sampler already
+//  ("Sun") screen, built on the data the SnapshotProducer already
 //  writes (`mo status --json` → SQLite). Two rows of glass metric cards
 //  (Health / CPU / Memory / GPU, then Disk / Network / Battery) over a
 //  sortable, pinnable process table.
 //
-//  Live values come from `Sampler.lastSnapshot` (in-memory, refreshed
+//  Live values come from `LiveFeed.lastSnapshot` (in-memory, refreshed
 //  each tick); the sparklines pull ~30 min of history from the DB.
 //
 
@@ -206,7 +206,7 @@ struct HealthRing: View {
 
 struct DiskCard: View {
     let s: MoleStatus
-    /// Live 1 s disk throughput from IOMonitor; falls back to the mo snapshot.
+    /// Live 1 s disk throughput from the LiveFeed; falls back to the mo snapshot.
     var liveRead: Double? = nil
     var liveWrite: Double? = nil
     var minHeight: CGFloat? = nil

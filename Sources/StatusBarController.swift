@@ -4,7 +4,7 @@
 //
 //  Owns the NSStatusItem and its popover. The popover is created
 //  lazily on first click and reused; its NSHostingController holds
-//  the SwiftUI `PopupView` bound to the Sampler (for live snapshot
+//  the SwiftUI `PopupView` bound to the LiveFeed (for live snapshot
 //  data) and the AppDelegate (for the History / Cleanup / Settings
 //  buttons that open windows).
 //

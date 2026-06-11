@@ -8,7 +8,7 @@
 //  captured output. Views and the MCP server call this instead of each
 //  re-implementing "spawn mo X → parse".
 //
-//  (Note: the Sampler still keeps Mole's raw `status` JSON — it stores and
+//  (Note: the SnapshotProducer still keeps Mole's raw `status` JSON — it stores and
 //  patches the text — so it doesn't go through `status()` here.)
 //
 
@@ -68,7 +68,7 @@ enum MoleClient {
     }
 
     /// A fresh system snapshot (`mo status --json`). Decodes to the typed model.
-    /// The periodic Sampler does NOT use this — it keeps the raw JSON to store +
+    /// The periodic producer does NOT use this — it keeps the raw JSON to store +
     /// patch — but one-shot readers can.
     static func status(timeout: TimeInterval = 8) -> MoleStatus? {
         guard let res = try? MoleCLI.run(args: ["status", "--json"], timeout: timeout),

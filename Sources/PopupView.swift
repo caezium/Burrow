@@ -4,7 +4,7 @@
 //
 //  The menu-bar HUD — Burrow's take on mole.fit's menu-bar popover, on
 //  the same brand + data path as the Status tab. It reuses the Status
-//  data model exactly: live values from `Sampler.lastSnapshot`, mini
+//  data model exactly: live values from `LiveFeed.lastSnapshot`, mini
 //  sparklines from `DB.findRangeSampled(prefix: MetricsStore.snapshotPrefix)`,
 //  rendered with the shared Brand components (Eyebrow / MiniChart /
 //  HealthRing / ProgressBar). The popover stays owned by

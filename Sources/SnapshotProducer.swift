@@ -62,7 +62,12 @@ protocol SnapshotSink {
 
 /// What the views observe — the latest decoded snapshot plus the 1 Hz
 /// net/disk rates and ring. Main-thread confined: the engine publishes
-/// through `publishOnMain`, views read from SwiftUI.
+/// through `publishOnMain`, views read from SwiftUI. The mutators assert
+/// main-thread (Thread.isMainThread), so any future off-main writer
+/// trips in debug rather than silently re-introducing the off-main publish
+/// race the old Sampler had. (A `@MainActor` annotation would force the
+/// non-isolated producer's init to construct it off the main actor — a hard
+/// error in Swift 5 mode — so the runtime guard is the practical safeguard.)
 final class LiveFeed: ObservableObject {
     struct Sample {
         let time: Date
@@ -87,6 +92,7 @@ final class LiveFeed: ObservableObject {
     var diskHistory: [Double] { samples.map { $0.readMBs + $0.writeMBs } }
 
     fileprivate func applySnapshot(_ s: MoleStatus, at: Date) {
+        assert(Thread.isMainThread, "LiveFeed must publish on the main thread")
         lastSnapshot = s
         sampledAt = at
     }
@@ -95,6 +101,7 @@ final class LiveFeed: ObservableObject {
     /// keep the previous published value, same as IOMonitor always did.
     fileprivate func applyTick(time: Date, rx: Double?, tx: Double?,
                                read: Double?, write: Double?, window: Int) {
+        assert(Thread.isMainThread, "LiveFeed must publish on the main thread")
         if let rx { rxMBs = rx }
         if let tx { txMBs = tx }
         if let read { readMBs = read }

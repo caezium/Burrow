@@ -33,7 +33,7 @@ enum Store {
         d.synchronize()
     }
 
-    // MARK: - Sampler
+    // MARK: - Sampling
 
     /// Seconds between `mo status --json` invocations. Clamp to [5, 3600]
     /// because below 5 the subprocess overhead dominates, and above an

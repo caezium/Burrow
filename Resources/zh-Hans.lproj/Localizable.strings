@@ -258,7 +258,6 @@
 "MB/s" = "MB/s";
 "read" = "读取";
 "write" = "写入";
-"Network" = "网络";
 "rx" = "接收";
 "tx" = "发送";
 "Thermal" = "温度";
@@ -363,7 +362,6 @@
 "Cleanup tools" = "清理工具";
 "Try asking" = "试试这样问";
 "Copy prompt" = "复制提示词";
-"Endpoint" = "端点";
 "Preview what a cleanup would free, then clean it up." = "预览清理能释放多少空间，然后执行清理。";
 "Uninstall Slack and remove its leftovers." = "卸载 Slack 并清除它的残留文件。";
 "What's my Mac's CPU and memory usage right now?" = "我的 Mac 现在的 CPU 和内存使用率是多少？";

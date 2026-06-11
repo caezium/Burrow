@@ -8,7 +8,7 @@
 //       alert with the install command, then quit.
 //    2. Open the SQLite history DB.
 //    3. Start QueryServer (Store-gated).
-//    4. Start Sampler (Store-configured cadence).
+//    4. Start SnapshotProducer (Store-configured cadence).
 //    5. Start Maintenance (hourly prune).
 //    6. Install the NSStatusItem.
 //
@@ -24,7 +24,7 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Singleton handle so SwiftUI views can reach the live
-    /// Maintenance / Sampler / DB without threading them through every
+    /// Maintenance / SnapshotProducer / DB without threading them through every
     /// initializer.
     static private(set) var shared: AppDelegate?
 

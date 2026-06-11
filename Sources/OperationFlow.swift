@@ -10,9 +10,10 @@
 //  never a subclass.
 //
 //  The process boundary is one method behind ProcessPort. Production uses
-//  SystemProcessPort (the spawn/elevated/stdin mechanics extracted from
-//  CommandRunner); tests script a fake. Plan #29 phase 6's unified runner
-//  replaces SystemProcessPort behind the same port when it lands.
+//  SystemProcessPort for the streaming op runs (Clean/Optimize); tests
+//  script a fake. This is the sibling of MoleProcess (the #29 capture-spawn
+//  runner): SystemProcessPort streams long-running ops, MoleProcess captures
+//  one-shot output — they coexist by use-case.
 //
 
 import Foundation
@@ -221,7 +222,7 @@ extension ToolOperation where Report == TaskRunReport {
 
 // MARK: - Production adapter
 
-/// The spawn mechanics extracted from CommandRunner: plain runs stream
+/// The streaming-op spawn mechanics: plain runs stream
 /// stdout+stderr through pipes; elevated runs go through ONE osascript auth
 /// prompt with output tailed from a temp log (`do shell script` doesn't
 /// stream); stdin is fed then closed; a timeout kills the child. All output
@@ -235,6 +236,12 @@ struct SystemProcessPort: ProcessPort {
             var logHandle: FileHandle?
 
             if spec.elevated {
+                // The osascript `do shell script` wrapper has no stdin channel,
+                // so elevated + stdin is unsupported. No caller pairs them today
+                // (stdin-fed flows like uninstall run un-elevated via MoleCLI.run);
+                // assert so the unsupported combo fails loudly rather than
+                // silently dropping the input if someone wires it up later.
+                assert(spec.stdin == nil, "elevated runs don't support stdin")
                 let safe = spec.arguments.map { $0.filter(\.isLetter) }.joined(separator: "-")
                 let logPath = NSTemporaryDirectory() + "burrow-op-\(safe).log"
                 FileManager.default.createFile(atPath: logPath, contents: Data())

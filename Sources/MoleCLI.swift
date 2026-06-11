@@ -6,7 +6,7 @@
 //  on a system-installed copy (`brew install mole`), found via PATH.
 //
 //  Three commands matter to Burrow today:
-//    * `mo status --json` — periodic sampler (Sampler.swift uses this).
+//    * `mo status --json` — periodic sampling (SnapshotProducer uses this).
 //      Emits the full system snapshot as JSON in ~3 KB. Auto-emits JSON
 //      when stdout is not a TTY, but we pass `--json` explicitly so the
 //      contract is visible in the args.
