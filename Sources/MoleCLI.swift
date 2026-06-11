@@ -107,12 +107,16 @@ enum MoleCLI {
         let exitCode: Int32
     }
 
+    /// The subprocess runner. Production uses `SystemMoleProcess`; tests inject
+    /// a fake (reset in `tearDown`). Test-only seam — not a configuration point.
+    internal static var processPort: MoleProcessPort = SystemMoleProcess()
+
     /// Run an executable with the given args, capturing stdout + stderr.
     /// Blocks until the process exits — callers are responsible for
     /// running this on a background queue. Times out after `timeout`
-    /// seconds; on timeout the process is terminated and we throw, rather
-    /// than returning a partial result, because callers always want
-    /// either a complete snapshot or to retry.
+    /// seconds; on timeout the process is terminated and the call returns a
+    /// non-zero `exitCode` (it does NOT throw). Callers treat any non-zero
+    /// exit as failure rather than distinguishing timeout from other errors.
     ///
     /// `stdin` feeds the child's standard input then closes it (EOF). This
     /// is how the uninstall flow answers Mole's `Proceed? [y/N]` and
@@ -123,46 +127,18 @@ enum MoleCLI {
                     executable: String? = nil,
                     stdin: String? = nil,
                     timeout: TimeInterval = 10) throws -> Result {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: executable ?? (findExecutable() ?? "/usr/bin/false"))
-        task.arguments = args
-
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        task.standardOutput = outPipe
-        task.standardError = errPipe
-
-        let inPipe: Pipe? = stdin != nil ? Pipe() : nil
-        if let inPipe { task.standardInput = inPipe }
-
-        try task.run()
-
-        // Write the canned input and close the write end so the child sees
-        // EOF after consuming it. Ignore write failures: if Mole exits before
-        // reading everything, the pipe write fails with EPIPE, which is fine.
-        if let inPipe, let stdin, let data = stdin.data(using: .utf8) {
-            let h = inPipe.fileHandleForWriting
-            try? h.write(contentsOf: data)
-            try? h.close()
-        }
-
-        // Kill the task after `timeout` if it's still running. The
-        // termination handler clears the timer so we don't fire stale
-        // kills against a recycled PID.
-        let killer = DispatchWorkItem { [weak task] in
-            if let task, task.isRunning { task.terminate() }
-        }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: killer)
-
-        task.waitUntilExit()
-        killer.cancel()
-
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+        let resolvedExecutable = executable ?? (findExecutable() ?? "/usr/bin/false")
+        let processResult = try MoleProcess.capture(
+            executable: resolvedExecutable,
+            args: args,
+            stdin: stdin,
+            timeout: timeout,
+            port: processPort
+        )
         return Result(
-            stdout: String(data: outData, encoding: .utf8) ?? "",
-            stderr: String(data: errData, encoding: .utf8) ?? "",
-            exitCode: task.terminationStatus
+            stdout: processResult.stdout,
+            stderr: processResult.stderr,
+            exitCode: processResult.exitCode
         )
     }
 
