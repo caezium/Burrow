@@ -16,7 +16,16 @@ cask "burrow" do
   homepage "https://github.com/caezium/Burrow"
 
   depends_on formula: "mole"
-  depends_on macos: :sonoma
+  # Homebrew 5.1.11 (May 2026) changed `depends_on macos: :sonoma` from
+  # "exactly Sonoma" to "Sonoma or newer" and deprecated the `">= :sonoma"`
+  # string form (a hard error under HOMEBREW_DEVELOPER). Branch so both old
+  # and new Homebrew get "macOS 14 or newer" with no warning.
+  # TODO: drop the legacy branch once pre-5.1.11 Homebrew is rare (~2027).
+  if Version.new(HOMEBREW_VERSION.split("-").first) >= Version.new("5.1.11")
+    depends_on macos: :sonoma
+  else
+    depends_on macos: ">= :sonoma"
+  end
 
   app "Burrow.app"
 
