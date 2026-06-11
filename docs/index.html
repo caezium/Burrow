@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Burrow · Free, open-source native Mac utility for cleanup, software, and status</title>
 <meta name="description" content="Burrow is a free, open-source native macOS app: clean junk, manage apps, run maintenance, map your disk, and watch live status in one window. Plus long-range history and an MCP server for Claude Code. Built on the Mole CLI.">
-<meta name="theme-color" content="#120E09">
+<meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="burrow-icon.png">
 <link rel="apple-touch-icon" href="burrow-icon-512.png">
 
@@ -16,229 +16,288 @@
 <meta property="og:url" content="https://caezium.github.io/Burrow/">
 <meta name="twitter:card" content="summary">
 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
+  /* Cal Sans — caezium house display face (self-hosted) */
+  @font-face {
+    font-family: "Cal Sans";
+    src: url("assets/fonts/CalSans-SemiBold.woff2") format("woff2");
+    font-weight: 600; font-style: normal; font-display: swap;
+  }
+
   :root {
-    /* dark, warm "burrow" ground — same restrained layout as mole.fit, our palette */
-    --bg:      #120E09;
-    --bg-soft: #17120C;
-    --espresso:#241B12;
-    --ink:     #F3ECDD;            /* cream — primary text */
-    --ink-2:   rgba(243,236,221,0.60);
-    --ink-3:   rgba(243,236,221,0.38);
-    --hair:    rgba(243,236,221,0.13);
-    --hair-2:  rgba(243,236,221,0.07);
-    --card:    rgba(243,236,221,0.04);
-    --accent:  #D9A066;            /* the burrow's warm light */
+    /* ===== caezium house style (adopted from devport) ===== */
+    /* dark charcoal ground · peach + lilac accents · Geist + Cal Sans · over-rounded · card-based */
+    --bg:       #121217;
+    --bg-soft:  #16161d;
+    --surface:  rgba(243,236,221,0.045);
+    --surface-2:rgba(243,236,221,0.07);
+    --ink:      #F3ECDD;
+    --ink-2:    rgba(243,236,221,0.72);
+    --ink-3:    rgba(243,236,221,0.46);
+    --hair:     rgba(243,236,221,0.14);
+    --hair-2:   rgba(243,236,221,0.08);
+    --accent:   #D9A066;   /* peach — primary */
+    --on-accent:#241B12;
+    --lilac:    #D6C6FF;
+    --apricot:  #FFD3B6;
+    --mint:     #C9F2E6;
 
     /* per-tool jewels — straight from Burrow's Tool.swift */
     --teal:#35C2A5; --coral:#F0714E; --violet:#8E84F0; --azure:#4FA3E3;
     --gold:#E6A93C; --moss:#6FB06A; --ginger:#D98C5F; --green:#57D58E; --red:#F0604E;
 
-    --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, "Times New Roman", serif;
-    --mono:  ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
+    --serif:   "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono:    "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    --heading: "Cal Sans", "Geist", -apple-system, system-ui, sans-serif;
 
-    --page: 1120px;
-    --pad: 64px;
+    --r-card: 28px;
+    --r-lg: 36px;
+    --r-sm: 18px;
+    --flat: 0 1px 0 rgba(255,255,255,0.05) inset;
+    --page: 1100px;
+    --pad: 40px;
   }
 
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
   body {
-    margin: 0;
-    color: var(--ink);
-    font-family: var(--serif);
-    font-size: 17px; line-height: 1.62;
-    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-    overflow-x: hidden;
+    margin: 0; color: var(--ink); font-family: var(--serif);
+    font-size: 18px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden;
     background-color: var(--bg);
     background-image:
-      radial-gradient(1100px 560px at 50% -8%, rgba(217,160,102,0.10), transparent 60%),
-      radial-gradient(900px 600px at 88% 4%, rgba(217,160,102,0.05), transparent 55%);
-    background-repeat: no-repeat;
+      radial-gradient(1200px 600px at 82% -10%, rgba(217,160,102,0.10), transparent 60%),
+      radial-gradient(1000px 520px at -10% 108%, rgba(217,160,102,0.08), transparent 60%);
+    background-repeat: no-repeat; background-attachment: fixed;
   }
   a { color: inherit; text-decoration: none; }
-  a.u { text-decoration: underline; text-decoration-color: rgba(217,160,102,0.45); text-underline-offset: 3px; }
+  a.u { text-decoration: underline; text-decoration-color: rgba(217,160,102,0.5); text-underline-offset: 3px; }
   a.u:hover { text-decoration-color: var(--accent); }
   img { display: block; max-width: 100%; }
   ::selection { background: rgba(217,160,102,0.26); }
   .page { max-width: var(--page); margin: 0 auto; padding: 0 var(--pad); }
+  .mono { font-family: var(--mono); }
+  code.k, .cmd { font-family: var(--mono); font-size: 0.84em; background: rgba(243,236,221,0.08); padding: 2px 7px; border-radius: 7px; color: var(--ink); }
 
-  h1,h2,h3 { margin: 0; font-weight: 500; }
-  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
-  .muted { color: var(--ink-2); }
+  /* ---------- top bar: segmented nav (devport) ---------- */
+  .topbar { position: sticky; top: 0; z-index: 50; padding: 14px 0;
+    background: rgba(18,18,23,0.72); backdrop-filter: saturate(150%) blur(14px); -webkit-backdrop-filter: saturate(150%) blur(14px);
+    border-bottom: 1px solid var(--hair-2); }
+  .topbar .in { display: flex; align-items: center; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mk { width: 26px; height: 26px; border-radius: 8px; }
+  .brand .nm { font-family: var(--mono); font-size: 15px; }
+  .seg { margin-left: auto; display: inline-flex; border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
+  .seg a { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); padding: 9px 15px; border-left: 1px solid var(--hair); transition: .15s; }
+  .seg a:first-child { border-left: 0; }
+  .seg a:hover { color: var(--ink); background: var(--surface-2); }
+  .ghosticon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--hair); color: var(--ink-2); transition: .15s; }
+  .ghosticon:hover { color: var(--ink); background: var(--surface); }
+  .ghosticon svg { width: 17px; height: 17px; }
+  .btn { font-family: var(--serif); font-weight: 600; font-size: 14.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 9px;
+    padding: 12px 22px; border-radius: 999px; border: 1.5px solid var(--accent); transition: .15s, transform .1s; white-space: nowrap; }
+  .btn:active { transform: translateY(1px); }
+  .btn-fill { background: var(--accent); color: var(--on-accent); }
+  .btn-fill:hover { background: #E3AD77; border-color: #E3AD77; }
+  .btn-out { background: transparent; color: var(--ink); border-color: var(--hair); }
+  .btn-out:hover { background: var(--surface); border-color: var(--ink); }
+  .btn-sm { padding: 9px 18px; font-size: 13.5px; }
+  .btn svg { width: 16px; height: 16px; }
+  @media (max-width: 820px) { .seg { display: none; } }
 
-  /* ---------- top bar ---------- */
-  .topbar { padding-top: 30px; }
-  .topbar .row { display: flex; align-items: baseline; gap: 14px; }
-  .topbar .brandline { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; color: var(--ink-2); }
-  .topbar .brandline b { color: var(--ink); font-weight: 600; }
-  .topbar .links { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 14px; }
-  .topbar .links a { color: var(--ink-2); }
-  .topbar .links a:hover { color: var(--ink); }
-  .topbar .links svg { width: 17px; height: 17px; display: block; }
-
-  /* ---------- hero (text-only, like mole) ---------- */
-  .hero { padding: 58px 0 30px; }
-  .hero h1 { font-size: clamp(60px, 11vw, 104px); line-height: 1.0; letter-spacing: -0.018em;
-    display: flex; align-items: baseline; gap: 0.2em; }
-  .hero h1 .mark { width: 0.6em; height: 0.6em; flex: 0 0 auto; transform: translateY(0.02em); }
-  .hero .sub { font-size: clamp(21px, 2.6vw, 27px); line-height: 1.42; max-width: 690px; margin: 30px 0 0; color: var(--ink); }
-  .hero .sub b { color: var(--ink); font-weight: 600; }
-  .hero .meta { margin: 30px 0 0; font-family: var(--mono); font-size: 13px; color: var(--ink-3);
-    display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
-  .hero .meta b { color: var(--accent); font-weight: 600; }
+  /* ---------- hero ---------- */
+  .hero { padding: 64px 0 34px; }
+  .hero .brandline { font-family: var(--mono); font-size: 12px; letter-spacing: 0.05em; color: var(--ink-3); }
+  .hero .brandline b { color: var(--ink-2); }
+  .hero h1 { font-family: var(--heading); font-weight: 600; font-size: clamp(58px, 10.5vw, 100px); line-height: 1.02;
+    letter-spacing: -0.01em; margin: 16px 0 0; display: flex; align-items: baseline; gap: 0.2em; }
+  .hero h1 .mark { width: 0.58em; height: 0.58em; transform: translateY(0.03em); }
+  .tagchip { display: inline-flex; align-items: center; gap: 9px; margin-top: 20px; padding: 9px 18px; border-radius: 999px;
+    background: rgba(217,160,102,0.16); border: 1px solid rgba(217,160,102,0.28); color: #E7C49A; font-weight: 600; font-size: 14.5px; }
+  .tagchip .d { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .hero .sub { font-size: clamp(20px, 2.4vw, 25px); line-height: 1.44; max-width: 660px; margin: 24px 0 0; color: var(--ink); }
+  .hero .sub b { font-weight: 600; }
+  .hero .meta { margin: 24px 0 0; font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .hero .meta b { color: var(--accent); }
   .hero .meta .dot { color: var(--hair); }
-  .cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
-  .hero-cmd { margin: 18px 0 0; font-family: var(--mono); font-size: 14px; color: var(--ink);
-    background: rgba(243,236,221,0.05); border: 1px solid var(--hair); border-radius: 11px;
-    padding: 12px 17px; display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    cursor: pointer; transition: .15s; text-align: left; }
-  .hero-cmd:hover { border-color: rgba(217,160,102,0.55); background: rgba(243,236,221,0.07); }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+  .cta .btn { padding: 14px 26px; font-size: 15px; }
+  .hero-cmd { margin: 18px 0 0; font-family: var(--mono); font-size: 13.5px; color: var(--ink); cursor: pointer; text-align: left;
+    background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-sm); padding: 13px 18px;
+    display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; transition: .15s; }
+  .hero-cmd:hover { border-color: rgba(217,160,102,0.55); background: var(--surface-2); }
   .hero-cmd .dollar { color: var(--accent); }
   .hero-cmd .hint { font-family: var(--serif); font-size: 13px; color: var(--ink-3); margin-left: 4px; }
   .hero-cmd.copied { border-color: var(--green); }
   .hero-cmd.copied .hint::after { content: " — copied"; color: var(--green); }
 
-  .btn { font-family: var(--serif); font-size: 15px; border-radius: 999px; padding: 13px 28px; cursor: pointer;
-    border: 1.5px solid var(--ink); display: inline-flex; align-items: center; gap: 9px; transition: .15s, transform .1s; }
-  .btn:active { transform: translateY(1px); }
-  .btn-fill { background: var(--ink); color: var(--espresso); font-weight: 600; letter-spacing: 0.2px; }
-  .btn-fill:hover { background: #fff; border-color: #fff; }
-  .btn-out { background: transparent; color: var(--ink); font-weight: 500; border-color: var(--hair); }
-  .btn-out:hover { background: var(--card); border-color: var(--ink); }
-  .btn svg { width: 16px; height: 16px; }
+  /* ---------- sections ---------- */
+  section { padding: 56px 0; }
+  .sec-head { margin-bottom: 28px; max-width: 760px; }
+  .sec-num { font-family: var(--mono); font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+  .sec-title { font-family: var(--heading); font-weight: 600; font-size: clamp(28px, 4vw, 40px); line-height: 1.06; letter-spacing: -0.005em; margin: 12px 0 0; }
+  .sec-intro { font-size: 17.5px; line-height: 1.55; color: var(--ink-2); margin: 16px 0 0; }
+  .sec-intro a { color: var(--accent); }
+  .covers { margin-top: 14px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); }
+  .covers a { color: var(--ink-2); } .covers a:hover { color: var(--accent); }
 
-  /* ---------- section scaffold ---------- */
-  section { padding: 64px 0; }
-  .rule { border: 0; border-top: 1px solid var(--hair-2); margin: 0; }
-  .sec-num { font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
-  .sec-title { font-size: clamp(28px, 4vw, 36px); line-height: 1.1; letter-spacing: -0.01em; margin: 13px 0 0; }
-  .sec-intro { font-size: 18px; line-height: 1.55; max-width: 720px; margin: 18px 0 0; color: var(--ink); }
-  .sec-head { padding-bottom: 30px; }
-  .covers { margin-top: 14px; font-size: 15px; color: var(--ink-2); }
-  .covers a { color: var(--ink); } .covers a:hover { color: var(--accent); }
-  code.k, .cmd { font-family: var(--mono); font-size: 0.86em; background: rgba(243,236,221,0.08); padding: 1px 6px; border-radius: 5px; color: var(--ink); }
+  .card { background: var(--surface); border: 1px solid var(--hair-2); border-radius: var(--r-card); box-shadow: var(--flat); }
 
   /* ---------- 00 See it ---------- */
-  .demo-panel { position: relative; margin-top: 6px; border-radius: 16px; overflow: hidden; background: #0B0907;
-    border: 1px solid var(--hair); aspect-ratio: 16 / 10; display: grid; place-items: center;
-    box-shadow: 0 40px 80px -52px rgba(0,0,0,0.85); }
-  .demo-panel img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
-  .demo-panel img.contain { object-fit: contain; padding: 22px; }
-  .demo-foot { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 22px; }
-  .demo-now { display: flex; align-items: baseline; gap: 12px; min-width: 240px; }
-  .demo-now .name { font-size: 21px; }
-  .demo-now .tag { font-style: italic; font-size: 14px; color: var(--ink-2); }
-  .demo-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
-  .pill { font-family: var(--serif); font-size: 14px; cursor: pointer; padding: 7px 16px; border-radius: 999px;
-    border: 1px solid var(--hair); background: transparent; color: var(--ink); transition: .14s; }
-  .pill:hover { border-color: rgba(243,236,221,0.35); }
-  .pill[aria-selected="true"] { background: var(--ink); color: var(--espresso); border-color: var(--ink); font-weight: 600; }
+  .demo { padding: 14px; }
+  .demo .stage { position: relative; border-radius: 20px; overflow: hidden; background: #0c0c11; aspect-ratio: 16 / 10; }
+  .demo .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  .demo .stage img.contain { object-fit: contain; padding: 18px; }
+  .demo-foot { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 16px 8px 4px; }
+  .demo-now { min-width: 220px; }
+  .demo-now .name { font-family: var(--heading); font-weight: 600; font-size: 20px; }
+  .demo-now .tag { font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+  .demo-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin-left: auto; }
+  .pill { font-family: var(--mono); font-size: 12px; cursor: pointer; color: var(--ink-2); padding: 6px 13px; border-radius: 999px;
+    border: 1px solid var(--hair); background: transparent; transition: .14s; }
+  .pill:hover { color: var(--ink); border-color: rgba(243,236,221,0.3); }
+  .pill[aria-selected="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
 
-  /* ---------- 01 The Five: editorial rows ---------- */
-  .tool-row { display: grid; grid-template-columns: 300px 1fr; gap: 40px; padding: 30px 0; border-top: 1px solid var(--hair-2); }
-  .tool-row .name { font-size: 23px; display: flex; align-items: center; gap: 11px; }
-  .tool-row .swatch { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: 0 0 auto; box-shadow: 0 0 10px color-mix(in srgb, var(--c) 70%, transparent); }
-  .tool-row .tag { font-style: italic; font-size: 14.5px; color: var(--c); opacity: .92; margin-top: 6px; }
-  .tool-row .desc { font-size: 16.5px; line-height: 1.6; max-width: 620px; align-self: center; color: var(--ink); }
-  .tool-row .desc .cmd b { color: var(--c); font-weight: 600; }
-  .subhead-mini { margin: 46px 0 0; font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.04em; color: var(--ink-3); }
+  /* ---------- 01 tools: card grid ---------- */
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; align-items: start; }
+  .tcard { padding: 24px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--hair-2);
+    box-shadow: var(--flat); transition: transform .18s, box-shadow .18s, border-color .18s; }
+  .tcard:hover { transform: translateY(-3px); border-color: var(--hair); box-shadow: 0 26px 52px -36px var(--c); }
+  .tcard .top { display: flex; align-items: center; gap: 11px; }
+  .tcard .ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto;
+    background: color-mix(in srgb, var(--c) 16%, transparent); border: 1px solid color-mix(in srgb, var(--c) 36%, transparent); }
+  .tcard .ico svg { width: 21px; height: 21px; stroke: var(--c); fill: none; stroke-width: 1.8; }
+  .tcard .nm { font-family: var(--heading); font-weight: 600; font-size: 21px; }
+  .tcard .tg { font-size: 14px; font-style: italic; color: var(--c); opacity: .92; margin-top: 12px; }
+  .tcard .ds { font-size: 14.5px; color: var(--ink-2); margin-top: 10px; line-height: 1.55; }
+  .tcard .ptag { display: inline-block; margin-top: 15px; font-family: var(--mono); font-size: 11.5px; padding: 4px 11px; border-radius: 999px;
+    background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 32%, transparent); }
+  .tcard .ds code { font-family: var(--mono); font-size: 0.85em; background: rgba(243,236,221,0.08); padding: 1px 5px; border-radius: 5px; }
+  .extra-label { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); letter-spacing: 0.04em; margin: 30px 0 16px; }
 
-  /* ---------- 02 Principles ---------- */
-  .principles { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
-  .principle { display: grid; grid-template-columns: 28px 1fr; gap: 20px; padding: 28px 0; border-top: 1px solid var(--hair-2); }
-  .principle .n { font-family: var(--mono); font-size: 22px; color: var(--accent); opacity: .85; line-height: 1.2; }
-  .principle .lead { font-size: 18px; }
-  .principle p { margin: 8px 0 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
-  .principle p b { color: var(--ink); font-weight: 600; }
+  /* ---------- 02 trust: mint pastel block ---------- */
+  .pastel-block { border-radius: var(--r-lg); padding: 8px 6px; background: rgba(230,169,60,0.06); border: 1px solid rgba(230,169,60,0.14); }
+  .pr { display: grid; grid-template-columns: 44px 1fr; gap: 18px; padding: 22px 26px; border-bottom: 1px solid rgba(230,169,60,0.10); }
+  .pr:last-child { border-bottom: 0; }
+  .pr .n { font-family: var(--mono); font-size: 17px; color: var(--gold); display: grid; place-items: center; width: 36px; height: 36px;
+    border-radius: 11px; background: rgba(230,169,60,0.1); border: 1px solid rgba(230,169,60,0.2); }
+  .pr .lead { font-family: var(--heading); font-weight: 600; font-size: 18px; }
+  .pr p { margin: 7px 0 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+  .pr p b { color: var(--ink); font-weight: 600; }
+  .pr a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
 
-  /* ---------- 03 Price ---------- */
-  .price-wrap { text-align: center; position: relative; padding-top: 20px; }
-  .price-wrap::before { content:""; position: absolute; left: 50%; top: -10px; width: 520px; height: 340px; transform: translateX(-50%);
-    z-index: -1; border-radius: 50%; background: radial-gradient(closest-side, rgba(217,160,102,0.14), transparent 72%); }
-  .price { font-size: clamp(76px, 12vw, 116px); line-height: 1; letter-spacing: -0.02em;
-    display: inline-flex; align-items: flex-start; gap: 6px; margin: 8px 0 6px; }
-  .price .cur { font-size: 0.40em; transform: translateY(0.55em); color: var(--accent); }
-  .price-tag { font-size: 18px; color: var(--ink-2); margin-bottom: 30px; }
-  .price-wrap .btn-fill { padding: 16px 42px; font-size: 16px; }
-  .price-lines { margin-top: 24px; font-size: 16px; line-height: 1.7; }
+  /* ---------- 03 price ---------- */
+  .price-card { text-align: center; padding: 48px 28px; border-radius: var(--r-lg); position: relative; overflow: hidden;
+    background: rgba(217,160,102,0.06); border: 1px solid rgba(217,160,102,0.16); }
+  .price-card::before { content: ""; position: absolute; left: 50%; top: -40px; width: 460px; height: 300px; transform: translateX(-50%);
+    border-radius: 50%; background: radial-gradient(closest-side, rgba(217,160,102,0.16), transparent 72%); pointer-events: none; }
+  .price-card > * { position: relative; }
+  .price { font-family: var(--heading); font-weight: 600; font-size: clamp(72px, 12vw, 112px); line-height: 1; letter-spacing: -0.01em;
+    display: inline-flex; align-items: flex-start; gap: 6px; }
+  .price .cur { font-size: 0.4em; transform: translateY(0.55em); color: var(--accent); }
+  .price-tag { font-size: 17px; color: var(--ink-2); margin: 8px 0 26px; }
+  .price-lines { margin-top: 22px; font-size: 15.5px; color: var(--ink-2); line-height: 1.7; }
   .price-lines a { color: var(--accent); }
-  .price-meta { margin-top: 18px; font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
-  .price-meta .dot { color: var(--hair); margin: 0 6px; }
+  .price-meta { margin-top: 14px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+  .price-meta .dot { color: var(--hair); margin: 0 7px; }
 
-  /* ---------- 04 FAQ ---------- */
-  .faq { max-width: 880px; }
-  .qa { padding-top: 30px; }
-  .qa .q { font-size: 18.5px; }
-  .qa .a { margin-top: 9px; font-size: 15.5px; line-height: 1.6; color: var(--ink-2); }
+  .installs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; align-items: start; }
+  .inst { padding: 22px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--hair-2); box-shadow: var(--flat); }
+  .inst h3 { font-family: var(--heading); font-weight: 600; font-size: 18px; display: flex; align-items: center; gap: 9px; }
+  .inst h3 .ptag { font-family: var(--mono); font-size: 10.5px; padding: 3px 9px; border-radius: 999px; background: rgba(217,160,102,0.16); color: var(--accent); border: 1px solid rgba(217,160,102,0.3); }
+  .inst p { font-size: 13.5px; color: var(--ink-2); margin: 9px 0 14px; line-height: 1.5; }
+  .code { position: relative; font-family: var(--mono); font-size: 12px; color: var(--ink); background: rgba(0,0,0,0.32);
+    border: 1px solid var(--hair); border-radius: 14px; padding: 32px 14px 13px; line-height: 1.7; overflow-x: auto; white-space: pre; }
+  .code .c { color: var(--ink-3); }
+  .copy { position: absolute; top: 8px; right: 8px; font-family: var(--mono); font-size: 10.5px; cursor: pointer; color: var(--ink-2);
+    background: var(--surface-2); border: 1px solid var(--hair); padding: 4px 10px; border-radius: 8px; transition: .15s; }
+  .copy:hover { color: var(--ink); } .copy.done { color: var(--green); border-color: color-mix(in srgb,var(--green) 50%, transparent); }
+
+  /* ---------- 04 faq (dropdowns) ---------- */
+  .faq { display: grid; gap: 12px; max-width: 880px; }
+  .qa { border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--hair-2); overflow: hidden; transition: border-color .15s, background .15s; }
+  .qa[open] { border-color: var(--hair); }
+  .qa summary { list-style: none; cursor: pointer; position: relative; padding: 20px 58px 20px 26px;
+    font-family: var(--heading); font-weight: 600; font-size: 18px; color: var(--ink); }
+  .qa summary::-webkit-details-marker { display: none; }
+  .qa summary:hover { background: var(--surface-2); }
+  .qa summary::after { content: ""; position: absolute; right: 28px; top: 24px; width: 10px; height: 10px;
+    border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(45deg); transition: transform .2s; }
+  .qa[open] summary::after { transform: rotate(-135deg); top: 28px; }
+  .qa .a { padding: 2px 26px 22px; font-size: 15px; color: var(--ink-2); line-height: 1.6; }
   .qa .a a { color: var(--accent); }
-  .faq .closing { margin-top: 40px; font-size: 15px; color: var(--ink-3); }
-  .faq .closing a { color: var(--accent); }
+  .faq-closing { margin-top: 22px; font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+  .faq-closing a { color: var(--accent); }
 
   /* ---------- footer ---------- */
-  footer { padding: 56px 0 72px; border-top: 1px solid var(--hair-2); }
-  .foot { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap; align-items: flex-start; }
-  .foot-brand { display: flex; align-items: center; gap: 14px; }
-  .foot-brand .icon { width: 46px; height: 46px; border-radius: 11px; }
-  .foot-brand .name { font-size: 24px; display: flex; align-items: center; gap: 9px; }
-  .foot-brand .name .mark { width: 18px; height: 18px; }
-  .foot-brand .tag { font-size: 14px; color: var(--ink-2); margin-top: 3px; }
-  .foot-right { text-align: right; max-width: 460px; }
-  .foot-links { font-size: 14.5px; }
-  .foot-links a { color: var(--ink); } .foot-links a:hover { color: var(--accent); }
-  .foot-links .dot { color: var(--hair); margin: 0 5px; }
-  .foot-note { margin-top: 12px; font-size: 13.5px; font-style: italic; color: var(--ink-2); }
-  .disclaimer { margin-top: 40px; font-size: 12.5px; line-height: 1.6; color: var(--ink-3); max-width: 760px; }
-  .disclaimer a { text-decoration: underline; text-underline-offset: 2px; color: var(--ink-2); }
-  .disclaimer .mono { font-family: var(--mono); }
+  footer { padding: 48px 0 64px; margin-top: 24px; border-top: 1px solid var(--hair-2); }
+  .foot { display: flex; justify-content: space-between; gap: 36px; flex-wrap: wrap; align-items: flex-start; }
+  .foot-brand { display: flex; gap: 14px; align-items: center; }
+  .foot-brand .icon { width: 46px; height: 46px; border-radius: 13px; }
+  .foot-brand .name { font-family: var(--heading); font-weight: 600; font-size: 22px; display: flex; align-items: center; gap: 9px; }
+  .foot-brand .name .mark { width: 17px; height: 17px; }
+  .foot-brand .tag { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; max-width: 320px; }
+  .foot-right { text-align: right; }
+  .foot-links { font-family: var(--mono); font-size: 13px; }
+  .foot-links a { color: var(--ink-2); } .foot-links a:hover { color: var(--accent); }
+  .foot-links .dot { color: var(--hair); margin: 0 6px; }
+  .foot-note { margin-top: 11px; font-size: 13.5px; font-style: italic; color: var(--ink-3); }
+  .disclaimer { margin-top: 34px; font-size: 12px; color: var(--ink-3); line-height: 1.6; max-width: 780px; }
+  .disclaimer a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
 
-  /* ---------- responsive ---------- */
   @media (max-width: 860px) {
-    :root { --pad: 28px; }
-    .tool-row { grid-template-columns: 1fr; gap: 8px; }
-    .tool-row .desc { max-width: none; }
-    .principles { grid-template-columns: 1fr; gap: 0; }
+    :root { --pad: 24px; }
+    .grid3, .grid2, .installs { grid-template-columns: 1fr; }
     .demo-foot { flex-direction: column; align-items: flex-start; }
     .demo-tabs { margin-left: 0; }
     .foot { flex-direction: column; } .foot-right { text-align: left; }
   }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tcard { transition: none; } }
 </style>
 </head>
 <body>
-<div class="page">
 
-  <!-- ===== TOP BAR ===== -->
-  <div class="topbar">
-    <div class="row">
-      <span class="brandline">Open source · <b>github.com/caezium/Burrow</b> · v0.6.5</span>
-      <span class="links">
-        <a href="#install">Install</a>
-        <a href="https://github.com/caezium/Burrow" target="_blank" rel="noopener" aria-label="GitHub">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.3-1.8-1.3-1.8-1.1-.7 0-.7 0-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0C17.3 5 18.3 5.3 18.3 5.3c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .5z"/></svg>
-        </a>
-      </span>
-    </div>
+<!-- ===== TOP BAR ===== -->
+<div class="topbar">
+  <div class="page in">
+    <a class="brand" href="#top" aria-label="Burrow">
+      <svg class="mk" viewBox="0 0 100 100" aria-hidden="true"><rect x="2" y="2" width="96" height="96" rx="26" fill="#241B12"/><path d="M27 63 a23 23 0 0 1 46 0 Z" fill="#F3ECDD"/><rect x="40" y="63" width="20" height="6" rx="3" fill="#241B12"/></svg>
+      <span class="nm">burrow</span>
+    </a>
+    <nav class="seg">
+      <a href="#see">see it</a>
+      <a href="#tools">tools</a>
+      <a href="#trust">trust</a>
+      <a href="#price">price</a>
+      <a href="#faq">faq</a>
+    </nav>
+    <a class="ghosticon" href="https://github.com/caezium/Burrow" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.3-1.8-1.3-1.8-1.1-.7 0-.7 0-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0C17.3 5 18.3 5.3 18.3 5.3c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .5z"/></svg>
+    </a>
+    <a class="btn btn-fill btn-sm" href="https://github.com/caezium/Burrow/releases/latest" target="_blank" rel="noopener">Download</a>
   </div>
+</div>
+
+<main id="top" class="page">
 
   <!-- ===== HERO ===== -->
   <header class="hero">
+    <span class="brandline">Open source · <b>github.com/caezium/Burrow</b> · v0.6.5</span>
     <h1>Burrow
-      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
-        <path d="M14 74 a36 36 0 0 1 72 0 Z" fill="#F3ECDD"/>
-        <rect x="38" y="74" width="24" height="7" rx="3.5" fill="#120E09"/>
-      </svg>
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 74 a36 36 0 0 1 72 0 Z" fill="#F3ECDD"/><rect x="38" y="74" width="24" height="7" rx="3.5" fill="#121217"/></svg>
     </h1>
+    <div class="tagchip"><span class="d"></span>Clean · Analyze · Status — free &amp; open source</div>
     <p class="sub">Remove junk, manage apps, run maintenance, analyze disk usage, and watch live status — in one native Mac app. Free, and open source.</p>
     <div class="meta">
-      <b>Free</b><span class="dot">·</span>
-      <b>MIT</b> open source<span class="dot">·</span>
-      built on the Mole CLI<span class="dot">·</span>
-      adds history + an MCP server<span class="dot">·</span>
-      macOS&nbsp;14+
+      <b>Free</b><span class="dot">·</span><b>MIT</b> open source<span class="dot">·</span>built on the Mole CLI<span class="dot">·</span>adds history + an MCP server<span class="dot">·</span>macOS&nbsp;14+
     </div>
     <div class="cta">
-      <a class="btn btn-fill" href="#install">Install with Homebrew</a>
+      <a class="btn btn-fill" href="#price">Install with Homebrew</a>
       <a class="btn btn-out" href="https://github.com/caezium/Burrow/releases/latest" target="_blank" rel="noopener">Download&nbsp;.zip</a>
     </div>
     <button class="hero-cmd" id="brewcmd" type="button" aria-label="Copy install command">
@@ -247,12 +306,9 @@
     </button>
   </header>
 
-  <hr class="rule">
-
   <!-- ===== 00 · See it ===== -->
   <section id="see">
     <div class="sec-head">
-      <div class="sec-num">00 · See it</div>
       <h2 class="sec-title">Five tools, one window</h2>
       <p class="sec-intro">Five tools plus a menu-bar HUD: Clean, Software, Optimize, Analyze, and Status, each with its own page and job — and each re-themes the whole window in its own colour.</p>
       <p class="covers">Covers everyday jobs people split across
@@ -264,153 +320,163 @@
       </p>
     </div>
 
-    <div class="demo-panel"><img id="demoImg" src="assets/shot-analyze.png" alt="Burrow — Analyze treemap"></div>
-    <div class="demo-foot">
-      <div class="demo-now">
-        <span class="name" id="demoName">Analyze</span>
-        <span class="tag" id="demoTag">Map every chamber below.</span>
-      </div>
-      <div class="demo-tabs" role="tablist">
-        <button class="pill" role="tab" data-img="assets/shot-clean.png"      data-name="Clean"      data-tag="Fresh air through old tunnels.">Clean</button>
-        <button class="pill" role="tab" data-img="assets/shot-purge2.png"     data-name="Purge"      data-tag="Clear the diggings dev work leaves behind.">Purge</button>
-        <button class="pill" role="tab" data-img="assets/shot-installers.png" data-name="Installers" data-tag="Sweep out the crates you unpacked.">Installers</button>
-        <button class="pill" role="tab" data-img="assets/shot-optimize.png"   data-name="Optimize"   data-tag="Small turns, a smoother run.">Optimize</button>
-        <button class="pill" role="tab" data-img="assets/shot-apps.png"       data-name="Software"   data-tag="Shed what you've outgrown.">Software</button>
-        <button class="pill" role="tab" data-img="assets/shot-analyze.png"    data-name="Analyze"    data-tag="Map every chamber below." aria-selected="true">Analyze</button>
-        <button class="pill" role="tab" data-img="assets/shot-status.png"     data-name="Status"     data-tag="Every pulse of the den.">Status</button>
-        <button class="pill" role="tab" data-img="assets/shot-history.png"    data-name="History"    data-tag="A long memory of the den.">History</button>
-        <button class="pill" role="tab" data-img="assets/shot-ai.png"         data-name="Agent"      data-tag="Ask your Mac, from Claude." data-contain="1">Agent</button>
-        <button class="pill" role="tab" data-img="assets/shot-menubar.png"    data-name="Menu&nbsp;bar" data-tag="The whole den, from the menu bar." data-contain="1">Menu&nbsp;bar</button>
+    <div class="card demo">
+      <div class="stage"><img id="demoImg" src="assets/shot-analyze.png" alt="Burrow — Analyze treemap"></div>
+      <div class="demo-foot">
+        <div class="demo-now">
+          <div class="name" id="demoName">Analyze</div>
+          <div class="tag" id="demoTag">Map every chamber below.</div>
+        </div>
+        <div class="demo-tabs" role="tablist">
+          <button class="pill" role="tab" data-img="assets/shot-clean.png"      data-name="Clean"      data-tag="Fresh air through old tunnels.">Clean</button>
+          <button class="pill" role="tab" data-img="assets/shot-purge2.png"     data-name="Purge"      data-tag="Clear the diggings dev work leaves behind.">Purge</button>
+          <button class="pill" role="tab" data-img="assets/shot-installers.png" data-name="Installers" data-tag="Sweep out the crates you unpacked.">Installers</button>
+          <button class="pill" role="tab" data-img="assets/shot-optimize.png"   data-name="Optimize"   data-tag="Small turns, a smoother run.">Optimize</button>
+          <button class="pill" role="tab" data-img="assets/shot-apps.png"       data-name="Software"   data-tag="Shed what you've outgrown.">Software</button>
+          <button class="pill" role="tab" data-img="assets/shot-analyze.png"    data-name="Analyze"    data-tag="Map every chamber below." aria-selected="true">Analyze</button>
+          <button class="pill" role="tab" data-img="assets/shot-status.png"     data-name="Status"     data-tag="Every pulse of the den.">Status</button>
+          <button class="pill" role="tab" data-img="assets/shot-history.png"    data-name="History"    data-tag="A long memory of the den.">History</button>
+          <button class="pill" role="tab" data-img="assets/shot-ai.png"         data-name="Agent"      data-tag="Ask your Mac, from Claude." data-contain="1">Agent</button>
+          <button class="pill" role="tab" data-img="assets/shot-menubar.png"    data-name="Menu&nbsp;bar" data-tag="The whole den, from the menu bar." data-contain="1">Menu&nbsp;bar</button>
+        </div>
       </div>
     </div>
   </section>
-
-  <hr class="rule">
 
   <!-- ===== 01 · The Five ===== -->
   <section id="tools">
     <div class="sec-head">
-      <div class="sec-num">01 · The Five</div>
       <h2 class="sec-title">A burrow of small jobs</h2>
       <p class="sec-intro">Each tool re-themes the whole window in its own colour. The colour is not decoration — it is how the tool tells you what it is about to touch. Every one drives a single, audited <span class="cmd">mo</span> command.</p>
     </div>
 
-    <div class="tool-row" style="--c: var(--teal)">
-      <div><div class="name"><span class="swatch"></span>Clean</div><div class="tag">Fresh air through old tunnels.</div></div>
-      <div class="desc">Ten-plus categories — caches, logs and leftovers from Xcode builds to browser temp files — sorted by what is safest to remove. Preview every file and byte count first; untick anything you want to keep, then clean for real. <span class="cmd"><b>mo</b> clean</span></div>
-    </div>
-    <div class="tool-row" style="--c: var(--coral)">
-      <div><div class="name"><span class="swatch"></span>Software</div><div class="tag">Shed what you've outgrown.</div></div>
-      <div class="desc">Your installed apps with search and sort by size, name, recency or source, plus multi-select uninstall that sweeps preferences, support files and launch agents. A Homebrew <b>Updates</b> tab checks what's outdated. <span class="cmd"><b>mo</b> uninstall --list</span></div>
-    </div>
-    <div class="tool-row" style="--c: var(--violet)">
-      <div><div class="name"><span class="swatch"></span>Optimize</div><div class="tag">Small turns, a smoother run.</div></div>
-      <div class="desc">Default maintenance tasks, one tap. Rebuild Quick Look, repair caches and metadata, flush DNS and audit login items — the routine chores, batched behind a single prompt. <span class="cmd"><b>mo</b> optimize</span></div>
-    </div>
-    <div class="tool-row" style="--c: var(--azure)">
-      <div><div class="name"><span class="swatch"></span>Analyze</div><div class="tag">Map every chamber below.</div></div>
-      <div class="desc">A squarified treemap of your whole disk. Drill into any branch, spot the biggest space users, and use context menus to reveal in Finder or send to Trash. <span class="cmd"><b>mo</b> analyze</span></div>
-    </div>
-    <div class="tool-row" style="--c: var(--gold)">
-      <div><div class="name"><span class="swatch"></span>Status</div><div class="tag">Every pulse of the den.</div></div>
-      <div class="desc">CPU, memory, GPU, disk, network and battery live on one page, each with a sparkline, plus a sortable, pinnable process table and a menu-bar HUD that drops the whole picture down from the menu bar. <span class="cmd"><b>mo</b> status</span></div>
+    <div class="grid3">
+      <article class="tcard" style="--c: var(--teal)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/><path d="M3 8l2-2M8 4l1.5-1.5M16 20l1.5 1.5"/></svg></div><div class="nm">Clean</div></div>
+        <div class="tg">Fresh air through old tunnels.</div>
+        <p class="ds">Ten-plus categories — caches, logs and leftovers from Xcode builds to browser temp files — sorted by what is safest to remove. Preview every file and byte count first; untick anything you want to keep, then clean for real.</p>
+        <span class="ptag">mo clean</span>
+      </article>
+      <article class="tcard" style="--c: var(--coral)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 20V9"/></svg></div><div class="nm">Software</div></div>
+        <div class="tg">Shed what you've outgrown.</div>
+        <p class="ds">Your installed apps with search and sort by size, name, recency or source, plus multi-select uninstall that sweeps preferences, support files and launch agents. A Homebrew Updates tab checks what's outdated.</p>
+        <span class="ptag">mo uninstall --list</span>
+      </article>
+      <article class="tcard" style="--c: var(--violet)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/><circle cx="12" cy="12" r="3.2"/></svg></div><div class="nm">Optimize</div></div>
+        <div class="tg">Small turns, a smoother run.</div>
+        <p class="ds">Default maintenance tasks, one tap. Rebuild Quick Look, repair caches and metadata, flush DNS and audit login items — the routine chores, batched behind a single prompt.</p>
+        <span class="ptag">mo optimize</span>
+      </article>
+      <article class="tcard" style="--c: var(--azure)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="11" rx="1"/><rect x="13" y="3" width="8" height="6" rx="1"/><rect x="13" y="11" width="8" height="10" rx="1"/><rect x="3" y="16" width="8" height="5" rx="1"/></svg></div><div class="nm">Analyze</div></div>
+        <div class="tg">Map every chamber below.</div>
+        <p class="ds">A squarified treemap of your whole disk. Drill into any branch, spot the biggest space users, and use context menus to reveal in Finder or send to Trash.</p>
+        <span class="ptag">mo analyze</span>
+      </article>
+      <article class="tcard" style="--c: var(--gold)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2 6 4-14 2 8h2l1.5-3H21"/></svg></div><div class="nm">Status</div></div>
+        <div class="tg">Every pulse of the den.</div>
+        <p class="ds">CPU, memory, GPU, disk, network and battery live on one page, each with a sparkline, plus a sortable, pinnable process table and a menu-bar HUD that drops the whole picture down from the menu bar.</p>
+        <span class="ptag">mo status</span>
+      </article>
     </div>
 
-    <div class="subhead-mini">… and two things the CLI can't do</div>
-    <div class="tool-row" style="--c: var(--moss)">
-      <div><div class="name"><span class="swatch"></span>History</div><div class="tag">A long memory of the den.</div></div>
-      <div class="desc">Every sample the Status tool takes lands in a local SQLite history. Scrub charts from five minutes out to ninety days, with peak-per-process tables for the moments the fans actually spun up. Nothing leaves the Mac.</div>
-    </div>
-    <div class="tool-row" style="--c: var(--ginger)">
-      <div><div class="name"><span class="swatch"></span>Agent · MCP</div><div class="tag">Ask your Mac, from Claude.</div></div>
-      <div class="desc">Burrow doubles as an MCP server, so Claude Code can ask "what's been happening on this Mac?" — <code class="k">burrow_snapshot</code>, <code class="k">burrow_history</code>, <code class="k">burrow_top_processes</code> — alongside a loopback HTTP API on <code class="k">127.0.0.1:9277</code>. Both local, both off until you opt in.</div>
+    <div class="extra-label mono">// and two things the CLI can't do</div>
+    <div class="grid2">
+      <article class="tcard" style="--c: var(--moss)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="nm">History</div></div>
+        <div class="tg">A long memory of the den.</div>
+        <p class="ds">Every sample the Status tool takes lands in a local SQLite history. Scrub charts from five minutes out to ninety days, with peak-per-process tables for the moments the fans actually spun up. Nothing leaves the Mac.</p>
+      </article>
+      <article class="tcard" style="--c: var(--ginger)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></div><div class="nm">Agent · MCP</div></div>
+        <div class="tg">Ask your Mac, from Claude.</div>
+        <p class="ds">Burrow doubles as an MCP server, so Claude Code can ask "what's been happening on this Mac?" — <code>burrow_snapshot</code>, <code>burrow_history</code>, <code>burrow_top_processes</code> — alongside a loopback HTTP API on <code>127.0.0.1:9277</code>. Both local-only; the HTTP API is on by default (Settings turns it off), and destructive agent actions need their own explicit opt-in.</p>
+      </article>
     </div>
   </section>
 
-  <hr class="rule">
-
-  <!-- ===== 02 · How it behaves ===== -->
-  <section id="behaves">
+  <!-- ===== 02 · Trust (pastel block) ===== -->
+  <section id="trust">
     <div class="sec-head">
-      <div class="sec-num">02 · How it behaves</div>
       <h2 class="sec-title">Conservative by default</h2>
-      <p class="sec-intro">Burrow drives the audited <span class="cmd">mo</span> engine and adds no surveillance of its own. There is no backend — nothing to phone home to.</p>
+      <p class="sec-intro">Burrow drives the audited <span class="cmd">mo</span> engine. Your files, metrics and history stay on the Mac; the one thing that leaves is anonymous, opt-out usage &amp; crash telemetry — disclosed line by line in <a class="u" href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>.</p>
     </div>
-    <div class="principles">
-      <div class="principle"><div class="n">1</div><div>
-        <div class="lead">Nothing leaves your Mac.</div>
-        <p>No analytics, telemetry, accounts or third-party SDKs. History is a local SQLite file and the MCP server is loopback-only. The one opt-in network call is <b>brew outdated</b> in the Updates tab.</p></div></div>
-      <div class="principle"><div class="n">2</div><div>
-        <div class="lead">Show before you remove.</div>
+    <div class="pastel-block">
+      <div class="pr"><div class="n">1</div><div><div class="lead">Your data stays on your Mac.</div>
+        <p>No accounts, no file or path uploads — scans, history and metrics are local files, and the MCP server is loopback-only. Burrow does send <b>opt-out anonymous usage &amp; crash reports</b> (bucketed counts, never files, paths or metrics; off in source builds, one switch in Settings). The exact event list is in <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>.</p></div></div>
+      <div class="pr"><div class="n">2</div><div><div class="lead">Show before you remove.</div>
         <p>Every action shows the file list and byte count first. You confirm; Burrow acts. Clean is categorized and sorted by what is <b>safest to remove</b>, and nothing is deleted on a single mis-tap.</p></div></div>
-      <div class="principle"><div class="n">3</div><div>
-        <div class="lead">You approve every elevation.</div>
+      <div class="pr"><div class="n">3</div><div><div class="lead">You approve every elevation.</div>
         <p>No background root helper. When a task needs admin rights, <b>macOS's own dialog</b> asks you — Burrow runs that one <span class="cmd">mo</span> command, then exits. No persistent privileged daemon.</p></div></div>
-      <div class="principle"><div class="n">4</div><div>
-        <div class="lead">Free, open, no upsell.</div>
+      <div class="pr"><div class="n">4</div><div><div class="lead">Free, open, no upsell.</div>
         <p>Five tools plus the HUD, history and the MCP server — all of it, <b>MIT-licensed</b>. Every line is on GitHub. No trial limits, no accounts, no trade.</p></div></div>
-      <div class="principle"><div class="n">5</div><div>
-        <div class="lead">Built on an audited engine.</div>
-        <p>Burrow bundles nothing from <span class="cmd">mo</span> — it drives the same binary you can read and run yourself. The honest trade-offs, including the admin path, are in <a class="u" href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p></div></div>
+      <div class="pr"><div class="n">5</div><div><div class="lead">Built on an audited engine.</div>
+        <p>Burrow bundles nothing from <span class="cmd">mo</span> — it drives the same binary you can read and run yourself. The honest trade-offs, including the admin path, are in <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p></div></div>
     </div>
   </section>
-
-  <hr class="rule">
 
   <!-- ===== 03 · Price ===== -->
-  <section id="install">
-    <div class="sec-head"><div class="sec-num">03 · Price</div><h2 class="sec-title">Free, no subscription</h2></div>
-
-    <div class="price-wrap">
+  <section id="price">
+    <div class="sec-head"><h2 class="sec-title">Free, no subscription</h2></div>
+    <div class="price-card">
       <div class="price"><span class="cur">$</span>0</div>
       <div class="price-tag">Free, forever. MIT-licensed.</div>
-      <a class="btn btn-fill" href="https://github.com/caezium/Burrow/releases/latest" target="_blank" rel="noopener">Get Burrow</a>
-      <div class="price-lines">
-        All five tools, the menu-bar HUD, history, and the MCP server included.<br>
-        <span class="muted">or <a class="u" href="#build">build it from source</a></span>
-      </div>
-      <div class="price-meta">unlimited Macs<span class="dot">·</span>no account<span class="dot">·</span>unsigned, pre-1.0<span class="dot">·</span>requires <span class="cmd">brew install mole</span></div>
+      <a class="btn btn-fill" href="https://github.com/caezium/Burrow/releases/latest" target="_blank" rel="noopener" style="padding:15px 40px; font-size:16px;">Get Burrow</a>
+      <div class="price-lines">All five tools, the menu-bar HUD, history, and the MCP server included.<br>
+        <span style="color:var(--ink-3)">or <a class="u" href="#build">build it from source</a></span></div>
+      <div class="price-meta">unlimited Macs<span class="dot">·</span>no account<span class="dot">·</span>unsigned, pre-1.0<span class="dot">·</span>requires brew install mole</div>
     </div>
 
-    <div id="build" style="max-width:880px; margin: 56px auto 0;">
-      <div class="tool-row" style="--c: var(--teal); border-top:1px solid var(--hair-2)">
-        <div><div class="name">Homebrew</div><div class="tag">recommended</div></div>
-        <div class="desc"><span class="cmd">brew install mole</span> &nbsp;then&nbsp; <span class="cmd">brew install --cask caezium/tap/burrow</span> — installs the required engine, then the app, and clears the Gatekeeper quarantine for you.</div>
+    <div class="installs" id="build">
+      <div class="inst">
+        <h3>Homebrew <span class="ptag">recommended</span></h3>
+        <p>Installs the required engine, then the app, and clears quarantine.</p>
+        <div class="code" data-copy="brew install mole
+brew install --cask caezium/tap/burrow"><button class="copy">copy</button><span class="c"># engine, then app</span>
+brew install mole
+brew install --cask caezium/tap/burrow</div>
       </div>
-      <div class="tool-row" style="--c: var(--azure)">
-        <div><div class="name">Direct download</div><div class="tag">a .zip from Releases</div></div>
-        <div class="desc">Unzip <span class="cmd">Burrow.app</span> into <span class="cmd">/Applications</span>, then <span class="cmd">xattr -cr /Applications/Burrow.app</span> to clear quarantine. Burrow is unsigned and pre-1.0 — <a class="u" href="https://github.com/caezium/Burrow/releases/latest" target="_blank" rel="noopener">Releases</a>.</div>
+      <div class="inst">
+        <h3>Direct download</h3>
+        <p>Unzip into <code class="k">/Applications</code>, then clear the Gatekeeper quarantine.</p>
+        <div class="code" data-copy="xattr -cr /Applications/Burrow.app
+open /Applications/Burrow.app"><button class="copy">copy</button>xattr -cr /Applications/Burrow.app
+open  /Applications/Burrow.app</div>
       </div>
-      <div class="tool-row" style="--c: var(--violet)">
-        <div><div class="name">Build from source</div><div class="tag">xcodegen + mole</div></div>
-        <div class="desc"><span class="cmd">git clone https://github.com/caezium/Burrow.git</span>, then <span class="cmd">xcodegen generate</span> and a Release <span class="cmd">xcodebuild</span>. Every line is yours to read first.</div>
+      <div class="inst">
+        <h3>Build from source</h3>
+        <p>Needs <code class="k">xcodegen</code> + <code class="k">mole</code>. Every line is yours to read first.</p>
+        <div class="code" data-copy="git clone https://github.com/caezium/Burrow.git
+cd Burrow && xcodegen generate"><button class="copy">copy</button>git clone …/caezium/Burrow.git
+cd Burrow && xcodegen generate</div>
       </div>
     </div>
   </section>
 
-  <hr class="rule">
-
-  <!-- ===== 04 · Questions ===== -->
+  <!-- ===== 04 · FAQ ===== -->
   <section id="faq">
-    <div class="sec-head"><div class="sec-num">04 · Questions</div><h2 class="sec-title">Honest answers</h2></div>
+    <div class="sec-head"><h2 class="sec-title">Honest answers</h2></div>
     <div class="faq">
-      <div class="qa"><div class="q">How is Burrow different from the <code class="k">mo</code> CLI?</div>
-        <div class="a"><code class="k">mo</code> is the free, open-source terminal engine that does the real work. Burrow is the native Mac GUI around it — disk maps, a status dashboard, the menu-bar HUD, multi-select uninstall, one-click workflows — plus two things the CLI doesn't have: a long-range metric history and an MCP server for agents.</div></div>
-      <div class="qa"><div class="q">Is it really free?</div>
-        <div class="a">Yes — free and MIT-licensed, with no accounts, ads or upsells. If you'd rather have a polished, signed, supported app and want to fund the <code class="k">mo</code> engine, <a class="u" href="https://mole.fit/" target="_blank" rel="noopener">mole.fit</a> is $9 and worth it. Burrow is the open-source alternative for people who want the source and the agent hooks.</div></div>
-      <div class="qa"><div class="q">Why does it need the Mole CLI?</div>
-        <div class="a">Burrow doesn't reimplement cleaning or analysis — it drives the audited <code class="k">mo</code> binary and bundles nothing from it. That keeps Burrow thin and means the dangerous work runs through a tool you can audit independently. <code class="k">brew install mole</code> first, or Burrow refuses to launch.</div></div>
-      <div class="qa"><div class="q">Is it signed and notarized?</div>
-        <div class="a">Not yet — Burrow is unsigned and pre-1.0. Every install path clears the Gatekeeper quarantine for you (<code class="k">xattr -cr</code> or the Homebrew cask). The honest trade-offs are in <a class="u" href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</div></div>
-      <div class="qa"><div class="q">Does it work without Full Disk Access? Does it upload anything?</div>
-        <div class="a">Yes — Burrow runs a safe scan by default; Full Disk Access lets it reach deeper App Support and container caches, and you can grant or skip it anytime. Nothing is uploaded: scans and cleanup run locally, history is a local file, and the MCP server is loopback and off until you turn it on.</div></div>
-      <div class="qa"><div class="q">What's the MCP server for?</div>
-        <div class="a">It lets Claude Code query your Mac's recent state — <code class="k">burrow_snapshot</code>, <code class="k">burrow_history</code>, <code class="k">burrow_top_processes</code>, <code class="k">burrow_info</code>. Point it at <code class="k">Burrow --mcp</code> in <code class="k">~/.claude/settings.json</code> and an agent can answer "what's been hammering this machine?" from real data.</div></div>
-      <p class="closing">Building from source, wiring up the MCP server, or anything else? It's all in the <a class="u" href="https://github.com/caezium/Burrow#readme" target="_blank" rel="noopener">README</a>.</p>
+      <details class="qa"><summary>How is Burrow different from the <code class="k">mo</code> CLI?</summary>
+        <div class="a"><code class="k">mo</code> is the free, open-source terminal engine that does the real work. Burrow is the native Mac GUI around it — disk maps, a status dashboard, the menu-bar HUD, multi-select uninstall, one-click workflows — plus two things the CLI doesn't have: a long-range metric history and an MCP server for agents.</div></details>
+      <details class="qa"><summary>Is it really free?</summary>
+        <div class="a">Yes — free and MIT-licensed, with no accounts, ads or upsells. If you'd rather have a polished, signed, supported app and want to fund the <code class="k">mo</code> engine, <a class="u" href="https://mole.fit/" target="_blank" rel="noopener">mole.fit</a> is $9 and worth it. Burrow is the open-source alternative for people who want the source and the agent hooks.</div></details>
+      <details class="qa"><summary>Why does it need the Mole CLI?</summary>
+        <div class="a">Burrow doesn't reimplement cleaning or analysis — it drives the audited <code class="k">mo</code> binary and bundles nothing from it. That keeps Burrow thin and means the dangerous work runs through a tool you can audit independently. <code class="k">brew install mole</code> first, or Burrow refuses to launch.</div></details>
+      <details class="qa"><summary>Is it signed and notarized?</summary>
+        <div class="a">Not yet — Burrow is unsigned and pre-1.0. Every install path clears the Gatekeeper quarantine for you (<code class="k">xattr -cr</code> or the Homebrew cask). The honest trade-offs are in <a class="u" href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</div></details>
+      <details class="qa"><summary>Does it work without Full Disk Access? Does it upload anything?</summary>
+        <div class="a">Yes — Burrow runs a safe scan by default; Full Disk Access lets it reach deeper App Support and container caches, and you can grant or skip it anytime. Scans and cleanup run locally and history is a local file — none of that is uploaded. What does leave, unless you turn it off in Settings, is anonymous usage &amp; crash telemetry: bucketed events with no files, paths or metrics, listed one by one in <a class="u" href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>. Source builds ship with it inert.</div></details>
+      <details class="qa"><summary>What's the MCP server for?</summary>
+        <div class="a">It lets Claude Code query your Mac's recent state — <code class="k">burrow_snapshot</code>, <code class="k">burrow_history</code>, <code class="k">burrow_top_processes</code>, <code class="k">burrow_info</code>. Point it at <code class="k">Burrow --mcp</code> in <code class="k">~/.claude/settings.json</code> and an agent can answer "what's been hammering this machine?" from real data.</div></details>
     </div>
+    <p class="faq-closing">Building from source, wiring up the MCP server, or anything else? It's all in the <a class="u" href="https://github.com/caezium/Burrow#readme" target="_blank" rel="noopener">README →</a></p>
   </section>
 
-</div>
+</main>
 
 <!-- ===== FOOTER ===== -->
 <footer>
@@ -420,7 +486,7 @@
         <img class="icon" src="burrow-icon.png" alt="">
         <div>
           <div class="name">Burrow ·
-            <svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 74 a36 36 0 0 1 72 0 Z" fill="#F3ECDD"/><rect x="38" y="74" width="24" height="7" rx="3.5" fill="#120E09"/></svg>
+            <svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 74 a36 36 0 0 1 72 0 Z" fill="#F3ECDD"/><rect x="38" y="74" width="24" height="7" rx="3.5" fill="#121217"/></svg>
           </div>
           <div class="tag">A free, open-source native Mac utility for cleanup, software, and status.</div>
         </div>
@@ -430,18 +496,19 @@
           <a href="https://github.com/caezium/Burrow" target="_blank" rel="noopener">GitHub</a><span class="dot">·</span>
           <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">Releases</a><span class="dot">·</span>
           <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a><span class="dot">·</span>
+          <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">Telemetry</a><span class="dot">·</span>
           <a href="https://github.com/caezium/Burrow/blob/main/LICENSE" target="_blank" rel="noopener">License</a><span class="dot">·</span>
-          <a href="https://github.com/tw93/Mole" target="_blank" rel="noopener">Mole CLI</a><span class="dot">·</span>
-          <a href="https://mole.fit/" target="_blank" rel="noopener">mole.fit</a>
+          <a href="https://github.com/tw93/Mole" target="_blank" rel="noopener">Mole CLI</a>
         </div>
         <div class="foot-note">For your Mac, or a friend's. Free and open source. May your time be your own.</div>
       </div>
     </div>
-    <p class="disclaimer">Burrow is an independent open-source project, inspired by <a href="https://mole.fit/" target="_blank" rel="noopener">mole.fit</a>'s structure and built on the same <span class="mono">mo</span> engine — but <b>not affiliated with or endorsed by mole.fit</b>. Its name, mark, palette and copy are its own. The <span class="mono">mo</span> CLI is © <a href="https://github.com/tw93/Mole" target="_blank" rel="noopener">tw93</a> (MIT) and is depended on at runtime; nothing from it is bundled.</p>
+    <p class="disclaimer">Burrow is an independent open-source project, inspired by <a href="https://mole.fit/" target="_blank" rel="noopener">mole.fit</a> and built on the same <span class="mono">mo</span> engine — but <b>not affiliated with or endorsed by mole.fit</b>. Its name, mark, palette and copy are its own. The <span class="mono">mo</span> CLI is © <a href="https://github.com/tw93/Mole" target="_blank" rel="noopener">tw93</a> (MIT) and is depended on at runtime; nothing from it is bundled.</p>
   </div>
 </footer>
 
 <script>
+  // demo tab-switcher
   var img = document.getElementById('demoImg'),
       nm  = document.getElementById('demoName'),
       tg  = document.getElementById('demoTag');
@@ -455,13 +522,20 @@
       tg.textContent = p.dataset.tag;
     });
   });
-
+  // brew copy
   var bc = document.getElementById('brewcmd');
   if (bc) bc.addEventListener('click', function () {
-    var cmd = 'brew install --cask caezium/tap/burrow';
-    if (navigator.clipboard) { navigator.clipboard.writeText(cmd).catch(function(){}); }
-    bc.classList.add('copied');
-    setTimeout(function () { bc.classList.remove('copied'); }, 1400);
+    if (navigator.clipboard) navigator.clipboard.writeText('brew install --cask caezium/tap/burrow').catch(function(){});
+    bc.classList.add('copied'); setTimeout(function () { bc.classList.remove('copied'); }, 1400);
+  });
+  // install-card copy buttons
+  document.querySelectorAll('.code').forEach(function (b) {
+    var btn = b.querySelector('.copy'); if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (navigator.clipboard) navigator.clipboard.writeText(b.getAttribute('data-copy') || '').catch(function(){});
+      btn.textContent = 'copied'; btn.classList.add('done');
+      setTimeout(function(){ btn.textContent = 'copy'; btn.classList.remove('done'); }, 1500);
+    });
   });
 </script>
 </body>
