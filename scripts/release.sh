@@ -15,12 +15,22 @@ command -v xcodegen >/dev/null 2>&1 || { echo "need xcodegen — brew install xc
 echo "==> xcodegen generate"
 xcodegen generate >/dev/null
 
+# Telemetry keys (optional). Sourced from the gitignored scripts/release.env so
+# secrets never hit the repo. Absent → an honest no-telemetry release: empty
+# keys make PostHog/Sentry inert (see Sources/Telemetry.swift, CrashReporter.swift).
+[ -f scripts/release.env ] && source scripts/release.env
+[ -n "${POSTHOG_API_KEY:-}" ] && echo "==> telemetry: PostHog key present" || echo "==> telemetry: no PostHog key (analytics off in this build)"
+[ -n "${SENTRY_DSN:-}" ] && echo "==> telemetry: Sentry DSN present" || echo "==> telemetry: no Sentry DSN (crash reporting off in this build)"
+
 echo "==> building Release (no Developer ID; ad-hoc signed below)"
 rm -rf build_dist
 xcodebuild -project Burrow.xcodeproj -scheme Burrow \
   -configuration Release -destination 'generic/platform=macOS' \
   -derivedDataPath build_dist \
   CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+  POSTHOG_API_KEY="${POSTHOG_API_KEY:-}" \
+  POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}" \
+  SENTRY_DSN="${SENTRY_DSN:-}" \
   build >/dev/null
 
 APP="build_dist/Build/Products/Release/Burrow.app"

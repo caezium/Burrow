@@ -42,15 +42,21 @@ final class MoInteractiveRunner: ObservableObject {
     private let subcommand: String
     private var pty: PTYPort
     private let tickInterval: TimeInterval
+    /// Resolved `mo` path, or nil to look it up at `start()`. Injectable so a
+    /// scripted FakePTY test (which ignores the path) can drive the whole
+    /// flow on a runner without `mo` on PATH — production leaves it nil.
+    private let executablePath: String?
     private var state = SelectionSession.State()
     private var timer: DispatchSourceTimer?
 
     init(subcommand: String, title: String,
-         pty: PTYPort = PTYTask(), tickInterval: TimeInterval = 0.06) {
+         pty: PTYPort = PTYTask(), tickInterval: TimeInterval = 0.06,
+         executablePath: String? = nil) {
         self.subcommand = subcommand
         self.title = title
         self.pty = pty
         self.tickInterval = tickInterval
+        self.executablePath = executablePath
         // Writing a keystroke to a pty whose child already exited raises SIGPIPE,
         // which would kill the app (try? can't catch a signal). Ignore it
         // process-wide; writes then fail with EPIPE, which we swallow.
@@ -69,7 +75,9 @@ final class MoInteractiveRunner: ObservableObject {
         publish()
         pty.onOutput = { [weak self] s in MainActor.assumeIsolated { self?.dispatch(.output(s)) } }
         pty.onExit = { [weak self] code in MainActor.assumeIsolated { self?.dispatch(.processExited(code)) } }
-        guard let mo = MoleCLI.findExecutable() else { phase = .failed("mo not found"); return }
+        guard let mo = executablePath ?? MoleCLI.findExecutable() else {
+            phase = .failed("mo not found"); return
+        }
         do { try pty.launch(mo, [subcommand]) }
         catch { phase = .failed("Couldn't start `mo \(subcommand)`.") }
     }
@@ -314,11 +322,15 @@ struct MoInteractiveView: View {
                 Text(selectionLabel).font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
                 Spacer()
                 Button { selected = (selected.count == runner.items.count) ? [] : Set(runner.items.indices) } label: {
-                    Text(selected.count == runner.items.count ? "select none" : "select all")
+                    // Explicit LocalizedStringKey: a `Text(cond ? "a" : "b")`
+                    // ternary resolves to the verbatim String overload, which
+                    // skips localization.
+                    Text(selected.count == runner.items.count
+                         ? LocalizedStringKey("select none") : LocalizedStringKey("select all"))
                         .font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
                 }.buttonStyle(.plain).padding(.trailing, 8)
                 Button { confirmRemoval() } label: {
-                    Text("Remove\(selected.isEmpty ? "" : " (\(selected.count))")")
+                    Text(selected.isEmpty ? LocalizedStringKey("Remove") : "Remove (\(selected.count))")
                         .font(Brand.sans(12, .semibold)).foregroundStyle(selected.isEmpty ? Brand.textTertiary : .white)
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .background(Capsule().fill(selected.isEmpty ? Color.white.opacity(0.06) : cfg.tool.accent))
@@ -345,8 +357,8 @@ struct MoInteractiveView: View {
             + targets.prefix(12).map { "• \($0.name)" }.joined(separator: "\n")
             + (targets.count > 12 ? "\n… and \(targets.count - 12) more" : "")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: NSLocalizedString("Remove", comment: "destructive confirm button"))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         runner.confirm(selected)
     }

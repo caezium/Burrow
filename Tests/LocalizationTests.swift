@@ -40,12 +40,54 @@ final class LocalizationTests: XCTestCase {
             "Maintenance complete.",
             "Periodic Maintenance",
             "User directory permissions already optimal",
+            // Privacy-critical surfaces added by the 2026-06 audit fixes:
+            // the consent dialog and the destructive-action gates must not
+            // fall back to English in a zh build.
+            "Share anonymous usage & crash reports?",
+            "Share",
+            "Don't Share",
+            "Anonymous usage",
+            "Also allow uninstalls & permanent deletes",
+            "Uninstall aborted",
         ]
 
         for key in requiredKeys {
             let value = try XCTUnwrap(strings[key], "missing zh-Hans translation for \(key)")
             XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             XCTAssertNotEqual(value, key)
+        }
+    }
+
+    /// A translation that retypes or *plainly* reorders `%` placeholders is a
+    /// runtime `String(format:)` crash (or garbage) that no compiler catches.
+    /// The conversion bound to each ARGUMENT must survive translation — but an
+    /// explicit positional reorder (`%2$lld … %1$lld`, the correct way to fix
+    /// word order across languages) must be allowed. So we reconstruct the
+    /// per-argument conversion sequence (honoring `%n$`) and compare that, not
+    /// the raw left-to-right order.
+    func testFormatSpecifiersSurviveTranslation() throws {
+        let strings = try zhHansStrings()
+        // Capture: group 1 = optional positional index (n in `%n$`), group 2 = conversion.
+        let pattern = try NSRegularExpression(pattern: "%(?:(\\d+)\\$)?(?:ll|l|h)?([@dioufgexXscp])")
+        func argTypes(_ s: String) -> [String] {
+            let ns = s as NSString
+            var byPosition: [Int: String] = [:]
+            var nextImplicit = 1
+            for m in pattern.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+                let conv = ns.substring(with: m.range(at: 2))
+                let pos: Int
+                if m.range(at: 1).location != NSNotFound {
+                    pos = Int(ns.substring(with: m.range(at: 1))) ?? nextImplicit
+                } else {
+                    pos = nextImplicit; nextImplicit += 1
+                }
+                byPosition[pos] = conv
+            }
+            return byPosition.keys.sorted().map { byPosition[$0]! }
+        }
+        for (key, value) in strings {
+            XCTAssertEqual(argTypes(key), argTypes(value),
+                           "format argument types drifted in translation of \"\(key)\"")
         }
     }
 

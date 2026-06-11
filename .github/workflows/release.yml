@@ -19,6 +19,15 @@ name: release
 #   AC_API_KEY_P8         base64 of the AuthKey_XXXX.p8
 # Without the cert secrets the build is unsigned (current behaviour); with
 # the cert but no AC_* keys it's signed but not notarized.
+#
+# Optional telemetry secrets — release.sh reads these from the environment
+# (locally it sources the gitignored scripts/release.env instead). Without
+# them a CI release ships with analytics/crash reporting INERT, which then
+# contradicts the "on by default" language in SECURITY.md/TELEMETRY.md —
+# set them so official artifacts match the docs:
+#   POSTHOG_API_KEY       PostHog project key (client-side, public class)
+#   POSTHOG_HOST          optional; defaults to https://us.i.posthog.com
+#   SENTRY_DSN            Sentry ingest DSN (client-side, public class)
 
 on:
   push:
@@ -37,7 +46,10 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to a commit SHA, not a floating tag: this job holds
+      # contents:write, the signing cert, and TAP_PAT, so a moved tag must
+      # not be able to run new code here. Comment keeps the version legible.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       # Use the newest Xcode on the runner so xcodebuild can read the project
       # format xcodegen emits (Homebrew's xcodegen targets the latest Xcode).
@@ -49,6 +61,10 @@ jobs:
 
       - name: Build (Release)
         id: build
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           bash scripts/release.sh >/dev/null
           APP="build_dist/Build/Products/Release/Burrow.app"
@@ -148,7 +164,8 @@ jobs:
 
       - name: Bump Homebrew cask in caezium/homebrew-tap
         env:
-          # PAT with `contents:write` (classic: `repo`) on caezium/homebrew-tap.
+          # Fine-grained PAT scoped to caezium/homebrew-tap ONLY, with
+          # Repository permissions → Contents: Read and write (nothing else).
           # Add it under Settings ▸ Secrets and variables ▸ Actions ▸ TAP_PAT.
           GH_TOKEN: ${{ secrets.TAP_PAT }}
         run: |

@@ -393,3 +393,57 @@
 "Still blocked? macOS only applies Full Disk Access the next time Burrow launches. Quit and reopen, then scan." = "仍被阻止？macOS 只在 Burrow 下次启动时才应用完全磁盘访问权限。请退出并重新打开，然后再扫描。";
 "Burrow uses the Mole CLI (`mo`) for system metrics and cleanup. Install it with:\n\n    brew install mole\n\nThen relaunch Burrow." = "Burrow 使用 Mole CLI（`mo`）获取系统指标并执行清理。请安装：\n\n    brew install mole\n\n然后重新启动 Burrow。";
 "Quit" = "退出";
+
+/* ===== Anonymous usage (telemetry) — Settings section + first-launch consent ===== */
+"Anonymous usage" = "匿名使用情况";
+"Share anonymous usage & crash reports" = "分享匿名使用情况和崩溃报告";
+"Sends anonymous product analytics (PostHog) and crash reports (Sentry): a random install id (not tied to you or your hardware), the app + macOS version, CPU type, and which features you use — with sizes and counts bucketed. Never file names, contents, paths, or your metrics. It helps gauge retention and catch crashes. On by default; turn it off and both stop. Full list in TELEMETRY.md." = "发送匿名产品分析（PostHog）和崩溃报告（Sentry）：一个随机安装 ID（与你本人和硬件无关）、应用与 macOS 版本、CPU 类型，以及你使用了哪些功能 — 大小和数量都按区间归档。绝不包含文件名、文件内容、路径或你的指标数据。它用于了解留存并发现崩溃。默认开启；关闭后两者都会停止。完整列表见 TELEMETRY.md。";
+"Share anonymous usage & crash reports?" = "分享匿名使用情况和崩溃报告？";
+"Helps prioritize fixes: app/OS version, coarse bucketed feature counts, and crash traces. Never files, paths, file contents, or your metrics — the exact list is in TELEMETRY.md. You can change this anytime in Settings → Anonymous usage." = "帮助确定修复优先级：应用/系统版本、按区间归档的功能使用次数和崩溃记录。绝不包含文件、路径、文件内容或你的指标数据 — 完整列表见 TELEMETRY.md。可随时在「设置 → 匿名使用情况」中更改。";
+"Share" = "分享";
+"Don't Share" = "不分享";
+
+/* ===== Agent (MCP) gates ===== */
+"Let agents run cleanups for real" = "允许智能体真正执行清理";
+"OFF by default. Agents can always read metrics and run dry-run previews. With this on, an agent can run a real `mo clean` / `optimize` — but ONLY when it also passes an explicit confirm flag, so a deletion is never one stray sentence away. Turn it off and agents are read-only again. Data stays on this Mac." = "默认关闭。智能体始终可以读取指标并运行预览（dry-run）。开启后，智能体可以真正执行 `mo clean` / `optimize` — 但仅当它同时传入显式的确认参数时才会执行，因此删除绝不会因一句口误而发生。关闭后智能体恢复只读。数据保留在这台 Mac 上。";
+"Also allow uninstalls & permanent deletes" = "同时允许卸载与永久删除";
+"A second key for what the Trash can't undo: real `mo uninstall`, and `permanent:true` deletes. Needs the cleanup switch above too; an uninstall also aborts unless mo matches exactly the requested apps." = "针对废纸篓无法挽回的操作的第二道开关：真正的 `mo uninstall`，以及 `permanent:true` 的永久删除。还需要上面的清理开关同时开启；若 mo 匹配到的应用与请求不完全一致，卸载也会中止。";
+
+/* ===== Uninstall pre-flight verification ===== */
+"Uninstall aborted" = "卸载已中止";
+"mo's matcher didn't agree with your selection, so nothing was removed.\n\n%@" = "mo 匹配到的应用与你的选择不一致，因此没有删除任何内容。\n\n%@";
+"mo would also remove: %@" = "mo 还会额外删除：%@";
+"mo did not match: %@" = "mo 未匹配到：%@";
+"couldn't verify which apps mo matched" = "无法确认 mo 匹配到了哪些应用";
+"aborted — matcher mismatch" = "已中止 — 匹配不一致";
+"uninstall failed" = "卸载失败";
+"OK" = "好";
+
+/* ===== i18n backfill (2026-06): legacy hardcoded strings ===== */
+/* Installer/purge chooser — clean (non-plural) labels */
+"done" = "完成";
+"failed" = "失败";
+"select none" = "全不选";
+"select all" = "全选";
+"Remove" = "删除";
+"Remove (%lld)" = "删除（%lld）";
+"Show all %lld" = "显示全部 %lld 项";
+"Showing the %lld biggest of %lld." = "显示 %2$lld 项中最大的 %1$lld 项。";
+"Loading all %lld… (%lld so far)" = "正在加载全部 %lld 项…（已加载 %lld 项）";
+/* Elevated-run cancellation (OperationFlow) */
+"authorization cancelled" = "已取消授权";
+/* Touch ID for sudo (Settings) */
+"Couldn't update Touch ID for sudo" = "无法更新 sudo 的 Touch ID";
+"`mo touchid %@` didn't complete (the password prompt may have been cancelled). You can also run it in a terminal." = "`mo touchid %@` 未完成（密码提示可能已被取消）。你也可以在终端中运行它。";
+/* AI "Explain" lens errors (AIConfig) */
+"No Ollama model is set — pick one in Settings." = "尚未设置 Ollama 模型 — 请在设置中选择一个。";
+"No model name is set for the OpenAI-compatible API — set one in Settings." = "尚未为 OpenAI 兼容 API 设置模型名称 — 请在设置中填写。";
+"The API base URL isn't a valid http(s) URL — check it in Settings." = "API 基础 URL 不是有效的 http(s) 地址 — 请在设置中检查。";
+
+/* i18n backfill (cont.) — running count + AI settings field labels */
+"%lld running" = "%lld 个运行中";
+"Ollama model" = "Ollama 模型";
+"Base URL" = "基础 URL";
+"Model" = "模型";
+"API key (optional)" = "API 密钥（可选）";
+"blank for LM Studio" = "LM Studio 留空";

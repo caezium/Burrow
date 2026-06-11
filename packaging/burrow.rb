@@ -39,6 +39,9 @@ cask "burrow" do
 
   zap trash: [
     "~/Library/Application Support/Burrow",
+    "~/Library/Caches/dev.caezium.Burrow",
+    "~/Library/HTTPStorages/dev.caezium.Burrow",
     "~/Library/Preferences/dev.caezium.Burrow.plist",
+    "~/Library/Saved Application State/dev.caezium.Burrow.savedState",
   ]
 end

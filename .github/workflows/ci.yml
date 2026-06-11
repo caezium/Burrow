@@ -1,0 +1,42 @@
+name: ci
+
+# Build + run the unit suite on every push/PR. The suite is hermetic on a
+# bare runner: tests that need the real `mo` binary or TCC-protected
+# folders skip themselves (XCTSkipUnless / env opt-ins), Store writes go to
+# a scratch defaults suite, and the hosted app stays inert under XCTest.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      # Pinned to a commit SHA, not a floating tag (supply-chain hygiene;
+      # comment keeps the version legible).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Test
+        run: |
+          xcodebuild test -project Burrow.xcodeproj -scheme Burrow \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
