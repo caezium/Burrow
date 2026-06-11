@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var retentionDays: Int = Store.retentionDays
     @State private var autoVacuum: Bool = Store.autoVacuum
     @State private var queryServerEnabled: Bool = Store.queryServerEnabled
+    @State private var telemetryEnabled: Bool = Store.telemetryEnabled
     @State private var mcpActionsEnabled: Bool = Store.mcpActionsEnabled
     @State private var showMenuBarIcon: Bool = Store.showMenuBarIcon
     @State private var aiEnabled: Bool = Store.aiEnabled
@@ -189,6 +190,13 @@ struct SettingsView: View {
                         toggleRow("Enable HTTP query server", isOn: $queryServerEnabled) { Store.queryServerEnabled = $0 }
                         infoRow("Endpoint", "127.0.0.1:\(Store.queryServerPort)")
                         footnote("Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch.")
+                    }
+
+                    section("Anonymous usage", "chart.bar") {
+                        toggleRow("Share anonymous usage & crash reports", isOn: $telemetryEnabled) { on in
+                            Telemetry.setEnabled(on)
+                        }
+                        footnote("Sends anonymous product analytics (PostHog) and crash reports (Sentry): a random install id (not tied to you or your hardware), the app + macOS version, CPU type, and which features you use — with sizes and counts bucketed. Never file names, contents, paths, or your metrics. It helps gauge retention and catch crashes. On by default; turn it off and both stop. Full list in TELEMETRY.md.")
                     }
                 }
                 .padding(22)

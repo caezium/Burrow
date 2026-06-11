@@ -46,9 +46,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
 
+        // Product analytics + crash reporting (PostHog + Sentry). Opt-out and
+        // inert without release-injected keys. Started before the `mo` gate so
+        // a launch with the engine missing still counts.
+        Telemetry.start()
+
         // No engine yet → guided install instead of a dead-end quit. The
         // window's Recheck calls startServices() once `mo` is found.
         guard MoleCLI.findExecutable() != nil else {
+            Telemetry.capture("engine_missing")
             showInstallWindow()
             return
         }
@@ -148,6 +154,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.sampler?.stop()
         self.queryServer?.stop()
         self.maintenance?.stop()
+        Telemetry.capture("app_terminated")
+        Telemetry.flush()
         // Final flush so any just-changed setting survives an app replacement
         // during an update.
         UserDefaults.standard.synchronize()

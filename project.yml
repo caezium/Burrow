@@ -21,6 +21,18 @@ settings:
     CODE_SIGNING_ALLOWED: NO
     DEAD_CODE_STRIPPING: YES
 
+# Telemetry SDKs. Product analytics (PostHog) + crash reporting (Sentry).
+# Both are inert unless a release injects keys (see the per-target settings
+# below): a plain `xcodegen + xcodebuild` dev build ships with empty keys and
+# never touches either network.
+packages:
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios
+    from: 3.59.0
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: 9.16.0
+
 targets:
   Burrow:
     type: application
@@ -44,6 +56,12 @@ targets:
         NSDocumentsFolderUsageDescription: "Burrow scans your Documents for reclaimable project artifacts."
         NSDownloadsFolderUsageDescription: "Burrow scans your Downloads for leftover installer files (.dmg, .pkg)."
         NSRemovableVolumesUsageDescription: "Burrow analyzes external drives when you point it at them."
+        # Telemetry keys, expanded from build settings at build time. Empty in
+        # dev builds (the defaults below) → analytics/crash reporting stay off.
+        # A release injects real values via `xcodebuild VAR=...` (see scripts/).
+        PHPostHogApiKey: "$(POSTHOG_API_KEY)"
+        PHPostHogHost: "$(POSTHOG_HOST)"
+        SentryDSN: "$(SENTRY_DSN)"
     entitlements:
       path: Resources/Burrow.entitlements
       properties:
@@ -55,7 +73,14 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.Burrow
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-    dependencies: []
+        # Telemetry defaults: empty → off. Releases override these on the
+        # xcodebuild command line (sourced from the gitignored release.env).
+        POSTHOG_API_KEY: ""
+        POSTHOG_HOST: "https://us.i.posthog.com"
+        SENTRY_DSN: ""
+    dependencies:
+      - package: PostHog
+      - package: Sentry
 
   BurrowTests:
     type: bundle.unit-test
@@ -69,3 +94,18 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.BurrowTests
     dependencies:
       - target: Burrow
+
+# Shared scheme so `xcodebuild test` works headlessly (CI and CLI runs)
+# instead of depending on Xcode auto-creating a local scheme on first open.
+schemes:
+  Burrow:
+    build:
+      targets:
+        Burrow: all
+        BurrowTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BurrowTests

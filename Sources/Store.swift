@@ -215,6 +215,18 @@ enum Store {
         set { d.set(newValue, forKey: "fda_notice_dismissed") }
     }
 
+    // MARK: - Telemetry
+
+    /// Anonymous usage + crash-reporting opt-in (active-day counts + app/OS/arch
+    /// breakdown). ON by default and opt-out — flipping it off in Settings sends
+    /// one final opt-out event, then mutes both SDKs (PostHog + Sentry). Their
+    /// local files (random ids, queued events) stay on disk but nothing further
+    /// is sent. No account, no PII, no file contents; see `Telemetry.swift`.
+    static var telemetryEnabled: Bool {
+        get { d.object(forKey: "telemetry_enabled") as? Bool ?? true }
+        set { write(newValue, "telemetry_enabled") }
+    }
+
     // MARK: - History view
 
     /// Last-selected History view range, in minutes. Persisting it

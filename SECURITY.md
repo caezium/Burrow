@@ -39,21 +39,48 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
 
 ## Network & privacy
 
-- **No telemetry, no analytics, no crash reporting, no account, no
-  sign-in, no third-party SDKs, no ads, no "upgrade to Pro."**
-- Burrow has **no backend** — there is nowhere for it to phone home to, and
-  it uploads nothing about you, ever.
+- **No account, no sign-in, no ads, no "upgrade to Pro."** Your metrics,
+  history, and file contents stay on the Mac — with one opt-in exception:
+  pointing the optional AI "Explain" lens at a **hosted** endpoint sends the
+  metrics fact sheet you're explaining to that endpoint (it's off by default
+  and local-first; see below).
+- **Anonymous analytics + crash reporting (opt-out).** Burrow uses
+  [PostHog](https://posthog.com) for product analytics and
+  [Sentry](https://sentry.io) for crash/error reports, so we can see how many
+  installs stay active, which versions to support, which features get used,
+  and when something crashes. **What's sent:** a random install id per SDK
+  (two ids, minted by the SDKs, not derived from your hardware, serial, or
+  account), the app + macOS version, CPU architecture, device model, locale,
+  and coarse feature-usage events with sizes and counts **bucketed into
+  ranges**. **What's never sent:** file names, file contents, paths (crash
+  reports scrub `/Users/<name>`), your home folder, your metrics/history, or
+  any account identity. **Your IP isn't stored**, either — PostHog events
+  carry `$ip = "0"` (and the project discards client IPs), and Sentry sets
+  `sendDefaultPii = false`. It's **on by default**; turn it off in **Settings → Anonymous
+  usage** and both PostHog and Sentry stop. The exact event list is in
+  **[TELEMETRY.md](TELEMETRY.md)**; the client code is
+  [`Sources/Telemetry.swift`](Sources/Telemetry.swift) and
+  [`Sources/CrashReporter.swift`](Sources/CrashReporter.swift). Both SDKs are
+  **inert in source/dev builds** — keys are injected only at release time, so
+  a build from this repo phones neither home.
 - **Local-only surfaces:**
-  - The MCP **HTTP query server** binds `127.0.0.1:9277` (loopback only;
-    toggle it off in Settings). It serves your local metrics to local MCP
-    clients; it is not reachable off-device.
+  - The MCP **HTTP query server** binds `127.0.0.1:9277` (loopback only; **on
+    by default**, toggle it off in Settings). It serves your local metrics to
+    local MCP clients; it is not reachable off-device, and it sends no CORS
+    grant, so web pages in your browser can't read it either.
   - The **stdio MCP server** (`Burrow --mcp`) is a local subprocess.
   - History is a local **SQLite** file under
     `~/Library/Application Support/Burrow/`.
-- **The only outbound network path is opt-in:** the Software → **Updates**
-  tab runs `brew outdated`, which contacts Homebrew's update feeds — the
-  same check `brew` does for itself. It reads version info; it sends
-  nothing about you.
+- **Other outbound paths:**
+  - The Software → **Updates** tab runs `brew outdated`, which contacts
+    Homebrew's update feeds — the same check `brew` does for itself. It reads
+    version info; it sends nothing about you.
+  - **Settings → Update Mole** runs `mo update` (Mole's own self-update
+    traffic), only when you click it.
+  - The optional **AI "Explain" lens** (off by default) talks to
+    `127.0.0.1` (Ollama / LM Studio). If you configure a hosted
+    OpenAI-compatible endpoint instead, the metrics summary being explained
+    is sent to that endpoint with your API key.
 
 ## Reporting a vulnerability
 
