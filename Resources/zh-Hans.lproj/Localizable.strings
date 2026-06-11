@@ -404,7 +404,6 @@
 "Don't Share" = "不分享";
 
 /* ===== Agent (MCP) gates ===== */
-"Let agents run cleanups for real" = "允许智能体真正执行清理";
 "OFF by default. Agents can always read metrics and run dry-run previews. With this on, an agent can run a real `mo clean` / `optimize` — but ONLY when it also passes an explicit confirm flag, so a deletion is never one stray sentence away. Turn it off and agents are read-only again. Data stays on this Mac." = "默认关闭。智能体始终可以读取指标并运行预览（dry-run）。开启后，智能体可以真正执行 `mo clean` / `optimize` — 但仅当它同时传入显式的确认参数时才会执行，因此删除绝不会因一句口误而发生。关闭后智能体恢复只读。数据保留在这台 Mac 上。";
 "Also allow uninstalls & permanent deletes" = "同时允许卸载与永久删除";
 "A second key for what the Trash can't undo: real `mo uninstall`, and `permanent:true` deletes. Needs the cleanup switch above too; an uninstall also aborts unless mo matches exactly the requested apps." = "针对废纸篓无法挽回的操作的第二道开关：真正的 `mo uninstall`，以及 `permanent:true` 的永久删除。还需要上面的清理开关同时开启；若 mo 匹配到的应用与请求不完全一致，卸载也会中止。";
@@ -442,8 +441,4 @@
 
 /* i18n backfill (cont.) — running count + AI settings field labels */
 "%lld running" = "%lld 个运行中";
-"Ollama model" = "Ollama 模型";
-"Base URL" = "基础 URL";
-"Model" = "模型";
-"API key (optional)" = "API 密钥（可选）";
 "blank for LM Studio" = "LM Studio 留空";
