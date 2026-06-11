@@ -291,16 +291,33 @@ struct SystemProcessPort: ProcessPort {
 
             t.terminationHandler = { proc in
                 killTimer?.cancel()
-                (proc.standardOutput as? Pipe)?.fileHandleForReading.readabilityHandler = nil
-                (proc.standardError as? Pipe)?.fileHandleForReading.readabilityHandler = nil
+                let outPipe = proc.standardOutput as? Pipe
+                let errPipe = proc.standardError as? Pipe
+                outPipe?.fileHandleForReading.readabilityHandler = nil
+                errPipe?.fileHandleForReading.readabilityHandler = nil
                 DispatchQueue.main.async {
                     tailTimer?.invalidate()
                     if let h = logHandle {
+                        // Elevated: tail the temp log one last time.
                         let data = h.readDataToEndOfFile()
                         if !data.isEmpty, let s = String(data: data, encoding: .utf8) {
                             for line in splitter.ingest(Ansi.strip(s)) { cont.yield(.line(line)) }
                         }
                         try? h.close()
+                    } else {
+                        // Non-elevated: the readabilityHandler is best-effort and
+                        // can miss the final chunk of a process that prints then
+                        // exits immediately (e.g. `printf …; exit`) — the handler
+                        // is nil'd above before that chunk is delivered. Drain
+                        // whatever's left so the last line isn't dropped (this was
+                        // an intermittent CI failure: got ["a"], expected ["a","b"]).
+                        for pipe in [outPipe, errPipe] {
+                            guard let pipe else { continue }
+                            let rest = pipe.fileHandleForReading.readDataToEndOfFile()
+                            if !rest.isEmpty, let s = String(data: rest, encoding: .utf8) {
+                                for line in splitter.ingest(Ansi.strip(s)) { cont.yield(.line(line)) }
+                            }
+                        }
                     }
                     for line in splitter.flush() { cont.yield(.line(line)) }
                     cont.yield(.exited(proc.terminationStatus))
