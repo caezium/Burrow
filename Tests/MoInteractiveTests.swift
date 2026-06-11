@@ -69,7 +69,9 @@ final class MoInteractiveTests: XCTestCase {
 
     func testKeystrokes_selectAll() {
         let down: [UInt8] = [0x1b, 0x5b, 0x42]
-        let expected = [UInt8](arrayLiteral: 0x20) + down + [0x20] + down + [0x20] + [0x0d]
+        let space: [UInt8] = [0x20]
+        let enter: [UInt8] = [0x0d]
+        let expected = space + down + space + down + space + enter
         XCTAssertEqual(MoTUI.keystrokesToSelect([0, 1, 2], count: 3, confirm: true), expected)
     }
 
