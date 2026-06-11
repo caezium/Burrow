@@ -204,34 +204,24 @@ struct TreemapView: View {
             let shown = Array(entries.filter { $0.size > 0 }.prefix(120))
             let rects = Treemap.layout(weights: shown.map { Double($0.size) },
                                        in: CGRect(x: 0, y: 0, width: geo.size.width, height: geo.size.height))
-//            ZStack(alignment: .topLeading) {
-//                ForEach(Array(shown.enumerated()), id: \.element.id) { i, e in
-//                    block(e, rects[i], color: Self.palette[i % Self.palette.count], isHover: hoveredID == e.id)
-//                }
-//            }
-//            .frame(width: geo.size.width, height: geo.size.height)
-            ZStack(alignment: .topLeading) {
+            ZStack {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, e in
                     block(e, rects[i], color: Self.palette[i % Self.palette.count], isHover: hoveredID == e.id)
-//                        .offset(x: rects[i].minX, y: rects[i].minY)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .contentShape(Rectangle())
+            // One hover hit-test over the laid-out rects — per-cell `.onHover`
+            // tracking areas can stick or misfire, a single region can't, and
+            // `.ended` reliably clears the highlight when the mouse leaves.
             .onContinuousHover { phase in
                 switch phase {
-                case .active(let location):
-                    // 找面积最小的包含鼠标位置的 block,解决onhover穿透问题
-                    let hit = zip(shown, rects)
-                        .filter { _, r in r.contains(location) }
-                        .min { a, b in (a.1.width * a.1.height) < (b.1.width * b.1.height) }
-                    hoveredID = hit?.0.id
-                case .ended:
-                    hoveredID = nil
+                case .active(let pt): hoveredID = zip(shown, rects).first { _, r in r.contains(pt) }?.0.id
+                case .ended:          hoveredID = nil
                 }
             }
         }
     }
-
 
     @ViewBuilder
     private func block(_ e: DiskScanEntry, _ r: CGRect, color: Color, isHover: Bool) -> some View {
@@ -240,24 +230,15 @@ struct TreemapView: View {
         RoundedRectangle(cornerRadius: 4, style: .continuous)
             .fill(LinearGradient(colors: [color.opacity(isHover ? 0.95 : 0.8), color.opacity(isHover ? 0.7 : 0.55)],
                                  startPoint: .top, endPoint: .bottom))
-            
             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(isHover ? Color.white.opacity(0.6) : Color.black.opacity(0.25), lineWidth: 1))
             .overlay(label(e, w: w, h: h))
             .frame(width: w, height: h)
-//            .offset(x: r.minX, y:r.minY)
             // `.position` (not `.offset`) so each cell's hit-test region tracks
             // its drawn rect — `.offset` left hit-testing at the layout origin,
             // which both lit the wrong square AND made only the first cell
             // clickable.
             .position(x: r.midX, y: r.midY)
-//            .onHover { inside in
-//                if inside {
-//                    print("hover IN: \(e.name) rect=\(r)")
-//                    hoveredID = e.id
-//                } else if hoveredID == e.id { hoveredID = nil}
-//            }
             .onTapGesture { onOpen(e) }
-//            .overlay(Text("\(Int(r.minX)),\(Int(r.minY))").font(.system(size:18)).foregroundColor(.white))
             .contextMenu {
                 Button(NSLocalizedString("Reveal in Finder", comment: "")) { AnalyzeIcons.reveal(e.path) }
                 if e.isDir { Button(NSLocalizedString("Open here", comment: "")) { onOpen(e) } }
