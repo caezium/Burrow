@@ -5,45 +5,32 @@
 //  The Clean tab — mole.fit's "Earth" flow, our brand. The hero offers
 //  both a no-risk "Scan your Mac" preview (`mo clean --dry-run`) and a
 //  direct "Clean Now" run. The real clean runs elevated through ONE auth
-//  prompt (CommandRunner.runElevated) so you don't get a stack of
-//  password dialogs, and finishes on a proper done banner.
+//  prompt and finishes on a proper done banner. The whole lifecycle
+//  (FDA gate, streaming, cancel, OperationCenter) lives in OperationFlow;
+//  this file is layout plus localized copy.
 //
 
 import SwiftUI
 import AppKit
 
 struct CleanView: View {
-    @StateObject private var runner = CommandRunner()
+    @StateObject private var flow = OperationFlow<TaskRunReport>()
     @State private var mode: Mode = .dry
-    @State private var pendingRun: ((Bool) -> Void)? = nil
 
     enum Mode { case dry, real }
 
     var body: some View {
-        if runner.phase == .idle {
-            if pendingRun != nil {
-                FullDiskAccessRequired(
-                    accent: Tool.clean.accent,
-                    onRecheck: { if Privacy.hasFullDiskAccess() { runPending(elevate: false); return true }; return false },
-                    onRunAnyway: { runPending(elevate: true) },   // root bypasses TCC → no flood
-                    onCancel: { pendingRun = nil })
-            } else {
-                ToolHero(tool: .clean, title: "Clean", subtitle: Tool.clean.tagline) {
-                    PillButton(title: "Clean Now") { confirmReal() }
-                    PillButton(title: "Preview", filled: false) { startDry() }
-                }
+        OperationScreen(flow: flow, accent: Tool.clean.accent, status: statusText) {
+            ToolHero(tool: .clean, title: "Clean", subtitle: Tool.clean.tagline) {
+                PillButton(title: "Clean Now") { confirmReal() }
+                PillButton(title: "Preview", filled: false) { startDry() }
             }
-        } else {
-            VStack(spacing: 0) {
-                statusBar.padding(.horizontal, 18).padding(.top, 4).padding(.bottom, 12)
-                Rectangle().fill(Brand.hairline).frame(height: 1)
-                if isDone, mode == .real {
-                    DoneBanner(accent: Tool.clean.accent, title: "Cleaned",
-                               detail: runner.summary.map(cleanedDetail))
-                } else if mode == .dry, let s = runner.summary {
-                    summaryBanner(s)
-                }
-                TaskReportView(groups: runner.groups, accent: Tool.clean.accent)
+        } banner: {
+            if case .finished(.done) = flow.state, mode == .real {
+                DoneBanner(accent: Tool.clean.accent, title: "Cleaned",
+                           detail: flow.report?.summary.map(cleanedDetail))
+            } else if mode == .dry, let s = flow.report?.summary {
+                summaryBanner(s)
             }
         }
     }
@@ -58,26 +45,6 @@ struct CleanView: View {
         if !s.freeNow.isEmpty { parts.append("\(s.freeNow) free now") }
         if !s.items.isEmpty { parts.append("\(s.items) items") }
         return parts.isEmpty ? "Done" : parts.joined(separator: " · ")
-    }
-
-    private var statusBar: some View {
-        HStack(spacing: 10) {
-            if isRunning { ProgressView().controlSize(.small).tint(Tool.clean.accent) }
-            Text(statusText).font(Brand.mono(12)).foregroundStyle(Brand.textSecondary)
-            Spacer()
-            if isRunning {
-                Button { runner.cancel() } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                        .font(Brand.mono(11)).foregroundStyle(Brand.red)
-                }.buttonStyle(.plain)
-            }
-            if isDone || isFailed {
-                Button { runner.reset() } label: {
-                    Label("Back", systemImage: "chevron.left")
-                        .font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
-                }.buttonStyle(.plain)
-            }
-        }
     }
 
     private func summaryBanner(_ s: TaskSummary) -> some View {
@@ -95,37 +62,31 @@ struct CleanView: View {
         .padding(.horizontal, 18).padding(.vertical, 12)
     }
 
-    private var isRunning: Bool { runner.phase == .running }
-    private var isDone: Bool { if case .done = runner.phase { return true }; return false }
-    private var isFailed: Bool { if case .failed = runner.phase { return true }; return false }
-
     private var statusText: String {
-        switch runner.phase {
-        case .running: return mode == .dry ? NSLocalizedString("Scanning your Mac…", comment: "") : NSLocalizedString("Cleaning… don't quit.", comment: "")
-        case .done:    return runner.wasCancelled ? NSLocalizedString("Stopped.", comment: "")
-            : (mode == .dry ? NSLocalizedString("Preview — review, then clean for real.", comment: "") : NSLocalizedString("Done — caches cleared.", comment: ""))
-        case .failed(let m): return String(format: NSLocalizedString("Failed: %@", comment: ""), m)
-        case .idle:    return ""
+        switch flow.state {
+        case .running:
+            return mode == .dry ? NSLocalizedString("Scanning your Mac…", comment: "")
+                                : NSLocalizedString("Cleaning… don't quit.", comment: "")
+        case .finished(.cancelled):
+            return NSLocalizedString("Stopped.", comment: "")
+        case .finished(.done):
+            return mode == .dry ? NSLocalizedString("Preview — review, then clean for real.", comment: "")
+                                : NSLocalizedString("Done — caches cleared.", comment: "")
+        case .finished(.failed(let m)):
+            return String(format: NSLocalizedString("Failed: %@", comment: ""), m)
+        case .idle, .gated:
+            return ""
         }
     }
 
-    // MARK: - Full Disk Access gate
-
-    /// Run a flood-prone scan. With Full Disk Access we run it directly.
-    /// Without, divert to the gate; the user either grants FDA (then we run
-    /// normally) or picks "Scan with admin", which runs the same command
-    /// elevated — root bypasses TCC, so one password replaces the flood.
-    /// `work(elevate)` decides whether to run via sudo.
-    private func guarded(_ work: @escaping (Bool) -> Void) {
-        if Privacy.hasFullDiskAccess() { work(false) } else { pendingRun = work }
-    }
-    private func runPending(elevate: Bool) { let r = pendingRun; pendingRun = nil; r?(elevate) }
-
+    /// Dry-run scans are flood-prone without Full Disk Access — the gate in
+    /// the descriptor diverts to FullDiskAccessRequired, where the user
+    /// either grants FDA or picks "Scan with admin" (root bypasses TCC).
     private func startDry() {
-        guarded { elevate in
-            mode = .dry
-            runner.run(["clean", "--dry-run"], elevated: elevate, label: "Scanning caches")
-        }
+        mode = .dry
+        flow.start(.moleStream(["clean", "--dry-run"],
+                               gate: .fullDiskAccess(adminBypass: true),
+                               label: NSLocalizedString("Scanning caches", comment: "")))
     }
 
     /// The real clean already runs elevated (root), so it never triggers the
@@ -139,6 +100,7 @@ struct CleanView: View {
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         mode = .real
-        runner.run(["clean"], elevated: true, label: NSLocalizedString("Cleaning caches", comment: ""))
+        flow.start(.moleStream(["clean"], elevated: true,
+                               label: NSLocalizedString("Cleaning caches", comment: "")))
     }
 }

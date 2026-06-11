@@ -20,11 +20,11 @@ final class StatusBarController {
     private let item: NSStatusItem
     private let popover: NSPopover
     private let db: DB
-    private let sampler: Sampler
+    private let producer: SnapshotProducer
 
-    init(db: DB, sampler: Sampler, delegate: AppDelegate) {
+    init(db: DB, producer: SnapshotProducer, delegate: AppDelegate) {
         self.db = db
-        self.sampler = sampler
+        self.producer = producer
         self.item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         // Build the popover before the button-target line below so all
@@ -39,7 +39,7 @@ final class StatusBarController {
         // then drives the real (screen-capped) size via preferredContentSize.
         popover.contentSize = NSSize(width: 334, height: 560)
         popover.contentViewController = HUDController(
-            root: PopupView(db: db, sampler: sampler, delegate: delegate))
+            root: PopupView(db: db, live: producer.live, delegate: delegate))
         self.popover = popover
 
         if let button = self.item.button {

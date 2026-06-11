@@ -4,87 +4,59 @@
 //
 //  The Optimize tab — mole.fit's "Mercury" one-tap maintenance, our
 //  brand. "Optimize" runs the safe maintenance tasks (elevated through a
-//  single auth prompt so there aren't repeated password dialogs);
-//  "Preview" is a no-auth `--dry-run`. Results render through the shared
-//  TaskReportView and finish on a done banner.
+//  single auth prompt); "Preview" is a no-auth `--dry-run`. The lifecycle
+//  lives in OperationFlow; this file is layout plus localized copy.
 //
 
 import SwiftUI
 
 struct OptimizeView: View {
-    @StateObject private var runner = CommandRunner()
+    @StateObject private var flow = OperationFlow<TaskRunReport>()
     @State private var preview = false
-    @State private var pendingRun: ((Bool) -> Void)? = nil
 
     var body: some View {
-        if runner.phase == .idle {
-            if pendingRun != nil {
-                FullDiskAccessRequired(
-                    accent: Tool.optimize.accent,
-                    onRecheck: { if Privacy.hasFullDiskAccess() { runPending(elevate: false); return true }; return false },
-                    onRunAnyway: { runPending(elevate: true) },
-                    onCancel: { pendingRun = nil })
-            } else {
-                ToolHero(tool: .optimize, title: "Optimize", subtitle: Tool.optimize.tagline) {
-                    PillButton(title: "Optimize") { runOptimize() }
-                    PillButton(title: "Preview", filled: false) { runPreview() }
-                }
+        OperationScreen(flow: flow, accent: Tool.optimize.accent, status: statusText) {
+            ToolHero(tool: .optimize, title: "Optimize", subtitle: Tool.optimize.tagline) {
+                PillButton(title: "Optimize") { runOptimize() }
+                PillButton(title: "Preview", filled: false) { runPreview() }
             }
-        } else {
-            VStack(spacing: 0) {
-                statusBar.padding(.horizontal, 18).padding(.top, 4).padding(.bottom, 12)
-                Rectangle().fill(Brand.hairline).frame(height: 1)
-                if isDone, !preview, !runner.wasCancelled {
-                    DoneBanner(accent: Tool.optimize.accent, title: "Maintenance complete",
-                               detail: String(format: NSLocalizedString("%d areas refreshed", comment: ""), runner.groups.count))
-                }
-                TaskReportView(groups: runner.groups, accent: Tool.optimize.accent)
+        } banner: {
+            if case .finished(.done) = flow.state, !preview {
+                DoneBanner(accent: Tool.optimize.accent, title: "Maintenance complete",
+                           detail: String(format: NSLocalizedString("%d areas refreshed", comment: ""),
+                                          flow.report?.groups.count ?? 0))
             }
         }
     }
-
-    private var statusBar: some View {
-        HStack(spacing: 10) {
-            if isRunning { ProgressView().controlSize(.small).tint(Tool.optimize.accent) }
-            Text(statusText).font(Brand.mono(12)).foregroundStyle(Brand.textSecondary)
-            Spacer()
-            if isRunning {
-                Button { runner.cancel() } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                        .font(Brand.mono(11)).foregroundStyle(Brand.red)
-                }.buttonStyle(.plain)
-            }
-            if isDone || isFailed {
-                Button { runner.reset() } label: {
-                    Label("Back", systemImage: "chevron.left")
-                        .font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
-                }.buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var isRunning: Bool { runner.phase == .running }
-    private var isDone: Bool { if case .done = runner.phase { return true }; return false }
-    private var isFailed: Bool { if case .failed = runner.phase { return true }; return false }
 
     private var statusText: String {
-        switch runner.phase {
-        case .running: return preview ? NSLocalizedString("Previewing maintenance…", comment: "") : NSLocalizedString("Running maintenance…", comment: "")
-        case .done:    return runner.wasCancelled ? NSLocalizedString("Stopped.", comment: "")
-            : (preview ? NSLocalizedString("Preview complete.", comment: "") : NSLocalizedString("Maintenance complete.", comment: ""))
-        case .failed(let m): return String(format: NSLocalizedString("Failed: %@", comment: ""), m)
-        case .idle:    return ""
+        switch flow.state {
+        case .running:
+            return preview ? NSLocalizedString("Previewing maintenance…", comment: "")
+                           : NSLocalizedString("Running maintenance…", comment: "")
+        case .finished(.cancelled):
+            return NSLocalizedString("Stopped.", comment: "")
+        case .finished(.done):
+            return preview ? NSLocalizedString("Preview complete.", comment: "")
+                           : NSLocalizedString("Maintenance complete.", comment: "")
+        case .finished(.failed(let m)):
+            return String(format: NSLocalizedString("Failed: %@", comment: ""), m)
+        case .idle, .gated:
+            return ""
         }
     }
 
-    private func guarded(_ work: @escaping (Bool) -> Void) {
-        if Privacy.hasFullDiskAccess() { work(false) } else { pendingRun = work }
-    }
-    private func runPending(elevate: Bool) { let r = pendingRun; pendingRun = nil; r?(elevate) }
-
     /// Optimize already runs elevated (root) → no flood, no gate.
-    private func runOptimize() { preview = false; runner.run(["optimize"], elevated: true, label: "Optimizing") }
+    private func runOptimize() {
+        preview = false
+        flow.start(.moleStream(["optimize"], elevated: true,
+                               label: NSLocalizedString("Optimizing", comment: "")))
+    }
+
     private func runPreview() {
-        guarded { elevate in preview = true; runner.run(["optimize", "--dry-run"], elevated: elevate, label: "Optimize preview") }
+        preview = true
+        flow.start(.moleStream(["optimize", "--dry-run"],
+                               gate: .fullDiskAccess(adminBypass: true),
+                               label: NSLocalizedString("Optimize preview", comment: "")))
     }
 }

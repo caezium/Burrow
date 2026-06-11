@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import os
 
 final class Maintenance {
     private let db: DB
@@ -24,14 +25,20 @@ final class Maintenance {
     private var timer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "dev.caezium.burrow.maintenance", qos: .utility)
 
+    /// Run stats, written by the tick on the maintenance queue and read by
+    /// the Settings panel on main — lock-protected so the cross-thread
+    /// read can't tear.
+    private struct Stats { var lastRunAt: Date?; var lastPruneDeleted = 0 }
+    private let stats = OSAllocatedUnfairLock(initialState: Stats())
+
     /// Wall-clock time the last full maintenance cycle finished. Exposed
     /// so the Settings panel can show "last run X ago" and a debug
     /// button can confirm a manual trigger took.
-    private(set) var lastRunAt: Date?
+    var lastRunAt: Date? { stats.withLock { $0.lastRunAt } }
 
     /// Rows deleted on the last prune. Tells the Settings UI whether the
     /// retention slider is doing anything useful.
-    private(set) var lastPruneDeleted: Int = 0
+    var lastPruneDeleted: Int { stats.withLock { $0.lastPruneDeleted } }
 
     init(db: DB, intervalSeconds: TimeInterval = 3600) {
         self.db = db
@@ -53,9 +60,10 @@ final class Maintenance {
         self.timer = nil
     }
 
-    /// Run maintenance synchronously on the calling thread. Used by the
-    /// Settings "Run now" button and by tests; production code waits
-    /// for the timer.
+    /// Run maintenance synchronously on the calling thread. Used by tests
+    /// and the Settings "Run now" button — call OFF the main thread for
+    /// UI-triggered runs: an opted-in VACUUM of a large DB blocks for its
+    /// full duration.
     func runNow() {
         self.queue.sync { self.tick() }
     }
@@ -64,20 +72,20 @@ final class Maintenance {
         let retentionDays = Store.retentionDays
         let cutoff = Int(Date().timeIntervalSince1970) - retentionDays * 86_400
 
+        var deleted = 0
         do {
-            self.lastPruneDeleted = try self.db.pruneOlderThan(cutoff)
+            deleted = try self.db.pruneOlderThan(cutoff)
         } catch {
             NSLog("Burrow.Maintenance: prune failed: \(error.localizedDescription)")
             // Don't bail — still advance lastRunAt so a one-off prune
             // failure doesn't make the Settings panel claim maintenance
             // never ran.
-            self.lastPruneDeleted = 0
         }
 
         // VACUUM only when something was actually deleted AND the user
         // opted in. Pruning a few stale rows doesn't justify rewriting
         // the whole DB file every hour.
-        if Store.autoVacuum, self.lastPruneDeleted > 1_000 {
+        if Store.autoVacuum, deleted > 1_000 {
             do {
                 try self.db.vacuum()
             } catch {
@@ -85,6 +93,7 @@ final class Maintenance {
             }
         }
 
-        self.lastRunAt = Date()
+        let finished = Date()
+        stats.withLock { $0.lastPruneDeleted = deleted; $0.lastRunAt = finished }
     }
 }

@@ -21,13 +21,18 @@ final class MaintenanceTests: XCTestCase {
             .appendingPathComponent("burrow-maint-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         db = try DB(at: tempDir.appendingPathComponent("burrow.db"))
-        // Defaults under our control during the test.
-        UserDefaults.standard.set(7, forKey: "retention_days")
+        // Defaults under our control during the test — in a scratch suite so
+        // the developer's real retention setting is never touched (and the
+        // hosted app, if it ever ran services, couldn't see the 7 either).
+        Store.d = UserDefaults(suiteName: StoreTests.scratchSuite)!
+        Store.d.removePersistentDomain(forName: StoreTests.scratchSuite)
+        Store.d.set(7, forKey: "retention_days")
     }
 
     override func tearDown() {
         db = nil
-        UserDefaults.standard.removeObject(forKey: "retention_days")
+        Store.d.removePersistentDomain(forName: StoreTests.scratchSuite)
+        Store.d = .standard
         try? FileManager.default.removeItem(at: tempDir)
     }
 

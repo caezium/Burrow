@@ -52,7 +52,12 @@ final class OperationCenter: ObservableObject {
         ops[i].phase = success ? .done : .failed
         if !detail.isEmpty { ops[i].detail = detail }
         DispatchQueue.main.asyncAfter(deadline: .now() + 22) { [weak self] in
-            self?.ops.removeAll { $0.id == id }
+            guard let self, let j = self.ops.firstIndex(where: { $0.id == id }) else { return }
+            // The runner reuses its id across runs (dry-run → real run):
+            // if this op was re-begun inside the linger window, the expiry
+            // belongs to the OLD run — a live row must never be removed.
+            guard self.ops[j].phase != .running else { return }
+            self.ops.remove(at: j)
         }
     }
 }

@@ -34,7 +34,7 @@ final class ExplainTests: XCTestCase {
 
     func testContextBuild_extractsFactsAndTopProcesses() throws {
         let now = Int(Date().timeIntervalSince1970)
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now, json: snapshot())
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now, json: snapshot())
         let ctx = try XCTUnwrap(ExplainContext.build(db: db))
         XCTAssertEqual(ctx.healthScore, 80)
         XCTAssertEqual(ctx.cpuUsage, 91.0, accuracy: 0.001)
@@ -46,8 +46,8 @@ final class ExplainTests: XCTestCase {
     func testContextBuild_includesRecentTrendFromHistory() throws {
         let now = Int(Date().timeIntervalSince1970)
         // Two snapshots in the window so the summary has something to average.
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now - 120, json: snapshot())
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now, json: snapshot())
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now - 120, json: snapshot())
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now, json: snapshot())
         let ctx = try XCTUnwrap(ExplainContext.build(db: db))
         XCTAssertEqual(ctx.cpuPeak, 91.0, accuracy: 0.001, "window peak comes from the snapshots")
         XCTAssertTrue(ctx.factSheet.contains("last_60min_cpu"), "fact sheet carries the trend")
@@ -76,7 +76,7 @@ final class ExplainTests: XCTestCase {
 
     func testPrompt_embedsFactsAndAsksForActionLine() throws {
         let now = Int(Date().timeIntervalSince1970)
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now, json: snapshot())
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now, json: snapshot())
         let ctx = try XCTUnwrap(ExplainContext.build(db: db))
         let (system, user) = ExplainPrompt.make(ctx)
         XCTAssertTrue(system.contains("ACTION:"), "model is instructed to emit an action line")
@@ -136,7 +136,7 @@ final class ExplainTests: XCTestCase {
 
     func testEngine_parsesProviderReplyIntoActionableResult() async throws {
         let now = Int(Date().timeIntervalSince1970)
-        try db.insert(prefix: Sampler.snapshotPrefix, ts: now, json: snapshot())
+        try db.insert(prefix: MetricsStore.snapshotPrefix, ts: now, json: snapshot())
         let engine = ExplainEngine(provider: FakeProvider(reply: "Disk is nearly full.\nACTION: clean"))
         let result = try await engine.explain(db: db)
         XCTAssertEqual(result.suggestion, .clean)

@@ -55,14 +55,14 @@ struct ExplainContext {
     /// Build from the latest snapshot plus a short history window, or nil if
     /// there's no snapshot yet. So the model sees a trend, not just an instant.
     static func build(db: DB) -> ExplainContext? {
-        guard let stored = SnapshotStore.latest(db) else { return nil }
+        guard let stored = MetricsStore(db: db).latest() else { return nil }
         let s = stored.status
         let now = Int(Date().timeIntervalSince1970)
         let top = (s.topProcesses ?? []).sorted { $0.cpu > $1.cpu }.prefix(5)
             .map { (name: $0.name, cpu: $0.cpu, mem: $0.memory) }
 
         let windowMin = 60
-        let rows = SnapshotStore.range(db, since: now - windowMin * 60, until: now, maxPoints: 240)
+        let rows = MetricsStore(db: db).snapshots(.init(since: now - windowMin * 60, until: now), maxPoints: 240)
         var cpuVals: [Double] = [], memVals: [Double] = []
         var peakCPU: [String: Double] = [:]
         var firstDisk: Double?, lastDisk: Double?
@@ -236,7 +236,9 @@ enum ExplainError: LocalizedError {
 /// nothing leaves the machine. If Ollama isn't running, surfaces an
 /// actionable error rather than hanging.
 struct OllamaProvider: ExplainProvider {
-    var model: String = Store.aiOllamaModel
+    // Config arrives explicitly from AIConfig.makeProvider() — providers
+    // never read Store themselves.
+    var model: String
     var baseURL: URL = URL(string: "http://127.0.0.1:11434")!
     var session: URLSession = .shared
 
@@ -284,9 +286,11 @@ struct OllamaProvider: ExplainProvider {
 /// we POST to `<baseURL>/chat/completions`. An empty key omits the
 /// Authorization header, which is what local servers like LM Studio want.
 struct OpenAICompatibleProvider: ExplainProvider {
-    var baseURL: String = Store.aiOpenAIBaseURL
-    var model: String = Store.aiOpenAIModel
-    var apiKey: String = Store.aiOpenAIKey
+    // Config arrives explicitly from AIConfig.makeProvider() — providers
+    // never read Store themselves.
+    var baseURL: String
+    var model: String
+    var apiKey: String
     var session: URLSession = .shared
 
     /// Resolve the chat-completions URL from a base that may or may not
@@ -359,18 +363,21 @@ struct OpenAICompatibleProvider: ExplainProvider {
 struct ExplainEngine {
     let provider: ExplainProvider
 
-    init(provider: ExplainProvider = OllamaProvider()) {
+    init(provider: ExplainProvider) {
         self.provider = provider
     }
 
     /// Build an engine from the user's current Explain settings — local
     /// Ollama by default, or an OpenAI-compatible endpoint (LM Studio / API)
-    /// when they've switched the backend in Settings.
-    static func fromSettings() -> ExplainEngine {
-        switch Store.aiProvider {
-        case "openai": return ExplainEngine(provider: OpenAICompatibleProvider())
-        default:       return ExplainEngine(provider: OllamaProvider())
+    /// when they've switched the backend in Settings. Throws the config's
+    /// own diagnosis instead of letting a misconfiguration surface as a
+    /// confusing network error later.
+    static func fromSettings() throws -> ExplainEngine {
+        let config = AIConfig.load()
+        if let problem = config.problem {
+            throw ExplainError.providerUnavailable(problem)
         }
+        return ExplainEngine(provider: config.makeProvider())
     }
 
     func explain(db: DB) async throws -> ExplainResult {

@@ -9,16 +9,32 @@
 
 import SwiftUI
 
+extension Notification.Name {
+    /// Posted by AppDelegate when a deep-link (HUD pill, gear, Dock reopen)
+    /// wants the LIVE window to switch panes. Routing through the existing
+    /// RootView instead of reinstalling the content view is what keeps
+    /// in-flight tool state (a running clean's report, scan caches) alive
+    /// across reopens.
+    static let burrowSelectPane = Notification.Name("dev.caezium.burrow.selectPane")
+    /// Posted with object `Bool` when the main window is shown/closed, so
+    /// panes with live timers can unmount while the window is invisible.
+    static let burrowWindowVisibility = Notification.Name("dev.caezium.burrow.windowVisibility")
+}
+
 struct RootView: View {
     let db: DB
-    let sampler: Sampler
+    let producer: SnapshotProducer
     weak var delegate: AppDelegate?
 
     @State private var pane: Pane
+    /// The window is closed-not-released; SwiftUI never fires onDisappear
+    /// for an installed-but-hidden hierarchy, so Home/Settings would keep
+    /// polling forever behind a closed window without this flag.
+    @State private var windowVisible = true
 
-    init(db: DB, sampler: Sampler, delegate: AppDelegate?, initialPane: Pane = .home) {
+    init(db: DB, producer: SnapshotProducer, delegate: AppDelegate?, initialPane: Pane = .home) {
         self.db = db
-        self.sampler = sampler
+        self.producer = producer
         self.delegate = delegate
         self._pane = State(initialValue: initialPane)
     }
@@ -40,9 +56,16 @@ struct RootView: View {
         .environment(\.colorScheme, .dark)
         .animation(.easeInOut(duration: 0.22), value: pane)
         // Sample fast only while a live metrics pane is on screen.
-        .onAppear { sampler.setForeground(Self.isMetricsPane(pane)) }
-        .onChange(of: pane) { _, p in sampler.setForeground(Self.isMetricsPane(p)) }
-        .onDisappear { sampler.setForeground(false) }
+        .onAppear { producer.setForeground(Self.isMetricsPane(pane)) }
+        .onChange(of: pane) { _, p in producer.setForeground(Self.isMetricsPane(p)) }
+        .onDisappear { producer.setForeground(false) }
+        .onReceive(NotificationCenter.default.publisher(for: .burrowSelectPane)) { note in
+            if let p = note.object as? Pane { pane = p }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .burrowWindowVisibility)) { note in
+            if let visible = note.object as? Bool { windowVisible = visible }
+            producer.setForeground(windowVisible && Self.isMetricsPane(pane))
+        }
     }
 
     /// Panes whose charts want live, high-cadence data. Home's Overview /
@@ -63,11 +86,19 @@ struct RootView: View {
             MoInteractiveView(.installer, isActive: pane == .tool(.installer)).tabVisible(pane == .tool(.installer))
             OptimizeView().tabVisible(pane == .tool(.optimize))
 
-            if pane == .home {
-                HomeView(db: db, sampler: sampler, onNavigate: { pane = $0 })
+            // Gated on window visibility too: these two carry live timers
+            // (2 s polls, 15 s DB reads) that must stop when the window
+            // closes — unmounting fires their onDisappear teardown.
+            if pane == .home, windowVisible {
+                HomeView(db: db, live: producer.live, onNavigate: { pane = $0 })
             }
-            if pane == .settings {
-                SettingsView(onRunMaintenance: { [weak delegate] in delegate?.maintenance?.runNow() })
+            if pane == .settings, windowVisible {
+                SettingsView(onRunMaintenance: { [weak delegate] in
+                    // Off-main: runNow blocks for the prune (and an opted-in
+                    // VACUUM can rewrite the whole DB file).
+                    let m = delegate?.maintenance
+                    DispatchQueue.global(qos: .utility).async { m?.runNow() }
+                })
             }
         }
     }

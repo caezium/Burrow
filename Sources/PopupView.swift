@@ -5,7 +5,7 @@
 //  The menu-bar HUD — Burrow's take on mole.fit's menu-bar popover, on
 //  the same brand + data path as the Status tab. It reuses the Status
 //  data model exactly: live values from `Sampler.lastSnapshot`, mini
-//  sparklines from `DB.findRangeSampled(prefix: Sampler.snapshotPrefix)`,
+//  sparklines from `DB.findRangeSampled(prefix: MetricsStore.snapshotPrefix)`,
 //  rendered with the shared Brand components (Eyebrow / MiniChart /
 //  HealthRing / ProgressBar). The popover stays owned by
 //  StatusBarController; this is just the SwiftUI it hosts.
@@ -19,8 +19,8 @@ struct PopupView: View {
     @ObservedObject private var ops = OperationCenter.shared
     private weak var delegate: AppDelegate?
 
-    init(db: DB, sampler: Sampler, delegate: AppDelegate) {
-        _model = StateObject(wrappedValue: HUDModel(db: db, sampler: sampler))
+    init(db: DB, live: LiveFeed, delegate: AppDelegate) {
+        _model = StateObject(wrappedValue: HUDModel(db: db, live: live))
         self.delegate = delegate
     }
 
@@ -132,7 +132,7 @@ struct PopupView: View {
         switch op.phase {
         case .running:
             TimelineView(.periodic(from: Date(), by: 1)) { ctx in
-                Text(Self.elapsed(from: op.startedAt, to: ctx.date))
+                Text(Fmt.elapsed(from: op.startedAt, to: ctx.date))
                     .font(Brand.mono(9)).foregroundStyle(Brand.textSecondary)
             }
         case .done:
@@ -150,11 +150,6 @@ struct PopupView: View {
         if l.contains("analy") { return Tool.analyze.accent }
         if l.contains("uninstall") { return Tool.apps.accent }
         return Brand.gold
-    }
-
-    static func elapsed(from start: Date, to now: Date) -> String {
-        let s = max(0, Int(now.timeIntervalSince(start)))
-        return s < 60 ? "\(s)s" : String(format: "%d:%02d", s / 60, s % 60)
     }
 
     /// Thin indeterminate progress bar for a running op — conveys "still
@@ -211,28 +206,28 @@ struct PopupView: View {
 
     private func metricGrid(_ s: MoleStatus) -> some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-            HUDTile(eyebrow: "CPU", glyph: "cpu", accent: Brand.green,
-                    value: String(format: "%.0f", s.cpu.usage), unit: "%",
-                    values: model.cpuHist, style: .bars,
-                    foot: String(format: "load %.2f", s.cpu.load1))
-            HUDTile(eyebrow: "Memory", glyph: "memorychip", accent: Brand.amber,
-                    value: String(format: "%.0f", s.memory.usedPercent), unit: "%",
-                    values: model.memHist, style: .area,
-                    foot: String(format: "%.1f/%.0f GB", Double(s.memory.used) / 1_073_741_824, Double(s.memory.total) / 1_073_741_824))
-            HUDTile(eyebrow: "Network", glyph: "network", accent: Brand.green,
-                    value: netValue(s).0, unit: netValue(s).1,
-                    values: model.netHist, style: .area,
-                    foot: netFoot(s))
-            HUDTile(eyebrow: "GPU", glyph: "cpu.fill", accent: Brand.orange,
-                    value: gpuValue(s).0, unit: gpuValue(s).1,
-                    values: model.gpuHist, style: .area,
-                    foot: (s.gpu?.first?.name ?? "GPU").replacingOccurrences(of: "Apple ", with: ""))
+            ValueTile(variant: .hud, eyebrow: "CPU", glyph: "cpu", accent: Brand.green,
+                      value: String(format: "%.0f", s.cpu.usage), unit: "%",
+                      values: model.cpuHist, chartStyle: .bars,
+                      footnote: String(format: "load %.2f", s.cpu.load1))
+            ValueTile(variant: .hud, eyebrow: "Memory", glyph: "memorychip", accent: Brand.amber,
+                      value: String(format: "%.0f", s.memory.usedPercent), unit: "%",
+                      values: model.memHist, chartStyle: .area,
+                      footnote: String(format: "%.1f/%.0f GB", Fmt.gib(s.memory.used), Fmt.gib(s.memory.total)))
+            ValueTile(variant: .hud, eyebrow: "Network", glyph: "network", accent: Brand.green,
+                      value: netValue(s).0, unit: netValue(s).1,
+                      values: model.netHist, chartStyle: .area,
+                      footnote: netFoot(s))
+            ValueTile(variant: .hud, eyebrow: "GPU", glyph: "cpu.fill", accent: Brand.orange,
+                      value: gpuValue(s).0, unit: gpuValue(s).1,
+                      values: model.gpuHist, chartStyle: .area,
+                      footnote: (s.gpu?.first?.name ?? "GPU").replacingOccurrences(of: "Apple ", with: ""))
         }
     }
 
     private func netValue(_ s: MoleStatus) -> (String, String) {
         let total = s.network.reduce(0.0) { $0 + $1.rxRateMbs + $1.txRateMbs }
-        return total < 1 ? (String(format: "%.0f", total * 1024), "KB/s") : (String(format: "%.1f", total), "MB/s")
+        return Fmt.rateParts(total, mbDecimals: 1)
     }
     private func netFoot(_ s: MoleStatus) -> String {
         let n = s.network.first(where: { !$0.ip.isEmpty }) ?? s.network.first
@@ -316,37 +311,6 @@ struct PopupView: View {
     private func openHistory() { open(.home) }   // History lives in Home now
 }
 
-// MARK: - Compact tile
-
-private struct HUDTile: View {
-    let eyebrow: String
-    let glyph: String
-    let accent: Color
-    let value: String
-    var unit: String = ""
-    let values: [Double]
-    var style: MiniChart.Style = .area
-    var foot: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Eyebrow(text: eyebrow, glyph: glyph, color: accent)
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value).font(Brand.mono(15, .semibold)).foregroundStyle(Brand.textPrimary)
-                if !unit.isEmpty { Text(unit).font(Brand.mono(9)).foregroundStyle(Brand.textSecondary) }
-            }
-            MiniChart(values: values, color: accent, style: style).frame(height: 13)
-            if let f = foot {
-                Text(f).font(Brand.mono(8.5)).foregroundStyle(Brand.textTertiary).lineLimit(1)
-            }
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Brand.cardFill))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Brand.hairline, lineWidth: 1))
-    }
-}
-
 // MARK: - Disk + Battery rows
 
 private struct DiskBatteryRows: View {
@@ -356,7 +320,7 @@ private struct DiskBatteryRows: View {
         HStack(spacing: 8) {
             if let disk = s.disks.first {
                 bar(eyebrow: "Disk", glyph: "internaldrive", accent: disk.usedPercent >= 90 ? Brand.red : Brand.blue,
-                    value: Fmt.gb((Double(disk.total) - Double(disk.used)) / 1_073_741_824) + " GB",
+                    value: Fmt.gb(Fmt.gib(Double(disk.total) - Double(disk.used))) + " GB",
                     detail: String(format: NSLocalizedString("%.0f%% used", comment: ""), disk.usedPercent),
                     fraction: disk.usedPercent / 100,
                     barColor: disk.usedPercent >= 90 ? Brand.red : Brand.blue)
@@ -392,28 +356,6 @@ private struct DiskBatteryRows: View {
     }
 }
 
-// MARK: - Shared health rating (also used by Status)
-
-enum HealthRating {
-    static func label(_ score: Int) -> String {
-        switch score {
-        case 90...:   return NSLocalizedString("Excellent", comment: "")
-        case 75..<90: return NSLocalizedString("Good", comment: "")
-        case 60..<75: return NSLocalizedString("Fair", comment: "")
-        case 40..<60: return NSLocalizedString("Poor", comment: "")
-        default:      return NSLocalizedString("Critical", comment: "")
-        }
-    }
-    static func color(_ score: Int) -> Color {
-        switch score {
-        case 75...:   return Brand.green
-        case 60..<75: return Brand.gold
-        case 40..<60: return Brand.orange
-        default:      return Brand.red
-        }
-    }
-}
-
 // MARK: - Model (same data path as StatusModel, lighter)
 
 @MainActor
@@ -426,13 +368,13 @@ final class HUDModel: ObservableObject {
     @Published var gpuHist: [Double] = []
 
     private let db: DB
-    private let sampler: Sampler
+    private let live: LiveFeed
     private var liveTimer: Timer?
     private var histTimer: Timer?
 
-    init(db: DB, sampler: Sampler) {
+    init(db: DB, live: LiveFeed) {
         self.db = db
-        self.sampler = sampler
+        self.live = live
     }
 
     func start() {
@@ -452,8 +394,8 @@ final class HUDModel: ObservableObject {
     }
 
     private func refreshCurrent() {
-        snap = sampler.lastSnapshot
-        if let when = sampler.lastSampleAt {
+        snap = live.lastSnapshot
+        if let when = live.sampledAt {
             freshness = String(format: NSLocalizedString("%ds ago", comment: ""), Int(Date().timeIntervalSince(when)))
         } else {
             freshness = NSLocalizedString("no samples yet", comment: "")
@@ -463,7 +405,7 @@ final class HUDModel: ObservableObject {
     private func refreshHistory() {
         let now = Int(Date().timeIntervalSince1970)
         var cpu: [Double] = [], mem: [Double] = [], net: [Double] = [], gpu: [Double] = []
-        for stored in SnapshotStore.range(db, since: now - 30 * 60, until: now, maxPoints: 30) {
+        for stored in MetricsStore(db: db).snapshots(.init(since: now - 30 * 60, until: now), maxPoints: 30) {
             let s = stored.status
             cpu.append(s.cpu.usage)
             mem.append(s.memory.usedPercent)

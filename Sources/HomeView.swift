@@ -17,7 +17,7 @@ import SwiftUI
 
 struct HomeView: View {
     let db: DB
-    let sampler: Sampler
+    let live: LiveFeed
     var onNavigate: (Pane) -> Void
 
     enum Section: String, CaseIterable, Identifiable {
@@ -87,8 +87,8 @@ struct HomeView: View {
     @ViewBuilder
     private var content: some View {
         switch section {
-        case .overview: StatusView(db: db, sampler: sampler)
-        case .history:  HistoryView(db: db)
+        case .overview: StatusView(db: db, live: live)
+        case .history:  HistoryView(db: db, live: live)
         case .activity: ActivityView()
         }
     }

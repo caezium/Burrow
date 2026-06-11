@@ -111,19 +111,17 @@ private struct HistorySnapshot {
 // MARK: - Loader (off-main)
 
 private enum HistoryLoader {
-    static func load(db: DB, rangeMinutes: Int, ioSamples: [IOMonitor.Sample] = []) -> HistorySnapshot {
+    static func load(db: DB, rangeMinutes: Int, ioSamples: [LiveFeed.Sample] = []) -> HistorySnapshot {
         let now = Int(Date().timeIntervalSince1970)
         let since = now - rangeMinutes * 60
         var snap = HistorySnapshot()
         snap.windowSince = Date(timeIntervalSince1970: TimeInterval(since))
         snap.windowUntil = Date(timeIntervalSince1970: TimeInterval(now))
 
-        let snaps = SnapshotStore.range(db, since: since, until: now, maxPoints: 720)
+        let store = MetricsStore(db: db)
+        let window = MetricsStore.Window(since: since, until: now)
+        let snaps = store.snapshots(window)
         snap.rowCount = snaps.count
-
-        var peakCPU: [String: Double] = [:]
-        var peakMem: [String: Double] = [:]
-        var peakMemBytes: [String: UInt64] = [:]
 
         for stored in snaps {
             let s = stored.status
@@ -149,12 +147,6 @@ private enum HistoryLoader {
             if let b = s.batteries?.first { snap.batteryPercent.append(.init(time: t, value: b.percent)) }
             if let g = s.gpu?.first, g.usage >= 0 { snap.gpuUsage.append(.init(time: t, value: g.usage)) }
             snap.healthScore.append(.init(time: t, value: Double(s.healthScore)))
-
-            for p in (s.topProcesses ?? []) {
-                if p.cpu > (peakCPU[p.name] ?? 0)    { peakCPU[p.name] = p.cpu }
-                if p.memory > (peakMem[p.name] ?? 0) { peakMem[p.name] = p.memory }
-                if let mb = p.memoryBytes, mb > (peakMemBytes[p.name] ?? 0) { peakMemBytes[p.name] = mb }
-            }
             snap.memoryPressure = s.memory.pressure
         }
 
@@ -171,15 +163,17 @@ private enum HistoryLoader {
             snap.diskWrite = splice(snap.diskWrite, ioSamples.map { .init(time: $0.time, value: $0.writeMBs) })
         }
 
-        let topByCPU = peakCPU.sorted { $0.value > $1.value }.prefix(20).map(\.key)
-        let topByMem = peakMem.sorted { $0.value > $1.value }.prefix(20).map(\.key)
+        // Union of the CPU and memory leaders — same aggregation the MCP
+        // tools use, computed once in MetricsStore instead of a third copy.
+        let pw = store.processWindow(window)
+        let leaders = pw.ranked(by: .peakCPU, limit: 20) + pw.ranked(by: .peakMem, limit: 20)
         var seen = Set<String>()
         var rows2: [ProcessRow] = []
-        for name in topByCPU + topByMem where seen.insert(name).inserted {
-            rows2.append(ProcessRow(name: name,
-                                    peakCPU: peakCPU[name] ?? 0,
-                                    peakMem: peakMem[name] ?? 0,
-                                    peakMemBytes: peakMemBytes[name] ?? 0))
+        for p in leaders where seen.insert(p.name).inserted {
+            rows2.append(ProcessRow(name: p.name,
+                                    peakCPU: p.peakCPU,
+                                    peakMem: p.peakMem,
+                                    peakMemBytes: p.peakMemBytes))
         }
         snap.topProcesses = rows2.sorted { $0.peakCPU > $1.peakCPU }
 
@@ -212,6 +206,7 @@ private struct AxisStyle {
 
 struct HistoryView: View {
     let db: DB
+    let live: LiveFeed
 
     @State private var range: HistoryRange = {
         let m = Store.lastHistoryRangeMinutes
@@ -437,7 +432,7 @@ struct HistoryView: View {
         // Grab the dense net/disk ring on the main actor (the loader runs off it),
         // trimmed to the window and downsampled so a 1 h range isn't 3600 points.
         let since = Date().addingTimeInterval(-Double(r.minutes * 60))
-        let ring = Self.downsample(IOMonitor.shared.samples.filter { $0.time >= since }, max: 900)
+        let ring = Self.downsample(live.samples.filter { $0.time >= since }, max: 900)
         DispatchQueue.global(qos: .userInitiated).async {
             let snap = HistoryLoader.load(db: self.db, rangeMinutes: r.minutes, ioSamples: ring)
             DispatchQueue.main.async {
@@ -448,7 +443,7 @@ struct HistoryView: View {
         }
     }
 
-    private static func downsample(_ s: [IOMonitor.Sample], max: Int) -> [IOMonitor.Sample] {
+    private static func downsample(_ s: [LiveFeed.Sample], max: Int) -> [LiveFeed.Sample] {
         guard s.count > max else { return s }
         let step = Double(s.count) / Double(max)
         return (0..<max).map { s[Int(Double($0) * step)] }

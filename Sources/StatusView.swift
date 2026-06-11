@@ -18,10 +18,11 @@ import AppKit
 /// The Overview section of Home: live metric cards + the process table.
 struct StatusView: View {
     @StateObject private var model: StatusModel
-    @ObservedObject private var io = IOMonitor.shared
+    @ObservedObject private var io: LiveFeed
 
-    init(db: DB, sampler: Sampler) {
-        _model = StateObject(wrappedValue: StatusModel(db: db, sampler: sampler))
+    init(db: DB, live: LiveFeed) {
+        _model = StateObject(wrappedValue: StatusModel(db: db, live: live))
+        self.io = live
     }
 
     private let row1H: CGFloat = 150
@@ -75,40 +76,40 @@ struct StatusView: View {
 
     // MARK: - Tiles built from the snapshot
 
-    private func cpuTile(_ s: MoleStatus) -> MetricTile {
+    private func cpuTile(_ s: MoleStatus) -> ValueTile {
         let chip: (String, Color)
         if let temp = s.thermal?.bestTemp {
             chip = (String(format: "%.0f°C", temp), Brand.orange)
         } else {
             chip = (String(format: NSLocalizedString("%d cores", comment: ""), s.cpu.coreCount), Brand.textSecondary)
         }
-        return MetricTile(
+        return ValueTile(
             eyebrow: "CPU", glyph: "cpu", accent: Brand.green,
             value: String(format: "%.1f", s.cpu.usage), unit: "%",
             chip: chip, values: model.cpuHist, chartStyle: .bars,
             footnote: String(format: NSLocalizedString("load %.2f · %.2f · %.2f", comment: ""), s.cpu.load1, s.cpu.load5, s.cpu.load15))
     }
 
-    private func memTile(_ s: MoleStatus) -> MetricTile {
+    private func memTile(_ s: MoleStatus) -> ValueTile {
         let m = s.memory
         let label = m.pressure.isEmpty ? "normal" : m.pressure.lowercased()
         let color: Color = label == "normal" ? Brand.textSecondary : (label == "warning" ? Brand.orange : Brand.red)
-        let used = Double(m.used) / 1_073_741_824
-        let total = Double(m.total) / 1_073_741_824
-        return MetricTile(
+        let used = Fmt.gib(m.used)
+        let total = Fmt.gib(m.total)
+        return ValueTile(
             eyebrow: "Memory", glyph: "memorychip", accent: Brand.amber,
             value: String(format: "%.0f", m.usedPercent), unit: "%",
             chip: (label, color), values: model.memHist, chartStyle: .area,
             footnote: String(format: NSLocalizedString("%.1f / %.1f GB · swap %.1f GB", comment: ""),
-                             used, total, Double(m.swapUsed) / 1_073_741_824))
+                             used, total, Fmt.gib(m.swapUsed)))
     }
 
-    private func gpuTile(_ s: MoleStatus) -> MetricTile {
+    private func gpuTile(_ s: MoleStatus) -> ValueTile {
         let g = s.gpu?.first
         let hasUsage = (g?.usage ?? -1) >= 0
         let name = (g?.name ?? s.hardware.cpuModel).replacingOccurrences(of: "Apple ", with: "")
         let cores = (g?.coreCount ?? 0)
-        return MetricTile(
+        return ValueTile(
             eyebrow: "GPU", glyph: "cpu.fill", accent: Brand.orange,
             value: hasUsage ? String(format: "%.0f", g!.usage) : "—",
             unit: hasUsage ? "%" : "",
@@ -116,7 +117,7 @@ struct StatusView: View {
             footnote: cores > 0 ? "\(name) · \(cores) cores" : name)
     }
 
-    private func netTile(_ s: MoleStatus) -> MetricTile {
+    private func netTile(_ s: MoleStatus) -> ValueTile {
         let snapNet = s.network.first(where: { !$0.ip.isEmpty }) ?? s.network.first
         // Prefer the native 1 s monitor (catches bursts the mo poll misses); the
         // mo snapshot is the fallback before the monitor has any samples.
@@ -124,60 +125,14 @@ struct StatusView: View {
         let rx = useLive ? io.rxMBs : (snapNet?.rxRateMbs ?? 0)
         let tx = useLive ? io.txMBs : (snapNet?.txRateMbs ?? 0)
         let total = rx + tx
-        let value: String
-        let unit: String
-        if total < 1 { value = String(format: "%.0f", total * 1024); unit = "KB/s" }
-        else { value = String(format: "%.2f", total); unit = "MB/s" }
+        let (value, unit) = Fmt.rateParts(total, mbDecimals: 2)
         var chip: (String, Color)? = nil
         if let p = s.proxy, p.enabled, !p.type.isEmpty { chip = (p.type, Brand.blue) }
-        return MetricTile(
+        return ValueTile(
             eyebrow: "Network", glyph: "network", accent: Brand.green,
             value: value, unit: unit, chip: chip,
             values: useLive ? io.netHistory : model.netHist, chartStyle: .area,
-            footnote: "↓ \(rate(rx))  ↑ \(rate(tx)) · \(snapNet?.name ?? "—") · \(snapNet?.ip ?? "—")")
-    }
-
-    private func rate(_ mbs: Double) -> String {
-        mbs < 1 ? "\(Int(mbs * 1024)) KB/s" : String(format: "%.1f MB/s", mbs)
-    }
-}
-
-// MARK: - Metric tile
-
-struct MetricTile: View {
-    let eyebrow: String
-    let glyph: String
-    let accent: Color
-    let value: String
-    var unit: String = ""
-    var chip: (String, Color)? = nil
-    let values: [Double]
-    var chartStyle: MiniChart.Style = .area
-    var footnote: String? = nil
-    var minHeight: CGFloat? = nil
-
-    var body: some View {
-        GlassCard(minHeight: minHeight) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Eyebrow(text: eyebrow, glyph: glyph, color: accent)
-                    Spacer(minLength: 4)
-                    if let c = chip { Chip(text: c.0, color: c.1) }
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(value).font(Brand.mono(26, .semibold)).foregroundStyle(Brand.textPrimary)
-                    if !unit.isEmpty {
-                        Text(unit).font(Brand.mono(12)).foregroundStyle(Brand.textSecondary)
-                    }
-                }
-                MiniChart(values: values, color: accent, style: chartStyle)
-                    .frame(height: 30)
-                Spacer(minLength: 2)
-                if let f = footnote {
-                    Text(f).font(Brand.mono(10)).foregroundStyle(Brand.textTertiary).lineLimit(1)
-                }
-            }
-        }
+            footnote: "↓ \(Fmt.rate(rx))  ↑ \(Fmt.rate(tx)) · \(snapNet?.name ?? "—") · \(snapNet?.ip ?? "—")")
     }
 }
 
@@ -260,7 +215,7 @@ struct DiskCard: View {
         let disk = s.disks.first
         let totalB = Double(disk?.total ?? 0)
         let usedB = Double(disk?.used ?? 0)
-        let freeGB = (totalB - usedB) / 1_073_741_824
+        let freeGB = Fmt.gib(totalB - usedB)
         let pct = disk?.usedPercent ?? 0
         let barColor: Color = pct >= 90 ? Brand.red : Brand.blue
         return GlassCard(minHeight: minHeight) {
@@ -501,9 +456,14 @@ struct AppIconView: View {
 /// apps) resolve; daemons fall back to a glyph. Cached by name.
 enum AppIcon {
     private static var cache: [String: NSImage] = [:]
+    /// Names that resolved to nothing. Daemons (most of the process table)
+    /// never match a running GUI app — without remembering that, every
+    /// 2 s refresh re-walks all running applications per daemon row.
+    private static var misses: Set<String> = []
 
     static func image(for proc: ProcessInfo) -> NSImage? {
         if let c = cache[proc.name] { return c }
+        if misses.contains(proc.name) { return nil }
         for app in NSWorkspace.shared.runningApplications {
             let exe = app.executableURL?.lastPathComponent
             if app.localizedName == proc.name || exe == proc.name || exe == proc.command {
@@ -513,33 +473,12 @@ enum AppIcon {
                 }
             }
         }
+        // Bounded: a newly-launched app with a previously-missed name just
+        // shows the glyph until the occasional reset re-resolves it.
+        if misses.count > 512 { misses.removeAll() }
+        misses.insert(proc.name)
         return nil
     }
-}
-
-// MARK: - Formatting
-
-enum Fmt {
-    static func gb(_ v: Double) -> String {
-        v < 10 ? String(format: "%.2f", v) : String(format: "%.0f", v)
-    }
-    static func bytes(_ b: Int64) -> String {
-        let units = ["B", "KB", "MB", "GB", "TB"]
-        var v = Double(b); var i = 0
-        while v >= 1024, i < units.count - 1 { v /= 1024; i += 1 }
-        let s = (i == 0) ? "\(Int(v))" : String(format: v < 10 ? "%.2f" : "%.1f", v)
-        return "\(s) \(units[i])"
-    }
-    static func uptime(_ secs: UInt64) -> String {
-        let d = secs / 86_400, h = (secs % 86_400) / 3_600, m = (secs % 3_600) / 60
-        if d > 0 { return "\(d)d \(h)h" }
-        if h > 0 { return "\(h)h \(m)m" }
-        return "\(m)m"
-    }
-    private static let dayFmt: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
-    }()
-    static func day(_ date: Date) -> String { dayFmt.string(from: date) }
 }
 
 // MARK: - Model
@@ -556,13 +495,13 @@ final class StatusModel: ObservableObject {
     @Published var pinned: Set<Int> = []
 
     private let db: DB
-    private let sampler: Sampler
+    private let live: LiveFeed
     private var liveTimer: Timer?
     private var histTimer: Timer?
 
-    init(db: DB, sampler: Sampler) {
+    init(db: DB, live: LiveFeed) {
         self.db = db
-        self.sampler = sampler
+        self.live = live
     }
 
     func start() {
@@ -606,14 +545,14 @@ final class StatusModel: ObservableObject {
     }
 
     private func refreshCurrent() {
-        snap = sampler.lastSnapshot
+        snap = live.lastSnapshot
     }
 
     private func refreshHistory() {
         let now = Int(Date().timeIntervalSince1970)
         let since = now - 30 * 60
         var cpu: [Double] = [], mem: [Double] = [], gpu: [Double] = [], net: [Double] = []
-        for stored in SnapshotStore.range(db, since: since, until: now, maxPoints: 40) {
+        for stored in MetricsStore(db: db).snapshots(.init(since: since, until: now), maxPoints: 40) {
             let s = stored.status
             cpu.append(s.cpu.usage)
             mem.append(s.memory.usedPercent)
