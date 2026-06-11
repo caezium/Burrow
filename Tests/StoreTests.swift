@@ -12,22 +12,56 @@ import XCTest
 @testable import Burrow
 
 final class StoreTests: XCTestCase {
+    static let scratchSuite = "dev.caezium.BurrowTests.scratch"
+
     override func setUp() {
-        // Strip every Store key before each case. Tests run inside the
-        // Burrow process so UserDefaults.standard is the same one the
-        // GUI app would use — clearing keeps us hermetic.
-        for k in [
-            "sample_interval_seconds",
-            "retention_days",
-            "auto_vacuum",
-            "query_server_port",
-            "query_server_enabled",
-            "last_history_range_minutes",
-            "fda_notice_dismissed",
-            "show_menu_bar_icon",
-        ] {
-            UserDefaults.standard.removeObject(forKey: k)
-        }
+        // The test bundle is hosted inside the real app, so
+        // UserDefaults.standard is the developer's live Burrow domain.
+        // Point Store at an empty scratch suite instead; tearDown removes
+        // it and restores the real domain untouched.
+        Store.d = UserDefaults(suiteName: Self.scratchSuite)!
+        Store.d.removePersistentDomain(forName: Self.scratchSuite)
+    }
+
+    override func tearDown() {
+        Store.d.removePersistentDomain(forName: Self.scratchSuite)
+        Store.d = .standard
+    }
+
+    // Audit H6: a test run must never leak writes into the developer's
+    // real preferences.
+    func testWrites_doNotTouchStandardDefaults() {
+        let key = "retention_days"
+        let before = UserDefaults.standard.object(forKey: key) as? Int
+        Store.retentionDays = 12_345
+        XCTAssertEqual(Store.retentionDays, 12_345)
+        let after = UserDefaults.standard.object(forKey: key) as? Int
+        XCTAssertEqual(after, before, "Store writes leaked into UserDefaults.standard")
+    }
+
+    // The two defaults users and security reviewers care most about:
+    // anonymous telemetry is opt-out (on until disabled), and agents may
+    // NOT run destructive cleanups until a human flips the switch.
+    func testTelemetryEnabled_defaultsTrue() {
+        XCTAssertTrue(Store.telemetryEnabled)
+    }
+
+    func testMCPActions_defaultFalse() {
+        XCTAssertFalse(Store.mcpActionsEnabled)
+    }
+
+    func testMCPIrreversible_defaultFalseAndPersists() {
+        XCTAssertFalse(Store.mcpIrreversibleEnabled)
+        Store.mcpIrreversibleEnabled = true
+        XCTAssertTrue(Store.mcpIrreversibleEnabled)
+    }
+
+    // The first-launch consent notice must show exactly once: not yet
+    // acknowledged on a fresh install, sticky once answered.
+    func testTelemetryNotice_defaultsUnacknowledgedAndPersists() {
+        XCTAssertFalse(Store.telemetryNoticeAcknowledged)
+        Store.telemetryNoticeAcknowledged = true
+        XCTAssertTrue(Store.telemetryNoticeAcknowledged)
     }
 
     // Issue #4: the menu-bar icon is on by default; the off-switch must

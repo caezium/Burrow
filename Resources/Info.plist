@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.5.5</string>
+	<string>0.6.5</string>
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>5</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSDesktopFolderUsageDescription</key>
@@ -32,5 +32,11 @@
 	<string>MIT License. Mole CLI © tw93. Independent, not affiliated with mole.fit.</string>
 	<key>NSRemovableVolumesUsageDescription</key>
 	<string>Burrow analyzes external drives when you point it at them.</string>
+	<key>PHPostHogApiKey</key>
+	<string>$(POSTHOG_API_KEY)</string>
+	<key>PHPostHogHost</key>
+	<string>$(POSTHOG_HOST)</string>
+	<key>SentryDSN</key>
+	<string>$(SENTRY_DSN)</string>
 </dict>
 </plist>

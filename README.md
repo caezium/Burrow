@@ -156,7 +156,7 @@ handles this honestly:
 > Releases are **unsigned** for now (pre-1.0; notarization is being wired up —
 > see [#10](https://github.com/caezium/Burrow/pull/10)). Each path below clears
 > the Gatekeeper quarantine for you. The full security/trust write-up — network,
-> admin rights, no telemetry — is in **[SECURITY.md](SECURITY.md)**.
+> admin rights, and the trade-offs — is in **[SECURITY.md](SECURITY.md)**.
 
 ### Homebrew (recommended)
 
@@ -196,16 +196,19 @@ Burrow** — or turn the menu-bar icon off in Settings to run it as a Dock app.
 
 ## Security & trust
 
-Burrow drives the audited `mo` CLI and adds no surveillance of its own:
+Burrow drives the audited `mo` CLI. The honest privacy picture:
 
-- **No telemetry, analytics, accounts, ads, or third-party SDKs**, and no
-  backend — nothing to phone home to.
+- **No accounts, no ads.** Your metrics, history, and file contents stay on
+  your Mac. Burrow does send opt-out, anonymous usage analytics and crash
+  reports (no files, paths, metrics, or stored IP — sizes/counts are
+  bucketed); turn it off in Settings. Full list in **[TELEMETRY.md](TELEMETRY.md)**.
 - **No background root helper.** When Clean/Optimize need admin rights, macOS's
   own dialog asks you and Burrow runs that one `mo` command, then exits — you
   approve every elevation.
-- **Local-only:** the optional MCP HTTP server is loopback (`127.0.0.1`, off by
-  default) and history is a local SQLite file. The one opt-in network call is
-  `brew outdated` in the Updates tab.
+- **Local-only surfaces:** the MCP HTTP server is loopback-only
+  (`127.0.0.1`, on by default — toggle it off in Settings) and history is a
+  local SQLite file. The Updates tab runs `brew outdated`, the same check
+  `brew` does for itself.
 - **Unsigned, pre-1.0** — full honest write-up, including the trade-offs of the
   admin path and the "Scan with admin" option, in **[SECURITY.md](SECURITY.md)**.
 
