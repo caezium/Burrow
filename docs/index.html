@@ -135,6 +135,14 @@
   .hero-cmd.copied { border-color: var(--green); }
   .hero-cmd.copied .hint::after { content: " — copied"; color: var(--green); }
 
+  /* mole.fit disclaimer note (above the tools) */
+  .disclaimer-note { margin: 10px 0 0; padding: 20px 24px; border-radius: var(--r-card); background: var(--surface);
+    border: 1px solid var(--hair-2); max-width: 860px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+  .disclaimer-note p { margin: 0; }
+  .disclaimer-note p + p { margin-top: 9px; }
+  .disclaimer-note b { color: var(--ink); font-weight: 600; }
+  .disclaimer-note a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
   /* ---------- sections ---------- */
   section { padding: 56px 0; }
   .sec-head { margin-bottom: 28px; max-width: 760px; }
@@ -305,6 +313,12 @@
       <span class="hint">click to copy · pulls in <span class="cmd">mole</span> &amp; clears quarantine</span>
     </button>
   </header>
+
+  <!-- ===== mole.fit disclaimer ===== -->
+  <div class="disclaimer-note">
+    <p>Burrow is an independent open-source project built on the same <span class="cmd">mo</span> engine as <a href="https://mole.fit/" target="_blank" rel="noopener">mole.fit</a> (the official Mole for Mac app by <span class="cmd">mo</span>'s author), but it is <b>not affiliated with or endorsed by mole.fit</b> — its own name, mark, palette, and copy are original.</p>
+    <p>If you want it and to fund <span class="cmd">mo</span>'s development — <a href="https://mole.fit/" target="_blank" rel="noopener">buy mole.fit ($9)</a>.</p>
+  </div>
 
   <!-- ===== 00 · See it ===== -->
   <section id="see">
@@ -503,7 +517,7 @@ cd Burrow && xcodegen generate</div>
         <div class="foot-note">For your Mac, or a friend's. Free and open source. May your time be your own.</div>
       </div>
     </div>
-    <p class="disclaimer">Burrow is an independent open-source project, inspired by <a href="https://mole.fit/" target="_blank" rel="noopener">mole.fit</a> and built on the same <span class="mono">mo</span> engine — but <b>not affiliated with or endorsed by mole.fit</b>. Its name, mark, palette and copy are its own. The <span class="mono">mo</span> CLI is © <a href="https://github.com/tw93/Mole" target="_blank" rel="noopener">tw93</a> (MIT) and is depended on at runtime; nothing from it is bundled.</p>
+    <p class="disclaimer">Burrow is an independent open-source project. The <span class="mono">mo</span> CLI is © <a href="https://github.com/tw93/Mole" target="_blank" rel="noopener">tw93</a> (MIT) and is depended on at runtime; nothing from it is bundled.</p>
   </div>
 </footer>
 
