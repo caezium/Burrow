@@ -77,13 +77,14 @@ enum DiskScanner {
     /// for each direct child; drill in by calling again with the child's
     /// path.
     static func scan(_ path: String) throws -> DiskScanResult {
-        guard MoleCLI.findExecutable() != nil else {
+        guard case .installed = MoEngine.shared.availability() else {
             throw DiskScanError.moNotFound
         }
         // 5-minute timeout — `mo analyze` on the home dir is usually a
         // few seconds, but a cold cache + large external volume + no
         // indexing can stretch it. Beyond 5 min something's wrong.
-        let result = try MoleCLI.run(args: ["analyze", "--json", path], timeout: 300)
+        let result = try MoEngine.shared.capture(
+            MoCommand(target: .mo, args: ["analyze", "--json", path], timeout: 300))
         guard result.exitCode == 0 else {
             if indicatesMissingJSONSupport(stderr: result.stderr) {
                 throw DiskScanError.moTooOld(found: MoleCLI.version())

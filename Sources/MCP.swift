@@ -538,7 +538,8 @@ struct ToolCatalog {
     /// object when `mo` isn't installed so the tool never throws.
     private func callCleanupHistory(_ args: [String: Any]) -> String {
         let limit = max(1, min((args["limit"] as? Int) ?? 20, 200))
-        let res = try? MoleCLI.run(args: ["history", "--json", "--limit", "\(limit)"], timeout: 15)
+        let res = try? MoEngine.shared.capture(
+            MoCommand(target: .mo, args: ["history", "--json", "--limit", "\(limit)"], timeout: 15))
         return Self.cleanupHistoryResult(exitCode: res?.exitCode ?? 127, stdout: res?.stdout ?? "")
     }
 
@@ -605,7 +606,8 @@ struct ToolCatalog {
     private static func deletionsLogPath() -> String {
         let fallback = (NSHomeDirectory() as NSString)
             .appendingPathComponent("Library/Logs/mole/deletions.log")
-        guard let res = try? MoleCLI.run(args: ["history", "--json"], timeout: 10),
+        guard let res = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ["history", "--json"], timeout: 10)),
               res.exitCode == 0,
               let data = res.stdout.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -713,8 +715,12 @@ struct ToolCatalog {
     /// Run `mo` with the given args, never throwing — a missing binary
     /// becomes exit code 127 so callers can degrade gracefully.
     private static func runMo(_ args: [String], stdin: String? = nil, timeout: TimeInterval) -> MoleCLI.Result {
-        (try? MoleCLI.run(args: args, stdin: stdin, timeout: timeout))
-            ?? MoleCLI.Result(stdout: "", stderr: "mo not found", exitCode: 127)
+        guard let cap = try? MoEngine.shared.capture(
+            MoCommand(target: .mo, args: args, stdin: stdin, timeout: timeout)) else {
+            return MoleCLI.Result(stdout: "", stderr: "mo not found", exitCode: 127)
+        }
+        return MoleCLI.Result(stdout: cap.stdout, stderr: cap.stderr,
+                              exitCode: cap.exitCode, timedOut: cap.timedOut)
     }
 
     /// Strip ANSI/VT100 escape sequences so mo's TUI coloring doesn't leak

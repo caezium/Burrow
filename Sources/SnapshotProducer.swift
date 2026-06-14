@@ -335,7 +335,8 @@ final class SnapshotProducer {
 /// or nonzero exit so the engine's failure model stays "skip this tick".
 struct MoCLIStatusSource: StatusSource {
     func statusJSON() throws -> String {
-        let result = try MoleCLI.run(args: ["status", "--json"], timeout: 8)
+        let result = try MoEngine.shared.capture(
+            MoCommand(target: .mo, args: ["status", "--json"], timeout: 8))
         guard result.exitCode == 0 else {
             throw NSError(domain: "Burrow.MoStatus", code: Int(result.exitCode), userInfo: [
                 NSLocalizedDescriptionKey: "mo status exit=\(result.exitCode) stderr=\(result.stderr.prefix(200))",

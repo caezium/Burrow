@@ -21,7 +21,8 @@ enum MoleClient {
     /// Installed apps + the exact names `mo uninstall` accepts. Sizes can take a
     /// while on a full /Applications, so callers give it room.
     static func listApps(timeout: TimeInterval = 180) -> [InstalledApp] {
-        guard let res = try? MoleCLI.run(args: ["uninstall", "--list"], timeout: timeout),
+        guard let res = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ["uninstall", "--list"], timeout: timeout)),
               res.exitCode == 0 else { return [] }
         return parseApps(Data(res.stdout.utf8))
     }
@@ -71,7 +72,8 @@ enum MoleClient {
     /// The periodic producer does NOT use this — it keeps the raw JSON to store +
     /// patch — but one-shot readers can.
     static func status(timeout: TimeInterval = 8) -> MoleStatus? {
-        guard let res = try? MoleCLI.run(args: ["status", "--json"], timeout: timeout),
+        guard let res = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ["status", "--json"], timeout: timeout)),
               res.exitCode == 0,
               let s = try? JSONDecoder().decode(MoleStatus.self, from: Data(res.stdout.utf8))
         else { return nil }

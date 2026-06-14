@@ -538,7 +538,8 @@ final class SoftwareModel: ObservableObject {
         let name = app.uninstallName
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             // EOF after the prompt makes --dry-run print the enumeration and exit.
-            let res = try? MoleCLI.run(args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120)
+            let res = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120))
             let text = Ansi.strip((res?.stdout ?? "") + "\n" + (res?.stderr ?? ""))
             let preview = UninstallPreview.parse(text.components(separatedBy: "\n"))
             Task { @MainActor in
@@ -709,7 +710,8 @@ final class SoftwareModel: ObservableObject {
             // user CONFIRMED. `--dry-run` changes nothing and exits at its
             // prompt on stdin EOF; an unparseable result aborts (fail closed).
             let pre = ticket.action.preflightCommand!
-            let dry = try? MoleCLI.run(args: pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120)
+            let dry = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120))
             let dryText = (dry?.stdout ?? "") + "\n" + (dry?.stderr ?? "")
             let matched = UninstallGuard.matchedApps(inDryRunOutput: dryText)
             let problem: String?
@@ -738,8 +740,9 @@ final class SoftwareModel: ObservableObject {
             // Verified — the ticket's stdin answers mo's prompts (proceed +
             // final confirm); they only ever apply to the set the dry run
             // just pinned.
-            let res = try? MoleCLI.run(args: ticket.command.args, stdin: ticket.command.stdin,
-                                       timeout: ticket.command.timeout ?? 600)
+            let res = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ticket.command.args, stdin: ticket.command.stdin,
+                          timeout: ticket.command.timeout ?? 600))
             let ok = (res?.exitCode ?? 1) == 0
             let parsed = Self.fetch()
             Task { @MainActor in

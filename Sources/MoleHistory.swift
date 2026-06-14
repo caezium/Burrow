@@ -50,7 +50,8 @@ enum MoleHistory {
 
     /// Run `mo history --json` and parse it. Synchronous — call off-main.
     static func load() -> [HistorySession] {
-        guard let res = try? MoleCLI.run(args: ["history", "--json"], timeout: 30),
+        guard let res = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ["history", "--json"], timeout: 30)),
               res.exitCode == 0,
               let data = res.stdout.data(using: .utf8) else { return [] }
         return parse(data)
