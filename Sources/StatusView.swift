@@ -605,28 +605,43 @@ struct ProcRow: View {
         return String(format: "%.1f%%", p.memory)
     }
 
+    /// Constant menu labels, hoisted out of the per-row `Menu` builder. As
+    /// inline `NSLocalizedString`s they were re-materialized as tagged-pointer
+    /// CFStrings on every 2 s feed tick × every realized row (issue #74 /
+    /// Sentry BURROW-E: `_CFStringCreateTaggedPointerString` in `Menu.init`).
+    /// Created once here.
+    private enum L {
+        static let pin = NSLocalizedString("Pin", comment: "")
+        static let unpin = NSLocalizedString("Unpin", comment: "")
+        static let reveal = NSLocalizedString("Reveal in Finder", comment: "")
+        static let copyName = NSLocalizedString("Copy name", comment: "")
+        static let copyPID = NSLocalizedString("Copy PID", comment: "")
+        static let quit = NSLocalizedString("Quit…", comment: "")
+        static let forceKill = NSLocalizedString("Force Kill…", comment: "")
+    }
+
     /// Per-row "…" menu: pin, reveal, copy; Quit / Force Kill for
     /// own-user processes only — root rows stay read-only.
     private var rowMenu: some View {
         Menu {
-            Button(pinned ? NSLocalizedString("Unpin", comment: "") : NSLocalizedString("Pin", comment: "")) { onPin() }
-            Button(NSLocalizedString("Reveal in Finder", comment: "")) {
+            Button(pinned ? L.unpin : L.pin) { onPin() }
+            Button(L.reveal) {
                 if let path = ProcessActions.executablePath(pid: p.pid) {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                 }
             }
-            Button(NSLocalizedString("Copy name", comment: "")) {
+            Button(L.copyName) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(p.name, forType: .string)
             }
-            Button(NSLocalizedString("Copy PID", comment: "")) {
+            Button(L.copyPID) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString("\(p.pid)", forType: .string)
             }
             if ProcessActions.isOwnProcess(pid: p.pid) {
                 Divider()
-                Button(NSLocalizedString("Quit…", comment: ""), role: .destructive) { confirmQuit(force: false) }
-                Button(NSLocalizedString("Force Kill…", comment: ""), role: .destructive) { confirmQuit(force: true) }
+                Button(L.quit, role: .destructive) { confirmQuit(force: false) }
+                Button(L.forceKill, role: .destructive) { confirmQuit(force: true) }
             }
         } label: {
             Image(systemName: "ellipsis")
