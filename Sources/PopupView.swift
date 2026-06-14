@@ -21,8 +21,8 @@ struct PopupView: View {
     @ObservedObject private var cleanScreen = CleanScreen.shared
     private weak var delegate: AppDelegate?
 
-    init(db: DB, live: LiveFeed, delegate: AppDelegate) {
-        _model = StateObject(wrappedValue: HUDModel(db: db, live: live))
+    init(db: DB, live: LiveFeed, feeds: FeedHub, delegate: AppDelegate) {
+        _model = StateObject(wrappedValue: HUDModel(db: db, live: live, feeds: feeds))
         self.delegate = delegate
     }
 
@@ -53,8 +53,13 @@ struct PopupView: View {
         .frame(width: 334)
         .fixedSize(horizontal: false, vertical: true)
         .environment(\.colorScheme, .dark)
-        .onAppear { model.start() }
-        .onDisappear { model.stop() }
+        // Three task-scoped subscriptions replace the old 1 s + 20 s timer
+        // pair (issue #53): the snapshot and sparkline pumps are shared with
+        // the Status pane, and closing the popover cancels these tasks,
+        // which detaches the pumps — nothing ticks behind a closed popover.
+        .task { await model.subscribeSnapshot() }
+        .task { await model.subscribeSparklines() }
+        .task { await model.subscribeCleanWatch() }
     }
 
     // MARK: Header — health glyph + score + headline issue + free space
@@ -582,33 +587,56 @@ final class HUDModel: ObservableObject {
 
     private let db: DB
     private let live: LiveFeed
-    private var liveTimer: Timer?
-    private var histTimer: Timer?
+    private let feeds: FeedHub
 
-    /// `mo history` is spawned at most once a day — the footer is a
-    /// lifetime figure, it doesn't move minute to minute.
-    private static var cleanWatchCache: (at: Date, totals: CleanWatch.Totals)?
-
-    init(db: DB, live: LiveFeed) {
+    init(db: DB, live: LiveFeed, feeds: FeedHub) {
         self.db = db
         self.live = live
+        self.feeds = feeds
     }
 
-    func start() {
-        refreshCurrent()
-        refreshHistory()
-        loadCleanWatch()
-        liveTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refreshCurrent() }
-        }
-        histTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refreshHistory() }
+    // MARK: Feed subscriptions (issue #53)
+    //
+    // No view-owned timers: each `subscribe…` parks on a shared, demand-
+    // counted pump and applies its values until the surrounding task is
+    // cancelled (the popover closing IS the unsubscribe). The snapshot and
+    // sparkline pumps are the SAME instances the Status pane binds to — one
+    // timer, one read, two observers — so the popover and Status stop
+    // double-polling the moment both are on screen.
+
+    /// Latest snapshot + freshness, off the 1 s `snapshot.live` pump.
+    func subscribeSnapshot() async {
+        for await v in feeds.liveSnapshot(live).subscribeValues() {
+            snap = v.snap
+            if let when = v.sampledAt {
+                freshness = String(format: NSLocalizedString("%ds ago", comment: ""), Int(Date().timeIntervalSince(when)))
+            } else {
+                freshness = NSLocalizedString("no samples yet", comment: "")
+            }
         }
     }
 
-    func stop() {
-        liveTimer?.invalidate(); liveTimer = nil
-        histTimer?.invalidate(); histTimer = nil
+    /// Sparklines + top drain, off the 15 s `metrics.sparklines.30m` pump.
+    func subscribeSparklines() async {
+        for await v in feeds.metricSparklines(db: db).subscribeValues() {
+            cpuHist = v.cpu; memHist = v.mem; netHist = v.net; gpuHist = v.gpu; fanHist = v.fan
+            topDrain = v.topDrain
+        }
+    }
+
+    /// Clean Watch lifetime totals, off the daily `history.cleanwatch`
+    /// pump. `mo history` is a lifetime figure; the day cadence keeps the
+    /// old once-a-day spawn behaviour, now demand-driven (it only runs
+    /// while the popover is open) instead of a process-wide static cache.
+    func subscribeCleanWatch() async {
+        let feed = feeds.feed("history.cleanwatch", cadence: 86_400) {
+            await Task.detached(priority: .utility) {
+                CleanWatch.totals(from: MoleHistory.load())
+            }.value
+        }
+        for await totals in feed.subscribeValues() {
+            cleanWatch = totals
+        }
     }
 
     // MARK: External volumes
@@ -636,49 +664,4 @@ final class HUDModel: ObservableObject {
         }
     }
 
-    private func refreshCurrent() {
-        snap = live.lastSnapshot
-        if let when = live.sampledAt {
-            freshness = String(format: NSLocalizedString("%ds ago", comment: ""), Int(Date().timeIntervalSince(when)))
-        } else {
-            freshness = NSLocalizedString("no samples yet", comment: "")
-        }
-    }
-
-    private func refreshHistory() {
-        let now = Int(Date().timeIntervalSince1970)
-        var cpu: [Double] = [], mem: [Double] = [], net: [Double] = [], gpu: [Double] = []
-        var fan: [Double] = []
-        var processLists: [[ProcessInfo]] = []
-        for stored in MetricsStore(db: db).snapshots(.init(since: now - 60 * 60, until: now), maxPoints: 60).snapshots {
-            let s = stored.status
-            cpu.append(s.cpu.usage)
-            mem.append(s.memory.usedPercent)
-            net.append(s.network.reduce(0.0) { $0 + $1.rxRateMbs + $1.txRateMbs })
-            gpu.append(max(0, s.gpu?.first?.usage ?? 0))
-            if let thermal = s.thermal, (thermal.fanCount ?? 0) > 0 {
-                fan.append(Double(thermal.fanSpeed))
-            }
-            if let procs = s.topProcesses { processLists.append(procs) }
-        }
-        // Sparklines stay ~30 min; the drain ranking uses the full hour.
-        cpuHist = Array(cpu.suffix(30)); memHist = Array(mem.suffix(30))
-        netHist = Array(net.suffix(30)); gpuHist = Array(gpu.suffix(30))
-        fanHist = Array(fan.suffix(30))
-        topDrain = TopDrain.heaviest(processLists)
-    }
-
-    private func loadCleanWatch() {
-        if let cached = Self.cleanWatchCache, Date().timeIntervalSince(cached.at) < 86_400 {
-            cleanWatch = cached.totals
-            return
-        }
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let totals = CleanWatch.totals(from: MoleHistory.load())
-            Task { @MainActor in
-                Self.cleanWatchCache = (Date(), totals)
-                self?.cleanWatch = totals
-            }
-        }
-    }
 }

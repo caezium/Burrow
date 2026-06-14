@@ -172,6 +172,185 @@ final class FeedsTests: XCTestCase {
         XCTAssertEqual(v, 1)
         feed.detach()
     }
+
+    // MARK: Migration — the shared metric pumps (issue #53 remainder)
+    //
+    // The headline of the migration: the popover HUD and the Status pane
+    // used to run their own timer pairs polling the same `LiveFeed`
+    // snapshot and the same DB history window. Now both ask the hub for the
+    // SAME keys, so each query is ONE pump — one timer, one read, two
+    // observers. These assert that property end-to-end with the real
+    // `liveSnapshot`/`metricSparklines` factories.
+
+    func testMetricPumps_sameKeyAcrossTwoScreens_isOnePump() throws {
+        let db = try Self.tempDB()
+        defer { Self.removeDB(db) }
+        let live = LiveFeed()
+
+        // "HUD" and "Status" each resolve the snapshot + sparkline queries.
+        let hudSnap = hub.liveSnapshot(live)
+        let statusSnap = hub.liveSnapshot(live)
+        let hudSpark = hub.metricSparklines(db: db.db)
+        let statusSpark = hub.metricSparklines(db: db.db)
+
+        XCTAssertTrue(hudSnap === statusSnap, "both screens share ONE snapshot pump")
+        XCTAssertTrue(hudSpark === statusSpark, "both screens share ONE sparkline pump")
+        // …and the two queries are distinct pumps (different keys).
+        XCTAssertFalse((hudSnap as AnyObject) === (hudSpark as AnyObject))
+    }
+
+    func testSharedSnapshotPump_twoSubscribers_oneFetchPerTick() async throws {
+        let live = LiveFeed()
+        // The HUD and the Status pane both bind the live-snapshot pump.
+        let hud = hub.liveSnapshot(live)
+        let status = hub.liveSnapshot(live)
+        XCTAssertTrue(hud === status)
+
+        hud.attach()                       // popover opens
+        await settle()
+        XCTAssertEqual(hud.fetchCount, 1, "first subscriber takes an immediate sample")
+
+        status.attach()                    // Status pane mounts onto the same pump
+        clock.advance()
+        await settle()
+        XCTAssertEqual(hud.fetchCount, 2,
+                       "two subscribers + one tick = ONE upstream read, not two")
+
+        status.detach()                    // leave Status; popover still open
+        clock.advance()
+        await settle()
+        XCTAssertEqual(hud.fetchCount, 3, "one subscriber left → still ticking")
+
+        hud.detach()                       // popover closes
+        clock.advance()
+        clock.advance()
+        await settle()
+        XCTAssertEqual(hud.fetchCount, 3, "zero subscribers → zero reads, structurally")
+    }
+
+    func testMetricSparklines_identicalWindow_suppressesRepublish() async throws {
+        let db = try Self.tempDB()
+        defer { Self.removeDB(db) }
+        // Two rows, fixed — the window doesn't change between ticks, so the
+        // projected value is identical and the change token must fold it.
+        try db.insertSnapshot(ts: 100, cpu: 10)
+        try db.insertSnapshot(ts: 200, cpu: 20)
+
+        let feed = hub.metricSparklines(db: db.db)
+        var publishes = 0
+        let sub = feed.objectWillChange.sink { publishes += 1 }
+        defer { sub.cancel() }
+
+        feed.attach()
+        await settle()
+        let afterFirst = publishes
+        clock.advance()
+        clock.advance()
+        await settle()
+        XCTAssertEqual(publishes, afterFirst,
+                       "an unchanged DB window must cause zero republishes across ticks")
+        feed.detach()
+    }
+
+    // MARK: Migration — Sparklines aggregation (pure helper)
+
+    func testSparklines_projectsEachSeriesAndRanksTopDrain() throws {
+        // Two snapshots: rising CPU, a fan-reporting machine, and one
+        // process ("hog") that out-CPUs the rest on average.
+        let s1 = try Self.status(cpu: 10, memPct: 40, rx: 1, tx: 2, gpu: 5,
+                                 fanCount: 2, fanSpeed: 1200,
+                                 procs: [("hog", 80), ("idle", 1)])
+        let s2 = try Self.status(cpu: 30, memPct: 50, rx: 3, tx: 4, gpu: 15,
+                                 fanCount: 2, fanSpeed: 1400,
+                                 procs: [("hog", 90), ("idle", 2)])
+
+        let out = Sparklines.from([s1, s2])
+        XCTAssertEqual(out.cpu, [10, 30])
+        XCTAssertEqual(out.mem, [40, 50])
+        XCTAssertEqual(out.net, [3, 7], "net is rx+tx summed across interfaces")
+        XCTAssertEqual(out.gpu, [5, 15])
+        XCTAssertEqual(out.fan, [1200, 1400], "RPM kept only when fans are reported")
+        XCTAssertEqual(out.topDrain?.name, "hog", "heaviest process by average CPU")
+        XCTAssertEqual(out.topDrain?.avgCPU ?? 0, 85, accuracy: 0.001)
+    }
+
+    func testSparklines_dropsFanlessSnapshots_andTrimsToTail() throws {
+        // No fans on this machine → the fan series stays empty even though
+        // the other series have points (the "no placebo zeros" rule).
+        let noFan = try Self.status(cpu: 1, memPct: 1, rx: 0, tx: 0, gpu: 0,
+                                    fanCount: 0, fanSpeed: 0, procs: [])
+        let out1 = Sparklines.from([noFan, noFan, noFan])
+        XCTAssertEqual(out1.fan, [], "fan-less snapshots contribute nothing")
+        XCTAssertEqual(out1.cpu.count, 3)
+        XCTAssertNil(out1.topDrain, "no processes → no drain")
+
+        // tailPoints trims the sparkline to its newest N while keeping order.
+        let many = try (0..<10).map { try Self.status(cpu: Double($0), memPct: 0, rx: 0, tx: 0,
+                                                       gpu: 0, fanCount: 0, fanSpeed: 0, procs: []) }
+        let out2 = Sparklines.from(many, tailPoints: 3)
+        XCTAssertEqual(out2.cpu, [7, 8, 9], "keeps the newest tailPoints in order")
+    }
+}
+
+// MARK: - Migration test plumbing (snapshot/DB builders)
+
+extension FeedsTests {
+    /// A throwaway on-disk DB plus a tiny snapshot writer, mirroring the
+    /// MetricsStoreTests pattern (real SQLite, no mocks).
+    final class TempDB {
+        let db: DB
+        let dir: URL
+        init() throws {
+            dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("burrow-feeds-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            db = try DB(at: dir.appendingPathComponent("burrow.db"))
+        }
+        func insertSnapshot(ts: Int, cpu: Double) throws {
+            try db.insert(prefix: MetricsStore.snapshotPrefix, ts: ts,
+                          json: FeedsTests.statusJSON(cpu: cpu))
+        }
+    }
+
+    nonisolated static func tempDB() throws -> TempDB { try TempDB() }
+    nonisolated static func removeDB(_ t: TempDB) { try? FileManager.default.removeItem(at: t.dir) }
+
+    /// Minimal valid `mo status --json` for a CPU value (the sparkline test
+    /// only needs the window to be non-empty and stable).
+    nonisolated static func statusJSON(cpu: Double) -> String {
+        """
+        {"collected_at":"2026-06-08T03:16:25.068057-07:00","host":"h","platform":"darwin",
+         "uptime_seconds":100,"procs":1,
+         "hardware":{"model":"Mac","cpu_model":"M","total_ram":"24 GB","disk_size":"460 GB","os_version":"26"},
+         "health_score":90,"health_score_msg":"Good",
+         "cpu":{"usage":\(cpu),"load1":1,"load5":1,"load15":1,"core_count":10,"logical_cpu":10},
+         "memory":{"used":1,"total":2,"used_percent":50,"swap_used":0,"swap_total":0,"pressure":""},
+         "disk_io":{"read_rate":0,"write_rate":0}}
+        """
+    }
+
+    /// Decode a synthetic MoleStatus for the pure-aggregation tests.
+    nonisolated static func status(cpu: Double, memPct: Double, rx: Double, tx: Double, gpu: Double,
+                                   fanCount: Int, fanSpeed: Int,
+                                   procs: [(name: String, cpu: Double)]) throws -> MoleStatus {
+        let top = procs.map {
+            "{\"pid\":1,\"name\":\"\($0.name)\",\"command\":\"\($0.name)\",\"cpu\":\($0.cpu),\"memory\":0}"
+        }.joined(separator: ",")
+        let json = """
+        {"collected_at":"2026-06-08T03:16:25.068057-07:00","host":"h","platform":"darwin",
+         "uptime_seconds":100,"procs":1,
+         "hardware":{"model":"Mac","cpu_model":"M","total_ram":"24 GB","disk_size":"460 GB","os_version":"26"},
+         "health_score":90,"health_score_msg":"Good",
+         "cpu":{"usage":\(cpu),"load1":1,"load5":1,"load15":1,"core_count":10,"logical_cpu":10},
+         "memory":{"used":1,"total":2,"used_percent":\(memPct),"swap_used":0,"swap_total":0,"pressure":""},
+         "disk_io":{"read_rate":0,"write_rate":0},
+         "network":[{"name":"en0","rx_rate_mbs":\(rx),"tx_rate_mbs":\(tx),"ip":"10.0.0.1"}],
+         "gpu":[{"name":"GPU","usage":\(gpu),"memory_used":0,"memory_total":0,"core_count":8}],
+         "thermal":{"cpu_temp":0,"gpu_temp":0,"fan_speed":\(fanSpeed),"fan_count":\(fanCount),"system_power":0},
+         "top_processes":[\(top)]}
+        """
+        return try JSONDecoder().decode(MoleStatus.self, from: Data(json.utf8))
+    }
 }
 
 // MARK: - Test plumbing

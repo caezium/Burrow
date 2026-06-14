@@ -20,8 +20,8 @@ struct StatusView: View {
     @StateObject private var model: StatusModel
     @ObservedObject private var io: LiveFeed
 
-    init(db: DB, live: LiveFeed) {
-        _model = StateObject(wrappedValue: StatusModel(db: db, live: live))
+    init(db: DB, live: LiveFeed, feeds: FeedHub) {
+        _model = StateObject(wrappedValue: StatusModel(db: db, live: live, feeds: feeds))
         self.io = live
     }
 
@@ -57,8 +57,14 @@ struct StatusView: View {
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { model.start() }
-        .onDisappear { model.stop() }
+        // Three task-scoped subscriptions replace the old 2 s + 15 s timer
+        // pair (issue #53). The snapshot and sparkline pumps are shared with
+        // the popover HUD; the process pump is Status-only. Leaving Home or
+        // closing the window unmounts this view, which cancels the tasks and
+        // detaches the pumps — no polling off-screen.
+        .task { await model.subscribeSnapshot() }
+        .task { await model.subscribeSparklines() }
+        .task { await model.subscribeProcesses() }
     }
 
     private var waiting: some View {
@@ -730,30 +736,69 @@ final class StatusModel: ObservableObject {
 
     private let db: DB
     private let live: LiveFeed
-    private var liveTimer: Timer?
-    private var histTimer: Timer?
-    /// Drop overlapping `ps` passes if one ever outlives the 2 s tick.
-    private var samplingProcesses = false
+    private let feeds: FeedHub
 
-    init(db: DB, live: LiveFeed) {
+    init(db: DB, live: LiveFeed, feeds: FeedHub) {
         self.db = db
         self.live = live
+        self.feeds = feeds
     }
 
-    func start() {
-        refreshCurrent()
-        refreshHistory()
-        liveTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refreshCurrent() }
-        }
-        histTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refreshHistory() }
+    // MARK: Feed subscriptions (issue #53)
+    //
+    // No view-owned timers: each `subscribe…` parks on a shared, demand-
+    // counted pump until the surrounding task is cancelled (the view
+    // unmounting — leaving Home or closing the window — IS the unsubscribe).
+    // The snapshot and sparkline pumps are the SAME instances the popover
+    // HUD binds to (one timer, one read, two observers), so Status and the
+    // HUD stop double-polling the moment both are on screen. The full
+    // process list is Status-only, so it gets its own pump.
+
+    /// Latest snapshot, off the shared 1 s `snapshot.live` pump.
+    func subscribeSnapshot() async {
+        for await v in feeds.liveSnapshot(live).subscribeValues() {
+            snap = v.snap
         }
     }
 
-    func stop() {
-        liveTimer?.invalidate(); liveTimer = nil
-        histTimer?.invalidate(); histTimer = nil
+    /// Sparklines, off the shared 15 s `metrics.sparklines.30m` pump (the
+    /// HUD reads the same pump for its tiles + top drain).
+    func subscribeSparklines() async {
+        for await v in feeds.metricSparklines(db: db).subscribeValues() {
+            cpuHist = v.cpu; memHist = v.mem; gpuHist = v.gpu; netHist = v.net; fanHist = v.fan
+        }
+    }
+
+    /// The full live process list + per-pid energy, off the 2 s
+    /// `processes.full` pump. One `ps` pass + the PWR lookups, off the main
+    /// thread (the spawn blocks ~10–30 ms), published together so a row and
+    /// its energy always belong to the same pass. In-flight coalescing in
+    /// the feed drops overlapping passes — the role the old
+    /// `samplingProcesses` flag played.
+    func subscribeProcesses() async {
+        let live = self.live
+        let feed = feeds.feed("processes.full", cadence: 2) {
+            // The energy lookups need a row set even when `ps` returns
+            // nothing (spawn failure): fall back to the snapshot's engine
+            // top five so the PWR column still fills for those rows, exactly
+            // as the old refreshProcesses did. (`lastSnapshot` is a
+            // main-thread-confined published value — read it on the main
+            // actor.)
+            let fallback = await MainActor.run { live.lastSnapshot?.topProcesses ?? [] }
+            return await Task.detached(priority: .userInitiated) {
+                let sampled = ProcessSampler.sample()
+                let rows = sampled.isEmpty ? fallback : sampled
+                var energies: [Int: UInt64] = [:]
+                for p in rows { energies[p.pid] = ProcessActions.energyNanojoules(pid: p.pid) }
+                return ProcessSample(processes: sampled, energies: energies)
+            }.value
+        }
+        for await v in feed.subscribeValues() {
+            // Empty pass (spawn failure) keeps the table on the snapshot's
+            // engine top five — sortedProcesses() falls back when empty.
+            processes = v.processes
+            energies = v.energies
+        }
     }
 
     func setSort(_ key: ProcSort) {
@@ -783,55 +828,4 @@ final class StatusModel: ObservableObject {
         return pin + rest
     }
 
-    private func refreshCurrent() {
-        snap = live.lastSnapshot
-        refreshProcesses()
-    }
-
-    /// One `ps` pass + the PWR lookups, off the main thread (the spawn
-    /// blocks ~10–30 ms), published together so a row and its energy
-    /// always belong to the same pass. Best-effort PWR per pid; "—"
-    /// where the kernel says nothing (other users' processes, kernel
-    /// tasks).
-    private func refreshProcesses() {
-        guard !samplingProcesses else { return }
-        samplingProcesses = true
-        let fallback = snap?.topProcesses ?? []
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let sampled = ProcessSampler.sample()
-            let rows = sampled.isEmpty ? fallback : sampled
-            var out: [Int: UInt64] = [:]
-            for p in rows {
-                out[p.pid] = ProcessActions.energyNanojoules(pid: p.pid)
-            }
-            Task { @MainActor in
-                guard let self else { return }
-                self.samplingProcesses = false
-                self.processes = sampled
-                self.energies = out
-            }
-        }
-    }
-
-    private func refreshHistory() {
-        let now = Int(Date().timeIntervalSince1970)
-        let since = now - 30 * 60
-        var cpu: [Double] = [], mem: [Double] = [], gpu: [Double] = [], net: [Double] = []
-        var fan: [Double] = []
-        for stored in MetricsStore(db: db).snapshots(.init(since: since, until: now), maxPoints: 40).snapshots {
-            let s = stored.status
-            cpu.append(s.cpu.usage)
-            mem.append(s.memory.usedPercent)
-            gpu.append(max(0, s.gpu?.first?.usage ?? 0))
-            let rx = s.network.reduce(0.0) { $0 + $1.rxRateMbs }
-            let tx = s.network.reduce(0.0) { $0 + $1.txRateMbs }
-            net.append(rx + tx)
-            // Same rule as the History chart: plot RPM whenever fans are
-            // detected — including 0 (parked) — skip fan-less snapshots.
-            if let thermal = s.thermal, (thermal.fanCount ?? 0) > 0 {
-                fan.append(Double(thermal.fanSpeed))
-            }
-        }
-        cpuHist = cpu; memHist = mem; gpuHist = gpu; netHist = net; fanHist = fan
-    }
 }

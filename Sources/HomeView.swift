@@ -88,9 +88,9 @@ struct HomeView: View {
     @ViewBuilder
     private var content: some View {
         switch section {
-        case .overview: StatusView(db: db, live: live)
+        case .overview: StatusView(db: db, live: live, feeds: feeds)
         case .history:  HistoryView(db: db, live: live, feeds: feeds)
-        case .activity: ActivityView()
+        case .activity: ActivityView(feeds: feeds)
         }
     }
 }

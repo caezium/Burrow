@@ -43,7 +43,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         // then drives the real (screen-capped) size via preferredContentSize.
         popover.contentSize = NSSize(width: 334, height: 560)
         popover.contentViewController = HUDController(
-            root: PopupView(db: db, live: producer.live, delegate: delegate))
+            root: PopupView(db: db, live: producer.live, feeds: delegate.feeds, delegate: delegate))
         self.popover = popover
 
         super.init()

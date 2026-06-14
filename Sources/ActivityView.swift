@@ -10,7 +10,11 @@
 import SwiftUI
 
 struct ActivityView: View {
-    @StateObject private var model = ActivityModel()
+    @StateObject private var model: ActivityModel
+
+    init(feeds: FeedHub) {
+        _model = StateObject(wrappedValue: ActivityModel(feeds: feeds))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,7 +23,11 @@ struct ActivityView: View {
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { model.loadIfNeeded() }
+        // The whole load/refresh lifecycle is one task-scoped feed
+        // subscription (issue #53): the `history.sessions` pump ticks only
+        // while this pane is on screen, and leaving it cancels the task,
+        // which detaches the pump. No view-owned timer, no off-screen poll.
+        .task { await model.subscribe() }
     }
 
     private var header: some View {
@@ -121,18 +129,37 @@ private struct SessionRow: View {
 final class ActivityModel: ObservableObject {
     @Published var sessions: [HistorySession] = []
     @Published var loading = false
-    private var started = false
 
-    func loadIfNeeded() { guard !started else { return }; started = true; reload() }
+    private let feeds: FeedHub
+    /// The subscribed sessions feed — held so the toolbar's manual refresh
+    /// can poke it; lifecycle belongs to the view's `.task` below.
+    private var feed: Feed<[HistorySession]>?
 
+    init(feeds: FeedHub) {
+        self.feeds = feeds
+    }
+
+    /// Park on the shared `history.sessions` pump (1 h cadence — the
+    /// cleanup log doesn't move minute to minute) and apply every value
+    /// until the surrounding task is cancelled.
+    func subscribe() async {
+        let feed = feeds.feed("history.sessions", cadence: 3600) {
+            await Task.detached(priority: .userInitiated) {
+                MoleClient.history()
+            }.value
+        }
+        self.feed = feed
+        loading = sessions.isEmpty
+        for await parsed in feed.subscribeValues() {
+            sessions = parsed
+            loading = false
+        }
+    }
+
+    /// The toolbar refresh button: poke the shared pump for an immediate
+    /// re-read (coalesced with any in-flight fetch).
     func reload() {
         loading = true
-        DispatchQueue.global(qos: .userInitiated).async {
-            let parsed = MoleClient.history()
-            Task { @MainActor in
-                self.sessions = parsed
-                self.loading = false
-            }
-        }
+        feed?.refresh()
     }
 }
