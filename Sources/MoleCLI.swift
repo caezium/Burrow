@@ -190,6 +190,12 @@ enum MoleCLI {
     /// a fake (reset in `tearDown`). Test-only seam — not a configuration point.
     internal static var processPort: MoleProcessPort = SystemMoleProcess()
 
+    /// The one-shot elevated runner (issue #48). Production spawns real
+    /// osascript via `SystemPrivilegeBroker`; tests inject a fake so the
+    /// build-the-osascript-spec quoting + auth-cancel classification run in
+    /// memory with no auth dialog. Test-only seam — reset in `tearDown`.
+    internal static var privilegeBroker: PrivilegeBroker = SystemPrivilegeBroker()
+
     /// Run an executable with the given args, capturing stdout + stderr.
     /// Blocks until the process exits — callers are responsible for
     /// running this on a background queue. Times out after `timeout`
@@ -229,15 +235,23 @@ enum MoleCLI {
     /// `sudo`, not this path. Blocking — call off the main thread. For
     /// one-shot privileged config like `touchid enable/disable`, not for
     /// streamed jobs (OperationFlow does those).
+    ///
+    /// The spawn now goes through `PrivilegeBroker` so the osascript quoting
+    /// and auth-cancel classification are testable in memory (issue #48); the
+    /// `Int32` return is preserved for existing callers that only branch on
+    /// "did it work" (a dismissed prompt collapses to a nonzero code, exactly
+    /// as before). New callers that want the named outcome use
+    /// `runElevatedClassified`.
     static func runElevated(args: [String]) -> Int32 {
-        guard let mo = trustedExecutable() else { return 127 }
-        let script = elevatedScript(executable: mo, args: args)
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        task.arguments = ["-e", script]
-        task.standardOutput = Pipe()
-        task.standardError = Pipe()
-        do { try task.run(); task.waitUntilExit(); return task.terminationStatus }
-        catch { return 1 }
+        runElevatedClassified(args: args).exitCode
+    }
+
+    /// As `runElevated`, but returns the classified outcome — `.authCancelled`
+    /// for a dismissed prompt is distinguished from a command that ran and
+    /// failed, so callers can show the right message without re-deriving the
+    /// "nonzero might mean cancel" heuristic themselves.
+    static func runElevatedClassified(args: [String]) -> ElevatedOutcome {
+        guard let mo = trustedExecutable() else { return .launchFailed }
+        return privilegeBroker.openElevated(executable: mo, args: args)
     }
 }

@@ -399,9 +399,13 @@ struct SystemProcessPort: ProcessPort {
 
     /// The one final-event rule (issue #48's error taxonomy): an elevated
     /// run that exits nonzero having produced NOTHING is a dismissed auth
-    /// prompt, not a command failure. Pure → table-tested.
+    /// prompt, not a command failure. The predicate itself lives in
+    /// `AuthCancel` so the streaming runner and the one-shot
+    /// `SystemPrivilegeBroker` share one source of truth. Pure → table-tested.
     static func finalEvent(exitCode: Int32, elevated: Bool, sawOutput: Bool) -> ProcessEvent {
-        if elevated, exitCode != 0, !sawOutput { return .authCancelled }
+        if AuthCancel.isAuthCancelled(elevated: elevated, exitCode: exitCode, sawOutput: sawOutput) {
+            return .authCancelled
+        }
         return .exited(exitCode)
     }
 
