@@ -251,7 +251,21 @@ final class PTYTask: PTYPort {
         close(aslave)   // parent doesn't use the slave end
     }
 
-    func send(_ bytes: [UInt8]) { try? master?.write(contentsOf: Data(bytes)) }
+    /// PTY writes go through a dedicated serial queue so a blocked `write()`
+    /// — the `mo` child not draining its stdin — can never park the @MainActor
+    /// caller (issue #73 / Sentry BURROW-D: the 0.06 s selection-replay tick
+    /// runs on the main queue). The serial queue preserves keystroke order;
+    /// the captured handle keeps the fd alive for an in-flight write even if
+    /// `terminate()` clears `master` underneath it. The master fd is otherwise
+    /// only touched by the FileHandle read handler, and read/write on a pty are
+    /// independent directions, so there's no fd race.
+    private let writeQueue = DispatchQueue(label: "dev.caezium.burrow.pty-write")
+
+    func send(_ bytes: [UInt8]) {
+        guard let master else { return }
+        let data = Data(bytes)
+        writeQueue.async { try? master.write(contentsOf: data) }
+    }
     func terminate() {
         master?.readabilityHandler = nil
         if proc.isRunning { proc.terminate() }
