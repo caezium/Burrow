@@ -63,12 +63,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // No engine yet → guided install instead of a dead-end quit. The
         // window's Recheck calls startServices() once `mo` is found.
-        guard MoleCLI.findExecutable() != nil else {
-            Telemetry.capture("engine_missing")
-            showInstallWindow()
-            return
+        //
+        // Discovery can shell out to `which mo` (MoleCLI.discover) when mo
+        // isn't in a trusted Homebrew path — a blocking Process wait that must
+        // never run on the main thread at launch (issue #72 / Sentry BURROW-1:
+        // a ~2 s+ app-hang on cold launch). Probe off-main, then gate startup
+        // back on the main thread. The brief window with no UI is fine; the
+        // status item / install window appear a beat later instead of after a
+        // freeze.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let found = MoleCLI.findExecutable() != nil
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if found {
+                    self.startServices()
+                } else {
+                    Telemetry.capture("engine_missing")
+                    self.showInstallWindow()
+                }
+            }
         }
-        startServices()
     }
 
     /// Guided onboarding window when `mo` is missing. Stays a regular Dock
