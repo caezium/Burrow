@@ -9,11 +9,12 @@
 //  descriptor (args, stdin, gate, elevation, a pure reduce closure) —
 //  never a subclass.
 //
-//  The process boundary is one method behind ProcessPort. Production uses
-//  SystemProcessPort for the streaming op runs (Clean/Optimize); tests
-//  script a fake. This is the sibling of MoleProcess (the #29 capture-spawn
-//  runner): SystemProcessPort streams long-running ops, MoleProcess captures
-//  one-shot output — they coexist by use-case.
+//  The process boundary is one method behind ProcessPort. Production takes its
+//  streaming port from the MoEngine facade (MoEngine.shared.streamPort, the real
+//  SystemProcessPort) so "how do I run mo?" has one answer; tests still script a
+//  fake by injecting `process:` directly. SystemProcessPort streams long-running
+//  ops (Clean/Optimize); MoleProcess (the #29 capture-spawn runner) captures
+//  one-shot output — both now hang off MoEngine, coexisting by use-case.
 //
 
 import Foundation
@@ -143,7 +144,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    init(process: any ProcessPort = SystemProcessPort(),
+    init(process: any ProcessPort = MoEngine.shared.streamPort,
          hasFullDiskAccess: @escaping () -> Bool = Privacy.hasFullDiskAccess,
          resolveMo: @escaping (_ elevated: Bool) -> String? = {
              $0 ? MoleCLI.trustedExecutable() : MoleCLI.findExecutable()

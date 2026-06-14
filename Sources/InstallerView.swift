@@ -40,6 +40,10 @@ final class MoInteractiveRunner: ObservableObject {
 
     let title: String
     private let subcommand: String
+    /// The interactive PTY session. Production takes a fresh one from the
+    /// MoEngine facade (MoEngine.shared.interactive(), the real PTYTask); tests
+    /// inject a scripted FakePTY. Raw, escape-preserving output either way — the
+    /// SelectionSession reducer parses Mole's redraw frames.
     private var pty: PTYPort
     private let tickInterval: TimeInterval
     /// Resolved `mo` path, or nil to look it up at `start()`. Injectable so a
@@ -50,7 +54,7 @@ final class MoInteractiveRunner: ObservableObject {
     private var timer: DispatchSourceTimer?
 
     init(subcommand: String, title: String,
-         pty: PTYPort = PTYTask(), tickInterval: TimeInterval = 0.06,
+         pty: PTYPort = MoEngine.shared.interactive(), tickInterval: TimeInterval = 0.06,
          executablePath: String? = nil) {
         self.subcommand = subcommand
         self.title = title

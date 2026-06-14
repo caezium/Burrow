@@ -8,18 +8,23 @@
 //  each found and spawned at its own call site. `MoEngine` is the ONE facade
 //  callers reach for so "how do I run mo?" has a single answer.
 //
-//  This slice (slice 2) wraps the CAPTURE + ELEVATED entry points and the
-//  discovery lookup, delegating to the existing, tested ports — it does NOT
-//  reimplement them. The streaming (`OperationFlow`/`SystemProcessPort`) and
-//  interactive PTY (`MoInteractive`/`PTYTask`) shapes are deliberately left in
-//  place; folding those onto the facade is the next slice.
+//  All FOUR process shapes now hang off this one facade (issue #48 complete):
+//  CAPTURE + ELEVATED + DISCOVERY (slice 2) plus STREAMING (clean / optimize)
+//  and interactive PTY (purge / installer), added here. Every shape delegates
+//  to the existing, tested port — the facade does NOT reimplement any spawn,
+//  elevation, or PTY internals; it just funnels "how do I run mo?" to one type.
 //
 //  Behavior is preserved exactly: a `capture(_:)` call produces the same argv,
-//  stdin, environment, timeout, and result fields that `MoleCLI.run` did, and
+//  stdin, environment, timeout, and result fields that `MoleCLI.run` did;
 //  `runElevatedClassified` routes through the same `PrivilegeBroker` against
-//  the same trusted-location resolution. The ports are injected (production
-//  defaults are the real ones) so the facade is testable with scripted fakes,
-//  matching the seams `MoleCLI`/`MoleProcess`/`PrivilegeBroker` already expose.
+//  the same trusted-location resolution; `stream(_:)` hands back the SAME
+//  `AsyncStream<ProcessEvent>` `SystemProcessPort` already produced (the
+//  elevated-osascript-tail, auth-cancel classification, and line-splitting are
+//  untouched); and `interactive()` vends a FRESH `PTYTask` whose raw,
+//  escape-preserving output the `SelectionSession` reducer depends on. The
+//  ports are injected (production defaults are the real ones) so every shape is
+//  testable with scripted fakes, matching the seams `MoleCLI`/`MoleProcess`/
+//  `PrivilegeBroker`/`ProcessPort`/`PTYPort` already expose.
 //
 
 import Foundation
@@ -104,24 +109,40 @@ struct SystemMoLocator: MoLocator {
 
 // MARK: - Facade
 
-/// The one runner facade. Capture + elevated + discovery in this slice; the
-/// ports are injected so every path is testable in memory.
+/// The one runner facade. All four `mo` process shapes — capture, elevated
+/// one-shot, streaming, and interactive PTY — plus discovery hang off this
+/// type; the ports are injected so every path is testable in memory.
 final class MoEngine {
     private let processPort: MoleProcessPort
     private let privilegeBroker: PrivilegeBroker
     private let locator: MoLocator
+    /// The streaming-op spawn port (clean / optimize). Exposed (not just used
+    /// by `stream(_:)`) so `OperationFlow`, which holds an `any ProcessPort`
+    /// and drives its own reduce/notify/auth-cancel loop, can take the facade's
+    /// production port as its default without the facade reaching into that loop.
+    let streamPort: ProcessPort
+    /// Vends a FRESH interactive PTY session per call. A factory, not a shared
+    /// instance, because a `PTYTask` is stateful per launch and each selection
+    /// host (purge / installer) must own its own — two hosts sharing one pty
+    /// would stomp each other's child and keystrokes.
+    private let makePTY: @Sendable () -> PTYPort
 
     /// Production singleton. Wraps the real capture runner, the real osascript
-    /// broker, and `MoleCLI` discovery — the exact spawn paths the migrated
-    /// call sites used before, just funneled through one type.
+    /// broker, `MoleCLI` discovery, the real streaming port, and the real PTY —
+    /// the exact spawn paths the migrated call sites used before, just funneled
+    /// through one type.
     static let shared = MoEngine()
 
     init(processPort: MoleProcessPort = SystemMoleProcess(),
          privilegeBroker: PrivilegeBroker = SystemPrivilegeBroker(),
-         locator: MoLocator = SystemMoLocator()) {
+         locator: MoLocator = SystemMoLocator(),
+         streamPort: ProcessPort = SystemProcessPort(),
+         makePTY: @escaping @Sendable () -> PTYPort = { PTYTask() }) {
         self.processPort = processPort
         self.privilegeBroker = privilegeBroker
         self.locator = locator
+        self.streamPort = streamPort
+        self.makePTY = makePTY
     }
 
     // MARK: Discovery
@@ -179,5 +200,31 @@ final class MoEngine {
     func runElevatedClassified(args: [String]) -> ElevatedOutcome {
         guard let mo = locator.locateTrusted() else { return .launchFailed }
         return privilegeBroker.openElevated(executable: mo, args: args)
+    }
+
+    // MARK: Streaming (clean / optimize)
+
+    /// Stream a long-running `mo` op line-by-line. Hands the spec straight to
+    /// the injected streaming port and returns its `AsyncStream<ProcessEvent>`
+    /// unchanged — the plain/elevated spawn, the osascript temp-log tail, the
+    /// ANSI strip + line split, and the auth-cancel classification all stay in
+    /// `SystemProcessPort`. Cancelling the consuming task still terminates the
+    /// child via the stream's `onTermination`, exactly as before. The caller
+    /// (`OperationFlow`) owns the reduce/notify/cancel loop; this is only the
+    /// spawn source.
+    func stream(_ spec: ProcessSpec) -> AsyncStream<ProcessEvent> {
+        streamPort.events(spec)
+    }
+
+    // MARK: Interactive PTY (purge / installer)
+
+    /// Open a FRESH interactive PTY session for a selection TUI (`mo purge` /
+    /// `mo installer`). Each call returns its own `PTYPort` because the session
+    /// is stateful (one child per launch, mutable callbacks) and each host must
+    /// own its own. The session delivers RAW, escape-preserving output — the
+    /// `SelectionSession` reducer parses Mole's redraw frames, so nothing here
+    /// strips or rewrites the bytes.
+    func interactive() -> PTYPort {
+        makePTY()
     }
 }
