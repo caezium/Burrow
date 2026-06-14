@@ -11,7 +11,11 @@
 //  capture runner as the exact argv/stdin/env/timeout it described, that a
 //  `.mo` target resolves through the locator (and degrades to a clean nonzero
 //  exit when `mo` is missing), and that the elevated path routes the TRUSTED
-//  binary to the broker — never a PATH lookup.
+//  binary to the broker — never a PATH lookup. The streaming and PTY shapes
+//  (slice 3, completing #48) are wired the same way: `stream(_:)` forwards the
+//  spec to the injected `ProcessPort` and returns its events untouched, and
+//  `interactive()` vends a FRESH session from the injected PTY factory each
+//  call — so two hosts can never share one stateful pty.
 //
 
 import XCTest
@@ -68,6 +72,33 @@ final class MoEngineTests: XCTestCase {
             calls.append((executable, args))
             return outcome
         }
+    }
+
+    /// Records the streamed spec and replays a canned event script — no real
+    /// process, no pipes. Same seam as OperationFlowTests.FakeProcessPort.
+    private final class FakeStreamPort: ProcessPort, @unchecked Sendable {
+        var script: [ProcessEvent]
+        private(set) var specs: [ProcessSpec] = []
+        init(script: [ProcessEvent]) { self.script = script }
+        func events(_ spec: ProcessSpec) -> AsyncStream<ProcessEvent> {
+            specs.append(spec)
+            let s = script
+            return AsyncStream { cont in
+                for e in s { cont.yield(e) }
+                cont.finish()
+            }
+        }
+    }
+
+    /// A throwaway PTY session that records nothing but its own identity — the
+    /// interactive() test only needs to prove each call returns a DISTINCT
+    /// instance (a shared one would let two hosts stomp each other).
+    private final class FakePTY: PTYPort {
+        var onOutput: ((String) -> Void)?
+        var onExit: ((Int32) -> Void)?
+        func launch(_ executable: String, _ args: [String]) throws {}
+        func send(_ bytes: [UInt8]) {}
+        func terminate() {}
     }
 
     // MARK: - capture: command → port wiring
@@ -218,5 +249,108 @@ final class MoEngineTests: XCTestCase {
         let failed = MoEngine(privilegeBroker: FakeBroker(outcome: .exited(2)),
                               locator: FakeLocator(trusted: "/opt/homebrew/bin/mo"))
         XCTAssertEqual(failed.runElevatedClassified(args: ["touchid", "disable"]), .exited(2))
+    }
+
+    // MARK: - Streaming (clean / optimize)
+
+    func testStream_forwardsTheSpecToThePortUntouched() {
+        let port = FakeStreamPort(script: [.exited(0)])
+        let engine = MoEngine(streamPort: port)
+
+        let spec = ProcessSpec(executable: "/usr/local/bin/mo",
+                               arguments: ["clean", "--dry-run"],
+                               stdin: nil, elevated: false, timeout: 30)
+        _ = engine.stream(spec)
+
+        // The facade is a pass-through: the port sees the exact spec, never a
+        // rewritten one. (Argv/elevation are destructive-path inputs — they
+        // must reach SystemProcessPort byte-for-byte.)
+        XCTAssertEqual(port.specs.count, 1)
+        XCTAssertEqual(port.specs.first, spec)
+    }
+
+    func testStream_replaysThePortsEventsInOrder() async {
+        let port = FakeStreamPort(script: [
+            .line("➤ Developer tools"),
+            .line("  → npm cache, 191.8MB"),
+            .exited(0),
+        ])
+        let engine = MoEngine(streamPort: port)
+
+        var lines: [String] = []
+        var exit: Int32?
+        for await event in engine.stream(ProcessSpec(executable: "/usr/local/bin/mo",
+                                                     arguments: ["clean"], stdin: nil,
+                                                     elevated: false, timeout: nil)) {
+            switch event {
+            case .line(let l): lines.append(l)
+            case .exited(let c): exit = c
+            case .authCancelled: XCTFail("the fake never emits auth-cancel")
+            }
+        }
+
+        // The stream the facade returns IS the port's — same events, same order.
+        XCTAssertEqual(lines, ["➤ Developer tools", "  → npm cache, 191.8MB"])
+        XCTAssertEqual(exit, 0)
+    }
+
+    func testStream_carriesElevatedAuthCancelClassificationThrough() async {
+        // The runner classifies auth-cancel; the facade just relays the event.
+        let port = FakeStreamPort(script: [.authCancelled])
+        let engine = MoEngine(streamPort: port)
+
+        var sawAuthCancel = false
+        for await event in engine.stream(ProcessSpec(executable: "/usr/local/bin/mo",
+                                                     arguments: ["clean"], stdin: nil,
+                                                     elevated: true, timeout: nil)) {
+            if case .authCancelled = event { sawAuthCancel = true }
+        }
+        XCTAssertTrue(sawAuthCancel)
+    }
+
+    func testStream_productionDefaultIsTheRealSystemPort() async {
+        // Default-constructed facade streams through SystemProcessPort, against a
+        // tiny system binary — the same local-substitutable style the capture
+        // echo test uses. Proves the production wiring spawns for real.
+        let engine = MoEngine()
+        var lines: [String] = []
+        var exit: Int32?
+        for await event in engine.stream(ProcessSpec(executable: "/bin/sh",
+                                                     arguments: ["-c", "printf 'a\\nb\\n'; exit 0"],
+                                                     stdin: nil, elevated: false, timeout: nil)) {
+            switch event {
+            case .line(let l): lines.append(l)
+            case .exited(let c): exit = c
+            case .authCancelled: XCTFail("un-elevated runs never classify as auth-cancel")
+            }
+        }
+        XCTAssertEqual(lines, ["a", "b"])
+        XCTAssertEqual(exit, 0)
+    }
+
+    // MARK: - Interactive PTY (purge / installer)
+
+    func testInteractive_vendsTheInjectedFactorysSession() {
+        let made = FakePTY()
+        let engine = MoEngine(makePTY: { made })
+        XCTAssertTrue(engine.interactive() === made, "interactive() returns the factory's session")
+    }
+
+    func testInteractive_vendsAFreshSessionEachCall() {
+        // A counter-backed factory: two calls must yield two DISTINCT sessions.
+        // A shared pty would let the purge and installer hosts stomp each other's
+        // child and keystrokes — the safety reason interactive() is a factory.
+        let engine = MoEngine(makePTY: { FakePTY() })
+        let first = engine.interactive()
+        let second = engine.interactive()
+        XCTAssertFalse(first === second, "each interactive() call owns its own pty session")
+    }
+
+    func testInteractive_productionDefaultIsARealPTYTask() {
+        // The default factory builds the real PTYTask — the session the purge /
+        // installer hosts drive. (Behavioral PTY coverage lives in
+        // MoInteractiveHostTests; here we only assert the production type.)
+        let engine = MoEngine()
+        XCTAssertTrue(engine.interactive() is PTYTask)
     }
 }
