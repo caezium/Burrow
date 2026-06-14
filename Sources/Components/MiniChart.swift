@@ -18,6 +18,13 @@ struct MiniChart: View {
     var color: Color
     var style: Style = .area
 
+    /// Defensive cap: the live feeds hand this ~30 points, but no caller should
+    /// ever be able to drive an unbounded series into the per-bar geometry
+    /// (issue #75 / Sentry BURROW-K — AttributeGraph fault on the popover
+    /// chart). `.bars` also renders as a single `Path` regardless; this only
+    /// bounds the point count feeding the scale.
+    private var samples: [Double] { values.count > 120 ? Array(values.suffix(120)) : values }
+
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
@@ -25,7 +32,7 @@ struct MiniChart: View {
             let (lo, hi) = bounds()
             let denom = max(hi - lo, 0.0001)
 
-            if values.count < 2 {
+            if samples.count < 2 {
                 // Flat baseline so an empty card doesn't look broken.
                 Path { p in
                     p.move(to: CGPoint(x: 0, y: h - 1))
@@ -47,8 +54,9 @@ struct MiniChart: View {
 
     @ViewBuilder
     private func area(w: CGFloat, h: CGFloat, lo: Double, denom: Double) -> some View {
-        let n = values.count
-        let pts: [CGPoint] = values.enumerated().map { i, v in
+        let vals = samples
+        let n = vals.count
+        let pts: [CGPoint] = vals.enumerated().map { i, v in
             CGPoint(x: w * CGFloat(i) / CGFloat(n - 1), y: y(v, h, lo, denom))
         }
         ZStack {
@@ -71,28 +79,33 @@ struct MiniChart: View {
         }
     }
 
-    @ViewBuilder
     private func bars(w: CGFloat, h: CGFloat, lo: Double, denom: Double) -> some View {
-        let n = values.count
+        // One `Path` of bottom-anchored rounded bars rather than N
+        // RoundedRectangle subviews offset off `geo.size.width`: a single
+        // layout node, so the chart can't feed an unbounded per-point subtree
+        // into AttributeGraph during a popover transition (issue #75).
+        let vals = samples
+        let n = max(vals.count, 1)
         let slot = w / CGFloat(n)
         let barW = max(1.5, slot * 0.62)
-        ZStack(alignment: .bottomLeading) {
-            ForEach(Array(values.enumerated()), id: \.offset) { i, v in
-                let bh = max(1.5, (1.0 - (1.0 - CGFloat((v - lo) / denom))) * h)
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(color.opacity(0.85))
-                    .frame(width: barW, height: bh)
-                    .offset(x: CGFloat(i) * slot + (slot - barW) / 2)
+        return Path { p in
+            for (i, v) in vals.enumerated() {
+                let bh = max(1.5, CGFloat((v - lo) / denom) * h)
+                let x = CGFloat(i) * slot + (slot - barW) / 2
+                p.addRoundedRect(in: CGRect(x: x, y: h - bh, width: barW, height: bh),
+                                 cornerSize: CGSize(width: 1, height: 1),
+                                 style: .continuous)
             }
         }
-        .frame(width: w, height: h, alignment: .bottomLeading)
+        .fill(color.opacity(0.85))
     }
 
     /// Stable vertical scale: floor at 0 (these are non-negative metrics)
     /// and pad a flat series so it doesn't pin to the baseline.
     private func bounds() -> (lo: Double, hi: Double) {
-        let lo = min(values.min() ?? 0, 0)
-        let hi = values.max() ?? 1
+        let vals = samples
+        let lo = min(vals.min() ?? 0, 0)
+        let hi = vals.max() ?? 1
         if hi - lo < 0.001 { return (lo, hi + 1) }
         return (lo, hi)
     }
