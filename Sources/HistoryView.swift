@@ -334,6 +334,16 @@ struct HistoryView: View {
         return (0..<n).map { (Double($0) * Double(count - 1) / Double(n - 1)).rounded() }
     }
 
+    /// Cap a bar series to a count a chart card can actually render — a
+    /// ~380 pt card maxes out around `cap` bars; beyond that they're
+    /// sub-pixel and only cost layout (the #57 hang). Strides evenly,
+    /// keeping the first and last sample.
+    static func capBars(_ pts: [ChartPoint], max cap: Int = 140) -> [ChartPoint] {
+        guard pts.count > cap, cap > 1 else { return pts }
+        let step = Double(pts.count - 1) / Double(cap - 1)
+        return (0..<cap).map { pts[Int((Double($0) * step).rounded())] }
+    }
+
     private func chartCard(_ title: String, _ subtitle: String,
                            _ series: [(name: String, points: [ChartPoint], color: Color)],
                            marks: ChartMarks = .line) -> some View {
@@ -355,46 +365,53 @@ struct HistoryView: View {
                 } else if marks == .bars {
                     // Bars are plotted BY INDEX (like the Status sparklines):
                     // each sample gets an equal slot, so width and gaps are
-                    // uniform at every range. On a continuous time axis the
-                    // bars bunched up where samples clustered and stretched
-                    // where they were sparse — index spacing fixes both. An
-                    // integer x has a unit step of 1, so .ratio sizes the bar
-                    // as a clean fraction of that slot. Axis labels map a few
-                    // indices back to their real timestamps.
-                    let pts = series.first?.points ?? []
-                    // Width is a real pixel value from the plot geometry —
-                    // .ratio never establishes a unit on this scale (the bars
-                    // vanished), and a fixed point width renders reliably and
-                    // scales with the sample count so it never overlaps.
-                    GeometryReader { geo in
-                        let barW = max(1.0, geo.size.width / CGFloat(max(pts.count, 1)) * 0.6)
-                        Chart {
-                            ForEach(series, id: \.name) { s in
-                                ForEach(Array(s.points.enumerated()), id: \.offset) { idx, p in
-                                    BarMark(x: .value("Sample", Double(idx)), y: .value("Value", p.value),
-                                            width: .fixed(barW))
-                                        .foregroundStyle(s.color.opacity(0.85))
+                    // uniform at every range. Axis labels map a few indices
+                    // back to their real timestamps.
+                    //
+                    // #57: a 90-day range stride-samples to 720 points, and a
+                    // BarMark per point is a layout node — 720 × several bar
+                    // cards drove SwiftUI's alignment layout into a recursive
+                    // explosion (a ≥2 s main-thread hang; `explicitAlignment` +
+                    // chkstk in the trace). Two fixes:
+                    //   1. CAP the bar count — a ~380 pt card can't render more
+                    //      than ~140 bars meaningfully, so down-sample there.
+                    //   2. NO GeometryReader — its size → barW → mark-layout →
+                    //      size feedback was the cycle that recursed. The width
+                    //      is a fixed pixel value derived from the (capped)
+                    //      count instead. (.ratio renders nothing on this
+                    //      index scale — keep .fixed.)
+                    let capped = series.map {
+                        (name: $0.name, points: Self.capBars($0.points), color: $0.color)
+                    }
+                    let n = max(capped.map(\.points.count).max() ?? 0, 1)
+                    let labelPts = capped.first?.points ?? []
+                    let barW = max(1.5, min(12.0, 360.0 / CGFloat(n) * 0.6))
+                    Chart {
+                        ForEach(capped, id: \.name) { s in
+                            ForEach(Array(s.points.enumerated()), id: \.offset) { idx, p in
+                                BarMark(x: .value("Sample", Double(idx)), y: .value("Value", p.value),
+                                        width: .fixed(barW))
+                                    .foregroundStyle(s.color.opacity(0.85))
+                            }
+                        }
+                    }
+                    .chartXScale(domain: -0.5 ... (Double(n) - 0.5))
+                    .chartXAxis {
+                        AxisMarks(values: barAxisTicks(labelPts.count, desired: style.desiredCount)) { v in
+                            AxisGridLine().foregroundStyle(Brand.hairline)
+                            if let d = v.as(Double.self) {
+                                let i = Int(d.rounded())
+                                if i >= 0, i < labelPts.count {
+                                    AxisValueLabel { Text(labelPts[i].time, format: style.format) }
+                                        .foregroundStyle(Brand.textTertiary).font(Brand.mono(8))
                                 }
                             }
                         }
-                        .chartXScale(domain: -0.5 ... (Double(max(pts.count, 1)) - 0.5))
-                        .chartXAxis {
-                            AxisMarks(values: barAxisTicks(pts.count, desired: style.desiredCount)) { v in
-                                AxisGridLine().foregroundStyle(Brand.hairline)
-                                if let d = v.as(Double.self) {
-                                    let i = Int(d.rounded())
-                                    if i >= 0, i < pts.count {
-                                        AxisValueLabel { Text(pts[i].time, format: style.format) }
-                                            .foregroundStyle(Brand.textTertiary).font(Brand.mono(8))
-                                    }
-                                }
-                            }
-                        }
-                        .chartYAxis {
-                            AxisMarks { _ in
-                                AxisGridLine().foregroundStyle(Brand.hairline)
-                                AxisValueLabel().foregroundStyle(Brand.textTertiary).font(Brand.mono(8))
-                            }
+                    }
+                    .chartYAxis {
+                        AxisMarks { _ in
+                            AxisGridLine().foregroundStyle(Brand.hairline)
+                            AxisValueLabel().foregroundStyle(Brand.textTertiary).font(Brand.mono(8))
                         }
                     }
                     .frame(height: 170)
