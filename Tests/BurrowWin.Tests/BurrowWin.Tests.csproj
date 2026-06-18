@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Models\CleanupPreviewItem.cs" Link="Production\Models\CleanupPreviewItem.cs" />
+    <Compile Include="..\..\Models\BurrowSettings.cs" Link="Production\Models\BurrowSettings.cs" />
+    <Compile Include="..\..\Models\DiskAnalysisOptions.cs" Link="Production\Models\DiskAnalysisOptions.cs" />
+    <Compile Include="..\..\Models\DiskTreemapRect.cs" Link="Production\Models\DiskTreemapRect.cs" />
+    <Compile Include="..\..\Models\DiskUsageNode.cs" Link="Production\Models\DiskUsageNode.cs" />
+    <Compile Include="..\..\Models\HistoryRangeDefinition.cs" Link="Production\Models\HistoryRangeDefinition.cs" />
+    <Compile Include="..\..\Models\InstalledApplication.cs" Link="Production\Models\InstalledApplication.cs" />
+    <Compile Include="..\..\Models\InstallerCleanupCandidate.cs" Link="Production\Models\InstallerCleanupCandidate.cs" />
+    <Compile Include="..\..\Models\LeftoverCandidate.cs" Link="Production\Models\LeftoverCandidate.cs" />
+    <Compile Include="..\..\Models\LeftoverRemovalResult.cs" Link="Production\Models\LeftoverRemovalResult.cs" />
+    <Compile Include="..\..\Models\MoleCommandResult.cs" Link="Production\Models\MoleCommandResult.cs" />
+    <Compile Include="..\..\Models\MoleEngineAvailability.cs" Link="Production\Models\MoleEngineAvailability.cs" />
+    <Compile Include="..\..\Models\OperationHistoryEntry.cs" Link="Production\Models\OperationHistoryEntry.cs" />
+    <Compile Include="..\..\Models\PurgeArtifactCandidate.cs" Link="Production\Models\PurgeArtifactCandidate.cs" />
+    <Compile Include="..\..\Models\PurgeProjectCandidate.cs" Link="Production\Models\PurgeProjectCandidate.cs" />
+    <Compile Include="..\..\Models\ProcessTelemetry.cs" Link="Production\Models\ProcessTelemetry.cs" />
+    <Compile Include="..\..\Models\ProcessUsageSummary.cs" Link="Production\Models\ProcessUsageSummary.cs" />
+    <Compile Include="..\..\Models\SystemTelemetrySnapshot.cs" Link="Production\Models\SystemTelemetrySnapshot.cs" />
+    <Compile Include="..\..\Models\TrayHudStatus.cs" Link="Production\Models\TrayHudStatus.cs" />
+    <Compile Include="..\..\Services\CleanPreviewParser.cs" Link="Production\Services\CleanPreviewParser.cs" />
+    <Compile Include="..\..\Services\BurrowStartupOptions.cs" Link="Production\Services\BurrowStartupOptions.cs" />
+    <Compile Include="..\..\Services\DiskAnalyzerService.cs" Link="Production\Services\DiskAnalyzerService.cs" />
+    <Compile Include="..\..\Services\DiskTreemapLayout.cs" Link="Production\Services\DiskTreemapLayout.cs" />
+    <Compile Include="..\..\Services\HistoryRangeCatalog.cs" Link="Production\Services\HistoryRangeCatalog.cs" />
+    <Compile Include="..\..\Services\HttpServerSettingsPlanner.cs" Link="Production\Services\HttpServerSettingsPlanner.cs" />
+    <Compile Include="..\..\Services\IDiskAnalyzerService.cs" Link="Production\Services\IDiskAnalyzerService.cs" />
+    <Compile Include="..\..\Services\IInstalledApplicationService.cs" Link="Production\Services\IInstalledApplicationService.cs" />
+    <Compile Include="..\..\Services\IInstallerCleanupService.cs" Link="Production\Services\IInstallerCleanupService.cs" />
+    <Compile Include="..\..\Services\IApplicationSettingsService.cs" Link="Production\Services\IApplicationSettingsService.cs" />
+    <Compile Include="..\..\Services\IMoleEngineProbe.cs" Link="Production\Services\IMoleEngineProbe.cs" />
+    <Compile Include="..\..\Services\IMoleEngineService.cs" Link="Production\Services\IMoleEngineService.cs" />
+    <Compile Include="..\..\Services\IOperationHistoryService.cs" Link="Production\Services\IOperationHistoryService.cs" />
+    <Compile Include="..\..\Services\IPurgeArtifactService.cs" Link="Production\Services\IPurgeArtifactService.cs" />
+    <Compile Include="..\..\Services\IStartupDiagnosticsService.cs" Link="Production\Services\IStartupDiagnosticsService.cs" />
+    <Compile Include="..\..\Services\ISystemTelemetrySamplerService.cs" Link="Production\Services\ISystemTelemetrySamplerService.cs" />
+    <Compile Include="..\..\Services\ISystemTelemetryService.cs" Link="Production\Services\ISystemTelemetryService.cs" />
+    <Compile Include="..\..\Services\ISystemTelemetryHistoryService.cs" Link="Production\Services\ISystemTelemetryHistoryService.cs" />
+    <Compile Include="..\..\Services\JsonApplicationSettingsService.cs" Link="Production\Services\JsonApplicationSettingsService.cs" />
+    <Compile Include="..\..\Services\JsonOperationHistoryService.cs" Link="Production\Services\JsonOperationHistoryService.cs" />
+    <Compile Include="..\..\Services\JsonSystemTelemetryHistoryService.cs" Link="Production\Services\JsonSystemTelemetryHistoryService.cs" />
+    <Compile Include="..\..\Services\InstallerCleanupService.cs" Link="Production\Services\InstallerCleanupService.cs" />
+    <Compile Include="..\..\Services\LocalMcpServerService.cs" Link="Production\Services\LocalMcpServerService.cs" />
+    <Compile Include="..\..\Services\LocalStartupDiagnosticsService.cs" Link="Production\Services\LocalStartupDiagnosticsService.cs" />
+    <Compile Include="..\..\Services\MoleEngineService.cs" Link="Production\Services\MoleEngineService.cs" />
+    <Compile Include="..\..\Services\ProcessUsageAggregator.cs" Link="Production\Services\ProcessUsageAggregator.cs" />
+    <Compile Include="..\..\Services\PurgeArtifactService.cs" Link="Production\Services\PurgeArtifactService.cs" />
+    <Compile Include="..\..\Services\SystemMoleEngineProbe.cs" Link="Production\Services\SystemMoleEngineProbe.cs" />
+    <Compile Include="..\..\Services\SystemTelemetrySamplerService.cs" Link="Production\Services\SystemTelemetrySamplerService.cs" />
+    <Compile Include="..\..\Services\SystemTelemetryFormatter.cs" Link="Production\Services\SystemTelemetryFormatter.cs" />
+    <Compile Include="..\..\Services\TrayHudStatusFormatter.cs" Link="Production\Services\TrayHudStatusFormatter.cs" />
+    <Compile Include="..\..\Services\TrayIconTextFormatter.cs" Link="Production\Services\TrayIconTextFormatter.cs" />
+    <Compile Include="..\..\Services\WindowsInstalledApplicationService.cs" Link="Production\Services\WindowsInstalledApplicationService.cs" />
+  </ItemGroup>
+</Project>

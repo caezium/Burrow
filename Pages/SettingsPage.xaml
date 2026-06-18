@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="BurrowWin.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:models="using:BurrowWin.Models"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="{StaticResource BurrowBackgroundBrush}"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Style x:Key="SettingsFieldLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource BurrowMonoFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{StaticResource BurrowMutedBrush}" />
+        </Style>
+
+        <Style x:Key="SettingsInputTextBoxStyle" TargetType="TextBox">
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Background" Value="#181815" />
+            <Setter Property="Foreground" Value="{StaticResource BurrowTextBrush}" />
+            <Setter Property="BorderBrush" Value="#56524A" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontFamily" Value="{StaticResource BurrowMonoFont}" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+
+        <Style x:Key="SettingsToggleSwitchStyle" TargetType="ToggleSwitch">
+            <Setter Property="Foreground" Value="{StaticResource BurrowMutedBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource BurrowMonoFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="OnContent" Value="On" />
+            <Setter Property="OffContent" Value="Off" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <Grid Padding="24,18,24,24" RowSpacing="18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid ColumnSpacing="14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Settings" />
+                    <TextBlock
+                        FontFamily="{StaticResource BurrowMonoFont}"
+                        Foreground="{StaticResource BurrowDimBrush}"
+                        Text="{Binding SettingsStatus}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Button
+                    Grid.Column="1"
+                    Command="{Binding RefreshCommand}"
+                    Style="{StaticResource BurrowSecondaryPillButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                        <TextBlock Text="Refresh" />
+                    </StackPanel>
+                </Button>
+
+                <Button
+                    Grid.Column="2"
+                    Command="{Binding SaveSettingsCommand}"
+                    Style="{StaticResource BurrowPillButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon
+                            FontSize="14"
+                            Foreground="#111111"
+                            Glyph="&#xE74E;" />
+                        <TextBlock
+                            Foreground="#111111"
+                            Text="Save" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnSpacing="18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.05*" />
+                    <ColumnDefinition Width="0.95*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource BurrowCardBorderStyle}">
+                    <Grid RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock
+                            Grid.ColumnSpan="2"
+                            Foreground="{StaticResource BurrowGreenBrush}"
+                            Style="{StaticResource BurrowLabelTextStyle}"
+                            Text="ENGINE" />
+
+                        <TextBlock Grid.Row="1" Foreground="{StaticResource BurrowMutedBrush}" Text="Status" />
+                        <TextBlock
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            Text="{Binding EngineStatus}"
+                            TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="2" Foreground="{StaticResource BurrowMutedBrush}" Text="Kind" />
+                        <TextBlock
+                            Grid.Row="2"
+                            Grid.Column="1"
+                            FontFamily="{StaticResource BurrowMonoFont}"
+                            Foreground="{StaticResource BurrowGoldBrush}"
+                            Text="{Binding EngineKind}" />
+
+                        <TextBlock Grid.Row="3" Foreground="{StaticResource BurrowMutedBrush}" Text="Path" />
+                        <TextBlock
+                            Grid.Row="3"
+                            Grid.Column="1"
+                            FontFamily="{StaticResource BurrowMonoFont}"
+                            Foreground="{StaticResource BurrowDimBrush}"
+                            Text="{Binding EnginePath}"
+                            TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="4" Foreground="{StaticResource BurrowMutedBrush}" Text="Setup" />
+                        <TextBlock
+                            Grid.Row="4"
+                            Grid.Column="1"
+                            Foreground="{StaticResource BurrowDimBrush}"
+                            Text="{Binding EngineInstallHint}"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource BurrowCardBorderStyle}">
+                    <Grid RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock
+                            Grid.ColumnSpan="2"
+                            Foreground="{StaticResource BurrowBlueBrush}"
+                            Style="{StaticResource BurrowLabelTextStyle}"
+                            Text="AGENT" />
+
+                        <StackPanel Grid.Row="1" Spacing="8">
+                            <TextBlock Style="{StaticResource SettingsFieldLabelStyle}" Text="HTTP server" />
+                            <ToggleSwitch
+                                IsOn="{Binding HttpServerEnabled, Mode=TwoWay}"
+                                Style="{StaticResource SettingsToggleSwitchStyle}" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            Spacing="8">
+                            <TextBlock Style="{StaticResource SettingsFieldLabelStyle}" Text="Port" />
+                            <TextBox
+                                InputScope="Number"
+                                Style="{StaticResource SettingsInputTextBoxStyle}"
+                                Text="{Binding HttpServerPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <StackPanel
+                            Grid.Row="2"
+                            Grid.ColumnSpan="2"
+                            Spacing="8">
+                            <TextBlock Style="{StaticResource SettingsFieldLabelStyle}" Text="MCP destructive actions" />
+                            <ToggleSwitch
+                                IsOn="{Binding McpDestructiveActionsEnabled, Mode=TwoWay}"
+                                Style="{StaticResource SettingsToggleSwitchStyle}" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="3" Foreground="{StaticResource BurrowMutedBrush}" Text="Endpoint" />
+                        <TextBlock
+                            Grid.Row="3"
+                            Grid.Column="1"
+                            FontFamily="{StaticResource BurrowMonoFont}"
+                            Foreground="{StaticResource BurrowDimBrush}"
+                            Text="{Binding McpEndpoint}"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="2" Style="{StaticResource BurrowCardBorderStyle}">
+                <Grid ColumnSpacing="18" RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock
+                        Grid.ColumnSpan="3"
+                        Foreground="{StaticResource BurrowGoldBrush}"
+                        Style="{StaticResource BurrowLabelTextStyle}"
+                        Text="BEHAVIOR" />
+
+                    <StackPanel Grid.Row="1" Spacing="8">
+                        <TextBlock Style="{StaticResource SettingsFieldLabelStyle}" Text="Sampling interval seconds" />
+                        <TextBox
+                            InputScope="Number"
+                            Style="{StaticResource SettingsInputTextBoxStyle}"
+                            Text="{Binding SamplingIntervalSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        Spacing="8">
+                        <TextBlock Style="{StaticResource SettingsFieldLabelStyle}" Text="History retention days" />
+                        <TextBox
+                            InputScope="Number"
+                            Style="{StaticResource SettingsInputTextBoxStyle}"
+                            Text="{Binding HistoryRetentionDays, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Row="1"
+                        Grid.Column="2"
+                        Spacing="8">
+                        <TextBlock Style="{StaticResource SettingsFieldLabelStyle}" Text="Tray icon" />
+                        <ToggleSwitch
+                            IsOn="{Binding TrayIconEnabled, Mode=TwoWay}"
+                            Style="{StaticResource SettingsToggleSwitchStyle}" />
+                    </StackPanel>
+
+                    <TextBlock
+                        Grid.Row="2"
+                        Grid.ColumnSpan="3"
+                        FontFamily="{StaticResource BurrowMonoFont}"
+                        Foreground="{StaticResource BurrowDimBrush}"
+                        Text="Sampling, tray visibility, HTTP enable and port, and MCP destructive gates apply immediately."
+                        TextWrapping="Wrap" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="3" Style="{StaticResource BurrowCardBorderStyle}">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock
+                        Grid.ColumnSpan="2"
+                        Foreground="{StaticResource BurrowPurpleBrush}"
+                        Style="{StaticResource BurrowLabelTextStyle}"
+                        Text="LOCAL FILES" />
+
+                    <TextBlock Grid.Row="1" Foreground="{StaticResource BurrowMutedBrush}" Text="Settings" />
+                    <TextBlock
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        FontFamily="{StaticResource BurrowMonoFont}"
+                        Foreground="{StaticResource BurrowDimBrush}"
+                        Text="{Binding SettingsPath}"
+                        TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="2" Foreground="{StaticResource BurrowMutedBrush}" Text="Telemetry" />
+                    <TextBlock
+                        Grid.Row="2"
+                        Grid.Column="1"
+                        FontFamily="{StaticResource BurrowMonoFont}"
+                        Foreground="{StaticResource BurrowDimBrush}"
+                        Text="{Binding TelemetryHistoryPath}"
+                        TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="3" Foreground="{StaticResource BurrowMutedBrush}" Text="Activity" />
+                    <TextBlock
+                        Grid.Row="3"
+                        Grid.Column="1"
+                        FontFamily="{StaticResource BurrowMonoFont}"
+                        Foreground="{StaticResource BurrowDimBrush}"
+                        Text="{Binding ActivityHistoryPath}"
+                        TextWrapping="Wrap" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="4" Style="{StaticResource BurrowCardBorderStyle}">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                Foreground="{StaticResource BurrowOrangeBrush}"
+                                Style="{StaticResource BurrowLabelTextStyle}"
+                                Text="RECENT ACTIVITY" />
+                            <TextBlock
+                                FontFamily="{StaticResource BurrowMonoFont}"
+                                Foreground="{StaticResource BurrowDimBrush}"
+                                Text="{Binding HistorySummary}" />
+                        </StackPanel>
+
+                        <Button
+                            Grid.Column="1"
+                            Command="{Binding LoadHistoryCommand}"
+                            Style="{StaticResource BurrowSecondaryPillButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="14" Glyph="&#xE81C;" />
+                                <TextBlock Text="Load activity" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <TextBlock
+                        Grid.Row="1"
+                        FontFamily="{StaticResource BurrowMonoFont}"
+                        Foreground="{StaticResource BurrowDimBrush}"
+                        Text="{Binding McpStdioCommand}"
+                        TextWrapping="Wrap" />
+
+                    <ListView
+                        Grid.Row="2"
+                        ItemsSource="{Binding HistoryEntries}"
+                        MaxHeight="280">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:OperationHistoryEntry">
+                                <Grid MinHeight="58" ColumnSpacing="12" Padding="0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="152" />
+                                        <ColumnDefinition Width="96" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="116" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock
+                                        FontFamily="{StaticResource BurrowMonoFont}"
+                                        Foreground="{StaticResource BurrowMutedBrush}"
+                                        Text="{x:Bind TimestampText}" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        FontFamily="{StaticResource BurrowMonoFont}"
+                                        Foreground="{StaticResource BurrowDimBrush}"
+                                        Text="{x:Bind Source}" />
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        FontWeight="SemiBold"
+                                        Text="{x:Bind Operation}"
+                                        TextTrimming="CharacterEllipsis" />
+                                    <TextBlock
+                                        Grid.Column="3"
+                                        Foreground="{StaticResource BurrowGoldBrush}"
+                                        Text="{x:Bind ResultText}" />
+                                    <TextBlock
+                                        Grid.Column="4"
+                                        FontFamily="{StaticResource BurrowMonoFont}"
+                                        Foreground="{StaticResource BurrowDimBrush}"
+                                        Text="{x:Bind Summary}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</Page>

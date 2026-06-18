@@ -1,42 +1,35 @@
-name: ci
-
-# Build + run the unit suite on every push/PR. The suite is hermetic on a
-# bare runner: tests that need the real `mo` binary or TCC-protected
-# folders skip themselves (XCTSkipUnless / env opt-ins), Store writes go to
-# a scratch defaults suite, and the hosted app stays inert under XCTest.
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main, windows ]
   pull_request:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 jobs:
-  test:
-    runs-on: macos-15
-    timeout-minutes: 30
+  build-test-publish:
+    runs-on: windows-latest
+
     steps:
-      # Pinned to a commit SHA, not a floating tag (supply-chain hygiene;
-      # comment keeps the version legible).
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Select newest Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Restore
+        run: dotnet restore .\BurrowWin.sln
 
-      - name: Generate project
-        run: xcodegen generate
+      - name: Build app
+        run: dotnet build .\BurrowWin.csproj -c Release -p:Platform=x64 -nr:false -v:minimal
+
+      - name: Build tests
+        run: dotnet build .\Tests\BurrowWin.Tests\BurrowWin.Tests.csproj -c Release -nr:false -v:minimal
 
       - name: Test
-        run: |
-          xcodebuild test -project Burrow.xcodeproj -scheme Burrow \
-            -destination 'platform=macOS' \
-            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+        run: dotnet test .\Tests\BurrowWin.Tests\BurrowWin.Tests.csproj -c Release --no-build -v:minimal
+
+      - name: Publish dry run
+        run: dotnet publish .\BurrowWin.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained false -o .\artifacts\ci-publish -v:minimal
