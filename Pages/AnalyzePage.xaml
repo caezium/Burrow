@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="BurrowWin.Pages.AnalyzePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:viewModels="using:BurrowWin.ViewModels"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="{StaticResource BurrowBackgroundBlueBrush}"
+    mc:Ignorable="d"
+    Loaded="AnalyzePage_Loaded"
+    SizeChanged="AnalyzePage_SizeChanged">
+
+    <Grid x:Name="AnalyzeRoot" ColumnSpacing="0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="455" />
+            <ColumnDefinition Width="1" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Grid Padding="24,34,20,24" RowSpacing="34">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <StackPanel HorizontalAlignment="Center" Spacing="18">
+                <Border
+                    Width="156"
+                    Height="156"
+                    CornerRadius="78">
+                    <Border.Background>
+                        <RadialGradientBrush Center="0.38,0.3" RadiusX="0.86" RadiusY="0.86">
+                            <GradientStop Color="#73B6F1" Offset="0" />
+                            <GradientStop Color="#345F89" Offset="1" />
+                        </RadialGradientBrush>
+                    </Border.Background>
+                </Border>
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontFamily="{StaticResource BurrowMonoFont}"
+                    FontSize="21"
+                    FontWeight="Bold"
+                    Foreground="{StaticResource BurrowMutedBrush}"
+                    Text="{Binding AnalyzeOverviewText}" />
+            </StackPanel>
+
+            <ListView
+                Grid.Row="1"
+                IsItemClickEnabled="False"
+                ItemsSource="{Binding SidebarItems}"
+                SelectionMode="None">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Background" Value="Transparent" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:AnalyzeSidebarItemViewModel">
+                        <Grid MinHeight="72" Padding="0,6" ColumnSpacing="14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="38" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon
+                                VerticalAlignment="Center"
+                                FontSize="27"
+                                Foreground="#EE466D"
+                                Glyph="&#xE8B7;" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock
+                                    FontSize="22"
+                                    FontWeight="SemiBold"
+                                    Foreground="{StaticResource BurrowTextBrush}"
+                                    Text="{x:Bind Name}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    FontFamily="{StaticResource BurrowMonoFont}"
+                                    FontSize="18"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowDimBrush}"
+                                    Text="{x:Bind SizeText}" />
+                            </StackPanel>
+                            <TextBlock
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                FontFamily="{StaticResource BurrowMonoFont}"
+                                FontSize="25"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource BurrowDimBrush}"
+                                Text=">" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
+        <Border Grid.Column="1" Background="#263343" />
+
+        <Grid Grid.Column="2" RowSpacing="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="84" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Padding="28,0,20,0" ColumnSpacing="14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="12">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="24"
+                        Foreground="{StaticResource BurrowMutedBrush}"
+                        Text="&#x2191;" />
+                    <TextBlock
+                        MaxWidth="760"
+                        VerticalAlignment="Center"
+                        FontSize="24"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource BurrowTextBrush}"
+                        Text="{Binding BreadcrumbText}"
+                        TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    FontFamily="{StaticResource BurrowMonoFont}"
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Foreground="{StaticResource BurrowDimBrush}"
+                    Text="{Binding ScanStatusText}" />
+                <Button
+                    Grid.Column="2"
+                    VerticalAlignment="Center"
+                    Command="{Binding ScanCommand}"
+                    Style="{StaticResource BurrowIconButtonStyle}">
+                    <FontIcon Glyph="&#xE72C;" />
+                </Button>
+
+                <Border
+                    Grid.ColumnSpan="3"
+                    VerticalAlignment="Bottom"
+                    BorderBrush="#263343"
+                    BorderThickness="0,0,0,1" />
+            </Grid>
+
+            <Grid
+                x:Name="TreemapViewport"
+                Grid.Row="1"
+                Padding="28,26,20,24"
+                Loaded="TreemapViewport_Loaded"
+                SizeChanged="TreemapViewport_SizeChanged">
+                <ItemsControl
+                    Width="{Binding TreemapCanvasWidth}"
+                    Height="{Binding TreemapCanvasHeight}"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    ItemsSource="{Binding TreemapTiles}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas
+                                Width="{Binding TreemapCanvasWidth}"
+                                Height="{Binding TreemapCanvasHeight}" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="viewModels:DiskTreemapTileViewModel">
+                            <Border
+                                Width="{x:Bind Width}"
+                                Height="{x:Bind Height}"
+                                Padding="12"
+                                Background="{x:Bind FillBrush}"
+                                BorderBrush="#263343"
+                                BorderThickness="1"
+                                CornerRadius="5">
+                                <Border.RenderTransform>
+                                    <TranslateTransform X="{x:Bind X}" Y="{x:Bind Y}" />
+                                </Border.RenderTransform>
+                                <StackPanel
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Opacity="{x:Bind LabelOpacity}"
+                                    Spacing="7">
+                                    <FontIcon
+                                        FontSize="25"
+                                        Foreground="{StaticResource BurrowTextBrush}"
+                                        Glyph="&#xE8B7;"
+                                        Visibility="{x:Bind IconVisibility}" />
+                                    <TextBlock
+                                        MaxLines="2"
+                                        HorizontalAlignment="Center"
+                                        FontSize="{x:Bind FontSize}"
+                                        FontWeight="Bold"
+                                        Foreground="{StaticResource BurrowTextBrush}"
+                                        Text="{x:Bind Name}"
+                                        TextAlignment="Center"
+                                        TextTrimming="CharacterEllipsis"
+                                        TextWrapping="WrapWholeWords" />
+                                    <TextBlock
+                                        HorizontalAlignment="Center"
+                                        FontFamily="{StaticResource BurrowMonoFont}"
+                                        FontSize="15"
+                                        FontWeight="Bold"
+                                        Foreground="{StaticResource BurrowTextBrush}"
+                                        Text="{x:Bind SizeText}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Grid>
+    </Grid>
+</Page>

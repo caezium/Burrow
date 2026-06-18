@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="BurrowWin.Pages.OptimizePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="{StaticResource BurrowBackgroundPurpleBrush}"
+    Loaded="OptimizePage_Loaded"
+    mc:Ignorable="d">
+
+    <Grid Padding="24,28,24,24" RowSpacing="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="220" />
+        </Grid.RowDefinitions>
+
+        <StackPanel
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Spacing="24">
+            <Border
+                Width="220"
+                Height="220"
+                CornerRadius="110">
+                <Border.Background>
+                    <RadialGradientBrush Center="0.36,0.32" RadiusX="0.85" RadiusY="0.85">
+                        <GradientStop Color="#8F82EE" Offset="0" />
+                        <GradientStop Color="#4B467A" Offset="1" />
+                    </RadialGradientBrush>
+                </Border.Background>
+            </Border>
+
+            <StackPanel HorizontalAlignment="Center" Spacing="10">
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontFamily="{StaticResource BurrowSerifFont}"
+                    FontSize="42"
+                    FontWeight="SemiBold"
+                    Text="Optimize" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontFamily="{StaticResource BurrowSerifFont}"
+                    FontSize="20"
+                    FontStyle="Italic"
+                    Foreground="{StaticResource BurrowMutedBrush}"
+                    Text="Small turns, a smoother run." />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontFamily="{StaticResource BurrowMonoFont}"
+                    FontSize="16"
+                    FontWeight="Bold"
+                    Foreground="{StaticResource BurrowGoldBrush}"
+                    Text="{Binding PendingMessage}" />
+            </StackPanel>
+
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="16">
+                <Button
+                    Click="OptimizeButton_Click"
+                    Content="Optimize"
+                    IsEnabled="{Binding CanOptimize}"
+                    Style="{StaticResource BurrowPillButtonStyle}" />
+                <Button
+                    Command="{Binding PreviewCommand}"
+                    Content="Preview"
+                    IsEnabled="{Binding CanPreview}"
+                    Style="{StaticResource BurrowSecondaryPillButtonStyle}" />
+                <ProgressRing
+                    Width="28"
+                    Height="28"
+                    IsActive="{Binding IsBusy}" />
+            </StackPanel>
+
+            <TextBlock
+                HorizontalAlignment="Center"
+                FontFamily="{StaticResource BurrowMonoFont}"
+                Foreground="{StaticResource BurrowDimBrush}"
+                Text="{Binding Summary}" />
+        </StackPanel>
+
+        <TextBox
+            Grid.Row="1"
+            AcceptsReturn="True"
+            FontFamily="{StaticResource BurrowMonoFont}"
+            IsReadOnly="True"
+            Text="{Binding OutputText, Mode=OneWay}"
+            TextWrapping="Wrap" />
+    </Grid>
+</Page>

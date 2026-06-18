@@ -1,0 +1,878 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="BurrowWin.Pages.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:models="using:BurrowWin.Models"
+    xmlns:viewModels="using:BurrowWin.ViewModels"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="#17130D"
+    Loaded="DashboardPage_Loaded"
+    Unloaded="DashboardPage_Unloaded"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Style x:Key="StatusCardStyle" TargetType="Border">
+            <Setter Property="Padding" Value="26" />
+            <Setter Property="CornerRadius" Value="22" />
+            <Setter Property="Background" Value="#1F1E1A" />
+            <Setter Property="BorderBrush" Value="#3A3832" />
+            <Setter Property="BorderThickness" Value="1.5" />
+        </Style>
+
+        <Style x:Key="StatusHeaderTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BurrowLabelTextStyle}">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="CharacterSpacing" Value="120" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="LineHeight" Value="20" />
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+        </Style>
+
+        <Style x:Key="StatusHeaderRowStyle" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Spacing" Value="8" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="StatusHeaderIconStyle" TargetType="FontIcon">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="StatusFooterTextStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource BurrowMonoFont}" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{StaticResource BurrowDimBrush}" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="StatusBadgeStyle" TargetType="Border">
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="#3B3934" />
+        </Style>
+
+        <Style x:Key="StatusTabButtonStyle" TargetType="Button" BasedOn="{StaticResource BurrowTopNavButtonStyle}">
+            <Setter Property="MinHeight" Value="48" />
+            <Setter Property="Padding" Value="22,8" />
+            <Setter Property="FontSize" Value="24" />
+        </Style>
+
+        <Style x:Key="StatusTabButtonSelectedStyle" TargetType="Button" BasedOn="{StaticResource BurrowTopNavButtonSelectedStyle}">
+            <Setter Property="MinHeight" Value="48" />
+            <Setter Property="Padding" Value="22,8" />
+            <Setter Property="FontSize" Value="24" />
+        </Style>
+    </Page.Resources>
+
+    <Grid RowSpacing="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="98" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Border
+                Margin="26,16,0,16"
+                Padding="6"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Background="#191713"
+                BorderBrush="#332F29"
+                BorderThickness="2"
+                CornerRadius="30">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button
+                        x:Name="StatusOverviewButton"
+                        Content="Overview"
+                        Style="{StaticResource StatusTabButtonSelectedStyle}" />
+                    <Button
+                        x:Name="StatusHistoryButton"
+                        Click="StatusSecondaryNav_Click"
+                        Content="History"
+                        Style="{StaticResource StatusTabButtonStyle}"
+                        Tag="history" />
+                    <Button
+                        x:Name="StatusActivityButton"
+                        Click="StatusSecondaryNav_Click"
+                        Content="Activity"
+                        Style="{StaticResource StatusTabButtonStyle}"
+                        Tag="activity" />
+                </StackPanel>
+            </Border>
+
+            <Border
+                Grid.Column="1"
+                Margin="0,20,28,20"
+                Padding="18,9"
+                VerticalAlignment="Center"
+                Background="#332511"
+                BorderBrush="#78591F"
+                BorderThickness="1.5"
+                CornerRadius="24">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon
+                        VerticalAlignment="Center"
+                        FontSize="15"
+                        Foreground="{StaticResource BurrowGoldBrush}"
+                        Glyph="&#xE945;" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontFamily="{StaticResource BurrowMonoFont}"
+                        FontSize="20"
+                        FontWeight="Bold"
+                        Foreground="{StaticResource BurrowGoldBrush}"
+                        Text="Explain" />
+                </StackPanel>
+            </Border>
+
+            <Border
+                VerticalAlignment="Bottom"
+                BorderBrush="#332F29"
+                BorderThickness="0,0,0,1" />
+        </Grid>
+
+        <ScrollViewer
+            Grid.Row="1"
+            Padding="0"
+            VerticalScrollBarVisibility="Auto">
+            <Grid Padding="26,10,26,28" ColumnSpacing="26" RowSpacing="26">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="306" />
+                    <RowDefinition Height="306" />
+                    <RowDefinition Height="252" />
+                    <RowDefinition Height="360" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource StatusCardStyle}">
+                    <Grid RowSpacing="18">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource StatusHeaderRowStyle}">
+                                <FontIcon
+                                    FontSize="15"
+                                    Foreground="{StaticResource BurrowGoldBrush}"
+                                    Style="{StaticResource StatusHeaderIconStyle}"
+                                    Glyph="&#xE9D2;" />
+                                <TextBlock
+                                    Foreground="{StaticResource BurrowGoldBrush}"
+                                    Style="{StaticResource StatusHeaderTextStyle}"
+                                    Text="HEALTH" />
+                            </StackPanel>
+                            <TextBlock
+                                Grid.Column="1"
+                                MaxWidth="190"
+                                Style="{StaticResource StatusFooterTextStyle}"
+                                Text="{Binding DeviceSummary}" />
+                        </Grid>
+                        <Grid Grid.Row="1" ColumnSpacing="18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="126" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock
+                                        FontSize="56"
+                                        FontWeight="SemiBold"
+                                        Foreground="{StaticResource BurrowTextBrush}"
+                                        Text="{Binding HealthScore}" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        FontSize="20"
+                                        FontWeight="Bold"
+                                        Foreground="{StaticResource BurrowGreenBrush}"
+                                        Text="{Binding HealthStatusText}" />
+                                </StackPanel>
+                                <TextBlock
+                                    FontSize="22"
+                                    FontWeight="SemiBold"
+                                    Foreground="{StaticResource BurrowMutedBrush}"
+                                    Text="{Binding HealthReason}" />
+                            </StackPanel>
+                            <Grid Grid.Column="1" Width="116" Height="116" VerticalAlignment="Center">
+                                <Ellipse
+                                    Stroke="#434B43"
+                                    StrokeThickness="10" />
+                                <Ellipse
+                                    Stroke="{StaticResource BurrowGreenBrush}"
+                                    StrokeThickness="10" />
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="28"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowTextBrush}"
+                                    Text="{Binding HealthScore}" />
+                            </Grid>
+                        </Grid>
+                        <TextBlock
+                            Grid.Row="2"
+                            Style="{StaticResource StatusFooterTextStyle}"
+                            Text="{Binding HealthFooter}" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource StatusCardStyle}">
+                    <Grid RowSpacing="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource StatusHeaderRowStyle}">
+                                <FontIcon
+                                    FontSize="14"
+                                    Foreground="{StaticResource BurrowGreenBrush}"
+                                    Style="{StaticResource StatusHeaderIconStyle}"
+                                    Glyph="&#xE950;" />
+                                <TextBlock
+                                    Foreground="{StaticResource BurrowGreenBrush}"
+                                    Style="{StaticResource StatusHeaderTextStyle}"
+                                    Text="CPU" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadgeStyle}" Background="#4A3324">
+                                <TextBlock
+                                    FontFamily="{StaticResource BurrowMonoFont}"
+                                    FontSize="17"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowOrangeBrush}"
+                                    Text="--°C" />
+                            </Border>
+                        </Grid>
+                        <TextBlock
+                            Grid.Row="1"
+                            FontSize="56"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource BurrowTextBrush}"
+                            Text="{Binding CpuUsageText}" />
+                        <ItemsControl
+                            Grid.Row="2"
+                            Margin="0,0,0,4"
+                            VerticalAlignment="Bottom"
+                            ItemsSource="{Binding CpuBars}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel VerticalAlignment="Bottom" Orientation="Horizontal" Spacing="6" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:DashboardBarSample">
+                                    <Border
+                                        Width="9"
+                                        Height="{x:Bind Height}"
+                                        VerticalAlignment="Bottom"
+                                        Background="{StaticResource BurrowGreenBrush}"
+                                        CornerRadius="3" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock
+                            Grid.Row="3"
+                            Style="{StaticResource StatusFooterTextStyle}"
+                            Text="{Binding CpuFooter}" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource StatusCardStyle}">
+                    <Grid RowSpacing="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource StatusHeaderRowStyle}">
+                                <FontIcon
+                                    FontSize="14"
+                                    Foreground="{StaticResource BurrowGoldBrush}"
+                                    Style="{StaticResource StatusHeaderIconStyle}"
+                                    Glyph="&#xE964;" />
+                                <TextBlock
+                                    Foreground="{StaticResource BurrowGoldBrush}"
+                                    Style="{StaticResource StatusHeaderTextStyle}"
+                                    Text="MEMORY" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadgeStyle}">
+                                <TextBlock
+                                    FontFamily="{StaticResource BurrowMonoFont}"
+                                    FontSize="17"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowMutedBrush}"
+                                    Text="{Binding MemoryStateBadge}" />
+                            </Border>
+                        </Grid>
+                        <TextBlock
+                            Grid.Row="1"
+                            FontSize="56"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource BurrowTextBrush}"
+                            Text="{Binding MemoryUsageText}" />
+                        <Grid Grid.Row="2" MinHeight="86">
+                            <Rectangle Opacity="0.22">
+                                <Rectangle.Fill>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#E7B34D" Offset="0" />
+                                        <GradientStop Color="#1D1C18" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Rectangle.Fill>
+                            </Rectangle>
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="100" Height="100">
+                                    <Polyline
+                                        Points="{Binding MemoryStatusChart.Points}"
+                                        Stroke="{StaticResource BurrowGoldBrush}"
+                                        StrokeEndLineCap="Round"
+                                        StrokeLineJoin="Round"
+                                        StrokeStartLineCap="Round"
+                                        StrokeThickness="3" />
+                                </Canvas>
+                            </Viewbox>
+                        </Grid>
+                        <TextBlock
+                            Grid.Row="3"
+                            Style="{StaticResource StatusFooterTextStyle}"
+                            Text="{Binding MemorySummary}" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="3" Style="{StaticResource StatusCardStyle}">
+                    <Grid RowSpacing="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource StatusHeaderRowStyle}">
+                                <FontIcon
+                                    FontSize="14"
+                                    Foreground="{StaticResource BurrowOrangeBrush}"
+                                    Style="{StaticResource StatusHeaderIconStyle}"
+                                    Glyph="&#xE7F8;" />
+                                <TextBlock
+                                    Foreground="{StaticResource BurrowOrangeBrush}"
+                                    Style="{StaticResource StatusHeaderTextStyle}"
+                                    Text="GPU" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadgeStyle}" Background="#4A3324">
+                                <TextBlock
+                                    FontFamily="{StaticResource BurrowMonoFont}"
+                                    FontSize="17"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowOrangeBrush}"
+                                    Text="--°C" />
+                            </Border>
+                        </Grid>
+                        <TextBlock
+                            Grid.Row="1"
+                            FontSize="56"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource BurrowTextBrush}"
+                            Text="{Binding GpuMetricText}" />
+                        <Grid Grid.Row="2" MinHeight="86">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="100" Height="100">
+                                    <Polyline
+                                        Points="{Binding GpuStatusChart.Points}"
+                                        Stroke="{StaticResource BurrowOrangeBrush}"
+                                        StrokeEndLineCap="Round"
+                                        StrokeLineJoin="Round"
+                                        StrokeStartLineCap="Round"
+                                        StrokeThickness="3" />
+                                </Canvas>
+                            </Viewbox>
+                        </Grid>
+                        <TextBlock
+                            Grid.Row="3"
+                            Style="{StaticResource StatusFooterTextStyle}"
+                            Text="{Binding GpuFooter}" />
+                    </Grid>
+                </Border>
+
+                <Border
+                    Grid.Row="1"
+                    Grid.ColumnSpan="1"
+                    Style="{StaticResource StatusCardStyle}">
+                    <Grid RowSpacing="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource StatusHeaderRowStyle}">
+                                <FontIcon
+                                    FontSize="14"
+                                    Foreground="{StaticResource BurrowBlueBrush}"
+                                    Style="{StaticResource StatusHeaderIconStyle}"
+                                    Glyph="&#xEDA2;" />
+                                <TextBlock
+                                    Foreground="{StaticResource BurrowBlueBrush}"
+                                    Style="{StaticResource StatusHeaderTextStyle}"
+                                    Text="DISK" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadgeStyle}">
+                                <TextBlock
+                                    FontFamily="{StaticResource BurrowMonoFont}"
+                                    FontSize="17"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowMutedBrush}"
+                                    Text="{Binding DiskTotalBadge}" />
+                            </Border>
+                        </Grid>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                            <TextBlock
+                                FontSize="56"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BurrowTextBrush}"
+                                Text="{Binding DiskFreeAmountText}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="20"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BurrowMutedBrush}"
+                                Text="{Binding DiskFreeUnitText}" />
+                        </StackPanel>
+                        <ProgressBar
+                            Grid.Row="2"
+                            Height="12"
+                            Foreground="{StaticResource BurrowRedBrush}"
+                            Maximum="100"
+                            Value="{Binding DiskUsagePercent}" />
+                        <StackPanel Grid.Row="4" Spacing="14">
+                            <TextBlock Style="{StaticResource StatusFooterTextStyle}" Text="{Binding DiskFooter}" />
+                            <TextBlock Style="{StaticResource StatusFooterTextStyle}" Text="Full in unavailable" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="2"
+                    Style="{StaticResource StatusCardStyle}">
+                    <Grid RowSpacing="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource StatusHeaderRowStyle}">
+                                <FontIcon
+                                    FontSize="14"
+                                    Foreground="{StaticResource BurrowGreenBrush}"
+                                    Style="{StaticResource StatusHeaderIconStyle}"
+                                    Glyph="&#xE774;" />
+                                <TextBlock
+                                    Foreground="{StaticResource BurrowGreenBrush}"
+                                    Style="{StaticResource StatusHeaderTextStyle}"
+                                    Text="NETWORK" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadgeStyle}" Background="#263547">
+                                <TextBlock
+                                    FontFamily="{StaticResource BurrowMonoFont}"
+                                    FontSize="17"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowBlueBrush}"
+                                    Text="{Binding NetworkBadge}" />
+                            </Border>
+                        </Grid>
+                        <StackPanel
+                            Grid.Row="1"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <TextBlock
+                                VerticalAlignment="Bottom"
+                                FontSize="52"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BurrowTextBrush}"
+                                Text="{Binding NetworkRateValueText}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="22"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BurrowMutedBrush}"
+                                Text="{Binding NetworkRateUnitText}" />
+                        </StackPanel>
+                        <Grid
+                            Grid.Row="2"
+                            Height="82"
+                            Margin="0,-4,0,-2"
+                            VerticalAlignment="Center">
+                            <Viewbox
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"
+                                Stretch="Fill">
+                                <Canvas Width="520" Height="80">
+                                    <Polyline
+                                        Points="0,68 520,68"
+                                        Stroke="#393732"
+                                        StrokeEndLineCap="Round"
+                                        StrokeStartLineCap="Round"
+                                        StrokeThickness="1" />
+                                    <Polyline
+                                        Points="{Binding NetworkDownloadChart.Points}"
+                                        Stroke="{StaticResource BurrowGreenBrush}"
+                                        StrokeEndLineCap="Round"
+                                        StrokeLineJoin="Round"
+                                        StrokeStartLineCap="Round"
+                                        StrokeThickness="1.5" />
+                                    <Polyline
+                                        Points="{Binding NetworkUploadChart.Points}"
+                                        Stroke="{StaticResource BurrowBlueBrush}"
+                                        StrokeEndLineCap="Round"
+                                        StrokeLineJoin="Round"
+                                        StrokeStartLineCap="Round"
+                                        StrokeThickness="1.5" />
+                                </Canvas>
+                            </Viewbox>
+                        </Grid>
+                        <TextBlock
+                            Grid.Row="3"
+                            Style="{StaticResource StatusFooterTextStyle}"
+                            Text="{Binding NetworkFooter}" />
+                    </Grid>
+                </Border>
+
+                <Border
+                    Grid.Row="1"
+                    Grid.Column="3"
+                    Style="{StaticResource StatusCardStyle}">
+                    <Grid RowSpacing="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource StatusHeaderRowStyle}">
+                                <FontIcon
+                                    FontSize="18"
+                                    Foreground="{StaticResource BurrowMutedBrush}"
+                                    Style="{StaticResource StatusHeaderIconStyle}"
+                                    Glyph="&#xE7F8;" />
+                                <TextBlock
+                                    Foreground="{StaticResource BurrowMutedBrush}"
+                                    Style="{StaticResource StatusHeaderTextStyle}"
+                                    Text="FAN" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadgeStyle}">
+                                <TextBlock
+                                    FontFamily="{StaticResource BurrowMonoFont}"
+                                    FontSize="17"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowMutedBrush}"
+                                    Text="{Binding FanBadge}" />
+                            </Border>
+                        </Grid>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                            <TextBlock
+                                FontSize="56"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BurrowTextBrush}"
+                                Text="{Binding FanMetricText}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="20"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BurrowMutedBrush}"
+                                Text="RPM" />
+                        </StackPanel>
+                        <Grid Grid.Row="2" MinHeight="112">
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="100" Height="100">
+                                    <Polyline
+                                        Points="{Binding FanStatusChart.Points}"
+                                        Stroke="{StaticResource BurrowMutedBrush}"
+                                        StrokeEndLineCap="Round"
+                                        StrokeLineJoin="Round"
+                                        StrokeStartLineCap="Round"
+                                        StrokeThickness="3" />
+                                </Canvas>
+                            </Viewbox>
+                        </Grid>
+                        <TextBlock
+                            Grid.Row="3"
+                            Style="{StaticResource StatusFooterTextStyle}"
+                            Text="{Binding FanFooter}" />
+                    </Grid>
+                </Border>
+
+                <Border
+                    Grid.Row="2"
+                    Grid.ColumnSpan="4"
+                    Style="{StaticResource StatusCardStyle}">
+                    <Grid ColumnSpacing="20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                        </Grid.ColumnDefinitions>
+                        <Grid RowSpacing="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Style="{StaticResource StatusHeaderRowStyle}">
+                                <FontIcon
+                                    FontSize="14"
+                                    Foreground="{StaticResource BurrowGoldBrush}"
+                                    Style="{StaticResource StatusHeaderIconStyle}"
+                                    Glyph="&#xEBA0;" />
+                                <TextBlock
+                                    Foreground="{StaticResource BurrowGoldBrush}"
+                                    Style="{StaticResource StatusHeaderTextStyle}"
+                                    Text="BATTERY" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock
+                                        FontSize="56"
+                                        FontWeight="SemiBold"
+                                        Foreground="{StaticResource BurrowTextBrush}"
+                                        Text="{Binding BatteryMetricText}" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        FontSize="20"
+                                        FontWeight="SemiBold"
+                                        Foreground="{StaticResource BurrowMutedBrush}"
+                                        Text="{Binding BatteryStateText}" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource StatusFooterTextStyle}" Text="{Binding BatteryFooter}" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Grid.Column="1">
+                            <Border
+                                Padding="12,5"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Top"
+                                Background="#263D2B"
+                                CornerRadius="14">
+                                <TextBlock
+                                    FontFamily="{StaticResource BurrowMonoFont}"
+                                    FontSize="17"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource BurrowGreenBrush}"
+                                    Text="{Binding BatteryHealthBadge}" />
+                            </Border>
+                            <Grid
+                                Width="96"
+                                Height="96"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                                <Ellipse Stroke="#443F35" StrokeThickness="8" />
+                                <Ellipse Stroke="{StaticResource BurrowGoldBrush}" StrokeThickness="8" />
+                                <FontIcon
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="28"
+                                    Foreground="{StaticResource BurrowMutedBrush}"
+                                    Glyph="&#xE7F4;" />
+                            </Grid>
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Bottom"
+                                FontFamily="{StaticResource BurrowMonoFont}"
+                                FontSize="16"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource BurrowMutedBrush}"
+                                Text="{Binding BatteryPercentText}" />
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Border
+                    Grid.Row="3"
+                    Grid.ColumnSpan="4"
+                    Padding="0"
+                    Style="{StaticResource StatusCardStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="60" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Padding="26,0" ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource StatusHeaderTextStyle}"
+                                Text="{Binding TopProcessesTitle}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource StatusHeaderTextStyle}"
+                                Text="PID" />
+                            <TextBlock
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource BurrowGoldBrush}"
+                                Style="{StaticResource StatusHeaderTextStyle}"
+                                Text="CPU" />
+                            <TextBlock
+                                Grid.Column="3"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource StatusHeaderTextStyle}"
+                                Text="PWR" />
+                            <TextBlock
+                                Grid.Column="4"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource StatusHeaderTextStyle}"
+                                Text="MEM" />
+                        </Grid>
+                        <Border
+                            Grid.Row="0"
+                            VerticalAlignment="Bottom"
+                            BorderBrush="#33312C"
+                            BorderThickness="0,0,0,1" />
+                        <ListView
+                            Grid.Row="1"
+                            IsItemClickEnabled="False"
+                            ItemsSource="{Binding TopProcesses}"
+                            SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="models:ProcessTelemetry">
+                                    <Grid MinHeight="48" Padding="26,0" ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="130" />
+                                            <ColumnDefinition Width="160" />
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="150" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="14">
+                                            <Border
+                                                Width="28"
+                                                Height="28"
+                                                VerticalAlignment="Center"
+                                                Background="#343331"
+                                                CornerRadius="6">
+                                                <FontIcon
+                                                    FontSize="12"
+                                                    Foreground="{StaticResource BurrowDimBrush}"
+                                                    Glyph="&#xE756;" />
+                                            </Border>
+                                            <TextBlock
+                                                VerticalAlignment="Center"
+                                                FontSize="20"
+                                                FontWeight="SemiBold"
+                                                Foreground="{StaticResource BurrowTextBrush}"
+                                                Text="{x:Bind Name}"
+                                                TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            FontFamily="{StaticResource BurrowMonoFont}"
+                                            FontSize="19"
+                                            FontWeight="Bold"
+                                            Foreground="{StaticResource BurrowDimBrush}"
+                                            Text="{x:Bind ProcessId}" />
+                                        <StackPanel
+                                            Grid.Column="2"
+                                            VerticalAlignment="Center"
+                                            Orientation="Horizontal"
+                                            Spacing="14">
+                                            <Grid Width="88" Height="8" VerticalAlignment="Center">
+                                                <Border Background="#343331" CornerRadius="4" />
+                                                <Border
+                                                    Width="{x:Bind CpuBarWidth}"
+                                                    HorizontalAlignment="Left"
+                                                    Background="{StaticResource BurrowGoldBrush}"
+                                                    CornerRadius="4" />
+                                            </Grid>
+                                            <TextBlock
+                                                Width="58"
+                                                FontFamily="{StaticResource BurrowMonoFont}"
+                                                FontSize="19"
+                                                FontWeight="Bold"
+                                                Foreground="{StaticResource BurrowGoldBrush}"
+                                                Text="{x:Bind CpuUsageText}" />
+                                        </StackPanel>
+                                        <TextBlock
+                                            Grid.Column="3"
+                                            VerticalAlignment="Center"
+                                            FontFamily="{StaticResource BurrowMonoFont}"
+                                            FontSize="19"
+                                            FontWeight="Bold"
+                                            Foreground="{StaticResource BurrowDimBrush}"
+                                            Text="{x:Bind PowerImpactText}" />
+                                        <TextBlock
+                                            Grid.Column="4"
+                                            VerticalAlignment="Center"
+                                            FontFamily="{StaticResource BurrowMonoFont}"
+                                            FontSize="19"
+                                            FontWeight="Bold"
+                                            Foreground="{StaticResource BurrowMutedBrush}"
+                                            Text="{x:Bind WorkingSetText}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Page>

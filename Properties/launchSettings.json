@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "BurrowWin (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "BurrowWin (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

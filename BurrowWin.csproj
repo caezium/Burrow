@@ -1,0 +1,164 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>BurrowWin</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
+    <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <MoleShimProject>Tools\MoShim\MoShim.csproj</MoleShimProject>
+    <MoleShimArchitecture Condition="'$(Platform)' == '' Or '$(Platform)' == 'AnyCPU'">$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</MoleShimArchitecture>
+    <MoleShimArchitecture Condition="'$(MoleShimArchitecture)' == ''">$([System.String]::Copy('$(Platform)').ToLowerInvariant())</MoleShimArchitecture>
+    <MoleShimRuntimeIdentifier>win-$(MoleShimArchitecture)</MoleShimRuntimeIdentifier>
+    <MoleShimOutputDir>Tools\MoShim\bin\$(Configuration)\net8.0\$(MoleShimRuntimeIdentifier)\publish\</MoleShimOutputDir>
+    <McpStdioProject>Tools\McpStdioBridge\BurrowMcpStdio.csproj</McpStdioProject>
+    <McpStdioOutputDir>Tools\McpStdioBridge\bin\$(Configuration)\net8.0\</McpStdioOutputDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\AppIcon.ico" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="Assets\mo.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\mo.exe')" />
+    <Content Include="Assets\mo.cmd" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\mo.cmd')" />
+    <Content Include="Assets\mole.ps1" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\mole.ps1')" />
+    <Content Include="Assets\Mole\**\*.*" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Mole')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Tests\**\*.cs;Tools\**\*.cs;obj\**\*.cs;bin\**\*.cs;artifacts\**\*.cs" />
+    <None Remove="Tests\**\*;Tools\**\*" />
+    <Content Remove="Tests\**\*;Tools\**\*" />
+  </ItemGroup>
+
+  <!--
+    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
+    Tools extension to be activated for this project even if the Windows App SDK Nuget
+    package has not yet been restored.
+  -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <!--
+    Microsoft.Windows.SDK.BuildTools.WinApp adds first-class support for
+    `dotnet run` on packaged WinUI apps: it hooks the .NET CLI Run target to
+    register a debug identity via the winapp CLI and launch the app with
+    package identity (AUMID).
+    Set <EnableWinAppRunSupport>false</EnableWinAppRunSupport> in a
+    <PropertyGroup> above to opt out.
+  -->
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.3.2" />
+  </ItemGroup>
+
+  <!--
+    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
+    Explorer "Package and Publish" context menu entry to be enabled for this project even if
+    the Windows App SDK Nuget package has not yet been restored.
+  -->
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <!-- Publish Properties -->
+  <PropertyGroup>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">False</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
+    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">False</PublishTrimmed>
+    <PublishSingleFile Condition="'$(Configuration)' != 'Debug'">False</PublishSingleFile>
+  </PropertyGroup>
+
+  <Target Name="BuildMoleShim" BeforeTargets="BeforeBuild" Condition="Exists('$(MoleShimProject)')">
+    <MSBuild
+      Projects="$(MoleShimProject)"
+      Targets="Restore;Publish"
+      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=$(MoleShimRuntimeIdentifier);PublishSingleFile=true;SelfContained=false;PublishDir=$(MSBuildProjectDirectory)\$(MoleShimOutputDir)" />
+  </Target>
+
+  <Target Name="BuildMcpStdioBridge" BeforeTargets="BeforeBuild" Condition="Exists('$(McpStdioProject)')">
+    <MSBuild
+      Projects="$(McpStdioProject)"
+      Targets="Restore;Build"
+      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=" />
+  </Target>
+
+  <Target Name="CopyMoleShimToOutput" AfterTargets="Build" Condition="Exists('$(MoleShimOutputDir)mo.exe')">
+    <ItemGroup>
+      <MoleShimOutput Include="$(MoleShimOutputDir)mo.*" />
+      <StaleMoleShimOutput Include="$(OutDir)Assets\Mole\mo.dll;$(OutDir)Assets\Mole\mo.deps.json;$(OutDir)Assets\Mole\mo.runtimeconfig.json" />
+    </ItemGroup>
+    <Delete Files="@(StaleMoleShimOutput)" TreatErrorsAsWarnings="true" />
+    <Copy
+      SourceFiles="@(MoleShimOutput)"
+      DestinationFolder="$(OutDir)Assets\Mole\"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyMcpStdioBridgeToOutput" AfterTargets="Build" Condition="Exists('$(McpStdioOutputDir)burrow-mcp-stdio.exe')">
+    <ItemGroup>
+      <McpStdioOutput Include="$(McpStdioOutputDir)burrow-mcp-stdio.*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(McpStdioOutput)"
+      DestinationFolder="$(OutDir)Assets\Mcp\"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyMoleShimToPublish" AfterTargets="Publish" Condition="Exists('$(MoleShimOutputDir)mo.exe')">
+    <ItemGroup>
+      <MoleShimPublishOutput Include="$(MoleShimOutputDir)mo.*" />
+      <StaleMoleShimPublishOutput Include="$(PublishDir)Assets\Mole\mo.dll;$(PublishDir)Assets\Mole\mo.deps.json;$(PublishDir)Assets\Mole\mo.runtimeconfig.json" />
+    </ItemGroup>
+    <Delete Files="@(StaleMoleShimPublishOutput)" TreatErrorsAsWarnings="true" />
+    <Copy
+      SourceFiles="@(MoleShimPublishOutput)"
+      DestinationFolder="$(PublishDir)Assets\Mole\"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyMcpStdioBridgeToPublish" AfterTargets="Publish" Condition="Exists('$(McpStdioOutputDir)burrow-mcp-stdio.exe')">
+    <ItemGroup>
+      <McpStdioPublishOutput Include="$(McpStdioOutputDir)burrow-mcp-stdio.*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(McpStdioPublishOutput)"
+      DestinationFolder="$(PublishDir)Assets\Mcp\"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyStaticAssetsToPublish" AfterTargets="Publish" Condition="'$(PublishDir)' != ''">
+    <ItemGroup>
+      <StaticPublishAsset Include="Assets\**\*.*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(StaticPublishAsset)"
+      DestinationFiles="@(StaticPublishAsset->'$(PublishDir)Assets\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
+</Project>
