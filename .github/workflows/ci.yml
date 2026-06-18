@@ -29,7 +29,15 @@ jobs:
         run: dotnet build .\Tests\BurrowWin.Tests\BurrowWin.Tests.csproj -c Release -nr:false -v:minimal
 
       - name: Test
-        run: dotnet test .\Tests\BurrowWin.Tests\BurrowWin.Tests.csproj -c Release --no-build -v:minimal
+        run: dotnet test .\Tests\BurrowWin.Tests\BurrowWin.Tests.csproj -c Release --no-build -v:minimal --logger "trx;LogFileName=burrowwin-tests.trx" --results-directory .\artifacts\test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: burrowwin-test-results
+          path: artifacts/test-results
+          if-no-files-found: ignore
 
       - name: Publish dry run
         run: dotnet publish .\BurrowWin.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained false -o .\artifacts\ci-publish -v:minimal

@@ -144,7 +144,7 @@ public sealed class MoleEngineServiceTests : IDisposable
             Write-Output "args=$($CommandArgs -join '|')"
 
             if ($Command -eq 'fail') {
-                Write-Error "failure from fake engine"
+                [Console]::Error.WriteLine("failure from fake engine")
                 exit 9
             }
 

@@ -97,15 +97,15 @@
   <Target Name="BuildMoleShim" BeforeTargets="BeforeBuild" Condition="Exists('$(MoleShimProject)')">
     <MSBuild
       Projects="$(MoleShimProject)"
-      Targets="Publish"
-      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=$(MoleShimRuntimeIdentifier);PublishSingleFile=true;SelfContained=false" />
+      Targets="Restore;Publish"
+      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=$(MoleShimRuntimeIdentifier);PublishSingleFile=true;SelfContained=false;PublishDir=$(MSBuildProjectDirectory)\$(MoleShimOutputDir)" />
   </Target>
 
   <Target Name="BuildMcpStdioBridge" BeforeTargets="BeforeBuild" Condition="Exists('$(McpStdioProject)')">
     <MSBuild
       Projects="$(McpStdioProject)"
-      Targets="Build"
-      Properties="Configuration=$(Configuration);Platform=AnyCPU" />
+      Targets="Restore;Build"
+      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=" />
   </Target>
 
   <Target Name="CopyMoleShimToOutput" AfterTargets="Build" Condition="Exists('$(MoleShimOutputDir)mo.exe')">

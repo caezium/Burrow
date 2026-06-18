@@ -1,0 +1,21 @@
+* text=auto
+
+*.cs text eol=crlf linguist-language=C#
+*.csproj text eol=crlf linguist-language=XML
+*.sln text eol=crlf linguist-language=Text
+*.xaml text eol=crlf linguist-language=XML
+*.ps1 text eol=crlf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+Assets/Mole/** linguist-vendored
+Assets/Mcp/** linguist-vendored
+
+*.exe binary
+*.dll binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
