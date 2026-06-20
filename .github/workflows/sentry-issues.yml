@@ -1,0 +1,146 @@
+name: sentry-issues
+
+# Poll Sentry for newly-detected issues and open a matching GitHub issue for
+# each one, so crashes/errors surface as tracked work without anyone watching
+# the Sentry dashboard.
+#
+# Why a poller and not Sentry's native "create GitHub issue" alert action:
+# that action is gated behind Sentry's Business billing plan, which this org
+# isn't on. This workflow needs only a read-only Sentry auth token and the
+# free plan's API.
+#
+# Dedup is by a hidden marker line ("sentry-id: <short-id>") in the body of
+# every issue we file. Before filing, we read back the short-ids of all
+# existing `sentry`-labelled issues (open AND closed) and skip any we've
+# already filed — so a given Sentry issue is filed exactly once, even after
+# its GitHub issue is closed.
+#
+# One-time setup:
+#   1. Sentry → Settings → Auth Tokens → Create New Token with scopes
+#      `project:read`, `event:read`, `org:read` (read-only).
+#   2. Add it to this repo as a secret named SENTRY_AUTH_TOKEN:
+#        gh secret set SENTRY_AUTH_TOKEN --repo caezium/Burrow
+#   Until the secret exists, runs no-op with a warning (they don't fail).
+
+on:
+  schedule:
+    # Every 30 minutes, off the :00/:30 rush. UTC (GitHub cron is always UTC).
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "Sentry issue search query"
+        default: "is:unresolved"
+      lookback_hours:
+        description: "Only file issues first seen within this many hours"
+        default: "24"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Never let two runs file issues at the same time (would race the dedup read).
+  group: sentry-issues
+  cancel-in-progress: false
+
+jobs:
+  file:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SENTRY_HOST: https://sentry.io
+      SENTRY_ORG: henry-zhang-r7
+      # Space-separated project slugs to watch. Both Burrow apps.
+      SENTRY_PROJECTS: "burrow burrow-windows"
+      SENTRY_QUERY: ${{ github.event.inputs.query || 'is:unresolved' }}
+      LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours || '24' }}
+      # Cap creations per run so a backlog can't open hundreds of issues at once.
+      MAX_PER_RUN: "25"
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+    steps:
+      - name: Poll Sentry and file GitHub issues
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ]; then
+            echo "::warning::SENTRY_AUTH_TOKEN secret is not set — nothing to do."
+            exit 0
+          fi
+
+          cutoff=$(date -u -d "${LOOKBACK_HOURS} hours ago" +%s)
+          echo "Filing issues first seen on/after $(date -u -d "@${cutoff}" '+%Y-%m-%d %H:%M UTC')"
+
+          # Short-ids we've already filed (open + closed), so we never duplicate.
+          seen="$(mktemp)"
+          gh issue list --repo "$GH_REPO" --label sentry --state all --limit 1000 \
+            --json body --jq '.[].body' 2>/dev/null \
+            | grep -oE 'sentry-id: [^ <]+' | awk '{print $2}' | sort -u > "$seen" || true
+          echo "Already filed: $(wc -l < "$seen" | tr -d ' ') Sentry issue(s)."
+
+          filed=0
+          for project in $SENTRY_PROJECTS; do
+            q=$(jq -rn --arg q "$SENTRY_QUERY" '$q | @uri')
+            url="${SENTRY_HOST}/api/0/projects/${SENTRY_ORG}/${project}/issues/?query=${q}&sort=new&limit=50"
+
+            resp=$(curl -fsS -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" "$url") || {
+              echo "::warning::Sentry API request failed for project '${project}' — skipping."
+              continue
+            }
+
+            while read -r issue; do
+              [ -z "$issue" ] && continue
+              shortId=$(jq -r '.shortId // empty' <<<"$issue")
+              [ -z "$shortId" ] && continue
+
+              # Already filed?
+              if grep -qxF "$shortId" "$seen"; then
+                continue
+              fi
+
+              firstSeen=$(jq -r '.firstSeen // empty' <<<"$issue")
+              fsEpoch=$(date -u -d "$firstSeen" +%s 2>/dev/null || echo 0)
+              if [ "$fsEpoch" -lt "$cutoff" ]; then
+                continue
+              fi
+
+              if [ "$filed" -ge "$MAX_PER_RUN" ]; then
+                echo "::warning::Hit MAX_PER_RUN=${MAX_PER_RUN}; remaining new issues will be filed next run."
+                break 2
+              fi
+
+              title=$(jq -r '.title // .metadata.value // .culprit // "Unknown error"' <<<"$issue")
+              level=$(jq -r '.level // "error"' <<<"$issue")
+              count=$(jq -r '.count // "?"' <<<"$issue")
+              lastSeen=$(jq -r '.lastSeen // "?"' <<<"$issue")
+              permalink=$(jq -r '.permalink // empty' <<<"$issue")
+
+              printf -v body '%s\n' \
+                "Auto-filed from Sentry by the \`sentry-issues\` workflow." \
+                "" \
+                "| | |" \
+                "|---|---|" \
+                "| **Sentry issue** | [${shortId}](${permalink}) |" \
+                "| **Project** | \`${project}\` |" \
+                "| **Level** | ${level} |" \
+                "| **Events** | ${count} |" \
+                "| **First seen** | ${firstSeen} |" \
+                "| **Last seen** | ${lastSeen} |" \
+                "" \
+                "<sub>sentry-id: ${shortId} — managed marker, do not edit or remove (prevents duplicate filings).</sub>"
+              if gh issue create --repo "$GH_REPO" \
+                   --title "[Sentry] ${shortId}: ${title}" \
+                   --label sentry \
+                   --body "$body" >/dev/null; then
+                echo "Filed ${shortId}: ${title}"
+                echo "$shortId" >> "$seen"   # dedup within this run too
+                filed=$((filed + 1))
+              else
+                echo "::warning::Failed to create GitHub issue for ${shortId}."
+              fi
+            done < <(jq -c '.[]' <<<"$resp")
+          done
+
+          echo "Done. Filed ${filed} new issue(s) this run."
