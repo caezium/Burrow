@@ -104,7 +104,7 @@ and [release notes](windows/docs/release.md).
     <td><img alt="Clean — scan complete, reclaimable space found" src="docs/assets/shot-clean-result.png"></td>
   </tr>
   <tr>
-    <td><img alt="Optimize — one-tap safe maintenance" src="docs/assets/shot-optimize.png"></td>
+    <td><img alt="Optimize — maintenance running" src="docs/assets/shot-optimize-running.png"></td>
     <td><img alt="Optimize — maintenance complete, areas refreshed" src="docs/assets/shot-optimize-done.png"></td>
   </tr>
   <tr>
