@@ -104,10 +104,6 @@ and [release notes](windows/docs/release.md).
     <td><img alt="Clean — scan complete, reclaimable space found" src="docs/assets/shot-clean-result.png"></td>
   </tr>
   <tr>
-    <td><img alt="Purge — reclaim space from dev projects (node_modules, build dirs, target/…)" src="https://github.com/user-attachments/assets/fb00ec56-6dd6-4781-8970-642ce2c1c300"></td>
-    <td><img alt="Installers — find and remove leftover .dmg/.pkg files in bulk" src="https://raw.githubusercontent.com/caezium/Burrow/main/docs/assets/shot-installers.png"></td>
-  </tr>
-  <tr>
     <td><img alt="Optimize — one-tap safe maintenance" src="docs/assets/shot-optimize.png"></td>
     <td><img alt="Optimize — maintenance complete, areas refreshed" src="docs/assets/shot-optimize-done.png"></td>
   </tr>
