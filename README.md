@@ -92,12 +92,12 @@ and [release notes](windows/docs/release.md).
 
 <table>
   <tr>
-    <td><img alt="Status — live CPU, memory, GPU, disk, network, and battery" src="https://github.com/user-attachments/assets/4161784c-b51d-4972-97f8-8ec0ea21e072"></td>
-    <td><img alt="History — long-range charts over a local SQLite metric history" src="https://github.com/user-attachments/assets/300c9c1c-13d9-4b2d-8660-6602c6b07161"></td>
+    <td><img alt="Status — live CPU, memory, GPU, disk, network, and battery" src="docs/assets/shot-status.png"></td>
+    <td><img alt="History — long-range charts over a local SQLite metric history" src="docs/assets/shot-history.png"></td>
   </tr>
   <tr>
-    <td><img alt="Analyze — squarified treemap of your whole disk" src="https://github.com/user-attachments/assets/9ef6ce5e-9730-470f-9a5a-3bfe9e195f82"></td>
-    <td><img alt="Clean — categorized cache, log, and leftover removal" src="https://github.com/user-attachments/assets/05b3d436-3c13-42ac-b7b3-dc7f331a5eb9"></td>
+    <td><img alt="Analyze — squarified treemap of your whole disk" src="docs/assets/shot-analyze.png"></td>
+    <td><img alt="Clean — hub for caches, dev build junk, and leftover installers" src="docs/assets/shot-clean.png"></td>
   </tr>
   <tr>
     <td><img alt="Clean — running" src="https://github.com/user-attachments/assets/1deb82af-00e3-4ba3-b641-c743a22242c5"></td>
@@ -112,7 +112,7 @@ and [release notes](windows/docs/release.md).
     <td><img alt="Optimize — finished summary" src="https://github.com/user-attachments/assets/de3c2ece-2c54-46bd-96af-5cb42e5895a2"></td>
   </tr>
   <tr>
-    <td><img alt="Software — installed apps with search, sort, and multi-select uninstall" src="https://github.com/user-attachments/assets/1a293b2f-baa4-4895-b722-eed0921ff21d"></td>
+    <td><img alt="Software — installed apps with search, sort, and multi-select uninstall" src="docs/assets/shot-apps.png"></td>
     <td><img alt="Software — Homebrew app updates" src="https://github.com/user-attachments/assets/8c3fa0bd-ba08-4dff-af5c-b0213b8adb69"></td>
   </tr>
   <tr>
