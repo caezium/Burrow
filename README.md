@@ -269,6 +269,24 @@ handles this honestly:
 - Burrow only ever reads sizes; it never opens that data itself, and the real
   cleanup always goes through macOS's own admin dialog.
 
+### Granted Full Disk Access but Burrow still doesn't see it?
+
+After a Burrow update, macOS can hold on to a stale permission record, so a
+grant you already enabled stops being recognised — and toggling it off and back
+on in System Settings doesn't always clear it. Reset it once:
+
+```sh
+tccutil reset SystemPolicyAllFiles dev.caezium.Burrow
+```
+
+Then quit Burrow (⌘Q), re-add it under **System Settings → Privacy & Security →
+Full Disk Access**, and reopen.
+
+Why it happens: Burrow's macOS builds are currently *ad-hoc signed*, so the
+app's identity changes between releases and macOS treats an updated build as a
+new app for permission purposes. A stable Developer ID signature — the permanent
+fix — is planned.
+
 ## Requirements
 
 ### macOS
@@ -362,9 +380,13 @@ Burrow drives the audited `mo` CLI. The honest privacy picture:
   disables REST endpoints but keeps the local `/mcp` bridge route available for
   stdio MCP clients. The macOS Updates tab runs `brew outdated`, the same check
   `brew` does for itself.
-- **Unsigned preview builds:** macOS release zips and Windows preview artifacts
-  are unsigned in the current repo state. Windows direct-download users should
-  expect SmartScreen or stricter Application Control policy prompts.
+- **Signing status:** macOS release zips are **ad-hoc signed** — a strictly
+  valid signature, but a per-build identity, so Full Disk Access must be
+  re-granted after each update (see [Permissions & Full Disk
+  Access](#permissions--full-disk-access)). Windows preview artifacts are
+  unsigned, so direct-download users should expect SmartScreen or stricter
+  Application Control policy prompts. A stable Developer ID signature (the
+  permanent fix) is planned.
 - The full honest write-up, including macOS admin trade-offs and the "Scan with
   admin" option, is in **[SECURITY.md](SECURITY.md)**.
 

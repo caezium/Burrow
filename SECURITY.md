@@ -1,22 +1,30 @@
 # Security & trust
 
 Burrow is a GUI that drives the [`mo` (Mole)](https://github.com/tw93/Mole)
-CLI. It is pre-1.0 and **not yet code-signed** — this page is the honest
+CLI. It is pre-1.0 and **not yet signed with a Developer ID** — this page is the honest
 account of what it does, what touches the network, and how it handles
 admin rights, so you can decide before you run it. The actual
 cleaning/scanning is done by `mo` (MIT, © tw93); audit that too.
 
 ## Code signing
 
-Burrow is currently **unsigned and un-notarized**. Code signing is a real
-security mechanism (a cryptographic identity macOS can rely on), not a
-formality — a signed/notarized build is on the roadmap. Until then:
+macOS release builds are **ad-hoc signed**: the signature is cryptographically
+valid (`codesign --verify --strict` passes), but it carries no Developer ID, so
+the build is **not notarized** and its identity changes on every build.
+Practically:
 
-- Install via the Homebrew cask (it strips the quarantine flag for you), or
-- after copying the app, run `xattr -cr /Applications/Burrow.app`.
+- Gatekeeper still shows the "unidentified developer" prompt on first launch.
+  Install via the Homebrew cask (it strips the quarantine flag for you), or run
+  `xattr -cr /Applications/Burrow.app` after copying the app.
+- Because the identity is per-build, a permission you grant (e.g. Full Disk
+  Access) has to be re-granted after each update.
 
-If you're not comfortable running an unsigned app that can ask for admin
-rights, **wait for the signed release** or build it yourself from source.
+A stable **Developer ID** signature — which fixes both points — is the planned
+next step. Code signing is a real security mechanism (a cryptographic identity
+macOS can rely on), not a formality.
+
+If you're not comfortable running a non-notarized app that can ask for admin
+rights, build it yourself from source.
 
 ## Privileged (admin) operations — no background helper
 
