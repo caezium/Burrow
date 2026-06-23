@@ -271,21 +271,23 @@ handles this honestly:
 
 ### Granted Full Disk Access but Burrow still doesn't see it?
 
-After a Burrow update, macOS can hold on to a stale permission record, so a
-grant you already enabled stops being recognised — and toggling it off and back
-on in System Settings doesn't always clear it. Reset it once:
+Burrow's macOS builds are currently *ad-hoc signed*, which gives the app no
+stable code identity — so macOS can treat an updated build as a new app and stop
+honouring a Full Disk Access grant you'd already enabled. To clear the stale
+grant (macOS 26 and earlier):
 
 ```sh
+killall Burrow                                          # menu-bar agent — quit it fully
 tccutil reset SystemPolicyAllFiles dev.caezium.Burrow
 ```
 
-Then quit Burrow (⌘Q), re-add it under **System Settings → Privacy & Security →
+Then **reboot**, re-add Burrow under **System Settings → Privacy & Security →
 Full Disk Access**, and reopen.
 
-Why it happens: Burrow's macOS builds are currently *ad-hoc signed*, so the
-app's identity changes between releases and macOS treats an updated build as a
-new app for permission purposes. A stable Developer ID signature — the permanent
-fix — is planned.
+On **macOS 27**, TCC appears to require a stable signed identity, so an ad-hoc
+build may be unable to hold Full Disk Access at all and the reset won't help.
+The durable fix for every case is a stable **Developer ID** signature — planned;
+tracked in [#181](https://github.com/caezium/Burrow/issues/181).
 
 ## Requirements
 
