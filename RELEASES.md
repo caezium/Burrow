@@ -1,3 +1,25 @@
+# Burrow 0.8.2
+
+A fix release: a Full Disk Access grant now actually takes effect, and Burrow
+asks for notification permission up front instead of mid-alert. Still
+local-first.
+
+## Fixed
+- **Full Disk Access is honored again.** The shipped app's embedded framework
+  signatures were malformed (`codesign --verify --strict` failed on
+  `Sentry.framework`), so macOS couldn't validate Burrow's identity and silently
+  ignored a Full Disk Access grant — turning it on in System Settings appeared to
+  do nothing. The release now re-signs the app and every nested framework
+  inside-out so the signature is valid and the grant takes effect. After
+  updating, toggle Full Disk Access off and back on once. (Burrow is still
+  ad-hoc-signed, so a re-grant is needed after each update until it ships with a
+  Developer ID signature.) (#177)
+
+## Changed
+- **Notification permission is requested up front.** Burrow now asks once — when
+  you finish onboarding or first enable a notifying feature — instead of
+  springing the system prompt the moment a notification tries to fire.
+
 # Burrow 0.8.1
 
 A stability release: the live dashboard no longer freezes, live status now

@@ -50,8 +50,8 @@ targets:
       properties:
         LSUIElement: true   # menu-bar agent, no Dock icon
         CFBundleDisplayName: Burrow
-        CFBundleShortVersionString: "0.8.1"
-        CFBundleVersion: "12"
+        CFBundleShortVersionString: "0.8.2"
+        CFBundleVersion: "13"
         NSHumanReadableCopyright: "MIT License. Mole CLI © tw93. Independent, not affiliated with mole.fit."
         # Friendly, one-time prompts for the standard folders Mole scans
         # (purge/installer touch these). Full Disk Access still covers the
