@@ -119,7 +119,24 @@ jobs:
         run: |
           APP="${{ steps.build.outputs.app }}"
           if [ -z "$CERT_P12" ] || [ -z "$SIGN_IDENTITY" ]; then
-            echo "::warning::No signing cert (MACOS_CERT_P12 / MACOS_SIGN_IDENTITY) set — shipping UNSIGNED."
+            # No Developer ID cert: re-sign AD-HOC rather than ship whatever
+            # xcodebuild left behind. Its SPM frameworks carry a CodeResources
+            # manifest that doesn't match the embedded bundle, so
+            # `codesign --verify --strict` fails ("code has no resources but
+            # signature indicates they must be present" on Sentry.framework) —
+            # macOS then can't validate the app's identity, so a Full Disk
+            # Access grant is never honoured (#177). An inside-out ad-hoc
+            # re-sign regenerates each framework's CodeResources and gives the
+            # app one coherent, strictly-valid identity, so TCC can validate it
+            # and FDA holds within a version. (A stable identity ACROSS updates
+            # still needs a Developer ID — set the MACOS_CERT_* secrets.)
+            echo "::warning::No Developer ID cert — re-signing AD-HOC (valid, but a per-build identity: FDA must be re-granted after each update until a cert is configured)."
+            if [ -d "$APP/Contents/Frameworks" ]; then
+              find "$APP/Contents/Frameworks" \( -name "*.framework" -o -name "*.dylib" \) -print0 \
+                | while IFS= read -r -d '' f; do codesign --force --sign - "$f"; done
+            fi
+            codesign --force --sign - --entitlements macos/Resources/Burrow.entitlements "$APP"
+            codesign --verify --strict --verbose=2 "$APP"
             echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
