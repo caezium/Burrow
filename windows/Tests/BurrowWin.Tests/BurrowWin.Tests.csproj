@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\Models\CleanupPreviewItem.cs" Link="Production\Models\CleanupPreviewItem.cs" />
+    <Compile Include="..\..\Models\BurrowEnvelope.cs" Link="Production\Models\BurrowEnvelope.cs" />
     <Compile Include="..\..\Models\BurrowSettings.cs" Link="Production\Models\BurrowSettings.cs" />
     <Compile Include="..\..\Models\DiskAnalysisOptions.cs" Link="Production\Models\DiskAnalysisOptions.cs" />
     <Compile Include="..\..\Models\DiskTreemapRect.cs" Link="Production\Models\DiskTreemapRect.cs" />
