@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { diskCard, type MiniAppMeta } from "./card.ts";
+import { decodeLayoutURL } from "./burrowlayout.ts";
 
 const meta: MiniAppMeta = {
   appName: "Burrow",
@@ -13,7 +14,9 @@ test("diskCard builds a mini-app card: caption, subcaption, lock-screen summary,
   expect(c.appName).toBe("Burrow");
   expect(c.extensionBundleId).toBe("dev.caezium.Burrow.imessage");
   expect(c.teamId).toBe("ABCDE12345");
-  expect(c.url).toBe("https://burrow.henryzh.dev");
+  // url carries the BurrowLayout as a base64url ?p= payload the extension decodes
+  expect(c.url.startsWith("https://burrow.henryzh.dev?p=")).toBe(true);
+  expect(decodeLayoutURL(c.url).title).toContain("99% full");
   expect(c.layout.caption).toContain("99% full");
   expect(c.layout.subcaption).toContain("6.1 GB free");
   expect(c.layout.subcaption).toContain("~6 days");

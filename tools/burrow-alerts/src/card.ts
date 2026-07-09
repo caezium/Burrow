@@ -7,6 +7,7 @@
  */
 
 import { gb } from "./format.ts";
+import { diskLayout, encodeLayoutURL } from "./burrowlayout.ts";
 import type { Disk, Forecast, Hog } from "./burrow.ts";
 
 /** The extension identity + deep link a card carries (from config). */
@@ -46,7 +47,11 @@ export function diskCard(meta: MiniAppMeta, d: DiskCardData): MiniAppInput {
     summary: `Burrow: disk ${pct}% full — ${free} free`,
   };
   if (d.hogs?.length) layout.trailingSubcaption = d.hogs[0].name;
-  return { ...meta, layout };
+  // The rich card data rides in the URL as ?p=<base64url BurrowLayout>; the
+  // Burrow Cards extension decodes and renders it. caption/subcaption above are
+  // the fallback bubble for recipients without the extension.
+  const url = meta.url ? encodeLayoutURL(meta.url, diskLayout(d)) : meta.url;
+  return { ...meta, url, layout };
 }
 
 /** Convenience: build DiskCardData from Burrow's own signals. */

@@ -124,7 +124,7 @@ extension BurrowNode: Codable {
 // MARK: - Transport (base64url `?p=` payload, matching burrowlayout.ts)
 
 public enum BurrowTransport {
-    public enum Error: Swift.Error { case missingPayload, badBase64 }
+    public enum Error: Swift.Error { case missingPayload, badBase64, encodeFailed }
 
     public static func decode(url: URL) throws -> BurrowLayout {
         guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -133,6 +133,18 @@ public enum BurrowTransport {
         }
         guard let data = Data(base64URLEncoded: p) else { throw Error.badBase64 }
         return try JSONDecoder().decode(BurrowLayout.self, from: data)
+    }
+
+    /// Encode a layout into `base?p=<base64url>` — the inverse of the sidecar's
+    /// encodeLayoutURL. Used by the extension's compose gallery to insert cards.
+    public static func encode(base: URL, layout: BurrowLayout) throws -> URL {
+        let data = try JSONEncoder().encode(layout)
+        var comps = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        var items = comps?.queryItems ?? []
+        items.append(URLQueryItem(name: "p", value: data.base64URLEncodedString()))
+        comps?.queryItems = items
+        guard let url = comps?.url else { throw Error.encodeFailed }
+        return url
     }
 }
 
@@ -144,5 +156,13 @@ extension Data {
         while b64.count % 4 != 0 { b64.append("=") }
         guard let d = Data(base64Encoded: b64) else { return nil }
         self = d
+    }
+
+    /// Encode to URL-safe base64 without padding — matches Node's `base64url`.
+    func base64URLEncodedString() -> String {
+        base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
 }

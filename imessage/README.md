@@ -8,18 +8,25 @@ The [alert sidecar](../tools/burrow-alerts) (or any agent) emits a **BurrowLayou
 
 ## Status
 
-This is an early scaffold. The **wire format is locked and tested** on both sides:
+Buildable end-to-end — `xcodegen generate` + the host scheme compiles clean for the iOS Simulator (`** BUILD SUCCEEDED **`). Set your Team ID to sideload to a device.
 
 | Piece | State |
 |---|---|
 | `tools/burrow-alerts/src/burrowlayout.ts` | ✅ schema + `?p=` transport, unit-tested (round-trip) |
-| `Shared/Sources/BurrowCards/BurrowLayout.swift` | ✅ matching Codable schema + base64url decoder |
-| `Shared/Sources/BurrowCards/BurrowLayoutRenderer.swift` | ⬜ JSON tree → SwiftUI |
-| `BurrowCardsExtension/` (MSMessagesAppViewController) | ⬜ decode `?p=` → render |
-| `BurrowCardsHost/` (host app + debug harness) | ⬜ |
-| `project.yml` (xcodegen) | ⬜ |
+| `Shared/Sources/BurrowCards/BurrowLayout.swift` | ✅ matching Codable schema + base64url encode/decode |
+| `Shared/Sources/BurrowCards/BurrowLayoutRenderer.swift` | ✅ JSON tree → native SwiftUI (fixed vocabulary) |
+| `Shared/Sources/BurrowCards/Samples.swift` | ✅ disk / CPU / cleanup sample cards |
+| `BurrowCardsExtension/` (MSMessagesAppViewController) | ✅ decode `?p=` → render; compose gallery inserts samples; deep-links |
+| `BurrowCardsHost/` (host app + debug harness) | ✅ picker + live-JSON paste, renders with no send |
+| `project.yml` (xcodegen) | ✅ host app embeds the extension |
 
-The Swift schema is written to match the TS round-trip test byte-for-byte — change one side, change both.
+The Swift schema matches the TS round-trip test byte-for-byte — change one side, change both.
+
+## Test it three ways
+
+1. **Harness (fastest, no sending):** run the **BurrowCardsHost** scheme on a Simulator or your iPhone. Flip the sample picker, or paste live JSON and hit Render. This exercises the renderer directly.
+2. **Extension in Messages:** run the **BurrowCards** scheme (or open Messages after installing the host). Tap `+` → Burrow Cards → the compose gallery inserts a sample card; tap the bubble to expand, tap an action to fire the `burrow://` deep link.
+3. **Real send from the sidecar:** set the `card` block (below) and `cd tools/burrow-alerts && bun run check:card`. The sidecar emits a `BurrowLayout` in the `?p=` URL; your extension renders it.
 
 ## Reality check
 
