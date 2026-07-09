@@ -8,11 +8,21 @@
  * once) or sends fail with "Target not allowed for this project".
  */
 
+import type { MiniAppInput } from "./card.ts";
+
 export type SendConfig = {
   recipient: string;
   projectId?: string;
   projectSecret?: string;
   forceLocal?: boolean;
+  /** When set (and in cloud mode), alerts render as mini-app cards. */
+  card?: {
+    appName: string;
+    extensionBundleId: string;
+    teamId: string;
+    url: string;
+    appStoreId?: number;
+  };
 };
 
 const dmGuid = (addr: string) => `any;-;${addr}`;
@@ -30,19 +40,40 @@ export function useCloud(cfg: SendConfig): boolean {
   return !cfg.forceLocal && Boolean(cfg.projectId && cfg.projectSecret);
 }
 
-/** Send one text. The inbound watcher is lazy, so this exits cleanly. */
-export async function sendText(cfg: SendConfig, body: string): Promise<void> {
-  const { Spectrum, text } = await import("spectrum-ts");
+/** Build the app + self-DM space, run `fn`, then shut down cleanly. */
+async function withSpace<T>(cfg: SendConfig, fn: (space: any, sdk: any) => Promise<T>): Promise<T> {
+  const sdk = await import("spectrum-ts");
   const { imessage } = await import("spectrum-ts/providers/imessage");
   const to = toE164(cfg.recipient);
   const app = useCloud(cfg)
-    ? await Spectrum({ projectId: cfg.projectId!, projectSecret: cfg.projectSecret!, providers: [imessage.config()] })
-    : await Spectrum({ providers: [imessage.config({ local: true })] });
+    ? await sdk.Spectrum({ projectId: cfg.projectId!, projectSecret: cfg.projectSecret!, providers: [imessage.config()] })
+    : await sdk.Spectrum({ providers: [imessage.config({ local: true })] });
   try {
     const im = imessage(app);
     const space = await im.space.get(dmGuid(to));
-    await space.send(text(body));
+    return await fn(space, sdk);
   } finally {
     await app.stop();
   }
+}
+
+/** Send one text. The inbound watcher is lazy, so this exits cleanly. */
+export async function sendText(cfg: SendConfig, body: string): Promise<void> {
+  await withSpace(cfg, async (space, sdk) => { await space.send(sdk.text(body)); });
+}
+
+/**
+ * Send an alert as a mini-app card (cloud-only), falling back to `fallbackText`
+ * when cards aren't available (local mode) or the SDK rejects the card.
+ */
+export async function sendCard(cfg: SendConfig, card: MiniAppInput, fallbackText: string): Promise<void> {
+  await withSpace(cfg, async (space, sdk) => {
+    const { customizedMiniApp } = await import("spectrum-ts/providers/imessage");
+    try {
+      await space.send(customizedMiniApp(card));
+    } catch (e: any) {
+      console.log(`[sender] mini-app card unavailable (${e?.message ?? e}) — sending text`);
+      await space.send(sdk.text(fallbackText));
+    }
+  });
 }

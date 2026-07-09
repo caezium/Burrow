@@ -21,7 +21,8 @@ import {
 } from "./src/burrow.ts";
 import { AlertStore, step, type ThresholdRule } from "./src/alertengine.ts";
 import { formatDiskAlert, formatCpuAlert, formatDigest } from "./src/format.ts";
-import { sendText, useCloud, type SendConfig } from "./src/sender.ts";
+import { sendText, sendCard, useCloud, type SendConfig } from "./src/sender.ts";
+import { diskCardFrom, type MiniAppInput } from "./src/card.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -33,6 +34,7 @@ type Config = {
   projectId?: string;
   projectSecret?: string;
   forceLocal?: boolean;
+  card?: { appName: string; extensionBundleId: string; teamId: string; url: string; appStoreId?: number };
   disk?: { high?: number; low?: number; cooldownSeconds?: number; hogsTimeoutMs?: number };
   cpu?: { high?: number; low?: number; windowMinutes?: number; minSamples?: number; cooldownSeconds?: number };
 };
@@ -51,6 +53,7 @@ const send: SendConfig = {
   projectId: process.env.PHOTON_PROJECT_ID ?? CFG.projectId,
   projectSecret: process.env.PHOTON_PROJECT_SECRET ?? CFG.projectSecret,
   forceLocal: CFG.forceLocal || process.argv.includes("--local"),
+  card: CFG.card,
 };
 
 // Defaults mirror Burrow's own thresholds (Doctor: <10% free = warn; ThresholdAlerts: CPU 90).
@@ -60,11 +63,13 @@ const CPU = { high: 90, low: 70, windowMinutes: 10, minSamples: 3, cooldownSecon
 // Monotonic-ish wall clock in seconds (fine — we only diff timestamps for cooldown).
 const now = () => Math.floor(Date.now() / 1000);
 
-async function deliver(label: string, body: string) {
-  console.log(`\n----- ${label} -----\n${body}\n${"-".repeat(label.length + 12)}`);
+async function deliver(label: string, body: string, card?: MiniAppInput) {
+  const asCard = Boolean(card && send.card && useCloud(send)); // cards are cloud-only
+  console.log(`\n----- ${label}${asCard ? " (card)" : ""} -----\n${body}\n${"-".repeat(label.length + 12)}`);
   if (DRY_RUN) { console.log("[dry-run] not sending"); return; }
   if (!send.recipient) { console.log("[skip] no recipient configured"); return; }
-  await sendText(send, body);
+  if (asCard) await sendCard(send, card!, body);   // text is the fallback
+  else await sendText(send, body);
   console.log(`[sent ✅] ${label} via spectrum-ts (${useCloud(send) ? "cloud" : "local"})`);
 }
 
@@ -89,7 +94,7 @@ async function runChecks(mcp: BurrowMCP) {
   // 2) Evaluate rules and stage next states. We do NOT persist state until after
   //    sends succeed, so a mid-run kill re-alerts rather than swallowing.
   const staged: Array<{ id: string; state: ReturnType<typeof step>["state"] }> = [];
-  const sends: Array<{ label: string; body: () => Promise<string> }> = [];
+  const sends: Array<{ label: string; produce: () => Promise<{ text: string; card?: MiniAppInput }> }> = [];
 
   const root = snap.disks.find((d) => d.mount === "/");
   if (root) {
@@ -101,11 +106,13 @@ async function runChecks(mcp: BurrowMCP) {
       sends.push({
         label: "disk alert",
         // Slow `analyze` runs on a THROWAWAY connection so it can't block anything.
-        body: async () => {
+        produce: async () => {
           const hogsMcp = new BurrowMCP();
           try {
             const hogs = await getTopHogs(hogsMcp, 3, DISK.hogsTimeoutMs);
-            return formatDiskAlert(root, forecast, hogs);
+            const text = formatDiskAlert(root, forecast, hogs);
+            const card = send.card ? diskCardFrom(send.card, root, forecast, hogs) : undefined;
+            return { text, card };
           } finally {
             await hogsMcp.close();
           }
@@ -121,14 +128,14 @@ async function runChecks(mcp: BurrowMCP) {
     const { state, fired } = step(rule, worst.avg_cpu, ts, store.get(rule.id));
     staged.push({ id: rule.id, state });
     console.log(`[cpu] worst="${worst.name}" avg ${worst.avg_cpu.toFixed(0)}% over ${CPU.windowMinutes}m (samples ${worst.samples}/${cpu.sampleCount}, need ${needSamples}) fired=${fired}`);
-    if (fired) sends.push({ label: "cpu alert", body: async () => formatCpuAlert({ name: worst.name, peak_cpu: worst.avg_cpu }, CPU.windowMinutes) });
+    if (fired) sends.push({ label: "cpu alert", produce: async () => ({ text: formatCpuAlert({ name: worst.name, peak_cpu: worst.avg_cpu }, CPU.windowMinutes) }) });
   } else {
     console.log(`[cpu] no process sustained ≥${CPU.high}% over ${CPU.windowMinutes}m (sampleCount ${cpu.sampleCount})`);
   }
 
   // 3) Send, then persist. If a send throws, state is not saved → we re-alert.
   //    Dry-run never persists (it must not suppress a later real alert).
-  for (const s of sends) await deliver(s.label, await s.body());
+  for (const s of sends) { const out = await s.produce(); await deliver(s.label, out.text, out.card); }
   if (DRY_RUN) return;
   for (const { id, state } of staged) store.set(id, state);
   store.save();
