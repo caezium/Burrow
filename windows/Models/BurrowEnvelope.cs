@@ -24,9 +24,9 @@ public sealed record BurrowEnvelope
     [JsonPropertyName("data")]
     public JsonElement Data { get; init; }
 
-    /// <summary>The error message on failure (null on success).</summary>
+    /// <summary>The structured error on failure (null on success): kind + message + platform.</summary>
     [JsonPropertyName("error")]
-    public string? Error { get; init; }
+    public BurrowError? Error { get; init; }
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -40,4 +40,22 @@ public sealed record BurrowEnvelope
     public static BurrowEnvelope Parse(string stdout)
         => JsonSerializer.Deserialize<BurrowEnvelope>(stdout, Options)
            ?? throw new JsonException("empty burrow envelope");
+}
+
+/// <summary>
+/// The structured error payload on a failure envelope (burrow-cli#4): a
+/// machine-readable <see cref="Kind"/> (permission_denied / unsupported / not_found /
+/// process_failed / error), the human <see cref="Message"/>, and the
+/// <see cref="Platform"/> it occurred on.
+/// </summary>
+public sealed record BurrowError
+{
+    [JsonPropertyName("kind")]
+    public string? Kind { get; init; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; init; }
+
+    [JsonPropertyName("platform")]
+    public string? Platform { get; init; }
 }
