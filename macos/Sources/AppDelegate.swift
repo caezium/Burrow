@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private(set) var db: DB?
     private(set) var producer: SnapshotProducer?
     private(set) var maintenance: Maintenance?
+    private var iMessageSidecar: IMessageSidecar?
     private var queryServer: QueryServer?
     private var statusBar: StatusBarController?
     /// Dev/verify only: standalone window hosting the HUD (BURROW_OPEN_ON_LAUNCH=hud).
@@ -146,6 +147,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let maintenance = Maintenance(db: db)
         self.maintenance = maintenance
         maintenance.start()
+
+        // Burrow over iMessage — bundled sidecar (alerts + optional agent).
+        // Opt-in; inert until the user configures delivery.
+        if Store.iMessageEnabled {
+            let sidecar = IMessageSidecar()
+            self.iMessageSidecar = sidecar
+            sidecar.start()
+        }
 
         // Completion notices + opt-in smart reminders. The delegate must
         // be set before any notification is delivered or clicked.
@@ -300,6 +309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.producer?.stop()
         self.queryServer?.stop()
         self.maintenance?.stop()
+        self.iMessageSidecar?.stop()
         Awake.shared.stop()
         CleanScreen.shared.hide()
         Telemetry.capture("app_terminated")

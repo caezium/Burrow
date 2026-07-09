@@ -115,6 +115,20 @@ targets:
           else
             echo "warning: burrow-engine source not present at $ENGINE_SRC — Burrow falls back to a system engine. Set BURROW_ENGINE_SRC or init the vendor/burrow-engine submodule."
           fi
+      - name: Bundle iMessage sidecar (spectrum-ts)
+        basedOnDependencyAnalysis: false
+        script: |
+          # Stage the "Burrow over iMessage" sidecar (Bun + spectrum-ts) into
+          # Resources/sidecar so users run it with zero install. Activates when the
+          # sidecar source is present and a `bun` binary can be found (BUN_BIN or
+          # PATH); otherwise the feature stays inert (build still green). Same
+          # post-build re-sign caveat as the engine above.
+          SIDECAR_SRC="${BURROW_SIDECAR_SRC:-$SRCROOT/../tools/burrow-alerts}"
+          if [ -f "$SIDECAR_SRC/agent.ts" ]; then
+            "$SRCROOT/scripts/bundle-sidecar.sh" "$SIDECAR_SRC" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          else
+            echo "warning: iMessage sidecar source not present at $SIDECAR_SRC — the iMessage feature will be inert."
+          fi
 
   BurrowTests:
     type: bundle.unit-test

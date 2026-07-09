@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "burrow": {
+      "command": "/Applications/Burrow.app/Contents/MacOS/Burrow",
+      "args": ["--mcp"]
+    }
+  }
+}
