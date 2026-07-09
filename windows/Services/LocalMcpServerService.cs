@@ -456,6 +456,46 @@ public sealed class LocalMcpServerService : BackgroundService
         }
 
         var effectiveCommand = confirm ? command : $"{command} --dry-run";
+
+        // Prefer the bundled conductor: `burrow <command> [--apply] --json` runs the bundled
+        // engine with the stable envelope + classified errors. burrow defaults to dry-run, so a
+        // confirmed (live) run adds --apply via BurrowConductorService.ActionArguments (the
+        // mo→burrow inversion). Any conductor miss falls through to the direct engine below.
+        var conductor = new BurrowConductorService();
+        if (conductor.IsAvailable)
+        {
+            try
+            {
+                var envelope = await conductor.CaptureAsync(
+                    command, BurrowConductorService.ActionArguments(confirm), cancellationToken);
+                return new JsonObject
+                {
+                    ["command"] = effectiveCommand,
+                    ["dry_run"] = !confirm,
+                    ["exit_code"] = 0,
+                    ["succeeded"] = true,
+                    ["stdout"] = ExtractEngineText(envelope.Data),
+                    ["stderr"] = string.Empty
+                };
+            }
+            catch (BurrowConductorException ex)
+            {
+                return new JsonObject
+                {
+                    ["command"] = effectiveCommand,
+                    ["dry_run"] = !confirm,
+                    ["exit_code"] = 1,
+                    ["succeeded"] = false,
+                    ["stdout"] = string.Empty,
+                    ["stderr"] = $"{ex.Message} [{ex.Kind}]"
+                };
+            }
+            catch (InvalidOperationException)
+            {
+                // Conductor vanished between IsAvailable and the run — fall through to the engine.
+            }
+        }
+
         var result = await _moleEngineService.ExecuteCommandAsync(effectiveCommand, cancellationToken: cancellationToken);
 
         return new JsonObject
@@ -467,6 +507,18 @@ public sealed class LocalMcpServerService : BackgroundService
             ["stdout"] = result.StandardOutput,
             ["stderr"] = result.StandardError
         };
+    }
+
+    // clean/optimize return their report as data.text; unwrap it so the MCP consumer sees the
+    // engine's text (as with the direct path), else fall back to the raw payload.
+    private static string ExtractEngineText(JsonElement data)
+    {
+        if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("text", out var text))
+        {
+            return text.GetString() ?? string.Empty;
+        }
+
+        return data.ValueKind == JsonValueKind.Undefined ? string.Empty : data.GetRawText();
     }
 
     private async Task<JsonObject> CaptureSnapshotAsync(CancellationToken cancellationToken)

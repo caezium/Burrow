@@ -67,6 +67,15 @@ public sealed class BurrowConductorService
     }
 
     /// <summary>
+    /// The conductor args for a destructive maintenance action, from MCP's <c>confirm</c> flag.
+    /// <c>burrow</c> defaults to dry-run, so a CONFIRMED (live) run needs <c>--apply</c>; an
+    /// unconfirmed run passes nothing (dry-run preview). The mo→burrow inversion, spelled once
+    /// + unit-tested so the destructive mapping can't silently drift.
+    /// </summary>
+    internal static IReadOnlyList<string> ActionArguments(bool confirm)
+        => confirm ? new[] { "--apply" } : Array.Empty<string>();
+
+    /// <summary>
     /// Run <c>burrow &lt;command&gt; [args…] --json</c> and return the parsed success envelope.
     /// Throws <see cref="InvalidOperationException"/> when no conductor is bundled, and
     /// <see cref="BurrowConductorException"/> on a timeout/cancel, empty or garbled output, or an

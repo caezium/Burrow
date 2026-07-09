@@ -47,4 +47,19 @@ public class BurrowConductorServiceTests
 
         Assert.Single(paths);
     }
+
+    // Safety-critical: the destructive confirm→apply mapping (burrow defaults to dry-run).
+    [Fact]
+    public void ActionArguments_Confirmed_AddsApply()
+    {
+        // A confirmed (live) maintenance run MUST add --apply, or a "real" clean silently no-ops.
+        Assert.Equal(new[] { "--apply" }, BurrowConductorService.ActionArguments(confirm: true));
+    }
+
+    [Fact]
+    public void ActionArguments_Unconfirmed_IsPreviewOnly()
+    {
+        // Unconfirmed → no --apply → burrow's default dry-run (preview). Must NOT delete for real.
+        Assert.Empty(BurrowConductorService.ActionArguments(confirm: false));
+    }
 }
