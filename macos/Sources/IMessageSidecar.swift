@@ -136,7 +136,8 @@ final class IMessageSidecar {
         p.executableURL = paths.bun
         p.arguments = args
         p.currentDirectoryURL = paths.dir
-        p.environment = SidecarLaunch.environment(cfg, burrowBin: Bundle.main.executableURL?.path ?? "", base: ProcessInfo.processInfo.environment)
+        // `Foundation.` qualifies past Burrow's own `ProcessInfo` metrics struct.
+        p.environment = SidecarLaunch.environment(cfg, burrowBin: Bundle.main.executableURL?.path ?? "", base: Foundation.ProcessInfo.processInfo.environment)
         return p
     }
 
