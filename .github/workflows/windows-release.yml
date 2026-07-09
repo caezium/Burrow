@@ -50,6 +50,32 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      # Build the FSL `burrow` conductor at its pinned submodule commit and stage it into Assets\
+      # so the csproj bundles it (its Content Include is conditional on Exists). NON-FATAL: without
+      # it the app falls back to the direct engine. windows-latest ships a Rust toolchain; the
+      # submodule is cloned fresh (checkout doesn't recurse submodules), reusing ENGINE_PAT.
+      - name: Build + stage burrow conductor
+        working-directory: ${{ github.workspace }}
+        shell: pwsh
+        env:
+          ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
+        run: |
+          try {
+            $sha = (git ls-tree HEAD windows/vendor/burrow-cli).Split()[2]
+            $dest = Join-Path $env:RUNNER_TEMP 'burrow-cli'
+            if ($env:ENGINE_PAT) {
+              git -c "url.https://x-access-token:$($env:ENGINE_PAT)@github.com/.insteadOf=https://github.com/" clone --quiet https://github.com/caezium/burrow-cli.git $dest
+            } else {
+              git clone --quiet https://github.com/caezium/burrow-cli.git $dest
+            }
+            git -C $dest -c advice.detachedHead=false checkout --quiet $sha
+            cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
+            Copy-Item (Join-Path $dest 'target\release\burrow.exe') 'windows\Assets\burrow.exe' -Force
+            Write-Host "staged burrow.exe @ $($sha.Substring(0,7))"
+          } catch {
+            Write-Host "::warning::burrow conductor build failed - Windows app falls back to the direct engine. $_"
+          }
+
       # Surface (without leaking) whether the keys will actually be baked, so a
       # release that silently shipped inert telemetry is easy to spot. Reads the
       # env (set from secrets) rather than interpolating the secret into script.

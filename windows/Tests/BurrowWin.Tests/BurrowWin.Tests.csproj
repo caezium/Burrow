@@ -68,6 +68,7 @@
     <Compile Include="..\..\Services\LocalMcpServerService.cs" Link="Production\Services\LocalMcpServerService.cs" />
     <Compile Include="..\..\Services\LocalStartupDiagnosticsService.cs" Link="Production\Services\LocalStartupDiagnosticsService.cs" />
     <Compile Include="..\..\Services\MoleEngineService.cs" Link="Production\Services\MoleEngineService.cs" />
+    <Compile Include="..\..\Services\BurrowConductorService.cs" Link="Production\Services\BurrowConductorService.cs" />
     <Compile Include="..\..\Services\ProcessUsageAggregator.cs" Link="Production\Services\ProcessUsageAggregator.cs" />
     <Compile Include="..\..\Services\PurgeArtifactService.cs" Link="Production\Services\PurgeArtifactService.cs" />
     <Compile Include="..\..\Services\RecycleBinDeletionService.cs" Link="Production\Services\RecycleBinDeletionService.cs" />
