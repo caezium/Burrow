@@ -1,3 +1,6 @@
 [submodule "macos/vendor/burrow-engine"]
 	path = macos/vendor/burrow-engine
 	url = https://github.com/caezium/burrow-engine.git
+[submodule "macos/vendor/burrow-cli"]
+	path = macos/vendor/burrow-cli
+	url = https://github.com/caezium/burrow-cli.git
