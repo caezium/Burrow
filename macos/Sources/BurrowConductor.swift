@@ -54,7 +54,9 @@ enum BurrowConductor {
     /// pointing at the bundled engine (the conductor otherwise walks up looking for a sibling
     /// `burrow-engine/`, which the app layout — Resources/engine — deliberately doesn't match).
     static func environment(engineDir: URL?) -> [String: String] {
-        var env = ProcessInfo.processInfo.environment
+        // Fully qualified: the Burrow module has its own `ProcessInfo` (a status model), which
+        // would otherwise shadow Foundation's here.
+        var env = Foundation.ProcessInfo.processInfo.environment
         if let dir = engineDir { env["BURROW_ENGINE_DIR"] = dir.path }
         return env
     }
