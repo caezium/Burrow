@@ -50,6 +50,13 @@ enum MoleHistory {
 
     /// Run `mo history --json` and parse it. Synchronous — call off-main.
     static func load() -> [HistorySession] {
+        // Prefer the bundled conductor (burrow history --json); its envelope `data` is the same
+        // history JSON. Fall back to the direct engine on any miss.
+        if BurrowConductor.isAvailable,
+           let envelope = try? BurrowConductor.capture("history", timeout: 30),
+           let data = envelope.data {
+            return parse(data)
+        }
         guard let res = try? MoEngine.shared.capture(
                 MoCommand(target: .mo, args: ["history", "--json"], timeout: 30)),
               res.exitCode == 0,

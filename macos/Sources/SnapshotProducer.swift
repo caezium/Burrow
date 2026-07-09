@@ -481,6 +481,15 @@ final class SnapshotProducer {
 /// or nonzero exit so the engine's failure model stays "skip this tick".
 struct MoCLIStatusSource: StatusSource {
     func statusJSON() throws -> String {
+        // Prefer the bundled conductor (burrow status --json): its envelope `data` is the same
+        // status JSON the snapshot pipeline decodes + patches, and it runs the bundled engine
+        // (no system mo needed). Fall back to the direct engine on any miss.
+        if BurrowConductor.isAvailable,
+           let envelope = try? BurrowConductor.capture("status", timeout: 8),
+           let data = envelope.data,
+           let json = String(data: data, encoding: .utf8) {
+            return json
+        }
         let result = try MoEngine.shared.capture(
             MoCommand(target: .mo, args: ["status", "--json"], timeout: 8))
         guard result.exitCode == 0 else {
