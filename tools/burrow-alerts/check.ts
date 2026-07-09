@@ -22,12 +22,13 @@ import {
 import { AlertStore, step, type ThresholdRule } from "./src/alertengine.ts";
 import { formatDiskAlert, formatCpuAlert, formatDigest } from "./src/format.ts";
 import { sendText, sendCard, useCloud, type SendConfig } from "./src/sender.ts";
-import { diskCardFrom, type MiniAppInput } from "./src/card.ts";
+import { diskCard, diskCardFrom, type MiniAppInput } from "./src/card.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DRY_RUN = process.argv.includes("--dry-run");
 const DIGEST = process.argv.includes("--digest");
 const TEST = process.argv.includes("--test"); // canned "connected" text — verifies delivery only
+const TEST_CARD = process.argv.includes("--test-card"); // fire a sample mini-app card on demand
 
 type Config = {
   recipient: string;
@@ -145,6 +146,15 @@ async function main() {
   // Delivery-only smoke test (setup wizard's "Send test message"). No MCP needed.
   if (TEST) {
     await deliver("test", "✅ Burrow is connected. You'll get disk, CPU, and weekly-cleanup alerts here.");
+    return;
+  }
+
+  // On-demand sample mini-app card (no threshold, no MCP). Needs a `card` block.
+  if (TEST_CARD) {
+    if (!send.card) { console.log("[skip] add a `card` block to config.local.json first (see config.example.json)."); return; }
+    if (!useCloud(send)) { console.log("[skip] mini-app cards are cloud-only (set projectId+projectSecret)."); return; }
+    const card = diskCard(send.card, { usedPercent: 99, freeBytes: 6.1e9, daysUntilFull: 6, hogs: [{ name: "Library", size: 160e9 }] });
+    await deliver("test card", "⚠️ Burrow: disk 99% full — 6.1 GB free · full in ~6 days (sample)", card);
     return;
   }
   const mcp = new BurrowMCP();

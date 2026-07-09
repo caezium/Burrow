@@ -12,6 +12,7 @@
     "check": "bun run check.ts",
     "check:dry": "bun run check.ts --dry-run",
     "check:test": "bun run check.ts --test",
+    "check:card": "bun run check.ts --test-card",
     "digest": "bun run check.ts --digest",
     "tracer": "bun run tracer.ts",
     "install-launchd": "./launchd/install.sh"
