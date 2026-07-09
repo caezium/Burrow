@@ -97,4 +97,34 @@ final class BurrowEnvelopeTests: XCTestCase {
         // A build without a bundled engine sets no override — the conductor resolves on its own.
         XCTAssertNil(BurrowConductor.environment(engineDir: nil)["BURROW_ENGINE_DIR"])
     }
+
+    // MARK: streaming argv translation (safety-critical: mo↔burrow dry-run/apply INVERSION)
+
+    func testStreamArgv_preview_dropsDryRun_neverApply() {
+        // mo preview (`clean --dry-run`) maps to burrow's DEFAULT (dry-run) — must NOT gain
+        // --apply, or a "preview" would delete for real.
+        XCTAssertEqual(BurrowConductor.streamArgv(fromMo: ["clean", "--dry-run"]),
+                       ["clean", "--stream"])
+    }
+
+    func testStreamArgv_live_addsApply() {
+        // mo live (`clean`, no --dry-run) needs --apply on burrow — or a real clean would silently
+        // no-op (burrow defaults to dry-run).
+        XCTAssertEqual(BurrowConductor.streamArgv(fromMo: ["clean"]),
+                       ["clean", "--apply", "--stream"])
+        XCTAssertEqual(BurrowConductor.streamArgv(fromMo: ["optimize"]),
+                       ["optimize", "--apply", "--stream"])
+    }
+
+    func testStreamOverride_offByDefault_keepsDirectEngine() {
+        // The switch is off unless explicitly set → no override, the direct mo path is preserved.
+        XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"], elevated: false))
+    }
+
+    func testStreamOverride_elevatedAlwaysDirect() {
+        UserDefaults.standard.set(true, forKey: "BurrowStreamViaConductor")
+        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
+        // Elevated runs (osascript, fresh env) stay on mo even with the switch on.
+        XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"], elevated: true))
+    }
 }

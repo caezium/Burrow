@@ -99,6 +99,46 @@ enum BurrowConductor {
         }
         return envelope
     }
+
+    // MARK: - Streaming clean/optimize (opt-in)
+
+    /// Opt-in switch for routing streaming clean/optimize through the conductor. Default OFF: this
+    /// is a DESTRUCTIVE path that can't be exercised in CI, so it stays behind a switch until it's
+    /// hand-tested on a real build. Flip with:
+    ///   `defaults write dev.caezium.Burrow BurrowStreamViaConductor -bool YES`
+    static var streamingEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "BurrowStreamViaConductor")
+    }
+
+    /// The streamable engine commands the conductor forwards with `--stream`. purge/installer are
+    /// an interactive TUI (PTY) and uninstall is irreversible + matcher-gated — those stay direct.
+    private static let streamableCommands: Set<String> = ["clean", "optimize"]
+
+    /// Translate a `mo` streaming argv into the conductor equivalent. `mo` runs LIVE by default and
+    /// `--dry-run` previews; burrow INVERTS that (dry-run by default, `--apply` to execute). So we
+    /// drop `--dry-run` (preview → burrow's default) or add `--apply` (live), then force `--stream`
+    /// so the engine's output flows line-by-line through the pipe instead of one buffered envelope.
+    /// Pure + unit-tested — the semantic mapping is the safety-critical part, so it's verified.
+    static func streamArgv(fromMo moArgs: [String]) -> [String] {
+        let isPreview = moArgs.contains("--dry-run")
+        var out = moArgs.filter { $0 != "--dry-run" }
+        if !isPreview { out.append("--apply") }   // mo-live → burrow needs --apply
+        out.append("--stream")
+        return out
+    }
+
+    /// When the switch is on AND a conductor is bundled AND this is a non-elevated streamable
+    /// command, the (burrow path, translated argv) to spawn instead of `mo`. Otherwise nil, so the
+    /// caller keeps the direct-engine path UNCHANGED. Elevated runs (osascript, fresh env that
+    /// wouldn't inherit BURROW_ENGINE_DIR) deliberately stay on `mo`.
+    static func streamOverride(moArgs: [String], elevated: Bool) -> (executable: String, arguments: [String])? {
+        guard streamingEnabled,
+              !elevated,
+              let command = moArgs.first,
+              streamableCommands.contains(command),
+              let burrow = executableURL()?.path else { return nil }
+        return (burrow, streamArgv(fromMo: moArgs))
+    }
 }
 
 /// Why a conductor run couldn't produce a usable success envelope.
