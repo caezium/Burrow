@@ -110,6 +110,15 @@ enum BurrowConductor {
         UserDefaults.standard.bool(forKey: "BurrowStreamViaConductor")
     }
 
+    /// Opt-in switch for the live-filling treemap: stream `analyze --progress` so a scan reports
+    /// the engine's file-level counters. Default OFF — it reworks AnalyzeView's scan flow +
+    /// progress granularity and can't be validated in CI. Read-only (no data risk), but gated so
+    /// the UX change is opt-in. Flip with:
+    ///   `defaults write dev.caezium.Burrow BurrowStreamAnalyze -bool YES`
+    static var streamingAnalyzeEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "BurrowStreamAnalyze")
+    }
+
     /// The streamable engine commands the conductor forwards with `--stream`. purge/installer are
     /// an interactive TUI (PTY) and uninstall is irreversible + matcher-gated — those stay direct.
     private static let streamableCommands: Set<String> = ["clean", "optimize"]
