@@ -19,6 +19,9 @@ test("diskCard builds a mini-app card: caption, subcaption, lock-screen summary,
   expect(decodeLayoutURL(c.url).title).toContain("99% full");
   expect(c.layout.caption).toContain("99% full");
   expect(c.layout.subcaption).toContain("6.1 GB free");
+  // image overlay text (the bytes are attached at send time, not here)
+  expect(c.layout.imageTitle).toBe("99% full");
+  expect(c.layout.imageSubtitle).toBe("6.1 GB free");
   expect(c.layout.subcaption).toContain("~6 days");
   expect(c.layout.summary?.toLowerCase()).toContain("disk 99% full");
 });

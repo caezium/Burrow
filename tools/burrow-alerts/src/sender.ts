@@ -63,10 +63,28 @@ export async function sendText(cfg: SendConfig, body: string): Promise<void> {
 }
 
 /**
+ * Load the bundled Burrow bubble image (JPEG). Best-effort — a missing asset
+ * just means the card ships without an image (captions/summary still render).
+ */
+async function bubbleImage(): Promise<Uint8Array | undefined> {
+  try {
+    const path = new URL("../assets/burrow-card.jpg", import.meta.url);
+    return await Bun.file(path).bytes();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Send an alert as a mini-app card (cloud-only), falling back to `fallbackText`
- * when cards aren't available (local mode) or the SDK rejects the card.
+ * when cards aren't available (local mode) or the SDK rejects the card. Attaches
+ * the bundled bubble image unless the caller already set one.
  */
 export async function sendCard(cfg: SendConfig, card: MiniAppInput, fallbackText: string): Promise<void> {
+  if (!card.layout.image) {
+    const image = await bubbleImage();
+    if (image) card = { ...card, layout: { ...card.layout, image } };
+  }
   await withSpace(cfg, async (space, sdk) => {
     const { customizedMiniApp } = await import("spectrum-ts/providers/imessage");
     try {

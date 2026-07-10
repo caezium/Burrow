@@ -24,6 +24,10 @@ export type MiniAppLayout = {
   subcaption?: string;
   trailingCaption?: string;
   trailingSubcaption?: string;
+  /** Bubble image bytes (JPEG — Photon rejects PNG). Attached at send time. */
+  image?: Uint8Array;
+  imageTitle?: string;
+  imageSubtitle?: string;
   summary?: string;
 };
 
@@ -44,6 +48,8 @@ export function diskCard(meta: MiniAppMeta, d: DiskCardData): MiniAppInput {
   const layout: MiniAppLayout = {
     caption: `⚠️ Disk ${pct}% full`,
     subcaption: parts.join(" · "),
+    imageTitle: `${pct}% full`,
+    imageSubtitle: `${free} free`,
     summary: `Burrow: disk ${pct}% full — ${free} free`,
   };
   if (d.hogs?.length) layout.trailingSubcaption = d.hogs[0].name;
