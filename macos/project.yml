@@ -54,6 +54,11 @@ targets:
       properties:
         LSUIElement: true   # menu-bar agent, no Dock icon
         CFBundleDisplayName: Burrow
+        # Deep-link scheme: burrow://action?id=clean — fired by the Burrow Cards
+        # iMessage extension's action buttons (see AppDelegate.application(_:open:)).
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.caezium.Burrow.deeplink
+            CFBundleURLSchemes: [burrow]
         CFBundleShortVersionString: "0.9.2"
         CFBundleVersion: "17"
         NSHumanReadableCopyright: "MIT License. Mole CLI © tw93. Independent, not affiliated with mole.fit."

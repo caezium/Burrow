@@ -319,6 +319,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         UserDefaults.standard.synchronize()
     }
 
+    // MARK: - Deep links (burrow://)
+
+    /// Map a `burrow://action?id=…` deep link to the pane it should open.
+    /// Returns nil for URLs that aren't ours. Pure, so it's unit-testable.
+    /// Fired from the Burrow Cards iMessage extension's action buttons.
+    static func pane(forDeepLink url: URL) -> Pane? {
+        guard url.scheme == "burrow" else { return nil }
+        let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "id" })?.value
+        switch id {
+        case "clean": return .tool(.clean)
+        case "inspect": return .tool(.status)
+        default: return .home   // any burrow:// url at least surfaces the app
+        }
+    }
+
+    /// System entry point for registered URL schemes (see CFBundleURLTypes).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard #available(macOS 14, *) else { return }
+        for url in urls {
+            guard let pane = AppDelegate.pane(forDeepLink: url) else { continue }
+            openMainWindow(initial: pane)
+            break
+        }
+    }
+
     // MARK: - Window
 
     /// Open the main window, focusing the requested section. If the
