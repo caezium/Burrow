@@ -1,0 +1,24 @@
+{
+  "_comment": "Copy to config.local.json (gitignored) and fill in. Delivery (recipient + Photon) is required for alerts; `llm` is only needed for the two-way agent.",
+
+  "recipient": "+1XXXXXXXXXX",
+
+  "_delivery": "spectrum-ts cloud when projectId+projectSecret are set (Photon is free for 1 user); omit them (or set forceLocal:true) for local mode.",
+  "projectId": "<photon project id>",
+  "projectSecret": "<photon project secret — keep out of git>",
+  "forceLocal": false,
+
+  "_llm": "Bring-your-own key for the two-way agent. Replace `llm` with ONE of these provider blocks:",
+  "_llm_openrouter": { "provider": "openrouter", "apiKey": "sk-or-…", "model": "anthropic/claude-sonnet-5" },
+  "_llm_openai": { "provider": "openai", "apiKey": "sk-…", "model": "gpt-5" },
+  "_llm_openai_compat": { "provider": "openai-compat", "baseUrl": "https://llm.internal/v1", "apiKey": "…", "model": "…" },
+  "_llm_anthropic": { "provider": "anthropic", "apiKey": "sk-ant-…", "model": "claude-sonnet-5" },
+  "_llm_claude_cli": { "provider": "claude-cli", "_note": "uses your local `claude` login; no key needed" },
+  "llm": { "provider": "claude-cli" },
+
+  "_card": "OPTIONAL (cloud only): render disk alerts as an iMessage mini-app card (rich bubble + lock-screen summary + tap-to-open URL) instead of plain text. Needs a real iMessage extension's identifiers; without one, recipients see the summary + app name and the tap may no-op. Falls back to text automatically. Remove this block to keep plain-text alerts.",
+  "_card_example": { "appName": "Burrow", "extensionBundleId": "dev.caezium.Burrow.imessage", "teamId": "ABCDE12345", "url": "https://burrow.henryzh.dev", "appStoreId": 0 },
+
+  "disk": { "high": 90, "low": 85, "cooldownSeconds": 21600, "hogsTimeoutMs": 25000 },
+  "cpu": { "high": 90, "low": 70, "windowMinutes": 10, "minSamples": 3, "cooldownSeconds": 3600 }
+}

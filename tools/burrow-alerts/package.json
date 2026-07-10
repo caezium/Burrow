@@ -1,0 +1,24 @@
+{
+  "name": "burrow-alerts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Burrow over iMessage: proactive Mac-health alerts + a two-way assistant. Alerts reuse Burrow's MCP-computed signals; the agent answers your texts via a BYO-key LLM (OpenRouter/OpenAI-compat/Anthropic/local claude) restricted to read-only Burrow tools. Delivery via Photon spectrum-ts.",
+  "scripts": {
+    "test": "bun test",
+    "setup": "bun run src/setup.ts",
+    "onboarding": "bun run src/onboarding.ts",
+    "agent": "bun run agent.ts",
+    "check": "bun run check.ts",
+    "check:dry": "bun run check.ts --dry-run",
+    "check:test": "bun run check.ts --test",
+    "check:card": "bun run check.ts --test-card",
+    "digest": "bun run check.ts --digest",
+    "tracer": "bun run tracer.ts",
+    "install-launchd": "./launchd/install.sh"
+  },
+  "dependencies": {
+    "@photon-ai/imessage-kit": "3.0.0",
+    "spectrum-ts": "9.1.0"
+  }
+}

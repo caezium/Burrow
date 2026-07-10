@@ -104,6 +104,15 @@ struct SettingsView: View {
     @State private var aiOpenAIBaseURL: String = Store.aiOpenAIBaseURL
     @State private var aiOpenAIModel: String = Store.aiOpenAIModel
     @State private var aiOpenAIKey: String = Store.aiOpenAIKey
+    @State private var iMessageEnabled: Bool = Store.iMessageEnabled
+    @State private var iMessageOwnerPhone: String = Store.iMessageOwnerPhone
+    @State private var iMessageProjectId: String = Store.iMessageProjectId
+    @State private var iMessageProjectSecret: String = Store.iMessageProjectSecret
+    @State private var iMessageAgentEnabled: Bool = Store.iMessageAgentEnabled
+    @State private var iMessageLLMProvider: String = Store.iMessageLLMProvider
+    @State private var iMessageLLMModel: String = Store.iMessageLLMModel
+    @State private var iMessageLLMBaseURL: String = Store.iMessageLLMBaseURL
+    @State private var iMessageLLMKey: String = Store.iMessageLLMKey
     @State private var moleVersion: String = "—"
     @State private var moleUpdating = false
     @State private var copiedConfig = false
@@ -588,6 +597,47 @@ struct SettingsView: View {
                     footnote("Any OpenAI-compatible server. For LM Studio: load a model, open Developer ▸ Start Server, and leave the key blank — the default URL is already LM Studio's. A hosted endpoint (e.g. OpenAI) needs a key and sends the metrics summary off-device (never file contents).")
                 }
                 footnote("Adds an \u{201C}Explain\u{201D} button to Status that reads your latest snapshot and explains it in plain English, optionally suggesting Clean/Purge/Installers.")
+            }
+
+            section("Burrow over iMessage", "message") {
+                Text("Your Mac texts you when disk or CPU crosses a line, and — with the assistant on — answers when you text it. Made for a headless Mac you can't walk over to (a Mac Studio, a build box). Delivery runs on Photon, free for one user.")
+                    .font(Brand.sans(12)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                toggleRow("Enable iMessage alerts", isOn: $iMessageEnabled) { Store.iMessageEnabled = $0 }
+                aiField("Your number (E.164)", placeholder: "+15551234567", text: $iMessageOwnerPhone) { Store.iMessageOwnerPhone = $0 }
+                aiField("Photon project id", placeholder: "from app.photon.codes", text: $iMessageProjectId) { Store.iMessageProjectId = $0 }
+                aiField("Photon project secret", placeholder: "kept in Keychain", text: $iMessageProjectSecret, secure: true) { Store.iMessageProjectSecret = $0 }
+                footnote("Photon is free for one user. Run the sidecar's `bun run setup` to create a project via device code, or paste an existing project's id + secret. After setup, text the assigned line once from your phone to opt in.")
+
+                Divider().padding(.vertical, 2)
+                toggleRow("Enable the two-way assistant (text your Mac)", isOn: $iMessageAgentEnabled) { Store.iMessageAgentEnabled = $0 }
+                if iMessageAgentEnabled {
+                    HStack {
+                        Text("Model provider").font(Brand.sans(12)).foregroundStyle(Brand.textPrimary)
+                        Spacer()
+                        Picker("", selection: $iMessageLLMProvider) {
+                            Text("OpenRouter").tag("openrouter")
+                            Text("OpenAI").tag("openai")
+                            Text("OpenAI-compatible").tag("openai-compat")
+                            Text("Anthropic").tag("anthropic")
+                            Text("Local claude CLI").tag("claude-cli")
+                        }
+                        .labelsHidden().pickerStyle(.menu).frame(width: 230)
+                        .onChange(of: iMessageLLMProvider) { _, v in Store.iMessageLLMProvider = v }
+                    }
+                    if iMessageLLMProvider == "claude-cli" {
+                        footnote("Uses your local `claude` login (run `claude login` once). No API key needed.")
+                    } else {
+                        if iMessageLLMProvider == "openai-compat" {
+                            aiField("Base URL", placeholder: "https://host/v1", text: $iMessageLLMBaseURL) { Store.iMessageLLMBaseURL = $0 }
+                        }
+                        aiField("Model", placeholder: "e.g. anthropic/claude-sonnet-5", text: $iMessageLLMModel) { Store.iMessageLLMModel = $0 }
+                        aiField("API key", placeholder: "kept in Keychain", text: $iMessageLLMKey, secure: true) { Store.iMessageLLMKey = $0 }
+                    }
+                    footnote("The assistant only READS your Mac's health (it can't clean, delete, or change anything), only answers your number, and is rate-limited. Bring your own key: OpenRouter, OpenAI-compatible, Anthropic, or your local claude CLI.")
+                }
+                footnote("Changes take effect on relaunch.")
             }
 
             section("Anonymous usage", "chart.bar") {

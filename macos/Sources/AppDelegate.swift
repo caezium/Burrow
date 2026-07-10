@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private(set) var db: DB?
     private(set) var producer: SnapshotProducer?
     private(set) var maintenance: Maintenance?
+    private var iMessageSidecar: IMessageSidecar?
     private var queryServer: QueryServer?
     private var statusBar: StatusBarController?
     /// Dev/verify only: standalone window hosting the HUD (BURROW_OPEN_ON_LAUNCH=hud).
@@ -146,6 +147,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let maintenance = Maintenance(db: db)
         self.maintenance = maintenance
         maintenance.start()
+
+        // Burrow over iMessage — bundled sidecar (alerts + optional agent).
+        // Opt-in; inert until the user configures delivery.
+        if Store.iMessageEnabled {
+            let sidecar = IMessageSidecar()
+            self.iMessageSidecar = sidecar
+            sidecar.start()
+        }
 
         // Completion notices + opt-in smart reminders. The delegate must
         // be set before any notification is delivered or clicked.
@@ -300,6 +309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.producer?.stop()
         self.queryServer?.stop()
         self.maintenance?.stop()
+        self.iMessageSidecar?.stop()
         Awake.shared.stop()
         CleanScreen.shared.hide()
         Telemetry.capture("app_terminated")
@@ -307,6 +317,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Final flush so any just-changed setting survives an app replacement
         // during an update.
         UserDefaults.standard.synchronize()
+    }
+
+    // MARK: - Deep links (burrow://)
+
+    /// Map a `burrow://action?id=…` deep link to the pane it should open.
+    /// Returns nil for URLs that aren't ours. Pure, so it's unit-testable.
+    /// Fired from the Burrow Cards iMessage extension's action buttons.
+    static func pane(forDeepLink url: URL) -> Pane? {
+        guard url.scheme == "burrow" else { return nil }
+        let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "id" })?.value
+        switch id {
+        case "clean": return .tool(.clean)
+        case "inspect": return .tool(.status)
+        default: return .home   // any burrow:// url at least surfaces the app
+        }
+    }
+
+    /// System entry point for registered URL schemes (see CFBundleURLTypes).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard #available(macOS 14, *) else { return }
+        for url in urls {
+            guard let pane = AppDelegate.pane(forDeepLink: url) else { continue }
+            openMainWindow(initial: pane)
+            break
+        }
     }
 
     // MARK: - Window

@@ -283,6 +283,66 @@ enum Store {
         }
     }
 
+    // MARK: - Burrow over iMessage
+
+    /// Master switch for the iMessage feature (alerts + optional agent). Off by
+    /// default — opt-in, and it spawns a bundled sidecar that talks to Photon.
+    static var iMessageEnabled: Bool {
+        get { d.object(forKey: "imessage_enabled") as? Bool ?? false }
+        set { write(newValue, "imessage_enabled") }
+    }
+
+    /// Your own number (E.164) that alerts go to and that the agent answers.
+    static var iMessageOwnerPhone: String {
+        get { (d.string(forKey: "imessage_owner_phone") ?? "").trimmingCharacters(in: .whitespaces) }
+        set { d.set(newValue.trimmingCharacters(in: .whitespaces), forKey: "imessage_owner_phone") }
+    }
+
+    /// Photon project id (delivery). The secret lives in the Keychain.
+    static var iMessageProjectId: String {
+        get { (d.string(forKey: "imessage_project_id") ?? "").trimmingCharacters(in: .whitespaces) }
+        set { d.set(newValue.trimmingCharacters(in: .whitespaces), forKey: "imessage_project_id") }
+    }
+
+    /// Photon project secret — KEYCHAIN (cloud credential, never a plist).
+    static var iMessageProjectSecret: String {
+        get { KeychainStore.string(for: "imessage_project_secret") ?? "" }
+        set { KeychainStore.set(newValue, for: "imessage_project_secret") }
+    }
+
+    /// Enable the two-way agent (text your Mac, it answers). Needs an LLM key
+    /// (or the local claude CLI). Alerts work without this.
+    static var iMessageAgentEnabled: Bool {
+        get { d.object(forKey: "imessage_agent_enabled") as? Bool ?? false }
+        set { write(newValue, "imessage_agent_enabled") }
+    }
+
+    /// Agent LLM provider: openrouter | openai | openai-compat | anthropic | claude-cli.
+    static var iMessageLLMProvider: String {
+        get {
+            let v = (d.string(forKey: "imessage_llm_provider") ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+            return v.isEmpty ? "claude-cli" : v
+        }
+        set { d.set(newValue, forKey: "imessage_llm_provider") }
+    }
+
+    static var iMessageLLMModel: String {
+        get { (d.string(forKey: "imessage_llm_model") ?? "").trimmingCharacters(in: .whitespaces) }
+        set { d.set(newValue.trimmingCharacters(in: .whitespaces), forKey: "imessage_llm_model") }
+    }
+
+    /// Base URL for the openai-compat provider (must end in /v1).
+    static var iMessageLLMBaseURL: String {
+        get { (d.string(forKey: "imessage_llm_base_url") ?? "").trimmingCharacters(in: .whitespaces) }
+        set { d.set(newValue.trimmingCharacters(in: .whitespaces), forKey: "imessage_llm_base_url") }
+    }
+
+    /// Agent LLM API key — KEYCHAIN. Blank for claude-cli.
+    static var iMessageLLMKey: String {
+        get { KeychainStore.string(for: "imessage_llm_key") ?? "" }
+        set { KeychainStore.set(newValue, for: "imessage_llm_key") }
+    }
+
     // MARK: - MCP / QueryServer
 
     /// Localhost port for the JSON HTTP server. 9277 by default

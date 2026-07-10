@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.henryzh.burrow-alerts.digest</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BUN__</string>
+    <string>run</string>
+    <string>__DIR__/check.ts</string>
+    <string>--digest</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__DIR__</string>
+
+  <!-- Weekly: Sundays at 09:00 local. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>0</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NO_PROXY</key><string>*</string>
+    <key>no_proxy</key><string>*</string>
+    <key>BURROW_BIN</key><string>/Applications/Burrow.app/Contents/MacOS/Burrow</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>__DIR__/logs/digest.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__DIR__/logs/digest.err.log</string>
+</dict>
+</plist>

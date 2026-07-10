@@ -1,0 +1,56 @@
+name: BurrowCards
+
+options:
+  bundleIdPrefix: dev.caezium.Burrow
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    # ↓↓↓ SET THIS to your Apple Team ID (Xcode → Settings → Accounts), then
+    #     re-run `xcodegen generate`. A free Apple account works for sideloading.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"        # iPhone
+
+targets:
+  # Host app — container for the extension + a standalone debug harness.
+  BurrowCardsHost:
+    type: application
+    platform: iOS
+    sources:
+      - BurrowCardsHost
+      - Shared/Sources/BurrowCards
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.Burrow.cards
+    info:
+      path: BurrowCardsHost/Info.plist
+      properties:
+        CFBundleDisplayName: Burrow Cards
+        UILaunchScreen: {}
+    dependencies:
+      - target: BurrowCards
+        embed: true
+
+  # The iMessage extension itself.
+  BurrowCards:
+    type: app-extension.messages
+    platform: iOS
+    sources:
+      - BurrowCardsExtension
+      - Shared/Sources/BurrowCards
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.Burrow.cards.extension
+    info:
+      path: BurrowCardsExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Burrow Cards
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.message-payload-provider
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MessagesViewController

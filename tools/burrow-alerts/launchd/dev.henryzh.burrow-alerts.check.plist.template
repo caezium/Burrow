@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.henryzh.burrow-alerts.check</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BUN__</string>
+    <string>run</string>
+    <string>__DIR__/check.ts</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__DIR__</string>
+
+  <!-- Every 10 minutes. Debounce (hysteresis + 6h disk / 1h CPU cooldown) means
+       this cadence checks often but alerts rarely. -->
+  <key>StartInterval</key>
+  <integer>600</integer>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- launchd starts from a clean env (no interactive-shell proxy), but be
+         explicit so cloud egress to Photon never routes through a local proxy. -->
+    <key>NO_PROXY</key><string>*</string>
+    <key>no_proxy</key><string>*</string>
+    <key>BURROW_BIN</key><string>/Applications/Burrow.app/Contents/MacOS/Burrow</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>__DIR__/logs/check.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__DIR__/logs/check.err.log</string>
+</dict>
+</plist>
