@@ -542,12 +542,73 @@ final class AnalyzeModel: ObservableObject {
     /// every child's walk pre-warms the drill-down cache. Bushier
     /// targets (drilling into node_modules…) fall back to mole's single
     /// aggregate call rather than spawning hundreds of processes.
+    /// Stream `burrow analyze --progress <path>`: the engine's live file counters drive
+    /// `onProgress`, and the terminal result parses like `analyze --json`. Synchronous (runs on the
+    /// scan's background queue), reusing the TDD'd AnalyzeProgressEvent parser. Throws on cancel /
+    /// spawn failure / no result so the caller can fall back to the direct walk.
+    nonisolated static func scanStreaming(
+        _ path: String,
+        isCancelled: @escaping () -> Bool = { false },
+        onProgress: @escaping (String, Int, Int) -> Void
+    ) throws -> DiskScanResult {
+        guard let burrow = BurrowConductor.executableURL() else { throw DiskScanError.moNotFound }
+        let proc = Process()
+        proc.executableURL = burrow
+        proc.arguments = ["analyze", "--progress", path]
+        var env = Foundation.ProcessInfo.processInfo.environment
+        if let dir = BurrowConductor.engineDir() { env["BURROW_ENGINE_DIR"] = dir.path }
+        proc.environment = env
+        let out = Pipe()
+        proc.standardOutput = out
+        proc.standardError = Pipe()   // discard the human-readable line on stderr
+        try proc.run()
+
+        let handle = out.fileHandleForReading
+        var pending = Data()
+        var resultData: Data?
+        while true {
+            if isCancelled() { proc.terminate(); throw DiskScanError.parseFailed("cancelled") }
+            let chunk = handle.availableData
+            if chunk.isEmpty { break }                       // EOF: engine closed stdout
+            pending.append(chunk)
+            while let newline = pending.firstIndex(of: 0x0A) {
+                let lineData = pending.subdata(in: pending.startIndex..<newline)
+                pending.removeSubrange(pending.startIndex...newline)
+                guard let line = String(data: lineData, encoding: .utf8),
+                      let event = AnalyzeProgressEvent.parse(line: line) else { continue }
+                switch event {
+                case .progress(let files, _, _, let scanned):
+                    onProgress(scanned, files, max(files, 1))   // path + running file count
+                case .result(let data):
+                    resultData = data
+                }
+            }
+        }
+        proc.waitUntilExit()
+        // A final result line that arrived without a trailing newline.
+        if resultData == nil, let line = String(data: pending, encoding: .utf8),
+           case .result(let data)? = AnalyzeProgressEvent.parse(line: line) {
+            resultData = data
+        }
+        guard let data = resultData else {
+            throw DiskScanError.parseFailed("analyze --progress produced no result")
+        }
+        return try DiskScanner.parse(data)
+    }
+
     nonisolated static func scanWithProgress(
         _ path: String,
         isCancelled: @escaping () -> Bool = { false },
         onProgress: @escaping (String, Int, Int) -> Void,
         cacheChild: @escaping (String, DiskScanResult) -> Void
     ) throws -> DiskScanResult {
+        // Opt-in live-filling treemap: stream `burrow analyze --progress` so the scan reports the
+        // engine's file-level counters. Any miss (flag off, no conductor, stream failure) falls
+        // through to the two-level per-child walk below, so behavior is unchanged by default.
+        if BurrowConductor.streamingAnalyzeEnabled, BurrowConductor.isAvailable,
+           let streamed = try? Self.scanStreaming(path, isCancelled: isCancelled, onProgress: onProgress) {
+            return streamed
+        }
         let fm = FileManager.default
         // The per-child walk is what emits "● <child> · k/N" progress, so it
         // must also run for Home (which carries dozens of entries once dotfiles

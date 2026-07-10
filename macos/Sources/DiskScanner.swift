@@ -77,6 +77,14 @@ enum DiskScanner {
     /// for each direct child; drill in by calling again with the child's
     /// path.
     static func scan(_ path: String) throws -> DiskScanResult {
+        // Prefer the bundled conductor: `burrow analyze --json <path>` runs the bundled engine,
+        // so disk analysis works even with NO system `mo` installed (the hard requirement just
+        // below). The envelope's `data` is the same analyze-go JSON, so `parse` is unchanged; any
+        // conductor miss (not bundled, engine error, empty/garbled) falls through to the direct
+        // engine, so behavior is never worse than before.
+        if BurrowConductor.isAvailable, let viaConductor = try? conductorScan(path) {
+            return viaConductor
+        }
         guard case .installed = MoEngine.shared.availability() else {
             throw DiskScanError.moNotFound
         }
@@ -93,6 +101,17 @@ enum DiskScanner {
         }
         guard let data = result.stdout.data(using: .utf8) else {
             throw DiskScanError.parseFailed("non-utf8 stdout")
+        }
+        return try Self.parse(data)
+    }
+
+    /// Scan via the bundled conductor (`burrow analyze --json <path>`). Throws on any miss —
+    /// not bundled, timeout, an `ok:false` envelope, or no `data` — so `scan` can fall back to
+    /// the direct engine. The `data` payload is the same analyze-go JSON, decoded by `parse`.
+    private static func conductorScan(_ path: String) throws -> DiskScanResult {
+        let envelope = try BurrowConductor.capture("analyze", [path], timeout: 300)
+        guard let data = envelope.data else {
+            throw DiskScanError.parseFailed("conductor returned an envelope with no data")
         }
         return try Self.parse(data)
     }

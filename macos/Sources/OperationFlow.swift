@@ -176,8 +176,19 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         }
 
         let exe: String?
+        var arguments = op.arguments
         switch op.executable {
-        case .mo: exe = resolveMo(op.elevated)
+        case .mo:
+            // Opt-in: route non-elevated streaming clean/optimize through the bundled conductor
+            // (`burrow … --stream`), which forwards the engine's live output line-by-line. When the
+            // switch is off / no conductor is bundled, `streamOverride` returns nil and the direct
+            // `mo` path below is byte-identical to before.
+            if let conductorRun = BurrowConductor.streamOverride(moArgs: op.arguments, elevated: op.elevated) {
+                exe = conductorRun.executable
+                arguments = conductorRun.arguments
+            } else {
+                exe = resolveMo(op.elevated)
+            }
         case .path(let p): exe = p
         }
         guard let executable = exe else {
@@ -186,7 +197,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
             return
         }
 
-        let spec = ProcessSpec(executable: executable, arguments: op.arguments,
+        let spec = ProcessSpec(executable: executable, arguments: arguments,
                                stdin: op.stdin, elevated: op.elevated, timeout: op.timeout)
         state = .running
         report = nil

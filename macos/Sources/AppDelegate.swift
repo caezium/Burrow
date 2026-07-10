@@ -58,6 +58,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
+        // Point the bundled `burrow` conductor at the bundled engine ONCE, so every conductor
+        // spawn (capture + streaming) resolves it without per-call env plumbing. Only when a
+        // conductor+engine are bundled and no override is already present (respects a dev's
+        // BURROW_ENGINE_DIR). Foundation-qualified: Burrow has its own ProcessInfo model.
+        if let engineDir = BurrowConductor.engineDir(),
+           Foundation.ProcessInfo.processInfo.environment["BURROW_ENGINE_DIR"] == nil {
+            setenv("BURROW_ENGINE_DIR", engineDir.path, 1)
+        }
+
         // Product analytics + crash reporting (PostHog + Sentry). Opt-out, on
         // by default, and inert without release-injected keys. Started before
         // the `mo` gate so a launch with the engine missing still counts.

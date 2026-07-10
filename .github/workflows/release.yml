@@ -72,6 +72,28 @@ jobs:
             echo "::warning::burrow-engine unavailable — set ENGINE_PAT or make it public. Shipping WITHOUT the bundled engine; app falls back to system \`mo\`."
           fi
 
+      # Fetch the FSL `burrow` conductor at its pinned submodule commit, beside the
+      # engine (RUNNER_TEMP). Same NON-FATAL contract: without it the app falls back to
+      # the direct engine. Reuses ENGINE_PAT for the clone (same org); the bundle phase
+      # (bundle-burrow.sh) cargo-builds it universal from BURROW_CLI_SRC. macOS runners
+      # ship a Rust toolchain; the script adds the x86_64 cross target itself.
+      - name: Fetch bundled burrow conductor (outside the work tree)
+        env:
+          ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
+        run: |
+          SHA="$(git ls-tree HEAD macos/vendor/burrow-cli | awk '{print $3}')"
+          DEST="$RUNNER_TEMP/burrow-cli"
+          AUTH=()
+          [ -n "$ENGINE_PAT" ] && AUTH=(-c "url.https://x-access-token:${ENGINE_PAT}@github.com/.insteadOf=https://github.com/")
+          if [ -n "$SHA" ] \
+             && git "${AUTH[@]}" clone --quiet https://github.com/caezium/burrow-cli.git "$DEST" \
+             && git -C "$DEST" -c advice.detachedHead=false checkout --quiet "$SHA"; then
+            echo "BURROW_CLI_SRC=$DEST" >> "$GITHUB_ENV"
+            echo "burrow: cloned to $DEST @ ${SHA:0:7}"
+          else
+            echo "::warning::burrow-cli unavailable — shipping WITHOUT the bundled conductor; app falls back to the direct engine."
+          fi
+
       # Pin a Go that satisfies the engine's go.mod (>= 1.25) for the bundle
       # phase's `go build`. Harmless when the engine isn't fetched.
       - name: Set up Go (for the bundled engine)
@@ -181,6 +203,9 @@ jobs:
                     if file -b "$f" | grep -q 'Mach-O'; then codesign --force --sign - "$f"; fi
                   done
             fi
+            # The FSL `burrow` conductor (Resources/burrow) is a sibling nested Mach-O —
+            # re-sign it inside-out too, or the app's resource seal goes stale (#177).
+            if [ -f "$APP/Contents/Resources/burrow" ]; then codesign --force --sign - "$APP/Contents/Resources/burrow"; fi
             codesign --force --sign - --entitlements macos/Resources/Burrow.entitlements "$APP"
             codesign --verify --strict --verbose=2 "$APP"
             echo "signed=false" >> "$GITHUB_OUTPUT"
@@ -219,6 +244,11 @@ jobs:
                     codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$f"
                   fi
                 done
+          fi
+          # The FSL `burrow` conductor (Resources/burrow) is a sibling nested Mach-O — it
+          # needs Developer ID + hardened runtime + secure timestamp too, or notarization rejects.
+          if [ -f "$APP/Contents/Resources/burrow" ]; then
+            codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/Resources/burrow"
           fi
           # Hardened runtime + secure timestamp are required for notarization.
           codesign --force --options runtime --timestamp \
