@@ -68,3 +68,28 @@ struct DupesReport: Equatable {
         return DupesReport(groups: groups, redundantBytes: total)
     }
 }
+
+/// The conductor's dedupe PREVIEW (`burrow dupes dedupe <dir>`, no --apply): either
+/// fclones' own dry-run plan (`cp -c <src> <dst>` per clone — exactly what --apply
+/// executes) or a skip (nothing actionable). Parsed loose, like DupesReport.
+struct DedupePreview: Equatable {
+    /// Actionable duplicate groups the plan covers (0 when skipped).
+    let groups: Int
+    /// The dry-run command lines (`cp -c …`), empty when skipped.
+    let plan: [String]
+    /// True when the conductor skipped the action (protected / cross-volume / singletons).
+    let skipped: Bool
+
+    static func parse(_ data: Data) -> DedupePreview? {
+        guard let raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return nil
+        }
+        if raw["skipped"] as? Bool == true {
+            return DedupePreview(groups: 0, plan: [], skipped: true)
+        }
+        guard raw["preview"] as? Bool == true else { return nil }
+        let groups = (raw["groups"] as? Int) ?? 0
+        let plan = raw["plan"] as? [String] ?? []
+        return DedupePreview(groups: groups, plan: plan, skipped: false)
+    }
+}

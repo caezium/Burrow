@@ -72,12 +72,60 @@ struct DupesView: View {
             .buttonStyle(.plain)
             .disabled(!BurrowConductor.isAvailable || model.folder == nil || model.scanning)
 
-            if model.scanning { ProgressView().controlSize(.small) }
+            // Act: clone-dedupe the scanned folder. Explain-before-act — this runs the
+            // conductor's PREVIEW first and confirms with fclones' own plan; only the
+            // confirm dialog triggers --apply. Enabled only when a scan found waste.
+            if let report = model.report, !report.groups.isEmpty {
+                Button { startDedupe(report) } label: {
+                    Text(String(format: NSLocalizedString("Reclaim %@…", comment: ""),
+                                Fmt.bytes(report.redundantBytes)))
+                        .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(Capsule().fill(Tool.dupes.accent))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.scanning || model.deduping)
+                .help(NSLocalizedString("Deduplicate with APFS clones — every path stays, the copies share storage. Nothing is deleted.", comment: ""))
+            }
+
+            if model.scanning || model.deduping { ProgressView().controlSize(.small) }
             Spacer()
             if let report = model.report {
                 Text(summaryLine(report))
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             }
+        }
+    }
+
+    /// Preview -> confirm -> apply. The dialog shows fclones' own dry-run plan (the exact
+    /// `cp -c` clones --apply will make) so consent is informed, and repeats the safety
+    /// property: paths stay, bytes get shared, nothing is deleted.
+    private func startDedupe(_ report: DupesReport) {
+        model.dedupePreview { preview in
+            guard let preview else { return } // model.error carries the reason
+            let alert = NSAlert()
+            if preview.skipped || preview.plan.isEmpty {
+                alert.messageText = NSLocalizedString("Nothing to deduplicate", comment: "")
+                alert.informativeText = NSLocalizedString("Every duplicate here is protected, cross-volume, or already a clone — there is nothing safe to reclaim.", comment: "")
+                alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+                alert.runModalQuiet()
+                return
+            }
+            alert.messageText = String(
+                format: NSLocalizedString("Reclaim %@ by clone-deduplicating?", comment: ""),
+                Fmt.bytes(report.redundantBytes))
+            let shown = preview.plan.prefix(6).map { "  " + $0 }.joined(separator: "\n")
+            let more = preview.plan.count > 6
+                ? "\n" + String(format: NSLocalizedString("  …and %d more", comment: ""), preview.plan.count - 6)
+                : ""
+            alert.informativeText = String(
+                format: NSLocalizedString("%d groups become APFS clones — every file keeps its path and contents; the copies share storage. Nothing is deleted, and edits to one copy no longer affect the others.\n\nPlanned clones:\n%@%@", comment: ""),
+                preview.groups, shown, more)
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: NSLocalizedString("Reclaim", comment: ""))
+            alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
+            guard alert.runModalQuiet() == .alertFirstButtonReturn else { return }
+            model.dedupeApply()
         }
     }
 
@@ -223,13 +271,13 @@ struct DupesView: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
-    /// v1 is report-only. Removing copies from the GUI ships later; until
-    /// then the CLI can act, keep-one and preview-first.
+    /// Reclaim clones in place (non-destructive); DELETING extra copies stays CLI-only,
+    /// where reference folders can be protected explicitly.
     private var footnote: some View {
         HStack(spacing: 8) {
             Image(systemName: "info.circle").font(.system(size: 10)).foregroundStyle(Brand.textTertiary)
-            (Text(NSLocalizedString("Read-only for now — deduplicating from here ships later. To act from the CLI: ", comment: ""))
-                + Text(verbatim: "burrow dupes dedupe <dir> --keep <ref> --apply").bold())
+            (Text(NSLocalizedString("Reclaim uses APFS clones — nothing is deleted. To delete extra copies instead (keep-one, preview-first): ", comment: ""))
+                + Text(verbatim: "burrow dupes remove <dir> --keep <ref> --apply").bold())
                 .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             Spacer()
         }
@@ -244,6 +292,7 @@ final class DupesModel: ObservableObject {
     /// The chosen folder (absolute path). Scans re-run against this.
     @Published var folder: String?
     @Published var scanning = false
+    @Published var deduping = false
     @Published var report: DupesReport?
     @Published var error: String?
 
@@ -298,6 +347,68 @@ final class DupesModel: ObservableObject {
                     OperationCenter.shared.end(self.opId, success: false,
                                                detail: NSLocalizedString("scan failed", comment: ""))
                 }
+            }
+        }
+    }
+
+    // MARK: Dedupe (act)
+
+    /// Run the conductor's dedupe PREVIEW (`dupes dedupe <dir>`, no --apply) and hand the
+    /// parsed plan to the caller on the main actor. nil = the preview itself failed
+    /// (self.error carries the reason).
+    func dedupePreview(_ completion: @escaping @MainActor (DedupePreview?) -> Void) {
+        guard let folder, !deduping else { return }
+        deduping = true
+        error = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            let preview: DedupePreview?
+            var failure: String?
+            do {
+                let envelope = try BurrowConductor.capture("dupes", ["dedupe", folder], timeout: 300)
+                preview = envelope.data.flatMap { DedupePreview.parse($0) }
+                if preview == nil {
+                    failure = NSLocalizedString("burrow returned an unreadable dedupe preview", comment: "")
+                }
+            } catch {
+                preview = nil
+                failure = error.localizedDescription
+            }
+            Task { @MainActor in
+                self.deduping = false
+                if let failure { self.error = failure }
+                completion(preview)
+            }
+        }
+    }
+
+    /// The confirmed action: `dupes dedupe <dir> --apply` — APFS clones, nothing deleted.
+    /// On success the folder is re-scanned so the pane shows the post-reclaim truth.
+    func dedupeApply() {
+        guard let folder, !deduping else { return }
+        deduping = true
+        error = nil
+        let name = (folder as NSString).lastPathComponent
+        let actId = UUID()
+        OperationCenter.shared.begin(actId, label: String(format: NSLocalizedString("Deduplicating %@", comment: ""), name),
+                                     notifiesOnEnd: true)
+        DispatchQueue.global(qos: .userInitiated).async {
+            var failure: String?
+            do {
+                _ = try BurrowConductor.capture("dupes", ["dedupe", folder, "--apply"], timeout: 600)
+            } catch {
+                failure = error.localizedDescription
+            }
+            Task { @MainActor in
+                self.deduping = false
+                if let failure {
+                    self.error = failure
+                    OperationCenter.shared.end(actId, success: false,
+                                               detail: NSLocalizedString("dedupe failed", comment: ""))
+                    return
+                }
+                OperationCenter.shared.end(actId, success: true,
+                                           detail: NSLocalizedString("duplicates now share storage", comment: ""))
+                self.rescan()
             }
         }
     }

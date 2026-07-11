@@ -109,6 +109,37 @@ final class DupesModelTests: XCTestCase {
         XCTAssertEqual(report.groups[0].fileLen, 50)
     }
 
+    // MARK: DedupePreview (the act-from-GUI flow)
+
+    func testDedupePreview_parsesPlanLines() throws {
+        // `burrow dupes dedupe <dir>` (no --apply) returns fclones' own dry-run — the
+        // exact commands --apply would execute. The confirm dialog shows these.
+        let data = """
+        {"preview": true, "action": "dedupe", "groups": 2,
+         "plan": ["cp -c /tmp/a /tmp/b", "cp -c /tmp/c /tmp/d"]}
+        """.data(using: .utf8)!
+        let preview = try XCTUnwrap(DedupePreview.parse(data))
+        XCTAssertFalse(preview.skipped)
+        XCTAssertEqual(preview.groups, 2)
+        XCTAssertEqual(preview.plan, ["cp -c /tmp/a /tmp/b", "cp -c /tmp/c /tmp/d"])
+    }
+
+    func testDedupePreview_parsesSkip() throws {
+        let data = """
+        {"skipped": true, "groups": 0, "reason": "no actionable duplicate groups"}
+        """.data(using: .utf8)!
+        let preview = try XCTUnwrap(DedupePreview.parse(data))
+        XCTAssertTrue(preview.skipped)
+        XCTAssertEqual(preview.groups, 0)
+        XCTAssertTrue(preview.plan.isEmpty)
+    }
+
+    func testDedupePreview_garbageAndWrongShapesAreNil() {
+        XCTAssertNil(DedupePreview.parse(Data("not json".utf8)))
+        // A group REPORT (scan output) is not a preview — must not be mistaken for one.
+        XCTAssertNil(DedupePreview.parse(Data(#"{"groups":[{"file_len":1}]}"#.utf8)))
+    }
+
     func testParse_keepsInt64PrecisionAboveInt32() throws {
         // 5 GB-scale byte counts must survive exactly — the reason the
         // parser is JSONSerialization, matching DiskScanner.parse.
