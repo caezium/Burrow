@@ -379,6 +379,88 @@ struct ToolCatalog {
                 ] as [String: Any],
             ],
             [
+                "name": "burrow_dupes",
+                "description": "Duplicate-file groups under one or more directories via `burrow dupes` (fclones group report). Read-only — reports groups, deletes nothing.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "paths": ["type": "array", "items": ["type": "string"], "description": "Absolute directories to scan for duplicate files."],
+                    ],
+                    "required": ["paths"],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
+                "name": "burrow_net",
+                "description": "Per-app network attribution via `burrow net`: which apps are moving bytes right now. Read-only.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [String: Any](),
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
+                "name": "burrow_orphans",
+                "description": "Leftover files under a directory that belong to no installed app, via `burrow orphans`. Read-only. `installed` (comma-separated bundle ids) overrides the auto-detected app inventory.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path": ["type": "string", "description": "Absolute directory to scan, e.g. \"~/Library/Application Support\" expanded."],
+                        "installed": ["type": "string", "description": "Optional comma-separated bundle ids to treat as installed (overrides auto-detection)."],
+                    ],
+                    "required": ["path"],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
+                "name": "burrow_photos",
+                "description": "Near-duplicate photos (visually similar PNG/JPEG, dHash) under a directory via `burrow photos`. Read-only — reports groups, deletes nothing.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path": ["type": "string", "description": "Absolute directory to scan for similar images."],
+                    ],
+                    "required": ["path"],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
+                "name": "burrow_rules_dryrun",
+                "description": "Preview what a community rules directory would clean via `burrow rules dryrun <dir>` — per-rule paths with risk and existence, nothing deleted. Read-only. `dir` is required (no rules ship with the app); `app` filters to one bundle id.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "dir": ["type": "string", "description": "Absolute path to a rules directory (one YAML file per app)."],
+                        "app": ["type": "string", "description": "Optional bundle id to filter to a single app's rules."],
+                    ],
+                    "required": ["dir"],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
+                "name": "burrow_sentinel",
+                "description": ".app bundles currently sitting in the Trash (uninstall-leftover candidates) via `burrow sentinel`. Read-only. `trashdir` overrides the default ~/.Trash.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "trashdir": ["type": "string", "description": "Optional Trash directory to scan instead of ~/.Trash."],
+                    ],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
+                "name": "burrow_slim_check",
+                "description": "Mach-O fat-binary analysis via `burrow slim-check <binary>`: arch slices + bytes a thin-to-host-arch would reclaim. Read-only — estimate only, never rewrites the binary.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "binary": ["type": "string", "description": "Absolute path to a Mach-O binary (e.g. an app's main executable)."],
+                    ],
+                    "required": ["binary"],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
                 "name": "burrow_clean",
                 "description": "Clean caches, logs, temp files and leftovers via `mo clean`. SAFE BY DEFAULT: with no `confirm` (or confirm:false) it runs `--dry-run` and only PREVIEWS what would be freed — nothing is deleted. A real deletion needs confirm:true AND the user's opt-in ('Let agents run cleanups' in Burrow Settings); without the opt-in, confirm:true is refused and reported as blocked. Real runs are not elevated (user-level caches only).",
                 "inputSchema": [
@@ -507,6 +589,20 @@ struct ToolCatalog {
             return self.callAnalyze(arguments)
         case "burrow_list_apps":
             return self.callListApps()
+        case "burrow_dupes":
+            return try self.callDupes(arguments)
+        case "burrow_net":
+            return self.callConductor("net", [])
+        case "burrow_orphans":
+            return try self.callOrphans(arguments)
+        case "burrow_photos":
+            return try self.callPhotos(arguments)
+        case "burrow_rules_dryrun":
+            return try self.callRulesDryrun(arguments)
+        case "burrow_sentinel":
+            return self.callSentinel(arguments)
+        case "burrow_slim_check":
+            return try self.callSlimCheck(arguments)
         case "burrow_clean":
             return self.runAction(.clean, confirm: (arguments["confirm"] as? Bool) ?? false)
         case "burrow_optimize":
@@ -929,6 +1025,111 @@ struct ToolCatalog {
         }
         let out = Self.stripANSI(res.stdout).trimmingCharacters(in: .whitespacesAndNewlines)
         return out.isEmpty ? "{\"apps\":[]}" : out
+    }
+
+    // MARK: - Conductor discovery tools (Phase 6.3 parity, read-only)
+    //
+    // These expose burrow-cli's discovery commands through the bundled
+    // conductor (`burrow <cmd> --json`, BurrowConductor.capture) and pass
+    // the envelope's `data` payload through VERBATIM — the contract tracks
+    // burrow-cli's, not ours, exactly like burrow_analyze tracks Mole's.
+    // All seven are read-only: no audit rows, no confirm gates, and the
+    // mutating siblings (dupes apply/dedupe, slim, evict) stay out of MCP.
+
+    /// One shape for all seven: availability check, capture, pass `data`
+    /// through. Degrades to a JSON error object — never a throw — so an
+    /// agent on a build without the bundled conductor sees why instead of
+    /// a -32603 (same posture as the exit-127 `mo` degrade above).
+    private func callConductor(_ command: String, _ args: [String],
+                               timeout: TimeInterval = 300) -> String {
+        guard BurrowConductor.isAvailable else {
+            return Self.jsonString([
+                "error": "the burrow conductor is not bundled in this build; \(command) is unavailable",
+                "command": command])
+        }
+        do {
+            let envelope = try BurrowConductor.capture(command, args, timeout: timeout)
+            guard let data = envelope.data,
+                  let out = String(data: data, encoding: .utf8),
+                  !out.isEmpty else {
+                return Self.jsonString(["error": "burrow \(command) returned no data",
+                                        "command": command])
+            }
+            return out
+        } catch let BurrowConductorError.engine(kind, message) {
+            return Self.jsonString(["error": message, "kind": kind, "command": command])
+        } catch {
+            return Self.jsonString(["error": error.localizedDescription, "command": command])
+        }
+    }
+
+    /// `burrow dupes <paths…>` — duplicate-file groups (fclones group
+    /// report; the mutating dedupe/remove/link subcommands are not exposed).
+    private func callDupes(_ args: [String: Any]) throws -> String {
+        let paths = (args["paths"] as? [String])?
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty } ?? []
+        guard !paths.isEmpty else {
+            throw MCPToolError.badArguments("dupes needs `paths`: one or more directories to scan")
+        }
+        return self.callConductor("dupes", paths)
+    }
+
+    /// `burrow orphans <dir> [--installed id1,id2,…]` — leftover files
+    /// belonging to no installed app.
+    private func callOrphans(_ args: [String: Any]) throws -> String {
+        guard let path = (args["path"] as? String)?.trimmingCharacters(in: .whitespaces),
+              !path.isEmpty else {
+            throw MCPToolError.badArguments("orphans needs `path`: a directory to scan")
+        }
+        var argv = [path]
+        if let installed = (args["installed"] as? String)?.trimmingCharacters(in: .whitespaces),
+           !installed.isEmpty {
+            argv += ["--installed", installed]
+        }
+        return self.callConductor("orphans", argv)
+    }
+
+    /// `burrow photos <dir>` — visually-similar image groups (dHash).
+    private func callPhotos(_ args: [String: Any]) throws -> String {
+        guard let path = (args["path"] as? String)?.trimmingCharacters(in: .whitespaces),
+              !path.isEmpty else {
+            throw MCPToolError.badArguments("photos needs `path`: a directory to scan")
+        }
+        return self.callConductor("photos", [path])
+    }
+
+    /// `burrow rules dryrun <dir> [--app id]` — preview a rules directory.
+    /// The CLI defaults its dir to `rules/` relative to CWD, which is
+    /// meaningless from a GUI-spawned process (and the app bundle ships no
+    /// rules), so the tool requires an explicit `dir` — honest > broken.
+    private func callRulesDryrun(_ args: [String: Any]) throws -> String {
+        guard let dir = (args["dir"] as? String)?.trimmingCharacters(in: .whitespaces),
+              !dir.isEmpty else {
+            throw MCPToolError.badArguments("rules_dryrun needs `dir`: a rules directory (none ships with the app)")
+        }
+        var argv = ["dryrun", dir]
+        if let app = (args["app"] as? String)?.trimmingCharacters(in: .whitespaces),
+           !app.isEmpty {
+            argv += ["--app", app]
+        }
+        return self.callConductor("rules", argv)
+    }
+
+    /// `burrow sentinel [trashdir]` — .app bundles sitting in the Trash.
+    private func callSentinel(_ args: [String: Any]) -> String {
+        let trashdir = (args["trashdir"] as? String)?.trimmingCharacters(in: .whitespaces)
+        let argv = trashdir.flatMap { $0.isEmpty ? nil : [$0] } ?? []
+        return self.callConductor("sentinel", argv)
+    }
+
+    /// `burrow slim-check <binary>` — Mach-O fat-slice reclaim estimate.
+    private func callSlimCheck(_ args: [String: Any]) throws -> String {
+        guard let binary = (args["binary"] as? String)?.trimmingCharacters(in: .whitespaces),
+              !binary.isEmpty else {
+            throw MCPToolError.badArguments("slim_check needs `binary`: a path to a Mach-O binary")
+        }
+        return self.callConductor("slim-check", [binary])
     }
 
     // MARK: Action helpers

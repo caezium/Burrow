@@ -11,7 +11,7 @@ samples continuously, and every actuating call is **dry-run by default**.
 
 ## The two kinds of tools
 
-- **Read-only (14)** — observe and diagnose. Always safe; call these proactively whenever a
+- **Read-only (21)** — observe and diagnose. Always safe; call these proactively whenever a
   question is about *this machine's* state, history, or health.
 - **Actuating, gated (5)** — clean / optimize / uninstall / purge / installer. **Preview by
   default** (`--dry-run`); a real run needs `confirm: true` **and** the user's Settings
@@ -54,6 +54,22 @@ samples continuously, and every actuating call is **dry-run by default**.
 | **burrow_analyze** | "What's taking up space in <folder>?" Size-ranked directory tree (the data behind the treemap). Read-only. | `path` |
 | **burrow_list_apps** | Before any uninstall, **always call this first** to get the exact app name `burrow_uninstall` accepts. Also answers "what apps are installed?" | — |
 
+## Discovery (read-only, via the bundled conductor)
+
+These route through the bundled `burrow` conductor and pass its JSON through verbatim. They
+find *reclaim candidates* but never delete anything — reporting only. On a build without the
+bundled conductor they return a JSON error object saying so (never a crash).
+
+| Tool | Use it proactively when… | Key params |
+|---|---|---|
+| **burrow_dupes** | "Do I have duplicate files in <folder>?" Duplicate-file groups (fclones group report) across one or more directories. Report-only — deletes nothing. | `paths` (required) |
+| **burrow_orphans** | "What leftovers did uninstalled apps leave behind?" Files under a directory that belong to no installed app. `installed` (csv of bundle ids) overrides auto-detection. | `path` (required), `installed` |
+| **burrow_net** | "Which app is using my network right now?" Per-app network attribution. | — |
+| **burrow_photos** | "Do I have near-duplicate photos in <folder>?" Visually-similar PNG/JPEG groups (dHash). Report-only. | `path` (required) |
+| **burrow_rules_dryrun** | Previewing what a community cleanup-rules directory would target: per-rule paths with risk + existence, nothing deleted. `dir` is required — no rules ship with the app. | `dir` (required), `app` |
+| **burrow_sentinel** | "Did I trash any apps whose leftovers I should sweep?" `.app` bundles currently in the Trash. | `trashdir` |
+| **burrow_slim_check** | "How much space would thinning <binary> reclaim?" Mach-O fat-slice analysis — estimate only, never rewrites the binary. | `binary` (required) |
+
 ---
 
 ## Act & maintain (actuating — gated, dry-run by default)
@@ -80,6 +96,7 @@ Every actuating call is recorded to Burrow's audit log, so the user can see what
   `burrow_process_usage` (over time) → name the culprit; offer `burrow_clean`/`optimize`
   preview only if relevant.
 - **"I'm low on disk"** → `burrow_disk_forecast` → `burrow_analyze <folder>` →
+  `burrow_dupes`/`burrow_photos`/`burrow_orphans`/`burrow_sentinel` for reclaim candidates →
   `burrow_purge`/`burrow_installer` previews → `burrow_clean` preview.
 - **"Is anything insecure / what's listening?"** → `burrow_doctor` (SIP/Gatekeeper/FileVault/
   firewall) + `burrow_ports`.
