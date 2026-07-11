@@ -155,6 +155,7 @@ struct RootView: View {
     private var content: some View {
         ZStack {
             AnalyzeView(isActive: pane == .tool(.analyze)).tabVisible(pane == .tool(.analyze))
+            DupesView().tabVisible(pane == .tool(.dupes))
             SoftwareView(isActive: pane == .tool(.apps)).tabVisible(pane == .tool(.apps))
             CleanHub().tabVisible(pane == .tool(.clean))
             OptimizeView().tabVisible(pane == .tool(.optimize))

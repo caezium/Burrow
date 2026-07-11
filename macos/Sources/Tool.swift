@@ -12,7 +12,7 @@
 import SwiftUI
 
 enum Tool: String, CaseIterable, Identifiable {
-    case clean, purge, installer, apps, optimize, analyze, status, ports, connectivity, tuneup
+    case clean, purge, installer, apps, optimize, analyze, dupes, status, ports, connectivity, tuneup
 
     var id: String { rawValue }
 
@@ -21,7 +21,7 @@ enum Tool: String, CaseIterable, Identifiable {
     /// optimize, then apps / analyze. The .purge/.installer cases live on for
     /// the hub cards, MCP actions, and Explain deep-links. The live dashboard
     /// isn't a tool anymore — it's Home, reached by the Burrow mark.
-    static let navOrder: [Tool] = [.clean, .optimize, .apps, .analyze, .ports, .connectivity]
+    static let navOrder: [Tool] = [.clean, .optimize, .apps, .analyze, .dupes, .ports, .connectivity]
 
     /// Lowercase tab label (matches the instrument-panel voice).
     var label: String { NSLocalizedString(rawValue, comment: "") }
@@ -35,6 +35,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .apps:      return NSLocalizedString("Apps", comment: "")
         case .optimize:  return NSLocalizedString("Optimize", comment: "")
         case .analyze:   return NSLocalizedString("Analyze", comment: "")
+        case .dupes:     return NSLocalizedString("Duplicates", comment: "")
         case .status:    return NSLocalizedString("Status", comment: "")
         case .ports:     return NSLocalizedString("Ports", comment: "")
         case .connectivity: return NSLocalizedString("Get Online", comment: "")
@@ -50,6 +51,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .apps:      return "shippingbox"
         case .optimize:  return "wand.and.stars"
         case .analyze:   return "square.grid.2x2"
+        case .dupes:     return "doc.on.doc"
         case .status:    return "waveform.path.ecg"
         case .ports:     return "network"
         case .connectivity: return "wifi"
@@ -66,6 +68,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .apps:      return Color(hex: 0xF0714E) // coral
         case .optimize:  return Color(hex: 0x8E84F0) // violet
         case .analyze:   return Color(hex: 0x4FA3E3) // azure
+        case .dupes:     return Color(hex: 0xDB7E9C) // rose
         case .status:    return Color(hex: 0xE6A93C) // gold
         case .ports:     return Color(hex: 0xB58BD6) // lilac
         case .connectivity: return Color(hex: 0x4FC3D9) // cyan
@@ -83,6 +86,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .apps:      return Color(hex: 0x2B1611)
         case .optimize:  return Color(hex: 0x1A1730)
         case .analyze:   return Color(hex: 0x0E1F2E)
+        case .dupes:     return Color(hex: 0x2A141C)
         case .status:    return Color(hex: 0x241D11)
         case .ports:     return Color(hex: 0x1B1426)
         case .connectivity: return Color(hex: 0x0E2630)
@@ -105,6 +109,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .apps:      return NSLocalizedString("Shed what you've outgrown.", comment: "")
         case .optimize:  return NSLocalizedString("Small turns, a smoother run.", comment: "")
         case .analyze:   return NSLocalizedString("Map every chamber below.", comment: "")
+        case .dupes:     return NSLocalizedString("Find what you've stashed twice.", comment: "")
         case .status:    return NSLocalizedString("Every pulse of the den.", comment: "")
         case .ports:     return NSLocalizedString("See who's listening.", comment: "")
         case .connectivity: return NSLocalizedString("Find your way back to the surface.", comment: "")
