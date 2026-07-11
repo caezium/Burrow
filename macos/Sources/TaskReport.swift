@@ -168,7 +168,9 @@ func parseTaskReport(_ lines: [String]) -> (groups: [TaskGroup], summary: TaskSu
     var sawSummary = false
 
     for raw in lines {
-        let t = raw.trimmingCharacters(in: .whitespaces)
+        // The engine styles its report (sizes in red, headers bold); strip ANSI here — the
+        // single parse chokepoint — so no consumer ever renders literal "[0;31m…" (#257).
+        let t = Ansi.strip(raw).trimmingCharacters(in: .whitespaces)
         if t.isEmpty || t.hasPrefix("↳") { continue }
 
         if t.hasPrefix("➤") {

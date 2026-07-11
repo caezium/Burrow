@@ -51,6 +51,22 @@ final class TaskReportTests: XCTestCase {
         XCTAssertEqual(result.groups.count, 1)
     }
 
+    func testStripsAnsiColorCodes_issue257() throws {
+        // The engine colors its dry-run sizes; unstripped escapes leaked into Tune-Up as
+        // literal "[0;31m1.9GB[0m" (#257). Every consumer of parseTaskReport must see
+        // clean text regardless of styling.
+        let lines = [
+            "➤ \u{1B}[1mDeveloper tools\u{1B}[0m",
+            "  → npm cache, \u{1B}[0;31m191.8MB\u{1B}[0m",
+            "Potential space: \u{1B}[0;31m1.9GB\u{1B}[0m | Items: 372 | Categories: 20",
+        ]
+        let result = parseTaskReport(lines)
+        let summary = try XCTUnwrap(result.summary)
+        XCTAssertEqual(summary.space, "1.9GB", "no escape bytes or bracket codes may survive")
+        XCTAssertEqual(result.groups.first?.title, "Developer tools")
+        XCTAssertEqual(result.groups.first?.items.first?.text, "npm cache, 191.8MB")
+    }
+
     // The one-line result shared by the Clean done-banner and the
     // completion notification: real freed-space numbers when present,
     // the tracked size otherwise.

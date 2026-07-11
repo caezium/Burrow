@@ -851,6 +851,36 @@ final class SoftwareModel: ObservableObject {
                 MoCommand(target: .mo, args: ticket.command.args, stdin: ticket.command.stdin,
                           timeout: ticket.command.timeout ?? 600))
             let ok = (res?.exitCode ?? 1) == 0
+
+            // FAILURE (#254): the apps are still installed, so there's nothing to re-scan —
+            // keep the list AND the selection so the user can retry, and surface the
+            // engine's actual error in an alert (the HUD alone can be invisible when the
+            // menu-bar icon is off).
+            guard ok else {
+                let engineError = [res?.stderr, res?.stdout]
+                    .compactMap { $0 }
+                    .joined(separator: "\n")
+                    .components(separatedBy: "\n")
+                    .map { Ansi.strip($0).trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                    .suffix(6)
+                    .joined(separator: "\n")
+                Task { @MainActor in
+                    self.loading = false
+                    OperationCenter.shared.end(opId, success: false,
+                                               detail: NSLocalizedString("uninstall failed", comment: ""))
+                    let alert = NSAlert()
+                    alert.messageText = NSLocalizedString("Uninstall failed", comment: "")
+                    alert.informativeText = engineError.isEmpty
+                        ? NSLocalizedString("The engine reported a failure with no error output. Nothing was removed.", comment: "")
+                        : engineError
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+                    alert.runModalQuiet()
+                }
+                return
+            }
+
             let parsed = Self.fetch()
             Task { @MainActor in
                 self.apps = parsed
@@ -861,9 +891,8 @@ final class SoftwareModel: ObservableObject {
                 // would silently collapse after an uninstall.
                 self.recentLoaded = false
                 if self.sort == .recent { self.ensureRecentDates() }
-                OperationCenter.shared.end(opId, success: ok,
-                                           detail: ok ? "\(targets.count) moved to Trash"
-                                                      : NSLocalizedString("uninstall failed", comment: ""))
+                OperationCenter.shared.end(opId, success: true,
+                                           detail: "\(targets.count) moved to Trash")
             }
         }
     }
