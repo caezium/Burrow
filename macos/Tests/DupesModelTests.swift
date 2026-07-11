@@ -109,6 +109,59 @@ final class DupesModelTests: XCTestCase {
         XCTAssertEqual(report.groups[0].fileLen, 50)
     }
 
+    // MARK: DupesSelection (the checklist — keep-one invariant)
+
+    private var twoGroups: DupesReport {
+        DupesReport(
+            groups: [
+                DupeGroup(fileLen: 100, files: ["/a/1", "/a/2", "/a/3"]),
+                DupeGroup(fileLen: 50, files: ["/b/1", "/b/2"]),
+            ],
+            redundantBytes: 250)
+    }
+
+    func testSelection_defaultsToAllButFirstPerGroup() {
+        let sel = DupesSelection(report: twoGroups)
+        XCTAssertFalse(sel.isTicked("/a/1"), "each group's first copy starts kept")
+        XCTAssertTrue(sel.isTicked("/a/2"))
+        XCTAssertTrue(sel.isTicked("/a/3"))
+        XCTAssertFalse(sel.isTicked("/b/1"))
+        XCTAssertTrue(sel.isTicked("/b/2"))
+        XCTAssertEqual(sel.selectedBytes(in: twoGroups), 250, "matches the report's redundant total")
+    }
+
+    func testSelection_keepOneGuardRefusesFullGroup() {
+        var sel = DupesSelection(report: twoGroups)
+        // /a/1 is the last unticked copy of group a — ticking it must be a no-op.
+        sel.toggle("/a/1", in: twoGroups)
+        XCTAssertFalse(sel.isTicked("/a/1"), "the guard must refuse selecting every copy")
+        XCTAssertTrue(sel.isKeptCopy("/a/1", in: twoGroups.groups[0]))
+        // Free a slot, then the first copy becomes selectable (the KEPT one moves).
+        sel.toggle("/a/2", in: twoGroups)
+        sel.toggle("/a/1", in: twoGroups)
+        XCTAssertTrue(sel.isTicked("/a/1"), "keep-one is per-group, not first-copy-sacred")
+        XCTAssertFalse(sel.isTicked("/a/2"))
+    }
+
+    func testSelection_groupTriStateAndToggle() {
+        var sel = DupesSelection(report: twoGroups)
+        let a = twoGroups.groups[0]
+        XCTAssertEqual(sel.groupState(a), .all, "default = at selectable max")
+        sel.toggleGroup(a)
+        XCTAssertEqual(sel.groupState(a), .none)
+        XCTAssertEqual(sel.selectedBytes(in: twoGroups), 50, "only group b remains")
+        sel.toggle("/a/3", in: twoGroups)
+        XCTAssertEqual(sel.groupState(a), .mixed)
+        sel.toggleGroup(a)
+        XCTAssertEqual(sel.groupState(a), .all, "mixed -> back to all-but-first")
+        XCTAssertFalse(sel.isTicked("/a/1"))
+    }
+
+    func testSelection_selectedPathsFollowGroupOrder() {
+        let sel = DupesSelection(report: twoGroups)
+        XCTAssertEqual(sel.selectedPaths(in: twoGroups), ["/a/2", "/a/3", "/b/2"])
+    }
+
     // MARK: DedupePreview (the act-from-GUI flow)
 
     func testDedupePreview_parsesPlanLines() throws {

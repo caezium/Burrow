@@ -69,6 +69,81 @@ struct DupesReport: Equatable {
     }
 }
 
+/// Which copies the user has ticked for removal — the same shape as CleanSelection so the
+/// Duplicates pane reads like the Clean review checklist. Pure + tested. THE invariant:
+/// every group always keeps at least one unticked copy (removing all copies of a file is
+/// data loss, not deduplication) — a toggle that would violate it is refused.
+struct DupesSelection: Equatable {
+    private(set) var ticked: Set<String>
+
+    /// Default selection: every copy EXCEPT each group's first (fclones lists its keep
+    /// choice first) — the standard "keep one of each" starting point.
+    init(report: DupesReport) {
+        var t = Set<String>()
+        for g in report.groups {
+            for f in g.files.dropFirst() {
+                t.insert(f)
+            }
+        }
+        ticked = t
+    }
+
+    func isTicked(_ path: String) -> Bool { ticked.contains(path) }
+
+    /// Toggle one copy. Ticking is refused (no-op) when it would select EVERY copy of the
+    /// path's group — the keep-one guard.
+    mutating func toggle(_ path: String, in report: DupesReport) {
+        if ticked.contains(path) {
+            ticked.remove(path)
+            return
+        }
+        guard let group = report.groups.first(where: { $0.files.contains(path) }) else { return }
+        let wouldBeTicked = group.files.filter { ticked.contains($0) || $0 == path }
+        if wouldBeTicked.count >= group.files.count { return } // keep-one guard
+        ticked.insert(path)
+    }
+
+    /// Is `path` the group's LAST unticked copy (the one the guard is protecting)?
+    func isKeptCopy(_ path: String, in group: DupeGroup) -> Bool {
+        !ticked.contains(path) && selectedCount(in: group) == group.files.count - 1
+    }
+
+    enum GroupState { case all, mixed, none }
+
+    /// Tri-state over the group's selectable maximum (all copies minus the kept one).
+    func groupState(_ group: DupeGroup) -> GroupState {
+        let n = selectedCount(in: group)
+        if n == 0 { return .none }
+        return n >= group.files.count - 1 ? .all : .mixed
+    }
+
+    /// Group checkbox: at-max -> none; anything else -> the default all-but-first.
+    mutating func toggleGroup(_ group: DupeGroup) {
+        if groupState(group) == .all {
+            for f in group.files { ticked.remove(f) }
+        } else {
+            for f in group.files { ticked.remove(f) }
+            for f in group.files.dropFirst() { ticked.insert(f) }
+        }
+    }
+
+    func selectedCount(in group: DupeGroup) -> Int {
+        group.files.filter { ticked.contains($0) }.count
+    }
+
+    func selectedBytes(in report: DupesReport) -> Int64 {
+        report.groups.reduce(Int64(0)) { sum, g in
+            sum + g.fileLen * Int64(selectedCount(in: g))
+        }
+    }
+
+    func selectedPaths(in report: DupesReport) -> [String] {
+        report.groups.flatMap { g in g.files.filter { ticked.contains($0) } }
+    }
+
+    var isEmpty: Bool { ticked.isEmpty }
+}
+
 /// The conductor's dedupe PREVIEW (`burrow dupes dedupe <dir>`, no --apply): either
 /// fclones' own dry-run plan (`cp -c <src> <dst>` per clone — exactly what --apply
 /// executes) or a skip (nothing actionable). Parsed loose, like DupesReport.
