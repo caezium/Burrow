@@ -37,7 +37,7 @@
         "Tune-Up sizes render clean \u2014 no more raw color codes",
         "Analyze can't stall on cache-heavy folders; the menu-bar popover no longer bounces",
         "Per-metric menu-bar text sizing with stable widths",
-        "Windows preview bundles burrow.exe and the same envelope contract"
+        "Windows preview is downloadable \u2014 BurrowWin zip with burrow.exe + engine bundled"
       ],
       "sections": [
         {
@@ -63,8 +63,15 @@
           "label": "Also",
           "items": [
             "Per-metric menu-bar text sizing, stable widths, flipped net in/out ordering",
-            "HUD popover re-pins when the menu bar auto-hides",
-            "Windows preview: burrow.exe bundled + BurrowEnvelope contract parser"
+            "HUD popover re-pins when the menu bar auto-hides"
+          ]
+        },
+        {
+          "label": "windows",
+          "items": [
+            "Downloadable at last: BurrowWin-0.10.0-win-x64.zip ships on this release \u2014 the unpackaged app with burrow.exe and the engine bundled (unzip, run BurrowWin.exe; Windows 10/11)",
+            "Agent-triggered clean/optimize route through burrow.exe with the same envelope contract as macOS",
+            "burrow.exe grew real Windows powers: Recycle-Bin safe delete, guarded BCU uninstalls, czkawka duplicates + similar photos, provider-aware OneDrive eviction, IP Helper network attribution"
           ]
         }
       ]

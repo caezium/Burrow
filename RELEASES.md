@@ -50,6 +50,19 @@ Tune-Up display bugs you reported.
   sentinel, app-slim check, similar photos — 21 read-only tools total.
   ([#258](https://github.com/caezium/Burrow/pull/258))
 
+## Windows preview
+- **Downloadable at last**: this release ships `BurrowWin-0.10.0-win-x64.zip` —
+  the unpackaged Windows app with the `burrow.exe` conductor and the engine
+  bundled (unzip and run `BurrowWin.exe`; Windows 10/11, .NET 8 runtime).
+- **The conductor, on Windows too**: agent-triggered clean/optimize route
+  through `burrow.exe` with the same envelope contract the macOS app speaks.
+  ([#252](https://github.com/caezium/Burrow/pull/252))
+- **`burrow.exe` grew real Windows powers** this cycle: Recycle-Bin safe
+  delete (never hard-deletes), guarded Bulk Crap Uninstaller uninstalls,
+  czkawka-backed duplicate + similar-photo discovery, provider-aware
+  OneDrive/Cloud Files eviction, and per-app network attribution via the
+  native IP Helper API.
+
 ## Also
 - Per-metric menu-bar text sizing with stable widths, and flipped net in/out
   ordering. ([#245](https://github.com/caezium/Burrow/pull/245))
