@@ -102,12 +102,12 @@ enum BurrowConductor {
 
     // MARK: - Streaming clean/optimize (opt-in)
 
-    /// Opt-in switch for routing streaming clean/optimize through the conductor. Default OFF: this
-    /// is a DESTRUCTIVE path that can't be exercised in CI, so it stays behind a switch until it's
-    /// hand-tested on a real build. Flip with:
-    ///   `defaults write dev.caezium.Burrow BurrowStreamViaConductor -bool YES`
+    /// Default ON (hand-validated on a real build): streaming clean/optimize route through the
+    /// bundled conductor (`burrow <cmd> --stream`), falling back to the direct engine on any
+    /// miss. Kill-switch:
+    ///   `defaults write dev.caezium.Burrow BurrowStreamViaConductor -bool NO`
     static var streamingEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "BurrowStreamViaConductor")
+        (UserDefaults.standard.object(forKey: "BurrowStreamViaConductor") as? Bool) ?? true
     }
 
     /// Default OFF: the per-child walk stays the default because its "scanning <child> · k/N"

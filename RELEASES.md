@@ -1,3 +1,63 @@
+# Burrow 0.10.0
+
+The conductor release. Burrow now ships its own command layer — the bundled
+`burrow` CLI conducts the bundled engine with one stable JSON contract — plus a
+brand-new Duplicates pane, and fixes for the sudo dialog, uninstall UX, and
+Tune-Up display bugs you reported.
+
+## New: Duplicates
+- **Find what you've stashed twice.** A new sidebar pane scans any folder for
+  byte-identical copies. Review them checklist-style — every group preselects
+  all but one copy, and always keeps at least one — then **Move to Trash**
+  (recoverable) or **Reclaim via APFS clones**, which frees the space without
+  deleting a single file. ([#260](https://github.com/caezium/Burrow/pull/260),
+  [#264](https://github.com/caezium/Burrow/pull/264),
+  [#266](https://github.com/caezium/Burrow/pull/266))
+
+## The conductor
+- **Burrow bundles `burrow`.** A universal (Apple Silicon + Intel) conductor
+  CLI ships inside the app and drives the bundled engine — disk analysis,
+  status, history, clean, and optimize all route through it. Burrow now works
+  fully out of the box with no Homebrew engine install, agents and the GUI
+  share one command surface, and every path falls back to the direct engine so
+  nothing regresses. ([#251](https://github.com/caezium/Burrow/pull/251),
+  [#261](https://github.com/caezium/Burrow/pull/261),
+  [#265](https://github.com/caezium/Burrow/pull/265))
+- **Windows groundwork** rides along: the Windows app bundles `burrow.exe` and
+  parses the same envelope contract.
+  ([#252](https://github.com/caezium/Burrow/pull/252))
+
+## Fixes
+- **The admin password dialog appears again.** Uninstalling a root-owned app
+  (Zoom et al.) from the GUI failed with "Admin access denied" because the
+  engine permission-tested `/dev/tty` instead of opening it — GUI runs now get
+  the proper macOS password prompt.
+  ([#253](https://github.com/caezium/Burrow/issues/253))
+- **Failed uninstalls are actionable.** The Software pane keeps your list and
+  selection and shows the engine's actual error, instead of silently rescanning
+  and pinging only the HUD.
+  ([#254](https://github.com/caezium/Burrow/issues/254))
+- **Tune-Up sizes render clean** — no more raw `[0;31m` color codes around the
+  reclaimable amount. ([#257](https://github.com/caezium/Burrow/issues/257))
+- **Analyze can't freeze on cache-heavy folders** — per-child scans are
+  timeout-bounded and show partial results instead of stalling; the menu-bar
+  popover no longer rubber-bands into empty space.
+  ([#256](https://github.com/caezium/Burrow/pull/256))
+
+## For agents
+- **7 new read-only MCP tools** through the bundled conductor — duplicates,
+  orphaned files, per-app network usage, cleaning-rule previews, trash
+  sentinel, app-slim check, similar photos — 21 read-only tools total.
+  ([#258](https://github.com/caezium/Burrow/pull/258))
+
+## Also
+- Per-metric menu-bar text sizing with stable widths, and flipped net in/out
+  ordering. ([#245](https://github.com/caezium/Burrow/pull/245))
+- The HUD popover re-pins itself when the menu bar auto-hides after opening.
+  ([#223](https://github.com/caezium/Burrow/issues/223))
+- Self-update runs `brew update` before upgrading, so it actually sees new
+  versions. ([#243](https://github.com/caezium/Burrow/issues/243))
+
 # Burrow 0.9.2
 
 A stability and battery release — several fixes to Cleanup, Analyze, and the
