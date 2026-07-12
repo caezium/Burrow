@@ -63,10 +63,12 @@ jobs:
           try {
             $sha = (git ls-tree HEAD windows/vendor/burrow-cli).Split()[2]
             $dest = Join-Path $env:RUNNER_TEMP 'burrow-cli'
-            if ($env:ENGINE_PAT) {
+            # burrow-cli is PUBLIC: clone unauthenticated FIRST. ENGINE_PAT is scoped to
+            # burrow-engine only, and an authenticated clone with an unauthorized token 403s
+            # (the bug that dropped the conductor from the first macOS 0.10.0 artifact).
+            git clone --quiet https://github.com/caezium/burrow-cli.git $dest
+            if (-not (Test-Path $dest) -and $env:ENGINE_PAT) {
               git -c "url.https://x-access-token:$($env:ENGINE_PAT)@github.com/.insteadOf=https://github.com/" clone --quiet https://github.com/caezium/burrow-cli.git $dest
-            } else {
-              git clone --quiet https://github.com/caezium/burrow-cli.git $dest
             }
             git -C $dest -c advice.detachedHead=false checkout --quiet $sha
             cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
@@ -94,6 +96,21 @@ jobs:
 
       - name: Publish (telemetry keys baked from secrets)
         run: dotnet publish .\BurrowWin.csproj -c ${{ github.event.inputs.configuration }} -p:Platform=x64 -r win-x64 --self-contained false -o .\artifacts\release-publish -v:minimal
+
+      # A release artifact without the conductor ships with dead features while the run
+      # stays green (the macOS 0.10.0 lesson) — hard-assert the publish output.
+      - name: Verify the bundled conductor + engine made it into the publish
+        shell: pwsh
+        run: |
+          if (-not (Test-Path ".\artifacts\release-publish\Assets\burrow.exe")) {
+            Write-Host "::error::Assets\burrow.exe missing - the conductor did not bundle. Failing the release."
+            exit 1
+          }
+          if (-not (Test-Path ".\artifacts\release-publish\Assets\Mole\mole.ps1")) {
+            Write-Host "::error::Assets\Mole engine missing. Failing the release."
+            exit 1
+          }
+          Write-Host "conductor: present / engine: present"
 
       - name: Upload published app
         uses: actions/upload-artifact@v4
