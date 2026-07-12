@@ -62,7 +62,13 @@ final class HUDController: NSViewController {
         NSLayoutConstraint.activate([
             hosting.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             hosting.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            hosting.widthAnchor.constraint(equalToConstant: 334),
+            // Width == the CLIP view (not a 334 constant): if any row's intrinsic width ever
+            // exceeded the popover width, a constant let the document grow wider than the
+            // clip — horizontal scrolling became possible, and with elasticity .none an
+            // accidental trackpad drag STUCK there, clipping the left column and showing
+            // blank space on the right. Equal widths make horizontal overflow impossible;
+            // SwiftUI lays out at popover width and truncates internally.
+            hosting.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
         ])
         self.view = scroll
     }
@@ -98,6 +104,11 @@ final class HUDController: NSViewController {
     /// Popover height = content height, capped to the visible screen;
     /// beyond the cap the internal scroll view takes over.
     private func syncPopoverHeight() {
+        // Self-heal any stuck horizontal offset (sessions that scrolled sideways before the
+        // equal-width constraint landed): the HUD never scrolls horizontally, so x is 0.
+        if let scroll = view as? NSScrollView, scroll.contentView.bounds.origin.x != 0 {
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: scroll.contentView.bounds.origin.y))
+        }
         var contentH = hosting.intrinsicContentSize.height
         if contentH <= 0 { contentH = hosting.fittingSize.height }
         let target = NSSize(width: 334, height: min(max(contentH, 1), maxHeight))
