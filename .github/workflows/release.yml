@@ -85,8 +85,12 @@ jobs:
           DEST="$RUNNER_TEMP/burrow-cli"
           AUTH=()
           [ -n "$ENGINE_PAT" ] && AUTH=(-c "url.https://x-access-token:${ENGINE_PAT}@github.com/.insteadOf=https://github.com/")
+          # burrow-cli is PUBLIC: clone unauthenticated FIRST. Injecting ENGINE_PAT (scoped to
+          # burrow-engine only) 403s the whole clone — exactly what silently dropped the
+          # conductor from the first 0.10.0 artifact.
           if [ -n "$SHA" ] \
-             && git "${AUTH[@]}" clone --quiet https://github.com/caezium/burrow-cli.git "$DEST" \
+             && { git clone --quiet https://github.com/caezium/burrow-cli.git "$DEST" \
+                  || git "${AUTH[@]}" clone --quiet https://github.com/caezium/burrow-cli.git "$DEST"; } \
              && git -C "$DEST" -c advice.detachedHead=false checkout --quiet "$SHA"; then
             echo "BURROW_CLI_SRC=$DEST" >> "$GITHUB_ENV"
             echo "burrow: cloned to $DEST @ ${SHA:0:7}"
@@ -127,6 +131,20 @@ jobs:
           VERSION=$(defaults read "$PWD/$APP/Contents/Info" CFBundleShortVersionString)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "app=$APP" >> "$GITHUB_OUTPUT"
+
+      # The bundle phases are non-fatal by design (dev builds fall back) — but a RELEASE
+      # without the conductor or engine ships with its headline features dead while the
+      # run stays green (how the first 0.10.0 artifact lost `burrow`). Assert both here.
+      - name: Verify the bundled conductor + engine made it into the app
+        run: |
+          APP="${{ steps.build.outputs.app }}"
+          [ -x "$APP/Contents/Resources/burrow" ] \
+            || { echo "::error::Resources/burrow missing — the conductor did not bundle. Failing the release."; exit 1; }
+          [ -x "$APP/Contents/Resources/engine/bin/analyze-go" ] \
+            || { echo "::error::Resources/engine incomplete — the engine did not bundle. Failing the release."; exit 1; }
+          lipo -archs "$APP/Contents/Resources/burrow" | grep -q "x86_64" \
+            || { echo "::error::bundled burrow is not universal (missing x86_64 slice)."; exit 1; }
+          echo "conductor: $(lipo -archs "$APP/Contents/Resources/burrow") ✓  engine: present ✓"
 
       - name: Verify the tag matches the app version
         run: |
