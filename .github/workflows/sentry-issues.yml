@@ -59,7 +59,11 @@ jobs:
       # Space-separated project slugs to watch. Both Burrow apps.
       SENTRY_PROJECTS: "burrow burrow-windows"
       SENTRY_QUERY: ${{ github.event.inputs.query || 'is:unresolved' }}
-      LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours || '24' }}
+      # 7 days, not 24h: GitHub throttles the 30-min cron to ~every 2h, and a 24h
+      # firstSeen cutoff PERMANENTLY (and silently) dropped anything older — the
+      # seen-list already prevents duplicates, so the cutoff only needs to guard
+      # against ancient-backfill floods.
+      LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours || '168' }}
       # Cap creations per run so a backlog can't open hundreds of issues at once.
       MAX_PER_RUN: "25"
       GH_TOKEN: ${{ github.token }}
@@ -117,6 +121,15 @@ jobs:
               continue
             }
 
+            fetched=$(jq 'if type=="array" then length else -1 end' <<<"$resp" 2>/dev/null || echo -1)
+            if [ "$fetched" = "-1" ]; then
+              echo "::warning::Sentry returned a non-array response for '${project}' — skipping. Head: $(head -c 160 <<<"$resp")"
+              continue
+            fi
+            echo "project ${project}: fetched ${fetched} unresolved issue(s)."
+            skipped_seen=0
+            skipped_old=0
+
             while read -r issue; do
               [ -z "$issue" ] && continue
               shortId=$(jq -r '.shortId // empty' <<<"$issue")
@@ -124,12 +137,15 @@ jobs:
 
               # Already filed?
               if grep -qxF "$shortId" "$seen"; then
+                skipped_seen=$((skipped_seen + 1))
                 continue
               fi
 
               firstSeen=$(jq -r '.firstSeen // empty' <<<"$issue")
               fsEpoch=$(date -u -d "$firstSeen" +%s 2>/dev/null || echo 0)
               if [ "$fsEpoch" -lt "$cutoff" ]; then
+                echo "Skipping ${shortId}: firstSeen ${firstSeen} is outside the ${LOOKBACK_HOURS}h lookback."
+                skipped_old=$((skipped_old + 1))
                 continue
               fi
 
@@ -215,6 +231,7 @@ jobs:
                 echo "::warning::Failed to create GitHub issue for ${shortId}."
               fi
             done < <(jq -c '.[]' <<<"$resp")
+            echo "project ${project}: ${skipped_seen} already filed, ${skipped_old} outside lookback."
           done
 
           echo "Done. Filed ${filed} new issue(s) this run."
