@@ -143,7 +143,7 @@ enum MoleCLI {
     static let installCommand = "brew install --cask caezium/tap/burrow"
     /// The engine fork (the MIT engine is bundled with the app, pinned at mo's last MIT
     /// release before upstream relicensed to GPL-3.0).
-    static let repoURL = URL(string: "https://github.com/caezium/burrow-engine")!
+    static let repoURL = URL(string: "https://github.com/caezium/burrow-digger")!
 
     /// Current `mo` version, or nil if not installed / unparsable.
     static func version() -> String? {

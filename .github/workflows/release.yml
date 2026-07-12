@@ -64,7 +64,7 @@ jobs:
           DEST="$RUNNER_TEMP/burrow-engine"
           AUTH=()
           [ -n "$ENGINE_PAT" ] && AUTH=(-c "url.https://x-access-token:${ENGINE_PAT}@github.com/.insteadOf=https://github.com/")
-          if git "${AUTH[@]}" clone --quiet https://github.com/caezium/burrow-engine.git "$DEST" \
+          if git "${AUTH[@]}" clone --quiet https://github.com/caezium/burrow-digger.git "$DEST" \
              && git -C "$DEST" -c advice.detachedHead=false checkout --quiet "$SHA"; then
             echo "BURROW_ENGINE_SRC=$DEST" >> "$GITHUB_ENV"
             echo "engine: cloned to $DEST @ ${SHA:0:7}"
