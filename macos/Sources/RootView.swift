@@ -45,6 +45,12 @@ struct RootView: View {
     @State private var fdaBannerDismissed = false
     /// Where Esc in the Settings pane returns to.
     @State private var lastNonSettingsPane: Pane = .home
+    /// Tools that have been opened this session. Panes mount on FIRST visit and stay alive
+    /// after (preserving in-flight work) — but never before: a hidden pane still runs full
+    /// layout + material backdrops on every display flush, and mounting all ten at launch
+    /// made window layout passes take 2s+ on memory-pressed Macs (BURROW-8T).
+    @State private var visitedTools: Set<Tool>
+
     /// Burrow's own self-update state — drives the top banner.
     @ObservedObject private var appUpdate = AppUpdate.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -54,7 +60,13 @@ struct RootView: View {
         self.producer = producer
         self.feeds = feeds
         self.delegate = delegate
-        self._pane = State(initialValue: Self.normalize(initialPane))
+        let start = Self.normalize(initialPane)
+        self._pane = State(initialValue: start)
+        if case .tool(let t) = start {
+            self._visitedTools = State(initialValue: [t])
+        } else {
+            self._visitedTools = State(initialValue: [])
+        }
     }
 
     /// Purge/Installer fold into Clean (CleanHub), so any lingering deep-link
@@ -112,6 +124,7 @@ struct RootView: View {
         .onChange(of: pane) { _, p in
             producer.setForeground(Self.isMetricsPane(p))
             if p != .settings { lastNonSettingsPane = p }
+            if case .tool(let t) = p { visitedTools.insert(t) }
         }
         .onDisappear { producer.setForeground(false) }
         .onReceive(NotificationCenter.default.publisher(for: .burrowSelectPane)) { note in
@@ -149,21 +162,43 @@ struct RootView: View {
         p == .home
     }
 
-    // Tools stay alive (preserving in-flight `mo` jobs); Home and Settings
-    // carry live timers we'd rather not run off-screen, so they're created on
-    // demand and torn down when you leave.
+    // Tools mount on FIRST visit and stay alive after (preserving in-flight `mo` jobs
+    // across tab switches) — never up front: a hidden pane still runs its full layout and
+    // material backdrops on every display-cycle flush, and mounting all ten at launch made
+    // whole-window layout take 2s+ on memory-pressed Macs (BURROW-8T, 12 users, macOS
+    // 15…27). Home and Settings stay create-on-demand/teardown (they carry live timers).
     private var content: some View {
         ZStack {
-            AnalyzeView(isActive: pane == .tool(.analyze)).tabVisible(pane == .tool(.analyze))
-            DupesView().tabVisible(pane == .tool(.dupes))
-            OrphansView().tabVisible(pane == .tool(.orphans))
-            PhotosView().tabVisible(pane == .tool(.photos))
-            NetView(isActive: pane == .tool(.net)).tabVisible(pane == .tool(.net))
-            SoftwareView(isActive: pane == .tool(.apps)).tabVisible(pane == .tool(.apps))
-            CleanHub().tabVisible(pane == .tool(.clean))
-            OptimizeView().tabVisible(pane == .tool(.optimize))
-            PortsView(isActive: pane == .tool(.ports)).tabVisible(pane == .tool(.ports))
-            ConnectivityView(isActive: pane == .tool(.connectivity)).tabVisible(pane == .tool(.connectivity))
+            if visitedTools.contains(.analyze) {
+                AnalyzeView(isActive: pane == .tool(.analyze)).tabVisible(pane == .tool(.analyze))
+            }
+            if visitedTools.contains(.dupes) {
+                DupesView().tabVisible(pane == .tool(.dupes))
+            }
+            if visitedTools.contains(.orphans) {
+                OrphansView().tabVisible(pane == .tool(.orphans))
+            }
+            if visitedTools.contains(.photos) {
+                PhotosView().tabVisible(pane == .tool(.photos))
+            }
+            if visitedTools.contains(.net) {
+                NetView(isActive: pane == .tool(.net)).tabVisible(pane == .tool(.net))
+            }
+            if visitedTools.contains(.apps) {
+                SoftwareView(isActive: pane == .tool(.apps)).tabVisible(pane == .tool(.apps))
+            }
+            if visitedTools.contains(.clean) {
+                CleanHub().tabVisible(pane == .tool(.clean))
+            }
+            if visitedTools.contains(.optimize) {
+                OptimizeView().tabVisible(pane == .tool(.optimize))
+            }
+            if visitedTools.contains(.ports) {
+                PortsView(isActive: pane == .tool(.ports)).tabVisible(pane == .tool(.ports))
+            }
+            if visitedTools.contains(.connectivity) {
+                ConnectivityView(isActive: pane == .tool(.connectivity)).tabVisible(pane == .tool(.connectivity))
+            }
 
             // Gated on window visibility too: these two carry live timers
             // (2 s polls, 15 s DB reads) that must stop when the window
