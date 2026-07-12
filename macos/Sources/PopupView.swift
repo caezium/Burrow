@@ -580,14 +580,21 @@ struct PopupView: View {
                 }
             }
             // Icon pills — text labels for every tool overflow the narrow
-            // popover; glyphs (tinted by tool) stay compact and tidy.
-            HStack(spacing: 6) {
+            // popover; glyphs (tinted by tool) stay compact and tidy. A fixed
+            // HStack of all tools now overruns the 334-wide popover (10 tools ×
+            // ~36 px ≈ 360 > ~308 usable), which bled past the frame and read as
+            // the popover being shifted left. A flexible grid wraps to as many
+            // rows as needed and always fits the width — add more tools freely.
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5),
+                spacing: 6
+            ) {
                 ForEach(Tool.navOrder) { tool in
                     Button { open(.tool(tool)) } label: {
                         Image(systemName: tool.glyph)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(tool.accent)
-                            .frame(width: 30, height: 26)
+                            .frame(maxWidth: .infinity, minHeight: 26)
                             .background(Capsule().fill(Brand.chipFill))
                     }
                     .buttonStyle(.plain)
