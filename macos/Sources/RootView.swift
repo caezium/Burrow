@@ -156,6 +156,9 @@ struct RootView: View {
         ZStack {
             AnalyzeView(isActive: pane == .tool(.analyze)).tabVisible(pane == .tool(.analyze))
             DupesView().tabVisible(pane == .tool(.dupes))
+            OrphansView().tabVisible(pane == .tool(.orphans))
+            PhotosView().tabVisible(pane == .tool(.photos))
+            NetView(isActive: pane == .tool(.net)).tabVisible(pane == .tool(.net))
             SoftwareView(isActive: pane == .tool(.apps)).tabVisible(pane == .tool(.apps))
             CleanHub().tabVisible(pane == .tool(.clean))
             OptimizeView().tabVisible(pane == .tool(.optimize))
