@@ -38,7 +38,7 @@ on:
         default: "is:unresolved"
       lookback_hours:
         description: "Only file issues first seen within this many hours"
-        default: "24"
+        default: "168"
 
 permissions:
   contents: read
