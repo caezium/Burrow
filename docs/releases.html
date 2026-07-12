@@ -123,13 +123,51 @@
 <header class="hero page">
   <h1>Changelog</h1>
   <p>Every version at a glance — what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">16 releases · latest 0.9.2 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p class="count">17 releases · latest 0.10.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
 </header>
 
 <main class="page">
+    <article class="entry" id="v0.10.0">
+      <div class="ver-col">
+        <h2 class="ver">0.10.0<span class="latest">latest</span></h2>
+        <span class="date mono">Jul 12, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.0" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">The conductor release — Burrow ships its own command layer, a brand-new Duplicates pane, and the sudo, uninstall, and Tune-Up fixes you reported.</p>
+        <div class="sblock">
+          <div class="slabel mono">New</div>
+          <ul class="slist">
+            <li>Duplicates pane: scan, review checklist-style with a keep-one guard, move extras to the Trash or reclaim via APFS clones</li>
+            <li>Bundled <code>burrow</code> conductor (universal): analysis, status, history, clean, and optimize route through one stable JSON contract with direct-engine fallback</li>
+            <li>7 read-only MCP tools through the conductor — 21 total for agents</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">Fixes</div>
+          <ul class="slist">
+            <li>Admin password dialog appears again for root-owned app uninstalls (the engine now opens /dev/tty instead of permission-testing it)</li>
+            <li>Failed uninstalls keep the list and selection and surface the engine's error</li>
+            <li>Tune-Up reclaim sizes no longer show raw ANSI color codes</li>
+            <li>Analyze bounds per-child scans so a huge cache folder can't freeze the scan</li>
+            <li>Menu-bar popover no longer rubber-bands into empty space</li>
+            <li>Self-update refreshes Homebrew before upgrading</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">Also</div>
+          <ul class="slist">
+            <li>Per-metric menu-bar text sizing, stable widths, flipped net in/out ordering</li>
+            <li>HUD popover re-pins when the menu bar auto-hides</li>
+            <li>Windows preview: burrow.exe bundled + BurrowEnvelope contract parser</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
     <article class="entry" id="v0.9.2">
       <div class="ver-col">
-        <h2 class="ver">0.9.2<span class="latest">latest</span></h2>
+        <h2 class="ver">0.9.2</h2>
         <span class="date mono">Jul 8, 2026</span>
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.2" target="_blank" rel="noopener">full notes ↗</a>
       </div>

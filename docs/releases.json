@@ -2,6 +2,74 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.10.0",
+      "date": "2026-07-12",
+      "tag": "v0.10.0",
+      "tagline": "The conductor release \u2014 Burrow ships its own command layer, a brand-new Duplicates pane, and the sudo, uninstall, and Tune-Up fixes you reported.",
+      "highlights": [
+        {
+          "icon": "package",
+          "color": "lilac",
+          "title": "New: Duplicates",
+          "line": "Scan any folder for byte-identical copies, review them checklist-style (every group keeps at least one), then move extras to the Trash \u2014 or reclaim the space with APFS clones, deleting nothing."
+        },
+        {
+          "icon": "wrench",
+          "color": "accent",
+          "title": "The conductor",
+          "line": "Burrow now bundles `burrow`, a universal CLI that drives the bundled engine \u2014 analysis, status, history, clean, and optimize all speak one stable contract, and the app works out of the box with no Homebrew install."
+        },
+        {
+          "icon": "key",
+          "color": "gold",
+          "title": "Sudo dialog fixed",
+          "line": "Uninstalling root-owned apps (Zoom et al.) shows the proper admin password prompt again instead of failing with \u201cAdmin access denied\u201d."
+        },
+        {
+          "icon": "robot",
+          "color": "mint",
+          "title": "7 new agent tools",
+          "line": "Duplicates, orphaned files, per-app network usage, rule previews, trash sentinel, app-slim check, and similar photos \u2014 21 read-only MCP tools total."
+        }
+      ],
+      "chips": [
+        "Failed uninstalls keep your selection and show the engine's actual error",
+        "Tune-Up sizes render clean \u2014 no more raw color codes",
+        "Analyze can't stall on cache-heavy folders; the menu-bar popover no longer bounces",
+        "Per-metric menu-bar text sizing with stable widths",
+        "Windows preview bundles burrow.exe and the same envelope contract"
+      ],
+      "sections": [
+        {
+          "label": "New",
+          "items": [
+            "Duplicates pane: scan, review checklist-style with a keep-one guard, move extras to the Trash or reclaim via APFS clones",
+            "Bundled `burrow` conductor (universal): analysis, status, history, clean, and optimize route through one stable JSON contract with direct-engine fallback",
+            "7 read-only MCP tools through the conductor \u2014 21 total for agents"
+          ]
+        },
+        {
+          "label": "Fixes",
+          "items": [
+            "Admin password dialog appears again for root-owned app uninstalls (the engine now opens /dev/tty instead of permission-testing it)",
+            "Failed uninstalls keep the list and selection and surface the engine's error",
+            "Tune-Up reclaim sizes no longer show raw ANSI color codes",
+            "Analyze bounds per-child scans so a huge cache folder can't freeze the scan",
+            "Menu-bar popover no longer rubber-bands into empty space",
+            "Self-update refreshes Homebrew before upgrading"
+          ]
+        },
+        {
+          "label": "Also",
+          "items": [
+            "Per-metric menu-bar text sizing, stable widths, flipped net in/out ordering",
+            "HUD popover re-pins when the menu bar auto-hides",
+            "Windows preview: burrow.exe bundled + BurrowEnvelope contract parser"
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.9.2",
       "date": "2026-07-08",
       "tag": "v0.9.2",
