@@ -186,14 +186,14 @@ enum UpdateCheck {
         }
     }
 
-    /// User-initiated one-click update for Homebrew installs: run
-    /// `brew upgrade --cask burrow` in Terminal, then relaunch. Still entirely
-    /// user-driven — nothing installs without this click. Uses a `.command`
-    /// file (no Automation/AppleScript permission needed): it waits for this
-    /// app to quit so the bundle can be swapped cleanly, upgrades, then reopens
-    /// Burrow. Terminal runs in the user's login shell, so `brew` is on PATH.
-    static func homebrewUpgrade() {
-        let script = """
+    /// The Homebrew update shell script (pure, so it's unit-tested). `brew upgrade --cask burrow`
+    /// prints "cannot be upgraded as-is" and EXITS 0 when the installed cask can't be upgraded in
+    /// place (the app self-modifies on launch — ad-hoc re-sign / receipt drift — so Homebrew
+    /// refuses and recommends a forced reinstall). Trusting that exit 0 made every update a silent
+    /// no-op: it claimed "Updated. Relaunching" and reopened the SAME build. So we capture the
+    /// output, detect the refusal, and run the `reinstall --force` Homebrew itself recommends.
+    static func homebrewUpdateScript(releasesURL: String) -> String {
+        """
         #!/bin/bash
         echo "Updating Burrow via Homebrew — it'll reopen when this finishes."
         echo
@@ -205,16 +205,30 @@ enum UpdateCheck {
         # the throttle so the cask is current. Its own exit status is ignored — a
         # warning on some *other* tap must not abort our upgrade. (#243)
         brew update || true
-        brew upgrade --cask burrow
-        code=$?
+        out=$(brew upgrade --cask burrow 2>&1); code=$?
+        printf '%s\\n' "$out"
+        # The refusal is a WARNING that exits 0, so fall back on the message, not $code.
+        if printf '%s' "$out" | grep -q "cannot be upgraded as-is"; then
+          echo
+          echo "Homebrew can't upgrade in place — reinstalling…"
+          brew reinstall --cask --force burrow
+          code=$?
+        fi
         echo
         if [ $code -eq 0 ]; then
           echo "Updated. Relaunching Burrow…"
           open -a Burrow
         else
-          echo "Update failed (exit $code). Grab it from \(releasesPageURL.absoluteString)"
+          echo "Update failed (exit $code). Grab it from \(releasesURL)"
         fi
         """
+    }
+
+    /// User-initiated one-click update for Homebrew installs. Writes the script to a `.command`
+    /// file and opens it in Terminal (no Automation permission needed), then quits so the bundle
+    /// can be swapped and the new build relaunched.
+    static func homebrewUpgrade() {
+        let script = homebrewUpdateScript(releasesURL: releasesPageURL.absoluteString)
         let path = (NSTemporaryDirectory() as NSString).appendingPathComponent("burrow-update.command")
         do {
             try script.write(toFile: path, atomically: true, encoding: .utf8)

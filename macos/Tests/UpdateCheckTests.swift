@@ -40,4 +40,20 @@ final class UpdateCheckTests: XCTestCase {
         XCTAssertNil(UpdateCheck.parseLatestRelease(Data("not json".utf8)))
         XCTAssertNil(UpdateCheck.parseLatestRelease(Data("{}".utf8)))
     }
+
+    // MARK: - Homebrew update script (the "cannot be upgraded as-is" silent no-op)
+
+    func testHomebrewUpdateScript_fallsBackToForcedReinstall() {
+        let s = UpdateCheck.homebrewUpdateScript(releasesURL: "https://example.com/r")
+        // Must detect Homebrew's exit-0 refusal by its message, not the exit code…
+        XCTAssertTrue(s.contains("cannot be upgraded as-is"),
+                      "must key off the warning text, since brew exits 0 on it")
+        // …and fall back to the forced reinstall Homebrew recommends.
+        XCTAssertTrue(s.contains("brew reinstall --cask --force burrow"),
+                      "must reinstall when an in-place upgrade is refused")
+        // Capture upgrade output so the refusal is detectable at all.
+        XCTAssertTrue(s.contains("out=$(brew upgrade --cask burrow 2>&1); code=$?"))
+        XCTAssertTrue(s.contains("open -a Burrow"))
+        XCTAssertTrue(s.contains("https://example.com/r"))
+    }
 }
