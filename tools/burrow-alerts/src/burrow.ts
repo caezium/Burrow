@@ -31,11 +31,45 @@ export class BurrowMCP {
   private nextId = 1;
   private pending = new Map<number, (msg: any) => void>();
   private ready: Promise<void>;
+  private dead = false;
+  private deadError: Error | null = null;
 
   constructor() {
     this.proc = spawn(BURROW_BIN, ["--mcp"], { stdio: ["pipe", "pipe", "ignore"] });
+    // A missing/moved Burrow.app makes spawn emit 'error' on the child. With no listener Node
+    // RE-THROWS it as an uncaught exception — bypassing every `.catch`/await and, in the
+    // long-lived agent (one BurrowMCP per message), turning a fresh Mac without Burrow into a
+    // crash-restart storm. Funnel 'error'/nonzero-exit into `die` so it surfaces as a normal
+    // rejection on `ready`/pending calls instead.
+    this.proc.on("error", (e) => this.die(e instanceof Error ? e : new Error(String(e))));
+    this.proc.on("exit", (code, signal) => {
+      if (code !== 0) this.die(new Error(`burrow --mcp exited early (code ${code ?? "null"}, signal ${signal ?? "null"})`));
+    });
     this.proc.stdout!.on("data", (d) => this.onData(String(d)));
     this.ready = this.init();
+  }
+
+  /** Tear down on a fatal child failure: reject every in-flight call (and `ready`, one of them)
+   *  so awaiters see an Error instead of an uncaught throw. Idempotent. */
+  private die(err: Error) {
+    if (this.dead) return;
+    this.dead = true;
+    this.deadError = err;
+    for (const [id, fn] of [...this.pending]) {
+      this.pending.delete(id);
+      fn({ error: { message: err.message } });
+    }
+  }
+
+  /** Write a framed JSON message, guarding a dead/closed pipe (a raw stdin.write on a failed
+   *  spawn throws EPIPE synchronously). */
+  private write(obj: unknown): void {
+    if (this.dead) return;
+    try {
+      this.proc.stdin!.write(JSON.stringify(obj) + "\n");
+    } catch (e) {
+      this.die(e instanceof Error ? e : new Error(String(e)));
+    }
   }
 
   private onData(chunk: string) {
@@ -55,6 +89,7 @@ export class BurrowMCP {
   }
 
   private rpc(method: string, params: unknown, timeoutMs = 15_000): Promise<any> {
+    if (this.dead) return Promise.reject(this.deadError ?? new Error(`MCP ${method}: burrow is not running`));
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -66,7 +101,7 @@ export class BurrowMCP {
         if (msg.error) reject(new Error(`MCP ${method}: ${msg.error.message ?? JSON.stringify(msg.error)}`));
         else resolve(msg.result);
       });
-      this.proc.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+      this.write({ jsonrpc: "2.0", id, method, params });
     });
   }
 
@@ -76,7 +111,7 @@ export class BurrowMCP {
       capabilities: {},
       clientInfo: { name: "burrow-alerts", version: "0.1.0" },
     });
-    this.proc.stdin!.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }) + "\n");
+    this.write({ jsonrpc: "2.0", method: "notifications/initialized", params: {} });
   }
 
   /** Call a tool and return its first text-content block verbatim. */

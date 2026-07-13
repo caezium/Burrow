@@ -115,6 +115,9 @@ export function makeAnthropicBrain(cfg: AnthropicCfg, deps: Deps = {}): Brain {
           },
           body: JSON.stringify({ model: cfg.model, max_tokens: 1024, system, messages, tools: toolPayload }),
         } as any);
+        // Without this an auth/rate-limit/5xx returns a body with no `content`, the brain yields
+        // "", and the agent texts the owner a BLANK bubble. Surface the failure instead.
+        if (!(res as any).ok) return `I couldn't reach the model (HTTP ${(res as any).status}).`;
         const json = await (res as any).json();
         const content: any[] = json.content ?? [];
 
@@ -156,6 +159,8 @@ export function makeOpenAICompatBrain(cfg: OpenAICompatCfg, deps: Deps = {}): Br
           headers: { "content-type": "application/json", authorization: `Bearer ${cfg.apiKey}` },
           body: JSON.stringify({ model: cfg.model, messages, tools: toolPayload }),
         } as any);
+        // See the Anthropic brain: a non-2xx here otherwise becomes an empty reply → blank iMessage.
+        if (!(res as any).ok) return `I couldn't reach the model (HTTP ${(res as any).status}).`;
         const json = await (res as any).json();
         const msg = json.choices?.[0]?.message ?? {};
 

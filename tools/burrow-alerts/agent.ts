@@ -114,6 +114,11 @@ async function handle(space: any, message: any): Promise<void> {
   try {
     console.log(`[agent] question received (len ${question.length}) — asking ${LLM.provider}…`);
     const reply = capReply(await (space.responding ? space.responding(() => answer(question)) : answer(question)), MAX_REPLY_CHARS);
+    if (!reply.trim()) { // never text a blank bubble (e.g. stripMarkdown ate the whole reply)
+      audit({ event: "empty_reply", who, provider: LLM.provider, qLen: question.length });
+      await say(space, "I didn't get an answer that time — try asking again.");
+      return;
+    }
     await say(space, reply);
     console.log(`[agent] replied (len ${reply.length}).`);
     audit({ event: "reply", who, provider: LLM.provider, qLen: question.length, replyLen: reply.length, ms: Date.now() - t0 });

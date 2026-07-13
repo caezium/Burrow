@@ -24,3 +24,19 @@ test("isAuthorized accepts the owner's number (any formatting) and rejects other
   expect(isAuthorized("", owner)).toBe(false);                 // empty sender
   expect(isAuthorized("+8613410272240", "")).toBe(false);     // no owner configured
 });
+
+test("isAuthorized rejects suffix collisions (the old endsWith bypass)", () => {
+  const owner = "+15551234567"; // US, +1
+  expect(isAuthorized("+1 (555) 123-4567", owner)).toBe(true);  // same number, formatted
+  expect(isAuthorized("5551234567", owner)).toBe(true);         // bare 10-digit, +1 dropped
+  expect(isAuthorized("1234567", owner)).toBe(false);           // 7-digit suffix — MUST NOT match
+  expect(isAuthorized("4567", owner)).toBe(false);              // short suffix — MUST NOT match
+  expect(isAuthorized("+8615551234567", owner)).toBe(false);    // owner digits as a suffix of a +86 number
+});
+
+test("isAuthorized matches email/handle owners exactly, case-insensitively", () => {
+  const owner = "Owner@Example.com";
+  expect(isAuthorized("owner@example.com", owner)).toBe(true);
+  expect(isAuthorized("someone@example.com", owner)).toBe(false);
+  expect(isAuthorized("example.com", owner)).toBe(false); // not a suffix match
+});

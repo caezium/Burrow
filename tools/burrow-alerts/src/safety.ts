@@ -8,12 +8,24 @@ export function digits(s: string): string {
   return (s ?? "").replace(/\D/g, "");
 }
 
-/** True only for the configured owner's number (suffix match tolerates formatting). */
+/** Canonical phone digits: strip a leading US/Canada country code so "+1 (555)…" and
+ *  "5551234567" compare equal, WITHOUT the old bidirectional `endsWith` that authorized any
+ *  suffix collision (e.g. a 7-digit sender matching an 11-digit owner) — a real auth bypass on
+ *  the only gate protecting a system-reading assistant. */
+function canonPhone(d: string): string {
+  return d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+}
+
+/** True only for the configured owner. Numeric handles compare by canonical digits (formatting /
+ *  +1 tolerated); email or other non-numeric handles compare case-insensitively verbatim. */
 export function isAuthorized(senderId: string, ownerDigits: string): boolean {
-  const d = digits(senderId);
-  const o = digits(ownerDigits);
-  if (!d || !o) return false;
-  return d === o || d.endsWith(o) || o.endsWith(d);
+  const sd = digits(senderId);
+  const od = digits(ownerDigits);
+  if (sd && od) return canonPhone(sd) === canonPhone(od);
+  // No digits on one side ⇒ an email/handle: exact, case-insensitive match (never a suffix).
+  const s = (senderId ?? "").trim().toLowerCase();
+  const o = (ownerDigits ?? "").trim().toLowerCase();
+  return s !== "" && s === o;
 }
 
 export function capReply(s: string, max: number): string {

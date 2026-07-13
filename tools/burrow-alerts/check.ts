@@ -95,7 +95,7 @@ async function runChecks(mcp: BurrowMCP) {
   // 2) Evaluate rules and stage next states. We do NOT persist state until after
   //    sends succeed, so a mid-run kill re-alerts rather than swallowing.
   const staged: Array<{ id: string; state: ReturnType<typeof step>["state"] }> = [];
-  const sends: Array<{ label: string; produce: () => Promise<{ text: string; card?: MiniAppInput }> }> = [];
+  const sends: Array<{ id: string; label: string; produce: () => Promise<{ text: string; card?: MiniAppInput }> }> = [];
 
   const root = snap.disks.find((d) => d.mount === "/");
   if (root) {
@@ -105,6 +105,7 @@ async function runChecks(mcp: BurrowMCP) {
     console.log(`[disk] / at ${root.used_percent.toFixed(1)}% (high ${DISK.high}/low ${DISK.low}) firing=${state.firing} fired=${fired}`);
     if (fired) {
       sends.push({
+        id: rule.id,
         label: "disk alert",
         // Slow `analyze` runs on a THROWAWAY connection so it can't block anything.
         produce: async () => {
@@ -129,16 +130,32 @@ async function runChecks(mcp: BurrowMCP) {
     const { state, fired } = step(rule, worst.avg_cpu, ts, store.get(rule.id));
     staged.push({ id: rule.id, state });
     console.log(`[cpu] worst="${worst.name}" avg ${worst.avg_cpu.toFixed(0)}% over ${CPU.windowMinutes}m (samples ${worst.samples}/${cpu.sampleCount}, need ${needSamples}) fired=${fired}`);
-    if (fired) sends.push({ label: "cpu alert", produce: async () => ({ text: formatCpuAlert({ name: worst.name, peak_cpu: worst.avg_cpu }, CPU.windowMinutes) }) });
+    if (fired) sends.push({ id: rule.id, label: "cpu alert", produce: async () => ({ text: formatCpuAlert({ name: worst.name, peak_cpu: worst.avg_cpu }, CPU.windowMinutes) }) });
   } else {
     console.log(`[cpu] no process sustained ≥${CPU.high}% over ${CPU.windowMinutes}m (sampleCount ${cpu.sampleCount})`);
   }
 
-  // 3) Send, then persist. If a send throws, state is not saved → we re-alert.
+  // 3) Send, then persist — PER RULE, not all-or-nothing. Each alert's new state is saved only
+  //    after its OWN delivery succeeds; a failure is isolated (logged, state left unsaved so it
+  //    re-alerts next run) and does not block or un-persist the others. The old single end-of-run
+  //    save meant one failed send (e.g. CPU) threw away an already-delivered alert's state (disk),
+  //    which then re-fired every 10 min — the exact spam this tool exists to avoid.
   //    Dry-run never persists (it must not suppress a later real alert).
-  for (const s of sends) { const out = await s.produce(); await deliver(s.label, out.text, out.card); }
+  const stateFor = new Map(staged.map((s) => [s.id, s.state] as const));
+  const firedIds = new Set(sends.map((s) => s.id));
+  for (const s of sends) {
+    try {
+      const out = await s.produce();
+      await deliver(s.label, out.text, out.card);
+      if (!DRY_RUN && stateFor.has(s.id)) { store.set(s.id, stateFor.get(s.id)!); store.save(); }
+    } catch (e: any) {
+      console.error(`[check] ${s.label} failed (state not saved, will re-alert): ${e?.message ?? e}`);
+    }
+  }
   if (DRY_RUN) return;
-  for (const { id, state } of staged) store.set(id, state);
+  // Rules that didn't fire (idle / recovered) have no send to gate on — persist them so a
+  // recovery below the low threshold is remembered and doesn't linger as "firing".
+  for (const { id, state } of staged) if (!firedIds.has(id)) store.set(id, state);
   store.save();
 }
 
