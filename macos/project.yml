@@ -132,6 +132,16 @@ targets:
           else
             echo "warning: burrow-cli source or cargo not present at $BURROW_CLI_SRC — Burrow falls back to the direct engine. Set BURROW_CLI_SRC or init the vendor/burrow-cli submodule."
           fi
+      - name: Bundle fclones (MIT sidecar)
+        basedOnDependencyAnalysis: false
+        script: |
+          # COPY the cached universal `fclones` beside the conductor so the Duplicates pane works
+          # with zero install — `burrow dupes` resolves it via $BURROW_FCLONES (set by the app to
+          # this bundled copy). This phase NEVER builds fclones (that heavy step is release-only,
+          # scripts/build-fclones.sh); it copies the cache and otherwise skips gracefully, so a
+          # disk-constrained local build is never at risk. Final seal happens POST-build.
+          "$SRCROOT/scripts/bundle-fclones.sh" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH" \
+            || echo "warning: fclones bundling skipped — Duplicates falls back to a system/\$BURROW_FCLONES fclones."
 
   BurrowTests:
     type: bundle.unit-test

@@ -52,3 +52,24 @@ jobs:
           xcodebuild test -project Burrow.xcodeproj -scheme Burrow \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+  # Validate the fclones sidecar cross-compiles universal (the Duplicates dependency). Runs on
+  # the fclones scripts so it proves + caches the build before a release relies on it.
+  fclones-sidecar:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Cache fclones sidecar
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: ~/.cache/burrow-fclones
+          key: fclones-universal-0.35.0
+      - name: Build universal fclones
+        run: bash scripts/build-fclones.sh
+      - name: Assert it is universal
+        run: |
+          F="$HOME/.cache/burrow-fclones/fclones-universal-0.35.0"
+          lipo -archs "$F" | grep -q arm64 && lipo -archs "$F" | grep -q x86_64 \
+            || { echo "::error::fclones not universal: $(lipo -archs "$F")"; exit 1; }
+          "$F" --version

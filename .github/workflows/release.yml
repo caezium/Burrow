@@ -111,6 +111,16 @@ jobs:
       - name: Select newest Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
 
+      # Cache the built universal fclones across releases so it builds only once (heavy —
+      # two full dep-tree builds). Keyed on the pinned version.
+      - name: Cache fclones sidecar
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: ~/.cache/burrow-fclones
+          key: fclones-universal-0.35.0
+      - name: Build fclones sidecar (MIT, universal)
+        run: bash scripts/build-fclones.sh
+
       - name: Install xcodegen
         run: brew install xcodegen
 
@@ -144,7 +154,11 @@ jobs:
             || { echo "::error::Resources/engine incomplete — the engine did not bundle. Failing the release."; exit 1; }
           lipo -archs "$APP/Contents/Resources/burrow" | grep -q "x86_64" \
             || { echo "::error::bundled burrow is not universal (missing x86_64 slice)."; exit 1; }
-          echo "conductor: $(lipo -archs "$APP/Contents/Resources/burrow") ✓  engine: present ✓"
+          [ -x "$APP/Contents/Resources/fclones" ] \
+            || { echo "::error::Resources/fclones missing — the Duplicates sidecar did not bundle. Failing the release."; exit 1; }
+          lipo -archs "$APP/Contents/Resources/fclones" | grep -q "x86_64" \
+            || { echo "::error::bundled fclones is not universal (missing x86_64 slice)."; exit 1; }
+          echo "conductor: $(lipo -archs "$APP/Contents/Resources/burrow") ✓  engine: present ✓  fclones: $(lipo -archs "$APP/Contents/Resources/fclones") ✓"
 
       - name: Verify the tag matches the app version
         run: |

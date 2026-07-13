@@ -38,6 +38,16 @@ enum BurrowConductor {
         return (exists && isDir.boolValue) ? dir : nil
     }
 
+    /// The bundled `fclones` sidecar (Resources/fclones, from bundle-fclones.sh), or nil if this
+    /// build didn't ship one. `burrow dupes` shells out to fclones; without a bundled copy it falls
+    /// back to a `$BURROW_FCLONES`/PATH fclones, and if none exists the Duplicates pane shows
+    /// "fclones not found".
+    static func fclonesURL() -> URL? {
+        guard let res = Bundle.main.resourceURL else { return nil }
+        let fclones = res.appendingPathComponent("fclones")
+        return FileManager.default.isExecutableFile(atPath: fclones.path) ? fclones : nil
+    }
+
     /// True when a bundled conductor is present. Call sites branch on this to decide between the
     /// conductor path and the legacy direct-engine path.
     static var isAvailable: Bool { executableURL() != nil }
@@ -58,6 +68,11 @@ enum BurrowConductor {
         // would otherwise shadow Foundation's here.
         var env = Foundation.ProcessInfo.processInfo.environment
         if let dir = engineDir { env["BURROW_ENGINE_DIR"] = dir.path }
+        // Point the conductor at the bundled fclones for `dupes` — but don't OVERRIDE a user's
+        // own $BURROW_FCLONES if they set one (they may prefer a newer/system fclones).
+        if env["BURROW_FCLONES"] == nil, let fclones = fclonesURL() {
+            env["BURROW_FCLONES"] = fclones.path
+        }
         return env
     }
 
