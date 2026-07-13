@@ -91,4 +91,32 @@ final class PhotosModelTests: XCTestCase {
         let g = PhotoGroup(paths: ["/tmp/x.png", "/tmp/y.png"])
         XCTAssertEqual(g.id, "/tmp/x.png")
     }
+
+    // MARK: skipped-unsupported (HEIC) surfacing
+
+    func testParse_skippedUnsupportedIsRead() throws {
+        let data = """
+        {"dir":"/p","threshold":10,"similar_groups":[],
+         "skipped_unsupported":43,"skipped_formats":{"heic":42,"tiff":1}}
+        """.data(using: .utf8)!
+        let report = try XCTUnwrap(PhotosReport.parse(data))
+        XCTAssertEqual(report.skippedUnsupported, 43)
+        XCTAssertEqual(report.skippedFormats["heic"], 42)
+        // Note leads with HEIC and rolls the rest into "other".
+        XCTAssertEqual(report.skippedNote, "42 HEIC + 1 other images couldn't be read (HEIC isn't supported yet)")
+    }
+
+    func testParse_noSkippedFieldMeansNoNote() throws {
+        // Older engines omit the field — absent must read as zero, no note (no false alarm).
+        let data = #"{"similar_groups":[{"paths":["/a.png","/b.png"]}]}"#.data(using: .utf8)!
+        let report = try XCTUnwrap(PhotosReport.parse(data))
+        XCTAssertEqual(report.skippedUnsupported, 0)
+        XCTAssertNil(report.skippedNote)
+    }
+
+    func testSkippedNote_singularHeicOnly() {
+        let r = PhotosReport(dir: "", threshold: 0, groups: [],
+                             skippedUnsupported: 1, skippedFormats: ["heic": 1])
+        XCTAssertEqual(r.skippedNote, "1 HEIC image couldn't be read (HEIC isn't supported yet)")
+    }
 }

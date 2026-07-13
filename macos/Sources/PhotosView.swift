@@ -37,7 +37,7 @@ struct PhotosView: View {
                 } else if let err = model.error {
                     errorState(err)
                 } else if let report = model.report {
-                    if report.groups.isEmpty { cleanState } else { results(report) }
+                    if report.groups.isEmpty { cleanState(report) } else { results(report) }
                 } else {
                     idleState
                 }
@@ -175,13 +175,20 @@ struct PhotosView: View {
         }
     }
 
-    private var cleanState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle").font(.system(size: 24)).foregroundStyle(Tool.photos.accent)
-            Text(NSLocalizedString("No look-alikes here", comment: ""))
+    private func cleanState(_ report: PhotosReport) -> some View {
+        // A folder of iPhone photos scans as "empty" because the engine can't decode HEIC — say so
+        // rather than claiming everything's unique, which would be an outright lie for that folder.
+        let skipped = report.skippedNote
+        return VStack(spacing: 8) {
+            Image(systemName: skipped == nil ? "checkmark.circle" : "photo.badge.exclamationmark")
+                .font(.system(size: 24)).foregroundStyle(Tool.photos.accent)
+            Text(skipped == nil
+                 ? NSLocalizedString("No look-alikes here", comment: "")
+                 : NSLocalizedString("Nothing scannable here", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
-            Text(NSLocalizedString("Every PNG and JPEG in this folder looks one of a kind.", comment: ""))
+            Text(skipped ?? NSLocalizedString("Every PNG and JPEG in this folder looks one of a kind.", comment: ""))
                 .font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
+                .multilineTextAlignment(.center).frame(maxWidth: 440)
         }
     }
 
@@ -195,6 +202,9 @@ struct PhotosView: View {
                         .font(Brand.serif(22, .medium)).foregroundStyle(Brand.textPrimary)
                     Text(NSLocalizedString("Images in a set look alike to a perceptual hash — not byte-identical, so judge with your eyes. Read-only: reveal anything in Finder.", comment: ""))
                         .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
+                    if let skipped = report.skippedNote {
+                        Text(skipped).font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
+                    }
                 }
                 Spacer()
             }
