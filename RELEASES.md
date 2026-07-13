@@ -1,3 +1,38 @@
+# Burrow 0.10.1
+
+Three new panes, and Duplicates finally works on a clean Mac. This release
+carries everything since 0.10.0 — the Leftovers, Similar Photos, and Network
+panes, plus a batch of menu-bar HUD and sidecar fixes.
+
+## New panes
+- **Leftovers.** Surface the files an app leaves behind after you delete it —
+  caches, preferences, application support, launch agents — and clear the
+  orphans. ([#273](https://github.com/caezium/Burrow/pull/273))
+- **Similar Photos.** Cluster visually-similar images — near-duplicate
+  screenshots, burst shots, re-exports — by perceptual hash. Read-only: review
+  the sets, reveal anything in Finder.
+  ([#273](https://github.com/caezium/Burrow/pull/273))
+- **Network.** Per-app bandwidth, so you can see what's talking to the internet.
+  ([#273](https://github.com/caezium/Burrow/pull/273))
+
+## Fixes
+- **Duplicates works out of the box.** The `fclones` sidecar it relies on is now
+  bundled inside the app, so there's no more "fclones not found" on a clean Mac.
+  ([#278](https://github.com/caezium/Burrow/pull/278))
+- **Similar Photos is honest about HEIC.** A folder of iPhone photos — HEIC,
+  which the scanner can't decode yet — now says "N HEIC couldn't be read"
+  instead of a bare, misleading empty result.
+  ([#283](https://github.com/caezium/Burrow/pull/283))
+- **Menu-bar HUD polish.** The popover no longer drifts sideways and clips its
+  content, and the tool strip wraps into a grid instead of overflowing.
+  ([#275](https://github.com/caezium/Burrow/pull/275),
+  [#277](https://github.com/caezium/Burrow/pull/277))
+- **No more ~2-second hang** when opening the window or switching panes — tool
+  panes now mount lazily. ([#274](https://github.com/caezium/Burrow/pull/274))
+- **Homebrew-installed helpers resolve.** A Finder-launched app now finds tools
+  on `/opt/homebrew/bin` on its PATH, matching what you see in a terminal.
+  ([#279](https://github.com/caezium/Burrow/pull/279))
+
 # Burrow 0.10.0
 
 The conductor release. Burrow now ships its own command layer — the bundled

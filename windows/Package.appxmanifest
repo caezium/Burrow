@@ -10,7 +10,7 @@
   <Identity
     Name="DA9687FB-09FD-4C4D-B67F-C35B87E6974E"
     Publisher="CN=Caezium"
-    Version="0.10.0.0" />
+    Version="0.10.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="DA9687FB-09FD-4C4D-B67F-C35B87E6974E" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
