@@ -59,6 +59,9 @@ jobs:
         shell: pwsh
         env:
           ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
+          # burrow-cli now depends on the PRIVATE burrow-engine crate over git; fetch it via the
+          # git CLI so the url.insteadOf token below applies.
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
           try {
             $sha = (git ls-tree HEAD windows/vendor/burrow-cli).Split()[2]
@@ -71,6 +74,12 @@ jobs:
               git -c "url.https://x-access-token:$($env:ENGINE_PAT)@github.com/.insteadOf=https://github.com/" clone --quiet https://github.com/caezium/burrow-cli.git $dest
             }
             git -C $dest -c advice.detachedHead=false checkout --quiet $sha
+            # cargo build fetches the private burrow-engine — authorize github.com for the CLI
+            # fetcher. Set AFTER the burrow-cli clone above so the burrow-engine-scoped token can't
+            # 403 that clone. No-op until the vendored burrow-cli carries the git dependency.
+            if ($env:ENGINE_PAT) {
+              git config --global url."https://x-access-token:$($env:ENGINE_PAT)@github.com/".insteadOf "https://github.com/"
+            }
             cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
             Copy-Item (Join-Path $dest 'target\release\burrow.exe') 'windows\Assets\burrow.exe' -Force
             Write-Host "staged burrow.exe @ $($sha.Substring(0,7))"

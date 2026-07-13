@@ -131,7 +131,18 @@ jobs:
           POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
           POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          # bundle-burrow.sh does `cargo build` on the vendored conductor, which now depends on the
+          # PRIVATE burrow-engine crate over git. Fetch it via the git CLI so the token below applies.
+          ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
+          # Let cargo read the private burrow-engine dependency during the conductor build. Set
+          # AFTER the conductor-fetch step (which clones burrow-cli unauthenticated) so this token —
+          # scoped to burrow-engine only — can't 403 that clone. No-op until the vendored burrow-cli
+          # actually carries the git dependency, so it's safe to land ahead of the submodule bump.
+          if [ -n "$ENGINE_PAT" ]; then
+            git config --global url."https://x-access-token:${ENGINE_PAT}@github.com/".insteadOf "https://github.com/"
+          fi
           # Sentry is vendored as a local framework (scripts/fetch-sentry.sh),
           # not an SPM package, so the SPM binary-download hang is gone — this is
           # a plain build now. The step timeout-minutes above is the hard cap.
