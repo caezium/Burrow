@@ -73,7 +73,22 @@ enum BurrowConductor {
         if env["BURROW_FCLONES"] == nil, let fclones = fclonesURL() {
             env["BURROW_FCLONES"] = fclones.path
         }
+        env["PATH"] = augmentedPATH(env["PATH"])
         return env
+    }
+
+    /// A Finder/LaunchServices launch strips PATH to `/usr/bin:/bin:/usr/sbin:/sbin` — no
+    /// `/opt/homebrew/bin` or `/usr/local/bin`. Absolute-path tools (the bundled engine/conductor/
+    /// fclones, `/usr/bin/nettop`, `/usr/bin/brctl`) don't care, but a user-installed fallback
+    /// sidecar AND the engine's own shell-outs to brew tools would silently vanish. Prepend the
+    /// Homebrew bins (idempotent) so PATH resolution matches what the user sees in a terminal.
+    /// Pure — unit-tested.
+    static func augmentedPATH(_ current: String?) -> String {
+        let base = (current?.isEmpty == false) ? current! : "/usr/bin:/bin:/usr/sbin:/sbin"
+        let brew = ["/opt/homebrew/bin", "/usr/local/bin"]
+        let entries = base.split(separator: ":").map(String.init)
+        let missing = brew.filter { !entries.contains($0) }
+        return missing.isEmpty ? base : (missing.joined(separator: ":") + ":" + base)
     }
 
     // MARK: - Capture (one-shot JSON commands)

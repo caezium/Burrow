@@ -98,6 +98,29 @@ final class BurrowEnvelopeTests: XCTestCase {
         XCTAssertNil(BurrowConductor.environment(engineDir: nil)["BURROW_ENGINE_DIR"])
     }
 
+    // MARK: PATH augmentation (the Finder-launch trap — brew sidecars/engine shell-outs)
+
+    func testAugmentedPATH_prependsHomebrewBinsToStrippedLaunchPATH() {
+        // The launchd/Finder default — no /opt/homebrew/bin.
+        let out = BurrowConductor.augmentedPATH("/usr/bin:/bin:/usr/sbin:/sbin")
+        XCTAssertEqual(out, "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin")
+    }
+
+    func testAugmentedPATH_isIdempotentAndPreservesExistingEntries() {
+        // A terminal launch already has the brew bins — don't duplicate them or reorder.
+        let terminal = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+        XCTAssertEqual(BurrowConductor.augmentedPATH(terminal), terminal)
+        // Only the missing one is added.
+        XCTAssertEqual(BurrowConductor.augmentedPATH("/opt/homebrew/bin:/usr/bin"),
+                       "/usr/local/bin:/opt/homebrew/bin:/usr/bin")
+    }
+
+    func testAugmentedPATH_handlesEmptyOrNil() {
+        let fallback = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        XCTAssertEqual(BurrowConductor.augmentedPATH(nil), fallback)
+        XCTAssertEqual(BurrowConductor.augmentedPATH(""), fallback)
+    }
+
     // MARK: streaming argv translation (safety-critical: mo↔burrow dry-run/apply INVERSION)
 
     func testStreamArgv_preview_dropsDryRun_neverApply() {
