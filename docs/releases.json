@@ -2,42 +2,100 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.10.1",
+      "date": "2026-07-13",
+      "tag": "v0.10.1",
+      "tagline": "Three new panes — Leftovers, Similar Photos, and Network — and Duplicates now works out of the box, plus menu-bar HUD and HEIC fixes.",
+      "highlights": [
+        {
+          "icon": "sweep",
+          "color": "lilac",
+          "title": "New: Leftovers",
+          "line": "Surface the files an app leaves behind after you delete it — caches, preferences, application support, launch agents — and clear the orphans."
+        },
+        {
+          "icon": "sparkle",
+          "color": "apricot",
+          "title": "New: Similar Photos",
+          "line": "Cluster visually-similar images — near-duplicate screenshots, burst shots, re-exports — by perceptual hash. Read-only: review the sets, reveal in Finder."
+        },
+        {
+          "icon": "globe",
+          "color": "azure",
+          "title": "New: Network",
+          "line": "See per-app bandwidth at a glance — which apps are actually talking to the internet."
+        },
+        {
+          "icon": "package",
+          "color": "green",
+          "title": "Duplicates works out of the box",
+          "line": "The `fclones` sidecar it relies on now ships inside the app — no more “fclones not found” on a clean Mac."
+        }
+      ],
+      "chips": [
+        "Similar Photos says when it skipped HEIC instead of showing an empty scan",
+        "Menu-bar popover no longer drifts sideways and clips; the tool strip wraps into a grid",
+        "No more ~2-second hang opening the window or switching panes",
+        "Finder-launched app finds Homebrew-installed helpers on its PATH"
+      ],
+      "sections": [
+        {
+          "label": "New",
+          "items": [
+            "Leftovers pane: find and clear the caches, preferences, and support files an app leaves behind",
+            "Similar Photos pane: cluster near-duplicate images by perceptual hash, reveal in Finder",
+            "Network pane: per-app bandwidth"
+          ]
+        },
+        {
+          "label": "Fixes",
+          "items": [
+            "Duplicates works with zero install — the fclones sidecar is now bundled universal",
+            "Similar Photos reports HEIC it can't decode (“N HEIC couldn't be read”) instead of a bare empty result",
+            "Menu-bar HUD popover no longer shifts sideways and clips; the tool strip wraps instead of overflowing",
+            "Tool panes mount lazily — no more ~2-second layout hang on open or pane switch",
+            "Finder-launched app augments its PATH with the Homebrew bins so installed helpers resolve"
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.10.0",
       "date": "2026-07-12",
       "tag": "v0.10.0",
-      "tagline": "The conductor release \u2014 Burrow ships its own command layer, a brand-new Duplicates pane, and the sudo, uninstall, and Tune-Up fixes you reported.",
+      "tagline": "The conductor release — Burrow ships its own command layer, a brand-new Duplicates pane, and the sudo, uninstall, and Tune-Up fixes you reported.",
       "highlights": [
         {
           "icon": "package",
           "color": "lilac",
           "title": "New: Duplicates",
-          "line": "Scan any folder for byte-identical copies, review them checklist-style (every group keeps at least one), then move extras to the Trash \u2014 or reclaim the space with APFS clones, deleting nothing."
+          "line": "Scan any folder for byte-identical copies, review them checklist-style (every group keeps at least one), then move extras to the Trash — or reclaim the space with APFS clones, deleting nothing."
         },
         {
           "icon": "wrench",
           "color": "accent",
           "title": "The conductor",
-          "line": "Burrow now bundles `burrow`, a universal CLI that drives the bundled engine \u2014 analysis, status, history, clean, and optimize all speak one stable contract, and the app works out of the box with no Homebrew install."
+          "line": "Burrow now bundles `burrow`, a universal CLI that drives the bundled engine — analysis, status, history, clean, and optimize all speak one stable contract, and the app works out of the box with no Homebrew install."
         },
         {
           "icon": "key",
           "color": "gold",
           "title": "Sudo dialog fixed",
-          "line": "Uninstalling root-owned apps (Zoom et al.) shows the proper admin password prompt again instead of failing with \u201cAdmin access denied\u201d."
+          "line": "Uninstalling root-owned apps (Zoom et al.) shows the proper admin password prompt again instead of failing with “Admin access denied”."
         },
         {
           "icon": "robot",
           "color": "mint",
           "title": "7 new agent tools",
-          "line": "Duplicates, orphaned files, per-app network usage, rule previews, trash sentinel, app-slim check, and similar photos \u2014 21 read-only MCP tools total."
+          "line": "Duplicates, orphaned files, per-app network usage, rule previews, trash sentinel, app-slim check, and similar photos — 21 read-only MCP tools total."
         }
       ],
       "chips": [
         "Failed uninstalls keep your selection and show the engine's actual error",
-        "Tune-Up sizes render clean \u2014 no more raw color codes",
+        "Tune-Up sizes render clean — no more raw color codes",
         "Analyze can't stall on cache-heavy folders; the menu-bar popover no longer bounces",
         "Per-metric menu-bar text sizing with stable widths",
-        "Windows preview is downloadable \u2014 BurrowWin zip with burrow.exe + engine bundled"
+        "Windows preview is downloadable — BurrowWin zip with burrow.exe + engine bundled"
       ],
       "sections": [
         {
@@ -45,7 +103,7 @@
           "items": [
             "Duplicates pane: scan, review checklist-style with a keep-one guard, move extras to the Trash or reclaim via APFS clones",
             "Bundled `burrow` conductor (universal): analysis, status, history, clean, and optimize route through one stable JSON contract with direct-engine fallback",
-            "7 read-only MCP tools through the conductor \u2014 21 total for agents"
+            "7 read-only MCP tools through the conductor — 21 total for agents"
           ]
         },
         {
@@ -69,7 +127,7 @@
         {
           "label": "windows",
           "items": [
-            "Downloadable at last: BurrowWin-0.10.0-win-x64.zip ships on this release \u2014 the unpackaged app with burrow.exe and the engine bundled (unzip, run BurrowWin.exe; Windows 10/11)",
+            "Downloadable at last: BurrowWin-0.10.0-win-x64.zip ships on this release — the unpackaged app with burrow.exe and the engine bundled (unzip, run BurrowWin.exe; Windows 10/11)",
             "Agent-triggered clean/optimize route through burrow.exe with the same envelope contract as macOS",
             "burrow.exe grew real Windows powers: Recycle-Bin safe delete, guarded BCU uninstalls, czkawka duplicates + similar photos, provider-aware OneDrive eviction, IP Helper network attribution"
           ]
@@ -80,19 +138,19 @@
       "version": "0.9.2",
       "date": "2026-07-08",
       "tag": "v0.9.2",
-      "tagline": "A stability and battery release \u2014 fixes to Cleanup, Analyze, and the menu bar, plus performance work that makes Burrow noticeably lighter while it sits idle.",
+      "tagline": "A stability and battery release — fixes to Cleanup, Analyze, and the menu bar, plus performance work that makes Burrow noticeably lighter while it sits idle.",
       "highlights": [
         {
           "icon": "trash",
           "color": "coral",
           "title": "Purge fixed",
-          "line": "Cleanup's project-artifacts purge was refusing every removal (\u201cCouldn't confirm the selection safely\u201d) \u2014 it now applies exactly the items you pick."
+          "line": "Cleanup's project-artifacts purge was refusing every removal (“Couldn't confirm the selection safely”) — it now applies exactly the items you pick."
         },
         {
           "icon": "leaf",
           "color": "green",
           "title": "Lighter while idle",
-          "line": "The metrics engine no longer reads the temperature, fan, and GPU sensors every second when no window is open \u2014 a real battery win."
+          "line": "The metrics engine no longer reads the temperature, fan, and GPU sensors every second when no window is open — a real battery win."
         },
         {
           "icon": "chart",
@@ -112,18 +170,18 @@
         "Doctor, disk SMART, and Time Machine probes are timeout-guarded; Doctor results cached",
         "Bounded Analyze memory, faster live sparklines",
         "Network-usage views share one sample instead of each running a 1-second scan",
-        "Fewer spurious \u201cApp Hang\u201d reports",
-        "Homebrew cask no longer depends on a system `mo` \u2014 the engine is bundled"
+        "Fewer spurious “App Hang” reports",
+        "Homebrew cask no longer depends on a system `mo` — the engine is bundled"
       ],
       "sections": [
         {
           "label": "Fixes",
           "items": [
-            "Purge (Cleanup \u2192 Project build artifacts) applies your selection instead of aborting with \u201cCouldn't confirm the selection safely\u201d",
-            "Analyze cancels superseded scans and caps engine concurrency \u2014 no more runaway pile of processes",
+            "Purge (Cleanup → Project build artifacts) applies your selection instead of aborting with “Couldn't confirm the selection safely”",
+            "Analyze cancels superseded scans and caps engine concurrency — no more runaway pile of processes",
             "Camera/mic in-use indicator ignores virtual audio/video devices and clears when capture ends",
             "Menu-bar popover no longer flies to a screen edge or mis-sizes on multi-display setups",
-            "Fewer spurious \u201cApp Hang\u201d reports"
+            "Fewer spurious “App Hang” reports"
           ]
         },
         {
@@ -149,19 +207,19 @@
       "version": "0.9.0",
       "date": "2026-06-30",
       "tag": "v0.9.0",
-      "tagline": "Burrow's biggest release \u2014 it now bundles its own engine (no separate install), and adds an Activity-Monitor-class process inspector, a Get Online connectivity companion, and a security-aware Doctor.",
+      "tagline": "Burrow's biggest release — it now bundles its own engine (no separate install), and adds an Activity-Monitor-class process inspector, a Get Online connectivity companion, and a security-aware Doctor.",
       "highlights": [
         {
           "icon": "package",
           "color": "teal",
           "title": "Bundled engine",
-          "line": "Burrow now ships its own MIT engine inside the app \u2014 a fork of Mole `mo` \u2014 so a fresh install needs no separate `brew install mole`. It runs the bundled engine first, falling back to a system `mo` for existing setups."
+          "line": "Burrow now ships its own MIT engine inside the app — a fork of Mole `mo` — so a fresh install needs no separate `brew install mole`. It runs the bundled engine first, falling back to a system `mo` for existing setups."
         },
         {
           "icon": "fingerprint",
           "color": "azure",
           "title": "Process inspector",
-          "line": "Click any process for a structured panel \u2014 identity, code signature, architecture, live CPU/memory, runtime, and its open network connections \u2014 plus a parent/child process tree."
+          "line": "Click any process for a structured panel — identity, code signature, architecture, live CPU/memory, runtime, and its open network connections — plus a parent/child process tree."
         },
         {
           "icon": "pulse",
@@ -179,14 +237,14 @@
           "icon": "shield",
           "color": "gold",
           "title": "Security-aware Doctor",
-          "line": "SIP, Gatekeeper, FileVault, and firewall at a glance \u2014 plus battery health, a high-CPU check, and one-click Copy diagnostics."
+          "line": "SIP, Gatekeeper, FileVault, and firewall at a glance — plus battery health, a high-CPU check, and one-click Copy diagnostics."
         }
       ],
       "chips": [
         "Clean sorts the review by reclaimable impact and flags sensitive (keychain/credential) paths",
         "All-time cleaned total on the Clean done screen",
         "App Store updates needing a newer macOS are hidden; alias-aware app search",
-        "One-tap whole-disk Analyze, plus a treemap \u201cOther\u201d fold",
+        "One-tap whole-disk Analyze, plus a treemap “Other” fold",
         "Optimize warns before running with a VPN or external display active",
         "Three main-thread hangs on the new process surfaces fixed"
       ],
@@ -194,44 +252,44 @@
         {
           "label": "engine",
           "items": [
-            "**Burrow bundles its own engine now.** The app ships an MIT-licensed `burrow-engine` (a fork of Mole `mo` at its last MIT release) inside `Burrow.app` and runs it directly \u2014 so a fresh install needs **no separate `brew install mole`**. Burrow prefers the bundled engine, then an installed `burrow-engine`, then a legacy system `mo` for existing setups."
+            "**Burrow bundles its own engine now.** The app ships an MIT-licensed `burrow-engine` (a fork of Mole `mo` at its last MIT release) inside `Burrow.app` and runs it directly — so a fresh install needs **no separate `brew install mole`**. Burrow prefers the bundled engine, then an installed `burrow-engine`, then a legacy system `mo` for existing setups."
           ]
         },
         {
           "label": "process inspector",
           "items": [
-            "**Per-process inspector** \u2014 click any process for a structured panel: identity (path, code signature, Mach-O architecture), live CPU/memory, runtime, and the process's open network connections.",
-            "**Process tree** \u2014 the parent/child hierarchy around any process.",
-            "**CPU watchdog** \u2014 set per-process CPU thresholds and get notified when something runs hot, with an editor in Settings.",
-            "**Filter, suspend/resume, export** \u2014 a typed predicate filter over the process table, suspend or resume a process, and export the table."
+            "**Per-process inspector** — click any process for a structured panel: identity (path, code signature, Mach-O architecture), live CPU/memory, runtime, and the process's open network connections.",
+            "**Process tree** — the parent/child hierarchy around any process.",
+            "**CPU watchdog** — set per-process CPU thresholds and get notified when something runs hot, with an editor in Settings.",
+            "**Filter, suspend/resume, export** — a typed predicate filter over the process table, suspend or resume a process, and export the table."
           ]
         },
         {
           "label": "get online",
           "items": [
-            "**On-demand speed test** \u2014 measure real down/up throughput.",
-            "**Nearby Wi-Fi scan** \u2014 surrounding networks and channel congestion (Home mode), so you can pick a clearer channel.",
-            "**Venue captive-portal tips** \u2014 venue-specific help for hotel/airport/caf\u00e9 portals that won't load.",
-            "**Connection history** \u2014 a log of connectivity events (SSID changes, drops)."
+            "**On-demand speed test** — measure real down/up throughput.",
+            "**Nearby Wi-Fi scan** — surrounding networks and channel congestion (Home mode), so you can pick a clearer channel.",
+            "**Venue captive-portal tips** — venue-specific help for hotel/airport/café portals that won't load.",
+            "**Connection history** — a log of connectivity events (SSID changes, drops)."
           ]
         },
         {
           "label": "doctor",
           "items": [
-            "**Security posture** \u2014 SIP, Gatekeeper, FileVault, and firewall at a glance, plus a high-CPU check and one-click **Copy diagnostics**.",
-            "**Battery health** \u2014 capacity % and condition (omitted on desktops).",
-            "**More context** \u2014 display, external-volume, and network context."
+            "**Security posture** — SIP, Gatekeeper, FileVault, and firewall at a glance, plus a high-CPU check and one-click **Copy diagnostics**.",
+            "**Battery health** — capacity % and condition (omitted on desktops).",
+            "**More context** — display, external-volume, and network context."
           ]
         },
         {
           "label": "clean, software & analyze",
           "items": [
             "**Clean** now sorts the review **by reclaimable impact** and **flags sensitive paths** (keychain/credential locations) before you delete; the done screen shows your **all-time cleaned total**.",
-            "**Software** \u2014 App Store updates that need a newer macOS are hidden; \u2318R refreshes with a cache bypass; app search is alias-aware.",
-            "**Uninstall** \u2014 a Clear-Data-only subset, plus an input-method leftover warning.",
-            "**Analyze** \u2014 one-tap whole-disk scan, and a treemap \u201cOther\u201d fold for tiny entries.",
-            "**Optimize** \u2014 a pre-run safety banner when a VPN or external display is active.",
-            "**Login items** \u2014 modern Login (BTM) items appear in the startup inventory; a LaunchAgent on an unplugged drive is no longer flagged broken.",
+            "**Software** — App Store updates that need a newer macOS are hidden; ⌘R refreshes with a cache bypass; app search is alias-aware.",
+            "**Uninstall** — a Clear-Data-only subset, plus an input-method leftover warning.",
+            "**Analyze** — one-tap whole-disk scan, and a treemap “Other” fold for tiny entries.",
+            "**Optimize** — a pre-run safety banner when a VPN or external display is active.",
+            "**Login items** — modern Login (BTM) items appear in the startup inventory; a LaunchAgent on an unplugged drive is no longer flagged broken.",
             "**Keep Screen On** keeps working with the lid closed."
           ]
         },
@@ -245,7 +303,7 @@
         {
           "label": "windows",
           "items": [
-            "**Windows preview** \u2014 version-aligned to 0.9.0; no Windows-specific changes this release."
+            "**Windows preview** — version-aligned to 0.9.0; no Windows-specific changes this release."
           ]
         }
       ]
@@ -254,13 +312,13 @@
       "version": "0.8.3",
       "date": "2026-06-25",
       "tag": "v0.8.3",
-      "tagline": "A metrics & menu-bar release \u2014 real memory-pressure reporting, a power-draw widget, a live menu-bar preview, and a snappier popover.",
+      "tagline": "A metrics & menu-bar release — real memory-pressure reporting, a power-draw widget, a live menu-bar preview, and a snappier popover.",
       "highlights": [
         {
           "icon": "gauge",
           "color": "teal",
           "title": "Real memory pressure",
-          "line": "\u201cBy pressure\u201d now reads actual macOS memory pressure \u2014 wired plus compressed over total, the same figure Activity Monitor shows \u2014 as a live percentage, colored by real load instead of a CPU-style ramp."
+          "line": "“By pressure” now reads actual macOS memory pressure — wired plus compressed over total, the same figure Activity Monitor shows — as a live percentage, colored by real load instead of a CPU-style ramp."
         },
         {
           "icon": "chart",
@@ -298,38 +356,38 @@
         {
           "label": "added",
           "items": [
-            "**Power-draw widget** \u2014 live system wattage (W) as a menu-bar metric.",
-            "**Real memory pressure.** \u201cBy pressure\u201d now reads actual macOS memory pressure \u2014 `(wired + compressed) / total` via `host_statistics64`, the same figure Activity Monitor reports \u2014 instead of reusing the CPU-style utilization ramp. Shown as a percentage on the memory tiles, colored green \u226459% / orange 60\u201379% / red \u226580%.",
-            "**Memory detail card** \u2014 the Status dashboard breaks memory down into used / free / cached / swap.",
-            "**Live menu-bar preview + layout presets** \u2014 Settings previews your real metrics as you configure them, with one-tap layout presets.",
-            "**Two new runner animations** \u2014 Wave and Bars."
+            "**Power-draw widget** — live system wattage (W) as a menu-bar metric.",
+            "**Real memory pressure.** “By pressure” now reads actual macOS memory pressure — `(wired + compressed) / total` via `host_statistics64`, the same figure Activity Monitor reports — instead of reusing the CPU-style utilization ramp. Shown as a percentage on the memory tiles, colored green ≤59% / orange 60–79% / red ≥80%.",
+            "**Memory detail card** — the Status dashboard breaks memory down into used / free / cached / swap.",
+            "**Live menu-bar preview + layout presets** — Settings previews your real metrics as you configure them, with one-tap layout presets.",
+            "**Two new runner animations** — Wave and Bars."
           ]
         },
         {
           "label": "changed",
           "items": [
             "**Consistent pressure coloring** across the dashboard tile, popover, memory-detail card, and menu bar.",
-            "**Live popover sparklines** \u2014 CPU / memory / GPU tick every second (about a minute of history).",
-            "**Honest color picker** \u2014 \u201cBy pressure\u201d is offered only where it applies (memory); the temperature color ramp was corrected."
+            "**Live popover sparklines** — CPU / memory / GPU tick every second (about a minute of history).",
+            "**Honest color picker** — “By pressure” is offered only where it applies (memory); the temperature color ramp was corrected."
           ]
         },
         {
           "label": "fixed",
           "items": [
             "**Brewfile import/export pickers no longer trip the hang detector** (ANR false-positives).",
-            "**App-Hang reports from memory-starved machines are dropped** before sending \u2014 they were environmental, not Burrow bugs."
+            "**App-Hang reports from memory-starved machines are dropped** before sending — they were environmental, not Burrow bugs."
           ]
         },
         {
           "label": "performance",
           "items": [
-            "**Snappier popover** \u2014 the metric grid no longer re-renders on unrelated state changes."
+            "**Snappier popover** — the metric grid no longer re-renders on unrelated state changes."
           ]
         },
         {
           "label": "windows",
           "items": [
-            "**Windows preview** \u2014 a version-aligned 0.8.3 build is attached (`BurrowWin-0.8.3-win-x64.zip`). No Windows-specific changes this release."
+            "**Windows preview** — a version-aligned 0.8.3 build is attached (`BurrowWin-0.8.3-win-x64.zip`). No Windows-specific changes this release."
           ]
         }
       ]
@@ -338,7 +396,7 @@
       "version": "0.8.2",
       "date": "2026-06-23",
       "tag": "v0.8.2",
-      "tagline": "A fix release \u2014 a Full Disk Access grant now actually takes effect, and Burrow asks for notification permission up front.",
+      "tagline": "A fix release — a Full Disk Access grant now actually takes effect, and Burrow asks for notification permission up front.",
       "highlights": [
         {
           "icon": "shield",
@@ -350,24 +408,24 @@
           "icon": "key",
           "color": "azure",
           "title": "Permission up front",
-          "line": "Burrow asks for notification permission once \u2014 at onboarding or when you first enable a notifying feature \u2014 instead of springing the prompt mid-notification."
+          "line": "Burrow asks for notification permission once — at onboarding or when you first enable a notifying feature — instead of springing the prompt mid-notification."
         }
       ],
       "chips": [
         "After updating, toggle Full Disk Access off and back on once",
-        "Still ad-hoc-signed \u2014 a re-grant is needed after each update until Burrow ships with a Developer ID signature"
+        "Still ad-hoc-signed — a re-grant is needed after each update until Burrow ships with a Developer ID signature"
       ],
       "sections": [
         {
           "label": "fixed",
           "items": [
-            "**Full Disk Access is honored again.** The shipped app's embedded framework signatures were malformed (`codesign --verify --strict` failed on `Sentry.framework`), so macOS couldn't validate Burrow's identity and silently ignored a Full Disk Access grant \u2014 turning it on in System Settings appeared to do nothing. The release now re-signs the app and every nested framework inside-out so the signature is valid and the grant takes effect. After updating, toggle Full Disk Access off and back on once. _(Burrow is still ad-hoc-signed, so a re-grant is needed after each update until it ships with a Developer ID signature.)_"
+            "**Full Disk Access is honored again.** The shipped app's embedded framework signatures were malformed (`codesign --verify --strict` failed on `Sentry.framework`), so macOS couldn't validate Burrow's identity and silently ignored a Full Disk Access grant — turning it on in System Settings appeared to do nothing. The release now re-signs the app and every nested framework inside-out so the signature is valid and the grant takes effect. After updating, toggle Full Disk Access off and back on once. _(Burrow is still ad-hoc-signed, so a re-grant is needed after each update until it ships with a Developer ID signature.)_"
           ]
         },
         {
           "label": "changed",
           "items": [
-            "**Notification permission is requested up front** \u2014 Burrow now asks once, when you finish onboarding or first enable a notifying feature, instead of springing the system prompt the moment a notification tries to fire."
+            "**Notification permission is requested up front** — Burrow now asks once, when you finish onboarding or first enable a notifying feature, instead of springing the system prompt the moment a notification tries to fire."
           ]
         }
       ]
@@ -376,7 +434,7 @@
       "version": "0.8.1",
       "date": "2026-06-23",
       "tag": "v0.8.1",
-      "tagline": "A stability release \u2014 no more dashboard freezes, live status now streams, a one-click Homebrew update, and the Windows preview's review closeout.",
+      "tagline": "A stability release — no more dashboard freezes, live status now streams, a one-click Homebrew update, and the Windows preview's review closeout.",
       "highlights": [
         {
           "icon": "gauge",
@@ -388,7 +446,7 @@
           "icon": "pulse",
           "color": "azure",
           "title": "Streaming live status",
-          "line": "With Mole 1.44+, status streams over `mo status --watch` (NDJSON) by default instead of polling \u2014 lower latency, less churn. Falls back to polling automatically."
+          "line": "With Mole 1.44+, status streams over `mo status --watch` (NDJSON) by default instead of polling — lower latency, less churn. Falls back to polling automatically."
         },
         {
           "icon": "package",
@@ -400,7 +458,7 @@
           "icon": "monitor",
           "color": "gold",
           "title": "Windows preview review",
-          "line": "Closed out the port review \u2014 MCP parity with the Mac, brand assets aligned, honest docs, and deletion-safety + test coverage."
+          "line": "Closed out the port review — MCP parity with the Mac, brand assets aligned, honest docs, and deletion-safety + test coverage."
         }
       ],
       "chips": [
@@ -412,7 +470,7 @@
         {
           "label": "fixed",
           "items": [
-            "**No more App-Hang freezes.** The Overview dashboard re-rendered its whole grid \u2014 every chart tile and the full process table \u2014 once a second; now only the small Disk / Network tiles update that often, the rest on the snapshot.",
+            "**No more App-Hang freezes.** The Overview dashboard re-rendered its whole grid — every chart tile and the full process table — once a second; now only the small Disk / Network tiles update that often, the rest on the snapshot.",
             "Opening **Settings** and the **About** panel no longer blocks the main thread (login-item status, metrics-folder sizing, and the engine-version lookup moved off it).",
             "**PostHog telemetry** now flushes off the main thread instead of on a main-run-loop timer."
           ]
@@ -420,19 +478,19 @@
         {
           "label": "changed",
           "items": [
-            "**Live status streams by default** \u2014 with Mole 1.44+, Burrow streams `mo status --watch` (NDJSON) instead of polling `mo status --json`: lower latency and less subprocess churn. Falls back to polling on older `mo` or a dropped stream."
+            "**Live status streams by default** — with Mole 1.44+, Burrow streams `mo status --watch` (NDJSON) instead of polling `mo status --json`: lower latency and less subprocess churn. Falls back to polling on older `mo` or a dropped stream."
           ]
         },
         {
           "label": "added",
           "items": [
-            "**Update with Homebrew** \u2014 for cask installs, the update prompt has a one-click button that runs `brew upgrade --cask burrow` and relaunches."
+            "**Update with Homebrew** — for cask installs, the update prompt has a one-click button that runs `brew upgrade --cask burrow` and relaunches."
           ]
         },
         {
           "label": "windows preview",
           "items": [
-            "Closed out the port review: MCP tool parity with macOS (`burrow_list_apps`, `burrow_purge`, `burrow_installer` \u2014 preview-only over MCP), stdio MCP that survives the HTTP toggle, brand assets / palette / fonts / icon aligned to the Mac, honest docs, and MCP + deletion-guard tests. Earlier rounds added Recycle-Bin routing, a drive-root guard, and SHA-256 verification of the bundled engine. Still an unsigned, build-from-source preview."
+            "Closed out the port review: MCP tool parity with macOS (`burrow_list_apps`, `burrow_purge`, `burrow_installer` — preview-only over MCP), stdio MCP that survives the HTTP toggle, brand assets / palette / fonts / icon aligned to the Mac, honest docs, and MCP + deletion-guard tests. Earlier rounds added Recycle-Bin routing, a drive-root guard, and SHA-256 verification of the bundled engine. Still an unsigned, build-from-source preview."
           ]
         }
       ]
@@ -453,7 +511,7 @@
           "icon": "globe",
           "color": "azure",
           "title": "Ports & Get Online",
-          "line": "A new Ports view \u2014 live connections, bandwidth, and peers \u2014 plus Get Online, with gateway/MDM checks and captive-portal rescue."
+          "line": "A new Ports view — live connections, bandwidth, and peers — plus Get Online, with gateway/MDM checks and captive-portal rescue."
         },
         {
           "icon": "wrench",
@@ -471,11 +529,11 @@
           "icon": "monitor",
           "color": "gold",
           "title": "Windows preview",
-          "line": "An early native WinUI 3 / .NET 8 Windows app under windows/ \u2014 Status, History, Analyze, Apps, and a tray HUD."
+          "line": "An early native WinUI 3 / .NET 8 Windows app under windows/ — Status, History, Analyze, Apps, and a tray HUD."
         }
       ],
       "chips": [
-        "Disk tile now forecasts when you'll run out of space (\u201cFull in ~N\u201d)",
+        "Disk tile now forecasts when you'll run out of space (“Full in ~N”)",
         "Doctor: new SMART-health and backup-awareness checks, with reminders",
         "Drag-select a History chart to see the top processes for that spike",
         "Killed several main-thread app-hangs (sort, ICU, process table, app icons)",
@@ -486,35 +544,35 @@
         {
           "label": "added",
           "items": [
-            "**Ports** \u2014 live connections, bandwidth, reverse-DNS peers, service labels, conflicts, sortable columns, and a per-connection detail view.",
-            "**Get Online** \u2014 MDM and gateway checks, the active-interface IP, captive-portal and device-side rescue, and one-click fixes.",
-            "**Tune-Up** \u2014 a Smart-Care flow (scan \u2192 results \u2192 run) that auto-scans the moment you open it.",
-            "**Homebrew** \u2014 Services (start / stop / restart), Brewfile snapshots (export / restore), and live `brew upgrade` progress in Updates.",
-            "**Menu bar** \u2014 a customizable popup, Stats-depth widgets, a RunCat-style runner, and live metric widgets in the status item.",
-            "**Disk** now forecasts when you'll run out of space (\u201cFull in ~N\u201d); **Doctor** gains SMART-health and backup-awareness checks with overdue reminders, multi-select bulk reclaim, and a git purge-safety badge.",
-            "**For your agent** \u2014 a deeper MCP surface: a token-gated `/events` SSE stream and `burrow_diff`, so an agent can watch and compare your machine over time."
+            "**Ports** — live connections, bandwidth, reverse-DNS peers, service labels, conflicts, sortable columns, and a per-connection detail view.",
+            "**Get Online** — MDM and gateway checks, the active-interface IP, captive-portal and device-side rescue, and one-click fixes.",
+            "**Tune-Up** — a Smart-Care flow (scan → results → run) that auto-scans the moment you open it.",
+            "**Homebrew** — Services (start / stop / restart), Brewfile snapshots (export / restore), and live `brew upgrade` progress in Updates.",
+            "**Menu bar** — a customizable popup, Stats-depth widgets, a RunCat-style runner, and live metric widgets in the status item.",
+            "**Disk** now forecasts when you'll run out of space (“Full in ~N”); **Doctor** gains SMART-health and backup-awareness checks with overdue reminders, multi-select bulk reclaim, and a git purge-safety badge.",
+            "**For your agent** — a deeper MCP surface: a token-gated `/events` SSE stream and `burrow_diff`, so an agent can watch and compare your machine over time."
           ]
         },
         {
           "label": "changed",
           "items": [
-            "A warm, tactile redesign \u2014 a warm-coffee adaptive palette, film grain over a soft gradient, a floating icon rail in place of the top tabs, borderless cards, and the Geist / Cal Sans type system.",
-            "**Overview** \u2014 Health pulled up into an open hero band over a cleaner three-up vitals grid.",
-            "**History** \u2014 a focal hero chart with a selectable metric strip; drag-select a span to surface the top processes for that spike.",
-            "**Menu-bar HUD** \u2014 borderless tiles on the same warm ground, with Doctor and Restore reskinned to match and edge-fade scrollers throughout."
+            "A warm, tactile redesign — a warm-coffee adaptive palette, film grain over a soft gradient, a floating icon rail in place of the top tabs, borderless cards, and the Geist / Cal Sans type system.",
+            "**Overview** — Health pulled up into an open hero band over a cleaner three-up vitals grid.",
+            "**History** — a focal hero chart with a selectable metric strip; drag-select a span to surface the top processes for that spike.",
+            "**Menu-bar HUD** — borderless tiles on the same warm ground, with Doctor and Restore reskinned to match and edge-fade scrollers throughout."
           ]
         },
         {
           "label": "performance",
           "items": [
-            "Killed several main-thread app-hangs \u2014 the process table, sort, ICU on the render path, app icons, clean reports, and the software list.",
+            "Killed several main-thread app-hangs — the process table, sort, ICU on the render path, app icons, clean reports, and the software list.",
             "Onboarding now auto-detects the `mo` engine."
           ]
         },
         {
           "label": "windows preview",
           "items": [
-            "An early native **WinUI 3 / .NET 8** app now lives under `windows/` \u2014 Status, History, Analyze, Apps, a tray HUD, local telemetry/history, and an MCP stdio bridge. Build from source; unsigned preview."
+            "An early native **WinUI 3 / .NET 8** app now lives under `windows/` — Status, History, Analyze, Apps, a tray HUD, local telemetry/history, and an MCP stdio bridge. Build from source; unsigned preview."
           ]
         },
         {
@@ -529,7 +587,7 @@
       "version": "0.7.2",
       "date": "2026-06-15",
       "tag": "v0.7.2",
-      "tagline": "A feature pass on the redesign \u2014 cleanup, software and the live dashboard get more capable, with opt-in update and privacy surfaces.",
+      "tagline": "A feature pass on the redesign — cleanup, software and the live dashboard get more capable, with opt-in update and privacy surfaces.",
       "highlights": [
         {
           "icon": "sweep",
@@ -553,7 +611,7 @@
           "icon": "globe",
           "color": "gold",
           "title": "Self-update",
-          "line": "Burrow checks itself for new versions (opt-in, default on) and shows a banner plus a menu-bar dot \u2014 it never installs on its own."
+          "line": "Burrow checks itself for new versions (opt-in, default on) and shows a banner plus a menu-bar dot — it never installs on its own."
         },
         {
           "icon": "monitor",
@@ -565,7 +623,7 @@
       "chips": [
         "Analyze shows live per-folder progress on the first scan",
         "Confirm dialogs & Touch ID no longer reported as app-hangs",
-        "Live App Store / Sparkle update checks stay click-gated \u2014 no silent network",
+        "Live App Store / Sparkle update checks stay click-gated — no silent network",
         "View Log on every result screen (Clean / Optimize / Purge / Installers)",
         "About & Check for Updates now in Settings too"
       ],
@@ -573,8 +631,8 @@
         {
           "label": "added",
           "items": [
-            "**Cleanup, unified** \u2014 Purge and Installers fold into Clean as category cards, each with a real result screen and the raw log tucked behind a View Log toggle.",
-            "**Self-update** \u2014 Burrow checks itself for new versions (opt-in, default on) and shows a banner plus a menu-bar dot. It never installs on its own.",
+            "**Cleanup, unified** — Purge and Installers fold into Clean as category cards, each with a real result screen and the raw log tucked behind a View Log toggle.",
+            "**Self-update** — Burrow checks itself for new versions (opt-in, default on) and shows a banner plus a menu-bar dot. It never installs on its own.",
             "**Homebrew updates** appear the moment you open the Apps tab, and your own login items get on/off toggles.",
             "An optional **camera & mic in-use indicator** in the menu-bar popover (off by default), reading the same signal as Control Center.",
             "**About** and **Check for Updates** now live in Settings too."
@@ -585,14 +643,14 @@
           "items": [
             "Network charts in Status and History draw download and upload as two separate lines.",
             "Analyze shows live per-folder progress on the first scan.",
-            "A View Log toggle on every result screen \u2014 Clean, Optimize, Purge, and Installers."
+            "A View Log toggle on every result screen — Clean, Optimize, Purge, and Installers."
           ]
         },
         {
           "label": "fixed",
           "items": [
             "Confirm dialogs and Touch ID are no longer reported as app-hangs.",
-            "Live App Store / Sparkle update checks stay click-gated \u2014 no silent network."
+            "Live App Store / Sparkle update checks stay click-gated — no silent network."
           ]
         }
       ]
@@ -601,13 +659,13 @@
       "version": "0.7.1",
       "date": "2026-06-14",
       "tag": "v0.7.1",
-      "tagline": "A stability pass \u2014 every freeze and the crash reported since the 0.7.0 redesign, fixed.",
+      "tagline": "A stability pass — every freeze and the crash reported since the 0.7.0 redesign, fixed.",
       "highlights": [
         {
           "icon": "gauge",
           "color": "gold",
           "title": "Freezes, fixed",
-          "line": "The History view, slow startup, and typing in Uninstall & Purge no longer lock the app \u2014 every app-hang from launch is gone."
+          "line": "The History view, slow startup, and typing in Uninstall & Purge no longer lock the app — every app-hang from launch is gone."
         },
         {
           "icon": "shield",
@@ -624,7 +682,7 @@
       ],
       "chips": [
         "History view no longer freezes on wide time ranges",
-        "Faster launch \u2014 mo discovery moved off the main thread",
+        "Faster launch — mo discovery moved off the main thread",
         "Fixed a crash opening the menu-bar popover charts",
         "Smooth typing during Uninstall & Purge",
         "Process-row Quit/Force-Kill menu no longer rebuilt every refresh",
@@ -637,14 +695,14 @@
           "items": [
             "The History view no longer freezes on wide time ranges.",
             "Typing in Uninstall and Purge is smooth again.",
-            "Fixed a crash opening the menu-bar popover charts \u2014 it and the Status mini-charts could segfault on a transition, and now draw as one stable shape.",
+            "Fixed a crash opening the menu-bar popover charts — it and the Status mini-charts could segfault on a transition, and now draw as one stable shape.",
             "GPU history bars draw again on Apple Silicon."
           ]
         },
         {
           "label": "performance",
           "items": [
-            "Faster launch \u2014 `mo` discovery moved off the main thread.",
+            "Faster launch — `mo` discovery moved off the main thread.",
             "The HUD, Status, and Activity panels share one refresh pump now.",
             "The process-row Quit / Force-Kill menu is no longer rebuilt on every refresh."
           ]
@@ -659,20 +717,20 @@
         {
           "label": "added",
           "items": [
-            "**New Software tab** \u2014 per-app uninstall review, a unified Updates list with source badges, and a startup inventory.",
-            "**Review before you clean** \u2014 Scan streams a live count-up into a per-item review screen, and deselected paths are protected for exactly one run.",
-            "**Finish-line alerts** \u2014 get notified when a clean, optimize, or uninstall finishes, plus opt-in low-disk and Trash reminders.",
+            "**New Software tab** — per-app uninstall review, a unified Updates list with source badges, and a startup inventory.",
+            "**Review before you clean** — Scan streams a live count-up into a per-item review screen, and deselected paths are protected for exactly one run.",
+            "**Finish-line alerts** — get notified when a clean, optimize, or uninstall finishes, plus opt-in low-disk and Trash reminders.",
             "Keep Screen On, Clean Screen, and global shortcuts."
           ]
         },
         {
           "label": "changed",
           "items": [
-            "Every tool redesigned \u2014 Onboarding, Clean, Software, Status, the menu-bar popover, Analyze, and Settings, all rebuilt.",
+            "Every tool redesigned — Onboarding, Clean, Software, Status, the menu-bar popover, Analyze, and Settings, all rebuilt.",
             "History CPU, GPU, and health render as bars, and GPU usage is read natively on Apple Silicon.",
             "A compact, scrollable process table.",
             "MCP cleanup tools share the app's gate, return structured summaries, and surface data-freshness on a stable contract.",
-            "~230 strings localized in \u7b80\u4f53\u4e2d\u6587 / \u7e41\u9ad4\u4e2d\u6587."
+            "~230 strings localized in 简体中文 / 繁體中文."
           ]
         },
         {
@@ -687,18 +745,18 @@
         {
           "label": "performance",
           "items": [
-            "History auto-refresh is demand-driven \u2014 no idle timer.",
+            "History auto-refresh is demand-driven — no idle timer.",
             "A deepened, test-covered `mo` runner / metrics / actions core."
           ]
         }
       ],
-      "tagline": "The big one \u2014 every tool redesigned, a real Clean review pipeline, a new Software tab, and notifications when work finishes.",
+      "tagline": "The big one — every tool redesigned, a real Clean review pipeline, a new Software tab, and notifications when work finishes.",
       "highlights": [
         {
           "icon": "layout",
           "color": "gold",
           "title": "Every tool redesigned",
-          "line": "Onboarding, Clean, Software, Status, the menu-bar popover, Analyze and Settings \u2014 all rebuilt."
+          "line": "Onboarding, Clean, Software, Status, the menu-bar popover, Analyze and Settings — all rebuilt."
         },
         {
           "icon": "sweep",
@@ -735,11 +793,11 @@
         "One-click relaunch when Full Disk Access is granted",
         "First-run onboarding checks the mo engine + version",
         "Compact, scrollable process table",
-        "Keep Screen On \u00b7 Clean Screen \u00b7 global shortcuts",
-        "~230 strings localized in \u7b80\u4f53\u4e2d\u6587 / \u7e41\u9ad4\u4e2d\u6587",
+        "Keep Screen On · Clean Screen · global shortcuts",
+        "~230 strings localized in 简体中文 / 繁體中文",
         "Truthful Touch ID copy",
         "Dashboard survives a bad metrics sample (skipped + counted)",
-        "History auto-refresh is demand-driven \u2014 no idle timer",
+        "History auto-refresh is demand-driven — no idle timer",
         "Deepened, test-covered mo runner / metrics / actions core"
       ]
     },
@@ -751,18 +809,18 @@
         {
           "label": "added",
           "items": [
-            "**One Home dashboard** \u2014 Status, History, and Activity fold into a single live view: vitals, charts, and recent jobs in one place.",
-            "**\u7e41\u9ad4\u4e2d\u6587** \u2014 Traditional Chinese joins English and \u7b80\u4f53, with an in-app switch, so you're not tied to the system language.",
-            "**Real fans & temps** \u2014 fan RPM and CPU/GPU die temperatures, read straight from the SMC \u2014 the gaps `mo` leaves on Apple Silicon, filled.",
-            "**1-second live charts** \u2014 net and disk sampled every second, so bursts show up instead of being averaged away.",
-            "**Trash from the treemap** \u2014 spot a forgotten folder in Analyze and send it to the Trash right there, no detour to Finder.",
-            "**Sharper AI Explain** \u2014 it briefs the whole picture now: the current snapshot, the recent trend, and your recent cleanups, in your language."
+            "**One Home dashboard** — Status, History, and Activity fold into a single live view: vitals, charts, and recent jobs in one place.",
+            "**繁體中文** — Traditional Chinese joins English and 简体, with an in-app switch, so you're not tied to the system language.",
+            "**Real fans & temps** — fan RPM and CPU/GPU die temperatures, read straight from the SMC — the gaps `mo` leaves on Apple Silicon, filled.",
+            "**1-second live charts** — net and disk sampled every second, so bursts show up instead of being averaged away.",
+            "**Trash from the treemap** — spot a forgotten folder in Analyze and send it to the Trash right there, no detour to Finder.",
+            "**Sharper AI Explain** — it briefs the whole picture now: the current snapshot, the recent trend, and your recent cleanups, in your language."
           ]
         },
         {
           "label": "changed",
           "items": [
-            "Opt-out anonymous telemetry \u2014 one switch, listed in [TELEMETRY.md](https://github.com/caezium/Burrow/blob/main/TELEMETRY.md).",
+            "Opt-out anonymous telemetry — one switch, listed in [TELEMETRY.md](https://github.com/caezium/Burrow/blob/main/TELEMETRY.md).",
             "AI keys moved to the Keychain.",
             "Deletes and uninstalls need a second agent opt-in."
           ]
@@ -770,58 +828,58 @@
         {
           "label": "fixed",
           "items": [
-            "The loopback API is hardened \u2014 no CORS grant.",
+            "The loopback API is hardened — no CORS grant.",
             "Treemap hover and breadcrumb fixed.",
-            "Tests grew 124 \u2192 244."
+            "Tests grew 124 → 244."
           ]
         }
       ],
-      "tagline": "The biggest release yet \u2014 one Home dashboard, \u7e41\u9ad4\u4e2d\u6587, native sensors, live 1-second charts.",
+      "tagline": "The biggest release yet — one Home dashboard, 繁體中文, native sensors, live 1-second charts.",
       "highlights": [
         {
           "icon": "home",
           "color": "gold",
           "title": "One Home dashboard",
-          "line": "Status, History and Activity fold into a single live view \u2014 vitals, charts and recent jobs in one place."
+          "line": "Status, History and Activity fold into a single live view — vitals, charts and recent jobs in one place."
         },
         {
           "icon": "globe",
           "color": "lilac",
-          "title": "\u7e41\u9ad4\u4e2d\u6587",
-          "line": "Traditional Chinese joins English and \u7b80\u4f53 \u2014 with an in-app switch, so you're not tied to the system language."
+          "title": "繁體中文",
+          "line": "Traditional Chinese joins English and 简体 — with an in-app switch, so you're not tied to the system language."
         },
         {
           "icon": "thermo",
           "color": "coral",
           "title": "Real fans & temps",
-          "line": "Fan RPM and CPU/GPU die temperatures, read straight from the SMC \u2014 the gaps Mole leaves on Apple Silicon, filled."
+          "line": "Fan RPM and CPU/GPU die temperatures, read straight from the SMC — the gaps Mole leaves on Apple Silicon, filled."
         },
         {
           "icon": "pulse",
           "color": "azure",
           "title": "1-second live charts",
-          "line": "Net and disk sampled every second \u2014 bursts actually show up instead of being averaged away."
+          "line": "Net and disk sampled every second — bursts actually show up instead of being averaged away."
         },
         {
           "icon": "trash",
           "color": "teal",
           "title": "Trash from the treemap",
-          "line": "Spot a forgotten folder in Analyze and send it to the Trash right there \u2014 no detour to Finder."
+          "line": "Spot a forgotten folder in Analyze and send it to the Trash right there — no detour to Finder."
         },
         {
           "icon": "sparkle",
           "color": "violet",
           "title": "Sharper AI Explain",
-          "line": "It now briefs the whole picture \u2014 current snapshot, recent trend and your recent cleanups, in your language."
+          "line": "It now briefs the whole picture — current snapshot, recent trend and your recent cleanups, in your language."
         }
       ],
       "chips": [
-        "opt-out anonymous telemetry \u2014 one switch, listed in [TELEMETRY.md](https://github.com/caezium/Burrow/blob/main/TELEMETRY.md)",
-        "loopback API hardened \u2014 no CORS grant",
+        "opt-out anonymous telemetry — one switch, listed in [TELEMETRY.md](https://github.com/caezium/Burrow/blob/main/TELEMETRY.md)",
+        "loopback API hardened — no CORS grant",
         "AI keys moved to the Keychain",
         "deletes & uninstalls need a second agent opt-in",
         "treemap hover & breadcrumb fixed",
-        "tests 124 \u2192 244"
+        "tests 124 → 244"
       ]
     },
     {
@@ -832,35 +890,35 @@
         {
           "label": "fixed",
           "items": [
-            "Installers and Purge no longer freeze when `mo` finds nothing, or on a second scan \u2014 the \u201cScanning\u2026\u201d hang is gone."
+            "Installers and Purge no longer freeze when `mo` finds nothing, or on a second scan — the “Scanning…” hang is gone."
           ]
         },
         {
           "label": "changed",
           "items": [
-            "The \u201cremove exactly what you picked \u2014 or nothing\u201d flow is now a pure state machine, verified in CI.",
+            "The “remove exactly what you picked — or nothing” flow is now a pure state machine, verified in CI.",
             "One ANSI cleaner, one typed client, one snapshot store.",
-            "Tests grew 90 \u2192 124."
+            "Tests grew 90 → 124."
           ]
         }
       ],
-      "tagline": "A reliability release \u2014 the selection flows stop hanging, and the engine integration is now driven by tests.",
+      "tagline": "A reliability release — the selection flows stop hanging, and the engine integration is now driven by tests.",
       "highlights": [
         {
           "icon": "wrench",
           "color": "teal",
-          "title": "No more \"Scanning\u2026\" hang",
+          "title": "No more \"Scanning…\" hang",
           "line": "Installers and Purge no longer freeze when Mole finds nothing, or on a second scan."
         },
         {
           "icon": "flask",
           "color": "violet",
           "title": "Tested mo integration",
-          "line": "The \"remove exactly what you picked \u2014 or nothing\" flow is now a pure state machine, verified in CI."
+          "line": "The \"remove exactly what you picked — or nothing\" flow is now a pure state machine, verified in CI."
         }
       ],
       "chips": [
-        "tests 90 \u2192 124",
+        "tests 90 → 124",
         "one ANSI cleaner, one typed client, one snapshot store"
       ]
     },
@@ -872,16 +930,16 @@
         {
           "label": "fixed",
           "items": [
-            "**Installer & Uninstall complete** \u2014 the confirm-screen timeout and the silent `[y/N]` hang are gone; both flows finish now.",
+            "**Installer & Uninstall complete** — the confirm-screen timeout and the silent `[y/N]` hang are gone; both flows finish now.",
             "Settings flush immediately."
           ]
         },
         {
           "label": "added",
           "items": [
-            "**Native disk I/O & GPU** \u2014 read natively where `mo` reports zero on Apple Silicon, so charts show real numbers.",
-            "**Purge \u2192 Show all** \u2014 pull in the complete find list and pick from everything, not just the ~50 biggest.",
-            "**More history charts** \u2014 Battery, GPU, and Fans join the lineup; Top Processes ranks by CPU or RAM.",
+            "**Native disk I/O & GPU** — read natively where `mo` reports zero on Apple Silicon, so charts show real numbers.",
+            "**Purge → Show all** — pull in the complete find list and pick from everything, not just the ~50 biggest.",
+            "**More history charts** — Battery, GPU, and Fans join the lineup; Top Processes ranks by CPU or RAM.",
             "The thermal chart plots a real temperature."
           ]
         },
@@ -892,13 +950,13 @@
           ]
         }
       ],
-      "tagline": "Fix-and-polish \u2014 cleanup flows actually complete, and the trackers show real data.",
+      "tagline": "Fix-and-polish — cleanup flows actually complete, and the trackers show real data.",
       "highlights": [
         {
           "icon": "package",
           "color": "coral",
           "title": "Installer & Uninstall complete",
-          "line": "The confirm-screen timeout and the silent [y/N] hang are gone \u2014 both flows now finish."
+          "line": "The confirm-screen timeout and the silent [y/N] hang are gone — both flows now finish."
         },
         {
           "icon": "gauge",
@@ -909,7 +967,7 @@
         {
           "icon": "list",
           "color": "teal",
-          "title": "Purge \u2192 Show all",
+          "title": "Purge → Show all",
           "line": "Pull in the complete find list and pick from everything, not just the ~50 biggest."
         },
         {
@@ -933,10 +991,10 @@
         {
           "label": "added",
           "items": [
-            "**Purge** \u2014 find and clear old build artifacts (`node_modules`, `target/`, `build/`), ticking exactly what goes.",
-            "**Installers** \u2014 sweep leftover `.dmg` / `.pkg` / `.iso` / `.zip` with the same pick-what-to-remove flow.",
-            "**Explain (AI), opt-in** \u2014 a lens that reads one snapshot and explains it in plain English; local Ollama by default, nothing leaves the Mac.",
-            "**Agents can act over MCP** \u2014 `burrow_clean`, `_optimize`, `_uninstall` and friends, each dry-running unless you flip the real-cleanups switch."
+            "**Purge** — find and clear old build artifacts (`node_modules`, `target/`, `build/`), ticking exactly what goes.",
+            "**Installers** — sweep leftover `.dmg` / `.pkg` / `.iso` / `.zip` with the same pick-what-to-remove flow.",
+            "**Explain (AI), opt-in** — a lens that reads one snapshot and explains it in plain English; local Ollama by default, nothing leaves the Mac.",
+            "**Agents can act over MCP** — `burrow_clean`, `_optimize`, `_uninstall` and friends, each dry-running unless you flip the real-cleanups switch."
           ]
         },
         {
@@ -947,13 +1005,13 @@
           ]
         }
       ],
-      "tagline": "Two new cleanup tools, an AI lens on Status, and agents that can act \u2014 safely.",
+      "tagline": "Two new cleanup tools, an AI lens on Status, and agents that can act — safely.",
       "highlights": [
         {
           "icon": "sweep",
           "color": "violet",
           "title": "Purge",
-          "line": "Find and clear old build artifacts \u2014 node_modules, target/, build/ \u2014 ticking exactly what goes."
+          "line": "Find and clear old build artifacts — node_modules, target/, build/ — ticking exactly what goes."
         },
         {
           "icon": "package",
@@ -965,13 +1023,13 @@
           "icon": "sparkle",
           "color": "lilac",
           "title": "Explain (AI), opt-in",
-          "line": "A lens that reads one snapshot and explains it in plain English \u2014 local Ollama by default, nothing leaves the Mac."
+          "line": "A lens that reads one snapshot and explains it in plain English — local Ollama by default, nothing leaves the Mac."
         },
         {
           "icon": "robot",
           "color": "moss",
           "title": "Agents can act over MCP",
-          "line": "burrow_clean, _optimize, _uninstall and friends \u2014 every action dry-runs unless you flip the real-cleanups switch."
+          "line": "burrow_clean, _optimize, _uninstall and friends — every action dry-runs unless you flip the real-cleanups switch."
         }
       ],
       "chips": [
@@ -987,7 +1045,7 @@
         {
           "label": "fixed",
           "items": [
-            "**Full Disk Access works** \u2014 ad-hoc signing gives the app a stable code identity, so the TCC grant finally binds.",
+            "**Full Disk Access works** — ad-hoc signing gives the app a stable code identity, so the TCC grant finally binds.",
             "A Quit & Reopen path after granting Full Disk Access."
           ]
         },
@@ -1000,11 +1058,11 @@
         {
           "label": "performance",
           "items": [
-            "Less energy in Software \u2014 dropped the per-app Spotlight query that kept `mds` and `mdworker` awake."
+            "Less energy in Software — dropped the per-app Spotlight query that kept `mds` and `mdworker` awake."
           ]
         }
       ],
-      "tagline": "Maintenance \u2014 Full Disk Access actually sticks now.",
+      "tagline": "Maintenance — Full Disk Access actually sticks now.",
       "highlights": [
         {
           "icon": "shield",
@@ -1032,12 +1090,12 @@
         {
           "label": "added",
           "items": [
-            "**Touch ID for sudo** \u2014 cleanups that need admin rights authenticate with a fingerprint, via `mo touchid`.",
-            "**Menu-bar HUD** \u2014 live job status from the menu bar, or run without the icon entirely in Dock mode.",
-            "**MCP server** \u2014 ask Claude Code about your Mac through a read-only stdio server, including `burrow_process_usage`.",
-            "**\u7b80\u4f53\u4e2d\u6587** \u2014 Simplified Chinese localization.",
-            "**History** \u2014 long-range charts, five minutes out to ninety days, over a local SQLite store.",
-            "**Homebrew cask** \u2014 `brew install --cask caezium/tap/burrow`: one command, engine included, quarantine cleared.",
+            "**Touch ID for sudo** — cleanups that need admin rights authenticate with a fingerprint, via `mo touchid`.",
+            "**Menu-bar HUD** — live job status from the menu bar, or run without the icon entirely in Dock mode.",
+            "**MCP server** — ask Claude Code about your Mac through a read-only stdio server, including `burrow_process_usage`.",
+            "**简体中文** — Simplified Chinese localization.",
+            "**History** — long-range charts, five minutes out to ninety days, over a local SQLite store.",
+            "**Homebrew cask** — `brew install --cask caezium/tap/burrow`: one command, engine included, quarantine cleared.",
             "An Activity pane with cleanup history in-app."
           ]
         },
@@ -1049,7 +1107,7 @@
           ]
         }
       ],
-      "tagline": "Burrow grows up \u2014 Touch ID, a live menu-bar HUD, an MCP server, \u7b80\u4f53\u4e2d\u6587, and a one-command install.",
+      "tagline": "Burrow grows up — Touch ID, a live menu-bar HUD, an MCP server, 简体中文, and a one-command install.",
       "highlights": [
         {
           "icon": "fingerprint",
@@ -1061,31 +1119,31 @@
           "icon": "monitor",
           "color": "azure",
           "title": "Menu-bar HUD",
-          "line": "Live job status from the menu bar \u2014 or run without the icon entirely, in Dock mode."
+          "line": "Live job status from the menu bar — or run without the icon entirely, in Dock mode."
         },
         {
           "icon": "robot",
           "color": "ginger",
           "title": "MCP server",
-          "line": "Ask Claude Code about your Mac \u2014 a read-only stdio server, including burrow_process_usage."
+          "line": "Ask Claude Code about your Mac — a read-only stdio server, including burrow_process_usage."
         },
         {
           "icon": "globe",
           "color": "lilac",
-          "title": "\u7b80\u4f53\u4e2d\u6587",
+          "title": "简体中文",
           "line": "Simplified Chinese localization."
         },
         {
           "icon": "clock",
           "color": "moss",
           "title": "History",
-          "line": "Long-range charts \u2014 five minutes out to ninety days \u2014 over a local SQLite store."
+          "line": "Long-range charts — five minutes out to ninety days — over a local SQLite store."
         },
         {
           "icon": "package",
           "color": "teal",
           "title": "Homebrew cask",
-          "line": "brew install --cask caezium/tap/burrow \u2014 one command, engine included, quarantine cleared."
+          "line": "brew install --cask caezium/tap/burrow — one command, engine included, quarantine cleared."
         }
       ],
       "chips": [
@@ -1102,9 +1160,9 @@
         {
           "label": "added",
           "items": [
-            "**Five tools, one window** \u2014 Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited `mo` engine.",
-            "**Status + History** \u2014 a live dashboard with per-metric sparklines, and long-range charts on a local store.",
-            "**MCP server, day one** \u2014 HTTP + stdio endpoints so Claude Code can ask what's happening on this Mac."
+            "**Five tools, one window** — Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited `mo` engine.",
+            "**Status + History** — a live dashboard with per-metric sparklines, and long-range charts on a local store.",
+            "**MCP server, day one** — HTTP + stdio endpoints so Claude Code can ask what's happening on this Mac."
           ]
         },
         {
@@ -1114,13 +1172,13 @@
           ]
         }
       ],
-      "tagline": "First public release \u2014 five tools, one native window, built on the Mole CLI.",
+      "tagline": "First public release — five tools, one native window, built on the Mole CLI.",
       "highlights": [
         {
           "icon": "layout",
           "color": "teal",
           "title": "Five tools, one window",
-          "line": "Status, Analyze, Software, Clean and Optimize \u2014 a native macOS GUI for the audited mo engine."
+          "line": "Status, Analyze, Software, Clean and Optimize — a native macOS GUI for the audited mo engine."
         },
         {
           "icon": "chart",

@@ -123,13 +123,42 @@
 <header class="hero page">
   <h1>Changelog</h1>
   <p>Every version at a glance — what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">17 releases · latest 0.10.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p class="count">18 releases · latest 0.10.1 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
 </header>
 
 <main class="page">
+    <article class="entry" id="v0.10.1">
+      <div class="ver-col">
+        <h2 class="ver">0.10.1<span class="latest">latest</span></h2>
+        <span class="date mono">Jul 13, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.1" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">Three new panes — Leftovers, Similar Photos, and Network — and Duplicates now works out of the box, plus menu-bar HUD and HEIC fixes.</p>
+        <div class="sblock">
+          <div class="slabel mono">New</div>
+          <ul class="slist">
+            <li>Leftovers pane: find and clear the caches, preferences, and support files an app leaves behind</li>
+            <li>Similar Photos pane: cluster near-duplicate images by perceptual hash, reveal in Finder</li>
+            <li>Network pane: per-app bandwidth</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">Fixes</div>
+          <ul class="slist">
+            <li>Duplicates works with zero install — the fclones sidecar is now bundled universal</li>
+            <li>Similar Photos reports HEIC it can't decode (“N HEIC couldn't be read”) instead of a bare empty result</li>
+            <li>Menu-bar HUD popover no longer shifts sideways and clips; the tool strip wraps instead of overflowing</li>
+            <li>Tool panes mount lazily — no more ~2-second layout hang on open or pane switch</li>
+            <li>Finder-launched app augments its PATH with the Homebrew bins so installed helpers resolve</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
     <article class="entry" id="v0.10.0">
       <div class="ver-col">
-        <h2 class="ver">0.10.0<span class="latest">latest</span></h2>
+        <h2 class="ver">0.10.0</h2>
         <span class="date mono">Jul 12, 2026</span>
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.0" target="_blank" rel="noopener">full notes ↗</a>
       </div>

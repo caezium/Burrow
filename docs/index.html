@@ -323,7 +323,7 @@
 
   <!-- ===== HERO ===== -->
   <header class="hero">
-    <span class="brandline">Open source · <b>github.com/caezium/Burrow</b> · v0.10.0</span>
+    <span class="brandline">Open source · <b>github.com/caezium/Burrow</b> · v0.10.1</span>
     <h1>Burrow
       <svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 74 a36 36 0 0 1 72 0 Z" fill="#F3ECDD"/><rect x="38" y="74" width="24" height="7" rx="3.5" fill="#121217"/></svg>
     </h1>
@@ -389,37 +389,36 @@
     <div class="sec-head wn-head">
       <div>
         <span class="sec-num">What's new · July 2026</span>
-        <h2 class="sec-title">New in 0.10.0</h2>
+        <h2 class="sec-title">New in 0.10.1</h2>
       </div>
       <a class="btn btn-out btn-sm" href="releases.html">All releases</a>
     </div>
 
     <div class="grid3 wn-grid">
       <article class="tcard" style="--c: var(--lilac)">
-        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div><div class="nm">New: Duplicates</div></div>
-        <p class="ds">Scan any folder for byte-identical copies, review them checklist-style (every group keeps at least one), then move extras to the Trash — or reclaim the space with APFS clones, deleting nothing.</p>
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1111 8H2m10.59 11.41A2 2 0 1014 16H2m15.73-8.27A2.5 2.5 0 1119.5 12H2"/></svg></div><div class="nm">New: Leftovers</div></div>
+        <p class="ds">Surface the files an app leaves behind after you delete it — caches, preferences, application support, launch agents — and clear the orphans.</p>
       </article>
-      <article class="tcard" style="--c: var(--accent)">
-        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><div class="nm">The conductor</div></div>
-        <p class="ds">Burrow now bundles <code>burrow</code>, a universal CLI that drives the bundled engine — analysis, status, history, clean, and optimize all speak one stable contract, and the app works out of the box with no Homebrew install.</p>
+      <article class="tcard" style="--c: var(--apricot)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l1.8 4.6L18 10l-4.2 1.4L12 16l-1.8-4.6L6 10l4.2-1.4z"/><path d="M18.5 15.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg></div><div class="nm">New: Similar Photos</div></div>
+        <p class="ds">Cluster visually-similar images — near-duplicate screenshots, burst shots, re-exports — by perceptual hash. Read-only: review the sets, reveal in Finder.</p>
       </article>
-      <article class="tcard" style="--c: var(--gold)">
-        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3l1 1-2 2M16 8l2 2"/></svg></div><div class="nm">Sudo dialog fixed</div></div>
-        <p class="ds">Uninstalling root-owned apps (Zoom et al.) shows the proper admin password prompt again instead of failing with “Admin access denied”.</p>
+      <article class="tcard" style="--c: var(--azure)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.5 4 5.6 4 9s-1.4 6.5-4 9c-2.6-2.5-4-5.6-4-9s1.4-6.5 4-9z"/></svg></div><div class="nm">New: Network</div></div>
+        <p class="ds">See per-app bandwidth at a glance — which apps are actually talking to the internet.</p>
       </article>
-      <article class="tcard" style="--c: var(--mint)">
-        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></div><div class="nm">7 new agent tools</div></div>
-        <p class="ds">Duplicates, orphaned files, per-app network usage, rule previews, trash sentinel, app-slim check, and similar photos — 21 read-only MCP tools total.</p>
+      <article class="tcard" style="--c: var(--green)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div><div class="nm">Duplicates works out of the box</div></div>
+        <p class="ds">The <code>fclones</code> sidecar it relies on now ships inside the app — no more “fclones not found” on a clean Mac.</p>
       </article>
     </div>
 
-    <div class="extra-label mono">// also tightened in 0.10.0</div>
+    <div class="extra-label mono">// also tightened in 0.10.1</div>
     <div class="wn-chips">
-      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Failed uninstalls keep your selection and show the engine's actual error</span>
-      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Tune-Up sizes render clean — no more raw color codes</span>
-      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Analyze can't stall on cache-heavy folders; the menu-bar popover no longer bounces</span>
-      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Per-metric menu-bar text sizing with stable widths</span>
-      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Windows preview is downloadable — BurrowWin zip with burrow.exe + engine bundled</span>
+      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Similar Photos says when it skipped HEIC instead of showing an empty scan</span>
+      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Menu-bar popover no longer drifts sideways and clips; the tool strip wraps into a grid</span>
+      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>No more ~2-second hang opening the window or switching panes</span>
+      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Finder-launched app finds Homebrew-installed helpers on its PATH</span>
     </div>
     <!-- WN:END -->
   </section>
