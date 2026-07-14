@@ -38,10 +38,13 @@ final class OperationFlowTests: XCTestCase {
     }
 
     /// Canned dry-run output in mo's report shape (parseTaskReport-compatible).
+    // The engine's `clean --stream` NDJSON preview (would_remove per item + a dry-run done),
+    // which BurrowStreamReport.reduce turns into the (groups, summary) shape. A dry-run done
+    // carries `would_free_human` → summary.space (no freeChange), so the completion line reads
+    // "Cleaned 383.8MB · 372 items" — same as the old human-text "Potential space" preview.
     static let cannedClean: [ProcessEvent] = [
-        .line("➤ Developer tools"),
-        .line("  → npm cache, 191.8MB"),
-        .line("Potential space: 383.8MB | Items: 372 | Categories: 20"),
+        .line(#"{"event":"would_remove","path":"/Users/x/Library/Caches/npm cache","bytes":201129000}"#),
+        .line(#"{"event":"done","dry_run":true,"would_free_bytes":402438000,"would_free_human":"383.8MB","count":372}"#),
         .exited(0),
     ]
 
