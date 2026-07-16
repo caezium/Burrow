@@ -48,6 +48,33 @@ public sealed class JsonSystemTelemetryHistoryServiceTests : IDisposable
             snapshot => Assert.Equal(DateTimeOffset.Parse("2026-06-15T00:02:00Z"), snapshot.CapturedAt));
     }
 
+    [Fact]
+    public async Task RecordAsync_AndReadRecentAsync_DoNotThrowUnderConcurrency()
+    {
+        var service = new JsonSystemTelemetryHistoryService(_historyPath);
+        await service.RecordAsync(CreateSnapshot(0));
+
+        var writer = Task.Run(async () =>
+        {
+            for (var offset = 1; offset <= 100; offset++)
+            {
+                await service.RecordAsync(CreateSnapshot(offset));
+            }
+        });
+        var reader = Task.Run(async () =>
+        {
+            for (var iteration = 0; iteration < 100; iteration++)
+            {
+                await service.ReadRecentAsync(10);
+            }
+        });
+
+        await Task.WhenAll(writer, reader);
+
+        var snapshots = await service.ReadRecentAsync(101);
+        Assert.Equal(101, snapshots.Count);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))

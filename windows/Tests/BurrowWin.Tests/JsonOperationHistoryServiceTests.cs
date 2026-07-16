@@ -57,6 +57,33 @@ public sealed class JsonOperationHistoryServiceTests : IDisposable
             entry => Assert.Equal("optimize", entry.Operation));
     }
 
+    [Fact]
+    public async Task RecordAsync_AndReadRecentAsync_DoNotThrowUnderConcurrency()
+    {
+        var service = new JsonOperationHistoryService(_historyPath);
+        await service.RecordAsync(CreateEntry("seed", 0));
+
+        var writer = Task.Run(async () =>
+        {
+            for (var offset = 1; offset <= 100; offset++)
+            {
+                await service.RecordAsync(CreateEntry("clean", offset));
+            }
+        });
+        var reader = Task.Run(async () =>
+        {
+            for (var iteration = 0; iteration < 100; iteration++)
+            {
+                await service.ReadRecentAsync(10);
+            }
+        });
+
+        await Task.WhenAll(writer, reader);
+
+        var entries = await service.ReadRecentAsync(101);
+        Assert.Equal(101, entries.Count);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))

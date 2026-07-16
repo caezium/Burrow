@@ -60,7 +60,16 @@ public sealed class SystemTelemetrySamplerService : BackgroundService, ISystemTe
         try
         {
             var snapshot = await _telemetryService.CaptureAsync(cancellationToken).ConfigureAwait(false);
-            await _historyService.RecordAsync(snapshot, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _historyService.RecordAsync(snapshot, cancellationToken).ConfigureAwait(false);
+            }
+            catch (IOException)
+            {
+                // History persistence is best-effort: an external process (antivirus scan,
+                // second app instance) holding the file must not fail the sample itself.
+            }
+
             LatestSnapshot = snapshot;
             return snapshot;
         }

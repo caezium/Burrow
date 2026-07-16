@@ -10,7 +10,7 @@ public sealed class JsonOperationHistoryService : IOperationHistoryService
         WriteIndented = false
     };
 
-    private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly SemaphoreSlim _fileLock = new(1, 1);
 
     public JsonOperationHistoryService()
         : this(Path.Combine(
@@ -37,7 +37,7 @@ public sealed class JsonOperationHistoryService : IOperationHistoryService
 
         var line = JsonSerializer.Serialize(entry, SerializerOptions);
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _fileLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await File.AppendAllTextAsync(HistoryFilePath, line + Environment.NewLine, cancellationToken)
@@ -45,7 +45,7 @@ public sealed class JsonOperationHistoryService : IOperationHistoryService
         }
         finally
         {
-            _writeLock.Release();
+            _fileLock.Release();
         }
     }
 
@@ -53,12 +53,29 @@ public sealed class JsonOperationHistoryService : IOperationHistoryService
         int limit,
         CancellationToken cancellationToken = default)
     {
-        if (limit <= 0 || !File.Exists(HistoryFilePath))
+        if (limit <= 0)
         {
             return [];
         }
 
-        var lines = await File.ReadAllLinesAsync(HistoryFilePath, cancellationToken).ConfigureAwait(false);
+        // Reads open the file with FileShare.Read, which makes a concurrent append fail
+        // with a sharing violation on Windows — serialize them against writes.
+        string[] lines;
+        await _fileLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!File.Exists(HistoryFilePath))
+            {
+                return [];
+            }
+
+            lines = await File.ReadAllLinesAsync(HistoryFilePath, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+
         var entries = new List<OperationHistoryEntry>(Math.Min(limit, lines.Length));
 
         for (var index = lines.Length - 1; index >= 0 && entries.Count < limit; index--)

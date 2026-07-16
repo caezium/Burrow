@@ -285,8 +285,19 @@ public partial class DashboardViewModel : ViewModelBase
     private async Task RefreshTelemetryAsync()
     {
         var snapshot = await _telemetrySamplerService.SampleNowAsync();
-        var recentSnapshots = await _systemTelemetryHistoryService.ReadRecentAsync(Math.Max(CpuBarCount, NetworkPointCount));
-        var recentActivity = await _operationHistoryService.ReadRecentAsync(5);
+
+        IReadOnlyList<SystemTelemetrySnapshot> recentSnapshots = [];
+        IReadOnlyList<OperationHistoryEntry> recentActivity = [];
+        try
+        {
+            recentSnapshots = await _systemTelemetryHistoryService.ReadRecentAsync(Math.Max(CpuBarCount, NetworkPointCount));
+            recentActivity = await _operationHistoryService.ReadRecentAsync(5);
+        }
+        catch (IOException)
+        {
+            // History files can be briefly held by an external process; render the fresh
+            // snapshot without charts rather than crashing the async void refresh tick.
+        }
 
         RunOnUiThread(() =>
         {

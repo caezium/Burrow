@@ -10,7 +10,7 @@ public sealed class JsonSystemTelemetryHistoryService : ISystemTelemetryHistoryS
         WriteIndented = false
     };
 
-    private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly SemaphoreSlim _fileLock = new(1, 1);
     private readonly Func<int> _historyRetentionDaysProvider;
 
     public JsonSystemTelemetryHistoryService()
@@ -53,7 +53,7 @@ public sealed class JsonSystemTelemetryHistoryService : ISystemTelemetryHistoryS
         }
 
         var line = JsonSerializer.Serialize(snapshot, SerializerOptions);
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _fileLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await File.AppendAllTextAsync(HistoryFilePath, line + Environment.NewLine, cancellationToken)
@@ -62,7 +62,7 @@ public sealed class JsonSystemTelemetryHistoryService : ISystemTelemetryHistoryS
         }
         finally
         {
-            _writeLock.Release();
+            _fileLock.Release();
         }
     }
 
@@ -70,12 +70,29 @@ public sealed class JsonSystemTelemetryHistoryService : ISystemTelemetryHistoryS
         int limit,
         CancellationToken cancellationToken = default)
     {
-        if (limit <= 0 || !File.Exists(HistoryFilePath))
+        if (limit <= 0)
         {
             return [];
         }
 
-        var lines = await File.ReadAllLinesAsync(HistoryFilePath, cancellationToken).ConfigureAwait(false);
+        // Reads open the file with FileShare.Read, which makes a concurrent append fail
+        // with a sharing violation on Windows — serialize them against writes.
+        string[] lines;
+        await _fileLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!File.Exists(HistoryFilePath))
+            {
+                return [];
+            }
+
+            lines = await File.ReadAllLinesAsync(HistoryFilePath, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+
         var snapshots = new List<SystemTelemetrySnapshot>(Math.Min(limit, lines.Length));
 
         for (var index = lines.Length - 1; index >= 0 && snapshots.Count < limit; index--)
