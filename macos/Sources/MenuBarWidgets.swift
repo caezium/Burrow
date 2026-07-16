@@ -343,9 +343,25 @@ enum MenuBarRenderer {
     private static let pad: CGFloat = 3         // leading/trailing
     // Fonts take a per-widget text size (issue #245) so each metric sizes
     // independently. `.medium` == the historical 11/8/8 pt.
-    static func valueFont(_ size: MenuBarTextSize) -> NSFont { .monospacedDigitSystemFont(ofSize: size.valueSize, weight: .medium) }
-    static func labelFont(_ size: MenuBarTextSize) -> NSFont { .monospacedSystemFont(ofSize: size.labelSize, weight: .bold) }
-    static func speedFont(_ size: MenuBarTextSize) -> NSFont { .monospacedDigitSystemFont(ofSize: size.speedSize, weight: .medium) }
+    static func valueFont(_ size: MenuBarTextSize) -> NSFont { monospaced(size.valueSize, weight: .medium, digits: true) }
+    static func labelFont(_ size: MenuBarTextSize) -> NSFont { monospaced(size.labelSize, weight: .bold, digits: false) }
+    static func speedFont(_ size: MenuBarTextSize) -> NSFont { monospaced(size.speedSize, weight: .medium, digits: true) }
+
+    /// The `monospaced…SystemFont` factories are declared `_Nonnull`, but the
+    /// underlying AppKit call can transiently return nil (font system not yet
+    /// ready, memory pressure). A nil font gets copied into a non-optional
+    /// `NSFont` and silently lands in a text-attributes dictionary; the app
+    /// then crashes deep in CoreText — "attempt to insert nil object from
+    /// objects[0]" — when AppKit re-invokes the cached menu-bar image's
+    /// drawing handler during a button redraw (issue #289). Recover the real
+    /// nullability by routing through an optional, and fall back to the plain
+    /// system font (which does not fail) so the row can never draw with nil.
+    private static func monospaced(_ size: CGFloat, weight: NSFont.Weight, digits: Bool) -> NSFont {
+        let mono: NSFont? = digits
+            ? .monospacedDigitSystemFont(ofSize: size, weight: weight)
+            : .monospacedSystemFont(ofSize: size, weight: weight)
+        return mono ?? .systemFont(ofSize: size, weight: weight)
+    }
     private static let barW: CGFloat = 22
     private static let barH: CGFloat = 4
     private static let sparkW: CGFloat = 26
