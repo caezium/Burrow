@@ -256,9 +256,16 @@ struct TaskReportView: View {
                 .padding(.horizontal, 18).padding(.vertical, 12)
             }
             .scrollIndicators(.hidden)
-            // Tail-follow the report as new lines stream in.
+            // Tail-follow the report as new lines stream in. The scroll is
+            // deferred past the current update transaction: calling scrollTo
+            // synchronously inside onChange mutates the scroll responder graph
+            // while SwiftUI is still combining responder preferences for this
+            // pass, which can fault in ScrollViewResponder.updateValue
+            // (Sentry BURROW-96, EXC_BAD_ACCESS in AttributeGraph).
             .onChange(of: itemCount) { _, _ in
-                withAnimation(.linear(duration: 0.15)) { proxy.scrollTo("BOTTOM", anchor: .bottom) }
+                DispatchQueue.main.async {
+                    withAnimation(.linear(duration: 0.15)) { proxy.scrollTo("BOTTOM", anchor: .bottom) }
+                }
             }
         }
     }

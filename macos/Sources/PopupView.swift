@@ -110,11 +110,16 @@ struct PopupView: View {
                 Text(headline(s)).font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
                     .lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 6)
-                if let disk = s.disks.first {
-                    Text(String(format: NSLocalizedString("%@ free", comment: ""),
-                                Fmt.bytes(Int64(disk.total) - Int64(disk.used))))
-                        .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
-                }
+                // Render the free-space line unconditionally (empty string when
+                // no disk is reported yet) so this live-updating label keeps a
+                // constant TupleView shape across snapshot ticks. A
+                // `_ConditionalContent` that flips as `s.disks` populates
+                // restructures the HStack subtree while the button's `.help`
+                // tooltip tracking and responder are live — an AttributeGraph
+                // EXC_BAD_ACCESS (Sentry BURROW-9A, same class as the BURROW-K
+                // popover fault).
+                Text(freeSpace(s))
+                    .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
                 Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Brand.textTertiary)
             }
@@ -123,6 +128,16 @@ struct PopupView: View {
         .buttonStyle(.plain)
         .help(NSLocalizedString("Open Burrow", comment: ""))
         .accessibilityLabel(String(format: NSLocalizedString("Health %d. Open Burrow.", comment: ""), s.healthScore))
+    }
+
+    /// Free space on the primary disk, or "" when no disk has been reported.
+    /// Returning a plain string lets `header` render a structurally-constant
+    /// `Text` instead of a `_ConditionalContent`, keeping the button's label
+    /// subtree stable across snapshot ticks (Sentry BURROW-9A).
+    private func freeSpace(_ s: MoleStatus) -> String {
+        guard let disk = s.disks.first else { return "" }
+        return String(format: NSLocalizedString("%@ free", comment: ""),
+                      Fmt.bytes(Int64(disk.total) - Int64(disk.used)))
     }
 
     private func headline(_ s: MoleStatus) -> String {

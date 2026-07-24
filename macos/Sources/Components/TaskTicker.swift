@@ -111,10 +111,17 @@ struct TaskTickerView: View {
                 .frame(maxWidth: 460)
                 .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Color.black.opacity(0.25)))
                 .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
+                // Deferred past the current update transaction: a synchronous
+                // scrollTo here mutates the scroll responder graph mid-way
+                // through responder-preference combination, which can fault in
+                // ScrollViewResponder.updateValue (Sentry BURROW-96,
+                // EXC_BAD_ACCESS in AttributeGraph).
                 .onChange(of: state.count) { _, _ in
                     guard pinnedToBottom else { return }
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                        proxy.scrollTo("TICKER_BOTTOM", anchor: .bottom)
+                    DispatchQueue.main.async {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                            proxy.scrollTo("TICKER_BOTTOM", anchor: .bottom)
+                        }
                     }
                 }
             }
