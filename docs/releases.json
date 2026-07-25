@@ -2,6 +2,46 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.10.2",
+      "date": "2026-07-24",
+      "tag": "v0.10.2",
+      "tagline": "A fix release — three crashes squashed (the menu-bar popover, the streaming task report, and a nil-font HUD metric), and the in-app updater no longer silently reopens the same build.",
+      "highlights": [
+        {
+          "icon": "shield",
+          "color": "teal",
+          "title": "Popover & streaming crashes gone",
+          "line": "Two EXC_BAD_ACCESS faults in SwiftUI's view graph — the menu-bar popover header and the live task report while a job streams — are fixed by keeping those subtrees stable across updates."
+        },
+        {
+          "icon": "gauge",
+          "color": "azure",
+          "title": "HUD font crash fixed",
+          "line": "The menu-bar metric could crash on a transiently-nil monospaced system font; it now falls back to the system font instead of crashing (Sentry BURROW-8Y)."
+        },
+        {
+          "icon": "package",
+          "color": "apricot",
+          "title": "In-app update actually updates",
+          "line": "When Homebrew refused to upgrade the cask in place it exited 0, so the one-click updater reopened the same build. It now detects the refusal and reinstalls."
+        }
+      ],
+      "chips": [
+        "On 0.10.1 the in-app updater may reopen the same build — grab 0.10.2 with `brew upgrade --cask burrow` (or `brew reinstall --cask --force burrow`), or the direct download.",
+        "Still ad-hoc-signed — re-grant Full Disk Access once after updating."
+      ],
+      "sections": [
+        {
+          "label": "fixed",
+          "items": [
+            "**No more menu-bar popover or streaming-report crashes.** Two `EXC_BAD_ACCESS` faults inside SwiftUI's view graph — one in the popover header button, one in the live task report/ticker as a job streamed — are fixed by keeping those view subtrees structurally stable across snapshot and scroll updates instead of restructuring them mid-update. ([#299](https://github.com/caezium/Burrow/pull/299))",
+            "**The menu-bar metric no longer crashes on a nil font.** `NSFont.monospacedSystemFont` is declared non-null but can transiently return nil under memory pressure; that null reached CoreText and crashed at draw time (Sentry BURROW-8Y). The metric widgets now fall back to the plain system font — cosmetic at worst, never a crash. ([#290](https://github.com/caezium/Burrow/pull/290))",
+            "**In-app update actually updates.** When the cask “cannot be upgraded as-is,” Homebrew prints a warning but exits 0 — so the one-click updater reported success and reopened the same build. It now detects the refusal by message and runs the `brew reinstall --force` Homebrew recommends. ([#287](https://github.com/caezium/Burrow/pull/287))"
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.10.1",
       "date": "2026-07-13",
       "tag": "v0.10.1",

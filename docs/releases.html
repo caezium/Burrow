@@ -123,13 +123,32 @@
 <header class="hero page">
   <h1>Changelog</h1>
   <p>Every version at a glance — what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">18 releases · latest 0.10.1 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p class="count">19 releases · latest 0.10.2 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
 </header>
 
 <main class="page">
+    <article class="entry" id="v0.10.2">
+      <div class="ver-col">
+        <h2 class="ver">0.10.2<span class="latest">latest</span></h2>
+        <span class="date mono">Jul 24, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.2" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">A fix release — three crashes squashed (the menu-bar popover, the streaming task report, and a nil-font HUD metric), and the in-app updater no longer silently reopens the same build.</p>
+        <div class="sblock">
+          <div class="slabel mono">fixed</div>
+          <ul class="slist">
+            <li><b>No more menu-bar popover or streaming-report crashes.</b> Two <code>EXC_BAD_ACCESS</code> faults inside SwiftUI's view graph — one in the popover header button, one in the live task report/ticker as a job streamed — are fixed by keeping those view subtrees structurally stable across snapshot and scroll updates instead of restructuring them mid-update. (<a href="https://github.com/caezium/Burrow/pull/299" target="_blank" rel="noopener">#299</a>)</li>
+            <li><b>The menu-bar metric no longer crashes on a nil font.</b> <code>NSFont.monospacedSystemFont</code> is declared non-null but can transiently return nil under memory pressure; that null reached CoreText and crashed at draw time (Sentry BURROW-8Y). The metric widgets now fall back to the plain system font — cosmetic at worst, never a crash. (<a href="https://github.com/caezium/Burrow/pull/290" target="_blank" rel="noopener">#290</a>)</li>
+            <li><b>In-app update actually updates.</b> When the cask “cannot be upgraded as-is,” Homebrew prints a warning but exits 0 — so the one-click updater reported success and reopened the same build. It now detects the refusal by message and runs the <code>brew reinstall --force</code> Homebrew recommends. (<a href="https://github.com/caezium/Burrow/pull/287" target="_blank" rel="noopener">#287</a>)</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
     <article class="entry" id="v0.10.1">
       <div class="ver-col">
-        <h2 class="ver">0.10.1<span class="latest">latest</span></h2>
+        <h2 class="ver">0.10.1</h2>
         <span class="date mono">Jul 13, 2026</span>
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.1" target="_blank" rel="noopener">full notes ↗</a>
       </div>
