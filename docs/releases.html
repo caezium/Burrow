@@ -123,13 +123,38 @@
 <header class="hero page">
   <h1>Changelog</h1>
   <p>Every version at a glance — what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">19 releases · latest 0.10.2 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p class="count">20 releases · latest 0.10.5 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
 </header>
 
 <main class="page">
+    <article class="entry" id="v0.10.5">
+      <div class="ver-col">
+        <h2 class="ver">0.10.5<span class="latest">latest</span></h2>
+        <span class="date mono">Jul 25, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.5" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">Burrow's MCP tools, tuned against real agent transcripts — one analyze call maps disk hotspots, killed runs say so instead of failing silently, and slow scans warn you up front.</p>
+        <div class="sblock">
+          <div class="slabel mono">improved</div>
+          <ul class="slist">
+            <li><b>One <code>burrow_analyze</code> call now maps disk hotspots.</b> The engine reports one directory level per run, which forced agents into a call per directory (a real session made 15 in a row). <code>analyze</code> gains <code>depth</code> (descend into the largest subdirectories), <code>limit</code>, and <code>min_size</code>, emits compact JSON instead of 35–60 KB pretty-printed blobs, and always reports what it pruned (<code>entries_omitted</code> / <code>omitted_bytes</code>, <code>partial: true</code> when the descent hits its time budget). (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>The slow tools now say they're slow.</b> <code>analyze</code>, <code>clean</code>, <code>purge</code>, and <code>installer</code> descriptions warn that big scans take minutes, so agents scope to a specific folder instead of hanging past their client's patience and falling back to shell commands. The agent docs and the <code>burrow-system-tools</code> skill now lead with the low-disk emergency playbook — the pattern that actually fires in practice. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">fixed</div>
+          <ul class="slist">
+            <li><b>Killed runs no longer fail silently.</b> A <code>burrow_clean</code> that hit its time limit rendered as <code>{"exit_code": 9, "output": ""}</code> — nothing an agent could act on. Timed-out actions (and analyze) now return <code>timed_out: true</code> plus a hint. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b><code>burrow_cleanup_history</code> explains itself.</b> When engine history is unavailable, the error now points at <code>burrow_info</code> to check whether Burrow is recording at all. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
     <article class="entry" id="v0.10.2">
       <div class="ver-col">
-        <h2 class="ver">0.10.2<span class="latest">latest</span></h2>
+        <h2 class="ver">0.10.2</h2>
         <span class="date mono">Jul 24, 2026</span>
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.2" target="_blank" rel="noopener">full notes ↗</a>
       </div>

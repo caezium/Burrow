@@ -2,6 +2,51 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.10.5",
+      "date": "2026-07-25",
+      "tag": "v0.10.5",
+      "tagline": "Burrow's MCP tools, tuned against real agent transcripts — one analyze call maps disk hotspots, killed runs say so instead of failing silently, and slow scans warn you up front.",
+      "highlights": [
+        {
+          "icon": "robot",
+          "color": "lilac",
+          "title": "One analyze call, whole hotspot map",
+          "line": "burrow_analyze gains depth, limit, and min_size — it descends into the largest subdirectories itself, emits compact JSON instead of 35–60 KB blobs, and always reports what it pruned."
+        },
+        {
+          "icon": "clock",
+          "color": "azure",
+          "title": "Timeouts say so",
+          "line": "A killed clean used to render as exit_code 9 with empty output. Timed-out actions now return timed_out: true plus a hint an agent can act on."
+        },
+        {
+          "icon": "list",
+          "color": "apricot",
+          "title": "Honest slow-tool docs",
+          "line": "The tools that scan for minutes now say so, and the agent docs + skill lead with the low-disk emergency playbook — the pattern that actually fires in practice."
+        }
+      ],
+      "chips": [
+        "Still ad-hoc-signed — re-grant Full Disk Access once after updating."
+      ],
+      "sections": [
+        {
+          "label": "improved",
+          "items": [
+            "**One `burrow_analyze` call now maps disk hotspots.** The engine reports one directory level per run, which forced agents into a call per directory (a real session made 15 in a row). `analyze` gains `depth` (descend into the largest subdirectories), `limit`, and `min_size`, emits compact JSON instead of 35–60 KB pretty-printed blobs, and always reports what it pruned (`entries_omitted` / `omitted_bytes`, `partial: true` when the descent hits its time budget). ([#303](https://github.com/caezium/Burrow/pull/303))",
+            "**The slow tools now say they're slow.** `analyze`, `clean`, `purge`, and `installer` descriptions warn that big scans take minutes, so agents scope to a specific folder instead of hanging past their client's patience and falling back to shell commands. The agent docs and the `burrow-system-tools` skill now lead with the low-disk emergency playbook — the pattern that actually fires in practice. ([#303](https://github.com/caezium/Burrow/pull/303))"
+          ]
+        },
+        {
+          "label": "fixed",
+          "items": [
+            "**Killed runs no longer fail silently.** A `burrow_clean` that hit its time limit rendered as `{\"exit_code\": 9, \"output\": \"\"}` — nothing an agent could act on. Timed-out actions (and analyze) now return `timed_out: true` plus a hint. ([#303](https://github.com/caezium/Burrow/pull/303))",
+            "**`burrow_cleanup_history` explains itself.** When engine history is unavailable, the error now points at `burrow_info` to check whether Burrow is recording at all. ([#303](https://github.com/caezium/Burrow/pull/303))"
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.10.2",
       "date": "2026-07-24",
       "tag": "v0.10.2",

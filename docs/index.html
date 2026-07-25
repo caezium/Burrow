@@ -323,7 +323,7 @@
 
   <!-- ===== HERO ===== -->
   <header class="hero">
-    <span class="brandline">Open source · <b>github.com/caezium/Burrow</b> · v0.10.2</span>
+    <span class="brandline">Open source · <b>github.com/caezium/Burrow</b> · v0.10.5</span>
     <h1>Burrow
       <svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 74 a36 36 0 0 1 72 0 Z" fill="#F3ECDD"/><rect x="38" y="74" width="24" height="7" rx="3.5" fill="#121217"/></svg>
     </h1>
@@ -389,29 +389,28 @@
     <div class="sec-head wn-head">
       <div>
         <span class="sec-num">What's new · July 2026</span>
-        <h2 class="sec-title">New in 0.10.2</h2>
+        <h2 class="sec-title">New in 0.10.5</h2>
       </div>
       <a class="btn btn-out btn-sm" href="releases.html">All releases</a>
     </div>
 
     <div class="grid3 wn-grid">
-      <article class="tcard" style="--c: var(--teal)">
-        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9.5 11.5l2 2 3.5-3.5"/></svg></div><div class="nm">Popover &amp; streaming crashes gone</div></div>
-        <p class="ds">Two EXC_BAD_ACCESS faults in SwiftUI's view graph — the menu-bar popover header and the live task report while a job streams — are fixed by keeping those subtrees stable across updates.</p>
+      <article class="tcard" style="--c: var(--lilac)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></div><div class="nm">One analyze call, whole hotspot map</div></div>
+        <p class="ds">burrow_analyze gains depth, limit, and min_size — it descends into the largest subdirectories itself, emits compact JSON instead of 35–60 KB blobs, and always reports what it pruned.</p>
       </article>
       <article class="tcard" style="--c: var(--azure)">
-        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19a9 9 0 1114 0"/><path d="M12 13l4-4"/><circle cx="12" cy="13" r="1.6"/></svg></div><div class="nm">HUD font crash fixed</div></div>
-        <p class="ds">The menu-bar metric could crash on a transiently-nil monospaced system font; it now falls back to the system font instead of crashing (Sentry BURROW-8Y).</p>
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="nm">Timeouts say so</div></div>
+        <p class="ds">A killed clean used to render as exit_code 9 with empty output. Timed-out actions now return timed_out: true plus a hint an agent can act on.</p>
       </article>
       <article class="tcard" style="--c: var(--apricot)">
-        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div><div class="nm">In-app update actually updates</div></div>
-        <p class="ds">When Homebrew refused to upgrade the cask in place it exited 0, so the one-click updater reopened the same build. It now detects the refusal and reinstalls.</p>
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></div><div class="nm">Honest slow-tool docs</div></div>
+        <p class="ds">The tools that scan for minutes now say so, and the agent docs + skill lead with the low-disk emergency playbook — the pattern that actually fires in practice.</p>
       </article>
     </div>
 
-    <div class="extra-label mono">// also tightened in 0.10.2</div>
+    <div class="extra-label mono">// also tightened in 0.10.5</div>
     <div class="wn-chips">
-      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>On 0.10.1 the in-app updater may reopen the same build — grab 0.10.2 with <code>brew upgrade --cask burrow</code> (or <code>brew reinstall --cask --force burrow</code>), or the direct download.</span>
       <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Still ad-hoc-signed — re-grant Full Disk Access once after updating.</span>
     </div>
     <!-- WN:END -->
