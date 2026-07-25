@@ -301,12 +301,27 @@ final class MoActionsTests: XCTestCase {
     }
 
     func testWire_uninstallAborts_areByteStable() {
+        // The nil-matched case is what every real call against the bundled engine hits (it
+        // answers in JSON, never the legacy text `matchedApps` parses) — the message must say
+        // uninstall is unavailable in this build and why, not the old "couldn't verify" non-answer.
         XCTAssertEqual(
             ActionWire.uninstallAbort(apps: ["Slack"], matched: nil),
-            #"{"apps":["Slack"],"command":"uninstall","error":"aborted: couldn't verify which apps mo matched","ran":false}"#)
+            #"{"apps":["Slack"],"command":"uninstall","error":"aborted: Uninstall isn't available in this build: the bundled engine can only resolve one app per request and expects an exact bundle id where Burrow currently sends display names, so there's no reliable way to confirm what it would actually remove before anything is deleted.","ran":false}"#)
         XCTAssertEqual(
             ActionWire.uninstallAbort(apps: ["Slack"], matched: ["Slack", "Slackpad"],
                                       mismatch: "mo would also remove: Slackpad"),
             #"{"apps":["Slack"],"command":"uninstall","error":"aborted: mo matched a different set than requested (mo would also remove: Slackpad). Use exact names from burrow_list_apps.","matched":["Slack","Slackpad"],"ran":false}"#)
+    }
+
+    /// Guards the exact honesty property Fix 2 introduced: the nil-matched abort must name the
+    /// build limitation, and must NOT claim a verification was attempted (the old wording read as
+    /// "we tried to check and couldn't", when in fact no check is even possible against this
+    /// engine yet).
+    func testWire_uninstallAbort_nilMatch_namesTheRealReason() {
+        let json = ActionWire.uninstallAbort(apps: ["Slack"], matched: nil)
+        XCTAssertTrue(json.contains("unavailable in this build"),
+                      "must say uninstall is unavailable in this build: \(json)")
+        XCTAssertFalse(json.contains("couldn't verify"),
+                       "must not claim a verification was attempted and came back inconclusive: \(json)")
     }
 }

@@ -333,7 +333,12 @@ enum ActionWire {
             obj["error"] = "aborted: mo matched a different set than requested "
                 + "(\(mismatch ?? "")). Use exact names from burrow_list_apps."
         } else {
-            obj["error"] = "aborted: couldn't verify which apps mo matched"
+            // The bundled engine answers in JSON, not the legacy text this preflight parses, so
+            // `matched` is nil on (almost) every real call — say plainly that uninstall is
+            // unavailable in this build (and why) rather than implying a check was attempted
+            // and came back inconclusive. Same wording an agent and a GUI user both see —
+            // UninstallGuard.unavailableReason is the one place it's spelled out.
+            obj["error"] = "aborted: " + UninstallGuard.unavailableReason
         }
         return json(obj)
     }

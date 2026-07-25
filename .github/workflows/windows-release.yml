@@ -51,9 +51,22 @@ jobs:
           dotnet-version: 8.0.x
 
       # Build the FSL `burrow` conductor at its pinned submodule commit and stage it into Assets\
-      # so the csproj bundles it (its Content Include is conditional on Exists). NON-FATAL: without
-      # it the app falls back to the direct engine. windows-latest ships a Rust toolchain; the
-      # submodule is cloned fresh (checkout doesn't recurse submodules), reusing ENGINE_PAT.
+      # so the csproj bundles it (its Content Include is conditional on Exists). windows-latest
+      # ships a Rust toolchain; the submodule is cloned fresh (checkout doesn't recurse
+      # submodules), authenticated with ENGINE_PAT.
+      #
+      # burrow-cli is PRIVATE (verified 2026-07-25) — there is no unauthenticated fallback worth
+      # trying first. An unauthenticated clone here always 403s and only wastes a round-trip
+      # before falling through to the same authenticated clone below, so go straight there.
+      #
+      # A failed build here FAILS THE STEP — it used to be a try/catch that downgraded any
+      # failure to a `::warning::` and kept going, the exact silent-degradation shape that has
+      # already shipped a broken release for this project once (see release.yml's engine-fetch
+      # step, fixed the same way). The "Verify the bundled conductor + engine" step further down
+      # would likely still catch a missing burrow.exe, but that's a second line of defense, not a
+      # reason to let this step swallow the REAL error (an expired ENGINE_PAT, a git/cargo
+      # failure) behind a generic warning and ~10 more minutes of restore/publish before the
+      # release fails anyway.
       - name: Build + stage burrow conductor
         working-directory: ${{ github.workspace }}
         shell: pwsh
@@ -63,29 +76,38 @@ jobs:
           # git CLI so the url.insteadOf token below applies.
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
-          try {
-            $sha = (git ls-tree HEAD windows/vendor/burrow-cli).Split()[2]
-            $dest = Join-Path $env:RUNNER_TEMP 'burrow-cli'
-            # burrow-cli is PUBLIC: clone unauthenticated FIRST. ENGINE_PAT is scoped to
-            # burrow-engine only, and an authenticated clone with an unauthorized token 403s
-            # (the bug that dropped the conductor from the first macOS 0.10.0 artifact).
-            git clone --quiet https://github.com/caezium/burrow-cli.git $dest
-            if (-not (Test-Path $dest) -and $env:ENGINE_PAT) {
-              git -c "url.https://x-access-token:$($env:ENGINE_PAT)@github.com/.insteadOf=https://github.com/" clone --quiet https://github.com/caezium/burrow-cli.git $dest
-            }
-            git -C $dest -c advice.detachedHead=false checkout --quiet $sha
-            # cargo build fetches the private burrow-engine — authorize github.com for the CLI
-            # fetcher. Set AFTER the burrow-cli clone above so the burrow-engine-scoped token can't
-            # 403 that clone. No-op until the vendored burrow-cli carries the git dependency.
-            if ($env:ENGINE_PAT) {
-              git config --global url."https://x-access-token:$($env:ENGINE_PAT)@github.com/".insteadOf "https://github.com/"
-            }
-            cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
-            Copy-Item (Join-Path $dest 'target\release\burrow.exe') 'windows\Assets\burrow.exe' -Force
-            Write-Host "staged burrow.exe @ $($sha.Substring(0,7))"
-          } catch {
-            Write-Host "::warning::burrow conductor build failed - Windows app falls back to the direct engine. $_"
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:ENGINE_PAT) {
+            Write-Host "::error::ENGINE_PAT is not set. burrow-cli is PRIVATE and has no unauthenticated fallback. Add/refresh the secret (Settings > Secrets and variables > Actions)."
+            exit 1
           }
+          $sha = (git ls-tree HEAD windows/vendor/burrow-cli).Split()[2]
+          if (-not $sha) {
+            Write-Host "::error::no gitlink for windows/vendor/burrow-cli in HEAD (.gitmodules / the submodule entry may be missing). Failing the build — there is no conductor to stage without it."
+            exit 1
+          }
+          $dest = Join-Path $env:RUNNER_TEMP 'burrow-cli'
+          git -c "url.https://x-access-token:$($env:ENGINE_PAT)@github.com/.insteadOf=https://github.com/" clone --quiet https://github.com/caezium/burrow-cli.git $dest
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::clone of caezium/burrow-cli failed (exit $LASTEXITCODE). Most likely ENGINE_PAT is missing, expired, or not scoped to grant read on this repo."
+            exit 1
+          }
+          git -C $dest -c advice.detachedHead=false checkout --quiet $sha
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::cloned caezium/burrow-cli, but commit $sha does not exist on any branch there."
+            exit 1
+          }
+          # cargo build fetches the private burrow-engine — authorize github.com for the CLI
+          # fetcher. Set AFTER the burrow-cli clone above so this broader rewrite can't affect
+          # that clone's own explicit (and narrower, -c-scoped) token use.
+          git config --global url."https://x-access-token:$($env:ENGINE_PAT)@github.com/".insteadOf "https://github.com/"
+          cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::cargo build of burrow-cli failed (exit $LASTEXITCODE)."
+            exit 1
+          }
+          Copy-Item (Join-Path $dest 'target\release\burrow.exe') 'windows\Assets\burrow.exe' -Force
+          Write-Host "staged burrow.exe @ $($sha.Substring(0,7))"
 
       # Surface (without leaking) whether the keys will actually be baked, so a
       # release that silently shipped inert telemetry is easy to spot. Reads the

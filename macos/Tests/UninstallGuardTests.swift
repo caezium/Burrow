@@ -88,4 +88,15 @@ final class UninstallGuardTests: XCTestCase {
         XCTAssertNotNil(UninstallGuard.mismatchDescription(confirmed: ["Slack"], matched: []))
         XCTAssertNotNil(UninstallGuard.mismatchDescription(confirmed: [], matched: ["Slack"]))
     }
+
+    // MARK: - Unavailable reason (post-repoint: the bundled engine speaks JSON, so `matchedApps`
+    // returns nil on almost every real call — the caller-facing message must say uninstall is
+    // unavailable in this build and why, not the old "couldn't verify" non-answer.)
+
+    func testUnavailableReason_statesUnavailabilityRatherThanAnInconclusiveCheck() {
+        let reason = UninstallGuard.unavailableReason
+        XCTAssertTrue(reason.contains("isn't available in this build"), reason)
+        XCTAssertFalse(reason.localizedCaseInsensitiveContains("couldn't verify"),
+                       "must not regress to the old ambiguous non-answer: \(reason)")
+    }
 }

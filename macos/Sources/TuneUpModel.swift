@@ -8,11 +8,21 @@
 //  instantly on re-entry and survives relaunch. Nothing here spawns a new
 //  process path — every scan reuses an existing engine:
 //
-//    • Cleanable junk  → `mo clean --dry-run`     (parseTaskReport summary)
-//    • Maintenance     → `mo optimize --dry-run`  (parseTaskReport groups)
+//    • Cleanable junk  → `mo clean --dry-run`     (the engine's JSON envelope,
+//                                                   read via cleanableSpace(fromCaptureStdout:))
+//    • Maintenance     → `mo optimize --dry-run`  (envelope again, via optimizeAreas(fromCaptureStdout:))
 //    • Apps to remove  → `mo uninstall --list`    (MoleClient.listApps, by size)
 //    • Startup items   → StartupInventory.scanLive vs the persisted baseline
 //    • Big disk users  → `mo analyze` on ~          (DiskScanner.scan)
+//
+//  NOTE on clean/optimize: the bundled engine ALWAYS answers in its JSON envelope — there is
+//  no human-text mode (confirmed against burrow-engine's own main.rs/cli.rs). `parseTaskReport`
+//  (TaskReport.swift) is a text-marker parser built for legacy mo/streamed output; feeding it a
+//  one-line JSON blob used to silently match nothing, so this pane always reported "nothing to
+//  clean" / "nothing to optimize" whenever the bundled engine is what actually ran — which in a
+//  shipped app is always. Read the envelope's structured fields instead — see the two helpers
+//  below, which fall back to `parseTaskReport` only when the capture ISN'T envelope-shaped at
+//  all (the bundled engine is missing and a legacy `mo`/MIT-fork binary answered instead).
 //
 //  App updates are deliberately NOT auto-scanned here — that contacts Apple /
 //  vendor appcasts, which the pre-scan-on-open feedback says must stay
@@ -35,7 +45,7 @@ struct TuneUpSnapshot: Codable {
 
     // Safe set — reversible, one-tap runnable.
     var cleanableText: String       // "383.8MB" from the clean dry-run, "" if none
-    var optimizeAreas: [String]     // optimize dry-run group titles
+    var optimizeAreas: [String]     // optimize dry-run task descriptions (only .isEmpty/.count are shown)
 
     // Review-only — flagged here, acted on in their own panes.
     var bigApps: [AppLite]
@@ -140,10 +150,7 @@ final class TuneUpModel: ObservableObject {
             guard let res = try? MoEngine.shared.capture(
                     MoCommand(target: .mo, args: ["clean", "--dry-run"], timeout: 120)),
                   res.exitCode == 0 else { return "" }
-            let (_, summary) = parseTaskReport(res.stdout.components(separatedBy: "\n"))
-            let space = summary?.space ?? ""
-            // "0B" / "0 B" reads as nothing to do.
-            return space.replacingOccurrences(of: " ", with: "").hasPrefix("0") ? "" : space
+            return Self.cleanableSpace(fromCaptureStdout: res.stdout)
         }.value
     }
 
@@ -152,9 +159,53 @@ final class TuneUpModel: ObservableObject {
             guard let res = try? MoEngine.shared.capture(
                     MoCommand(target: .mo, args: ["optimize", "--dry-run"], timeout: 120)),
                   res.exitCode == 0 else { return [] }
-            let (groups, _) = parseTaskReport(res.stdout.components(separatedBy: "\n"))
-            return groups.map { TaskReportText.title($0.title) }
+            return Self.optimizeAreas(fromCaptureStdout: res.stdout)
         }.value
+    }
+
+    /// Pull the would-free size out of a buffered `clean --dry-run` capture. The bundled engine's
+    /// envelope carries structured fields (`total_bytes`/`total_human`) alongside a `text`
+    /// rendering kept for other consumers (e.g. the streaming reducer) — read the structured
+    /// field directly rather than re-parsing that text with the marker-based `parseTaskReport`.
+    ///
+    /// Whether the capture decodes as an envelope AT ALL is the fork, not the value inside it:
+    /// if it does, that's the bundled engine and its structured fields are authoritative (even a
+    /// genuine `total_bytes: 0` means nothing to clean — it does not fall through). If it
+    /// doesn't, `.mo` resolved to a legacy `mo`/MIT-fork binary instead (the bundled engine is
+    /// missing — a dev build, or a broken install) and THAT still speaks the marker text
+    /// `parseTaskReport` was built for, so fall back to it rather than going blank in that
+    /// narrower case too.
+    static func cleanableSpace(fromCaptureStdout stdout: String) -> String {
+        guard let envelope = try? BurrowEnvelope.parse(stdout) else {
+            let (_, summary) = parseTaskReport(stdout.components(separatedBy: "\n"))
+            let space = summary?.space ?? ""
+            // "0B" / "0 B" reads as nothing to do.
+            return space.replacingOccurrences(of: " ", with: "").hasPrefix("0") ? "" : space
+        }
+        guard envelope.ok, let data = envelope.data,
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return "" }
+        let totalBytes = (payload["total_bytes"] as? Int64) ?? Int64(payload["total_bytes"] as? Int ?? 0)
+        guard totalBytes > 0 else { return "" }
+        return (payload["total_human"] as? String) ?? ""
+    }
+
+    /// One entry per maintenance task a buffered `optimize --dry-run` capture lists under
+    /// `data.tasks` — same envelope-vs-text fork as `cleanableSpace` above (an envelope that
+    /// decodes fine is authoritative; one that doesn't fork to the legacy marker parser).
+    /// TuneUpView only ever checks `optimizeAreas.isEmpty` and `.count` (never the strings
+    /// themselves), so the exact wording doesn't matter — it just needs to be non-empty and one
+    /// entry per task (or per legacy group, on the fallback path).
+    static func optimizeAreas(fromCaptureStdout stdout: String) -> [String] {
+        guard let envelope = try? BurrowEnvelope.parse(stdout) else {
+            let (groups, _) = parseTaskReport(stdout.components(separatedBy: "\n"))
+            return groups.map { TaskReportText.title($0.title) }
+        }
+        guard envelope.ok, let data = envelope.data,
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tasks = payload["tasks"] as? [[String: Any]]
+        else { return [] }
+        return tasks.compactMap { $0["description"] as? String }
     }
 
     private static func scanBigApps() async -> [TuneUpSnapshot.AppLite] {

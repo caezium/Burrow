@@ -843,16 +843,26 @@ final class SoftwareModel: ObservableObject {
             if let matched {
                 problem = UninstallGuard.mismatchDescription(confirmed: names, matched: matched)
             } else {
-                problem = NSLocalizedString("couldn't verify which apps mo matched", comment: "")
+                // The bundled engine answers in JSON, not the legacy "Matched N app(s):" text
+                // this guard parses, so `matched` is nil on (almost) every real call — see
+                // UninstallGuard.unavailableReason for why that's a build limitation to state
+                // plainly, not a "couldn't verify" non-answer, and not something to fix by
+                // teaching this guard to read JSON.
+                problem = UninstallGuard.unavailableReason
             }
             if let problem {
                 Task { @MainActor in
                     self.loading = false
                     OperationCenter.shared.end(opId, success: false,
-                                               detail: NSLocalizedString("aborted — matcher mismatch", comment: ""))
+                                               detail: matched == nil
+                                                   ? NSLocalizedString("aborted — uninstall unavailable in this build", comment: "")
+                                                   : NSLocalizedString("aborted — matcher mismatch", comment: ""))
                     let alert = NSAlert()
                     alert.messageText = NSLocalizedString("Uninstall aborted", comment: "")
-                    alert.informativeText = String(
+                    // The nil-match case IS the whole story (a build limitation, not a specific
+                    // disagreement) — state it directly rather than folding it into the
+                    // "matcher didn't agree" template, which would misdescribe it.
+                    alert.informativeText = matched == nil ? problem : String(
                         format: NSLocalizedString("mo's matcher didn't agree with your selection, so nothing was removed.\n\n%@", comment: ""),
                         problem)
                     alert.alertStyle = .warning

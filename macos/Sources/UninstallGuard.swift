@@ -14,10 +14,51 @@
 //  only proceed to the real run when it equals what the user confirmed.
 //  Anything unparseable fails CLOSED — no real run.
 //
+//  Post-repoint, "unparseable" is the NORMAL case against the bundled engine: it answers every
+//  command in its JSON envelope, never the legacy "Matched N app(s):" text below, so
+//  `matchedApps` returns nil on (almost) every real call and callers abort. See
+//  `unavailableReason` for why that must stay true for now rather than be "fixed".
+//
 
 import Foundation
 
 enum UninstallGuard {
+
+    /// Why uninstall can't be verified against the bundled engine, in the one sentence surfaced
+    /// verbatim by both the GUI's abort alert (`SoftwareView`) and the MCP `uninstall` tool's
+    /// refusal (`ActionWire.uninstallAbort`) — one wording, so a person and an agent reading the
+    /// tool's JSON learn the same true thing instead of each caller inventing its own guess at
+    /// "couldn't verify". Not run through `NSLocalizedString`: it's shared verbatim with the
+    /// non-localized MCP wire text, matching how `SettingsView` already states this build's other
+    /// engine-capability gaps (e.g. `touchIDEngineSupported`'s footnote) in plain, unlocalized text.
+    ///
+    /// Do NOT respond to this by teaching `matchedApps` to decode the engine's JSON — that would
+    /// ENABLE uninstall, and uninstall is not safe to enable yet, for three separate engine-side
+    /// reasons that have nothing to do with parsing:
+    ///
+    ///  1. `burrow-engine uninstall` resolves exactly ONE bundle id per invocation
+    ///     (`args.iter().find(|a| !a.starts_with("--"))` feeding `find_leftovers(home,
+    ///     bundle_id)`) — every app after the first in a multi-app request is silently dropped.
+    ///  2. Burrow passes DISPLAY NAMES (`InstalledApp.uninstallName`, sourced from the old
+    ///     digger-era `--list`) where the engine wants an exact bundle id — `leftover_paths`
+    ///     interpolates the argument directly into paths like `Library/Containers/{bundle_id}`.
+    ///     A display name coincidentally matches for the handful of apps whose support files
+    ///     happen to be named that way and finds nothing for everyone else, so a "fixed" guard
+    ///     would produce PARTIAL, ARBITRARY deletions — not the uniform no-op this produces today.
+    ///  3. As of this writing, `--permanent` is unparsed by the engine (removal runs through
+    ///     `execute_clean`'s `fs::remove_dir_all`/`remove_file` unconditionally) and there is no
+    ///     Trash path, so every real uninstall would be a hard delete despite the confirm
+    ///     sheet's "moves to the Trash (recoverable)" promise. `caezium/burrow-engine` is a
+    ///     separate, actively-developed repo — confirm this specific point against its current
+    ///     source before relying on it; #1 and #2 above don't depend on it and are each
+    ///     independently sufficient to keep this guard closed even if #3 already landed.
+    ///
+    /// All three need fixing on the engine side (and the app needs to start sending bundle ids)
+    /// before this guard's fail-closed behavior should be relaxed.
+    static let unavailableReason = "Uninstall isn't available in this build: the bundled engine "
+        + "can only resolve one app per request and expects an exact bundle id where Burrow "
+        + "currently sends display names, so there's no reliable way to confirm what it would "
+        + "actually remove before anything is deleted."
 
     /// App names mo reports it matched, parsed from (ANSI-decorated)
     /// `mo uninstall --dry-run` output:
