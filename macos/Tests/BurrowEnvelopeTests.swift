@@ -87,15 +87,11 @@ final class BurrowEnvelopeTests: XCTestCase {
                        ["status", "--json"])
     }
 
-    func testConductorEnvironment_pointsAtBundledEngine() {
-        let dir = URL(fileURLWithPath: "/Applications/Burrow.app/Contents/Resources/engine")
-        let env = BurrowConductor.environment(engineDir: dir)
-        XCTAssertEqual(env["BURROW_ENGINE_DIR"], dir.path)
-    }
-
-    func testConductorEnvironment_nilEngineDirLeavesItUnset() {
-        // A build without a bundled engine sets no override — the conductor resolves on its own.
-        XCTAssertNil(BurrowConductor.environment(engineDir: nil)["BURROW_ENGINE_DIR"])
+    func testConductorEnvironment_neverSetsEngineDir() {
+        // BURROW_ENGINE_DIR named the OLD conductor at the digger's runtime directory (a sibling
+        // Resources/engine this app layout never had post-repoint). The engine looks for nothing,
+        // so this key must never be (re)introduced.
+        XCTAssertNil(BurrowConductor.environment()["BURROW_ENGINE_DIR"])
     }
 
     // MARK: PATH augmentation (the Finder-launch trap — brew sidecars/engine shell-outs)
@@ -121,33 +117,103 @@ final class BurrowEnvelopeTests: XCTestCase {
         XCTAssertEqual(BurrowConductor.augmentedPATH(""), fallback)
     }
 
-    // MARK: streaming argv translation (safety-critical: mo↔burrow dry-run/apply INVERSION)
+    // MARK: mo→engine argv translation (safety-critical: dry-run/apply INVERSION)
+    //
+    // `engineArgv` is the semantic mapping every caller shares — MoActions's action catalog
+    // (MCP + the Software tab's uninstall) and this file's own streaming path alike. Test it
+    // directly, not just through `streamArgv`, since `MoActionsTests` pins the MoActions side of
+    // the same contract.
+
+    func testEngineArgv_preview_dropsDryRun_neverApply() {
+        // mo preview (`clean --dry-run`) maps to the engine's DEFAULT (dry-run) — must NOT gain
+        // --apply, or a "preview" would delete for real.
+        XCTAssertEqual(BurrowConductor.engineArgv(fromMo: ["clean", "--dry-run"]), ["clean"])
+    }
+
+    func testEngineArgv_live_addsApply() {
+        // mo live (`clean`, no --dry-run) needs --apply on the engine — or a real clean would
+        // silently no-op (the engine defaults to dry-run). This is the §2 bug in miniature.
+        XCTAssertEqual(BurrowConductor.engineArgv(fromMo: ["clean"]), ["clean", "--apply"])
+        XCTAssertEqual(BurrowConductor.engineArgv(fromMo: ["optimize"]), ["optimize", "--apply"])
+    }
+
+    func testEngineArgv_uninstallPreview_singleAndMultiApp() {
+        XCTAssertEqual(BurrowConductor.engineArgv(fromMo: ["uninstall", "--dry-run", "Slack"]),
+                       ["uninstall", "Slack"])
+        XCTAssertEqual(
+            BurrowConductor.engineArgv(fromMo: ["uninstall", "--dry-run", "Slack", "Zoom"]),
+            ["uninstall", "Slack", "Zoom"])
+    }
+
+    func testEngineArgv_uninstallLive_permanentFlagPassesThroughUntouched() {
+        // --permanent isn't part of the dry-run/apply inversion this function owns — it rides
+        // through unchanged either way. (The engine doesn't currently interpret it at all; see
+        // the accompanying report — that's a separate, already-flagged gap, not this mapping's job.)
+        XCTAssertEqual(
+            BurrowConductor.engineArgv(fromMo: ["uninstall", "--permanent", "Slack"]),
+            ["uninstall", "--permanent", "Slack", "--apply"])
+    }
 
     func testStreamArgv_preview_dropsDryRun_neverApply() {
-        // mo preview (`clean --dry-run`) maps to burrow's DEFAULT (dry-run) — must NOT gain
-        // --apply, or a "preview" would delete for real.
+        // Delegates to engineArgv, plus the transport-only --stream.
         XCTAssertEqual(BurrowConductor.streamArgv(fromMo: ["clean", "--dry-run"]),
                        ["clean", "--stream"])
     }
 
     func testStreamArgv_live_addsApply() {
-        // mo live (`clean`, no --dry-run) needs --apply on burrow — or a real clean would silently
-        // no-op (burrow defaults to dry-run).
         XCTAssertEqual(BurrowConductor.streamArgv(fromMo: ["clean"]),
                        ["clean", "--apply", "--stream"])
         XCTAssertEqual(BurrowConductor.streamArgv(fromMo: ["optimize"]),
                        ["optimize", "--apply", "--stream"])
     }
 
-    func testStreamOverride_offByDefault_keepsDirectEngine() {
-        // The switch is off unless explicitly set → no override, the direct mo path is preserved.
-        XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"], elevated: false))
+    // MARK: streamOverride / shouldStreamViaConductor
+    //
+    // `streamOverride` itself needs a real bundled `burrow` binary to ever return non-nil, which
+    // this test host doesn't ship — so these test the pure decision (`shouldStreamViaConductor`)
+    // rather than asserting a real override fires. Whether the resolved binary actually behaves
+    // is the hand-test in the plan's exit gate ("An elevated clean that actually deletes").
+
+    func testShouldStreamViaConductor_onByDefault() {
+        // `streamingEnabled` is `?? true` (see its doc: "Default ON, hand-validated on a real
+        // build") — with no UserDefaults key set (the CI/fresh-launch case, and this test's own
+        // starting state), clean/optimize stream through the conductor unless someone explicitly
+        // turns the switch off. An earlier version of this test asserted the OPPOSITE — that the
+        // switch defaults OFF — which doesn't match `streamingEnabled`'s own `?? true` fallback
+        // and failed in exactly the environment (no host app, no launch args) it claimed to cover.
+        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "clean"))
+        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
     }
 
-    func testStreamOverride_elevatedAlwaysDirect() {
+    func testShouldStreamViaConductor_explicitlyOff_disablesStreaming() {
+        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
+        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
+        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "clean"))
+        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
+    }
+
+    func testShouldStreamViaConductor_onlyClean_andOptimize_whenSwitchIsOn() {
         UserDefaults.standard.set(true, forKey: "BurrowStreamViaConductor")
         defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
-        // Elevated runs (osascript, fresh env) stay on mo even with the switch on.
-        XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"], elevated: true))
+        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "clean"))
+        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
+        // purge/installer are the interactive PTY flow; uninstall is matcher-gated — neither is
+        // ever streamed, switch on or off.
+        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "purge"))
+        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "installer"))
+        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "uninstall"))
+    }
+
+    // `shouldStreamViaConductor`/`streamOverride` deliberately take no `elevated` parameter at
+    // all — see `shouldStreamViaConductor`'s doc for why. Before this change, a `!elevated` guard
+    // meant `CleanView`/`TuneUpView`'s real clean/optimize (the app's ONLY GUI callers of
+    // `.moleStream`, both always `elevated: true`) never received the mo→engine argv translation:
+    // every actual Clean/Optimize button fell through to the direct-engine path with untranslated
+    // argv, which the engine reads with inverted dry-run/apply meaning. There is no elevated-vs-
+    // not variant of `shouldStreamViaConductor` to test — the absence of the parameter IS the
+    // regression guard; a future edit would have to deliberately re-add it to reintroduce the bug.
+
+    func testStreamOverride_offByDefault_keepsDirectEngine() {
+        XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"]))
     }
 }

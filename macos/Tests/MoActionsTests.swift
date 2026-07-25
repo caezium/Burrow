@@ -24,7 +24,10 @@ final class MoActionsTests: XCTestCase {
         guard case .run(let ticket) = MoActions.decide(.clean, .preview, gate) else {
             return XCTFail("preview must not require any opt-in")
         }
-        XCTAssertEqual(ticket.command.args, ["clean", "--dry-run"])
+        // Engine-style, not mo-style: the ticket's args are what actually gets spawned (the
+        // bundled binary is the engine post-repoint), so `mint` translates mo's `--dry-run` away
+        // to the engine's own dry-run default rather than passing it through untranslated.
+        XCTAssertEqual(ticket.command.args, ["clean"])
         XCTAssertNil(ticket.command.stdin)
         XCTAssertEqual(ticket.command.timeout, 180)
         XCTAssertFalse(ticket.command.elevated)
@@ -47,7 +50,9 @@ final class MoActionsTests: XCTestCase {
         guard case .run(let ticket) = MoActions.decide(.clean, .real, gate) else {
             return XCTFail("opted-in real clean must run")
         }
-        XCTAssertEqual(ticket.command.args, ["clean"])
+        // A live mo run (`["clean"]`, no --dry-run) needs the engine's --apply, or this would
+        // silently no-op against the engine's dry-run default — the exact §2 bug.
+        XCTAssertEqual(ticket.command.args, ["clean", "--apply"])
         // An MCP server can't field a sudo prompt — agent runs never elevate.
         XCTAssertFalse(ticket.command.elevated)
         XCTAssertEqual(ticket.command.timeout, 600)
@@ -75,7 +80,9 @@ final class MoActionsTests: XCTestCase {
         guard case .run(let ticket) = MoActions.decide(action, .real, gate) else {
             return XCTFail("fully opted-in uninstall must run")
         }
-        XCTAssertEqual(ticket.command.args, ["uninstall", "--permanent", "Slack", "Zoom"])
+        // --apply appended (live mo run, no --dry-run to drop); --permanent rides through
+        // untouched — it isn't part of the dry-run/apply mapping.
+        XCTAssertEqual(ticket.command.args, ["uninstall", "--permanent", "Slack", "Zoom", "--apply"])
         XCTAssertEqual(ticket.command.stdin, String(repeating: "y\n", count: 4))
         XCTAssertEqual(ticket.command.timeout, 600)
         XCTAssertEqual(ticket.preflight, .verifyUninstallMatch(expected: ["Slack", "Zoom"]))
@@ -87,7 +94,7 @@ final class MoActionsTests: XCTestCase {
             action, .preview, .agent(actionsOptIn: false, irreversibleOptIn: false)) else {
             return XCTFail("uninstall preview is read-only — always allowed")
         }
-        XCTAssertEqual(ticket.command.args, ["uninstall", "--dry-run", "Slack"])
+        XCTAssertEqual(ticket.command.args, ["uninstall", "Slack"])
         XCTAssertNil(ticket.preflight)
     }
 
@@ -99,12 +106,13 @@ final class MoActionsTests: XCTestCase {
             return XCTFail("agent purge must downgrade, not block")
         }
         XCTAssertEqual(ticket.mode, .preview, "real purge is TUI-only — agents get the preview")
-        XCTAssertEqual(ticket.command.args, ["purge", "--dry-run"])
+        XCTAssertEqual(ticket.command.args, ["purge"])
         XCTAssertNotNil(ticket.note, "the downgrade carries the redirect note")
 
         guard case .run(let plain) = MoActions.decide(.purge, .preview, gate) else {
             return XCTFail()
         }
+        XCTAssertEqual(plain.command.args, ["purge"])
         XCTAssertNil(plain.note, "an asked-for preview needs no redirect")
     }
 
@@ -119,7 +127,7 @@ final class MoActionsTests: XCTestCase {
             return XCTFail("'Scan with admin' resolves the gate — root bypasses TCC")
         }
         XCTAssertTrue(ticket.command.elevated)
-        XCTAssertEqual(ticket.command.args, ["clean", "--dry-run"])
+        XCTAssertEqual(ticket.command.args, ["clean"])
     }
 
     func testGUI_realCleanNeedsExplicitConfirm_thenRunsElevated() throws {
@@ -142,7 +150,7 @@ final class MoActionsTests: XCTestCase {
             return XCTFail("optimize must run without a separate dialog")
         }
         XCTAssertTrue(ticket.command.elevated)
-        XCTAssertEqual(ticket.command.args, ["optimize"])
+        XCTAssertEqual(ticket.command.args, ["optimize", "--apply"])
     }
 
     func testGUI_uninstallConfirmedTicket_carriesPreflightAndUnifiedTimeout() throws {
@@ -185,6 +193,54 @@ final class MoActionsTests: XCTestCase {
         XCTAssertEqual(gui.command.stdin, agent.command.stdin)
         XCTAssertEqual(gui.preflight, agent.preflight)
         XCTAssertEqual(gui.command.timeout, agent.command.timeout)
+        // Pin the concrete value too, not just "the two surfaces agree" — engine-style
+        // (--apply appended), never mo's own live-by-default argv passed through raw.
+        XCTAssertEqual(gui.command.args, ["uninstall", "Slack", "--apply"])
+    }
+
+    // MARK: - mo↔engine argv translation (the §2 fix)
+    //
+    // `mint` is the one place every RunTicket's args get built, so this sweeps the whole catalog
+    // rather than relying on one example per action to catch a regression. The bundled binary
+    // every ticket ultimately reaches is the engine (post-repoint), which reads mo's own
+    // `--dry-run`-less "live" argv as ITS dry-run — so a ticket that still carries a bare
+    // mo-style live command with no `--apply` would silently no-op if this translation ever
+    // regressed.
+
+    func testMint_everyRealTicket_carriesApply_neverBareDryRun() throws {
+        let cases: [(MoAction, ActionGate)] = [
+            (.clean, .agent(actionsOptIn: true, irreversibleOptIn: true)),
+            (.optimize, .agent(actionsOptIn: true, irreversibleOptIn: true)),
+            (.uninstall(apps: ["Slack"], permanent: false),
+             .agent(actionsOptIn: true, irreversibleOptIn: true)),
+        ]
+        for (action, gate) in cases {
+            guard case .run(let ticket) = MoActions.decide(action, .real, gate) else {
+                return XCTFail("\(action) real run should mint under a fully opted-in gate")
+            }
+            XCTAssertTrue(ticket.command.args.contains("--apply"),
+                         "\(action): a real run must reach the engine with --apply, or it " +
+                         "silently no-ops against the engine's dry-run default")
+            XCTAssertFalse(ticket.command.args.contains("--dry-run"),
+                          "\(action): mo's own --dry-run flag is meaningless to the engine and " +
+                          "must not leak through untranslated")
+        }
+    }
+
+    func testMint_everyPreviewTicket_neverCarriesApply() throws {
+        let cases: [MoAction] = [.clean, .optimize, .purge, .installer,
+                                 .uninstall(apps: ["Slack"], permanent: false)]
+        for action in cases {
+            guard case .run(let ticket) = MoActions.decide(
+                action, .preview, .agent(actionsOptIn: false, irreversibleOptIn: false)) else {
+                return XCTFail("\(action) preview should always mint")
+            }
+            XCTAssertFalse(ticket.command.args.contains("--apply"),
+                          "\(action): a preview must never gain --apply — that would turn a " +
+                          "\"just show me\" request into a live destructive run")
+            XCTAssertFalse(ticket.command.args.contains("--dry-run"),
+                          "\(action): mo's --dry-run is translated away, not passed through")
+        }
     }
 
     // MARK: - The frozen wire format (golden tests)

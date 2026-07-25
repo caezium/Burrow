@@ -81,9 +81,14 @@ enum MoAction: Equatable {
     /// The match-preflight command (uninstall only): pin what mo's matcher
     /// resolves BEFORE answering its prompts. `--dry-run` changes nothing
     /// and exits at its prompt on stdin EOF.
+    ///
+    /// Built from mo-style argv, same as every other command here, so it goes through the same
+    /// `BurrowConductor.engineArgv` translation `mint` applies — this bypasses `mint` (it isn't a
+    /// runnable ticket, just the probe `execute()` runs before answering any prompt), so without
+    /// this it would reach the engine untranslated like every other pre-repoint call site did.
     var preflightCommand: ActionCommand? {
         guard case .uninstall(let apps, _) = self else { return nil }
-        return ActionCommand(args: ["uninstall", "--dry-run"] + apps,
+        return ActionCommand(args: BurrowConductor.engineArgv(fromMo: ["uninstall", "--dry-run"] + apps),
                              stdin: "", timeout: 120, elevated: false)
     }
 
@@ -231,7 +236,15 @@ enum MoActions {
         let spec = action.spec
         let isElevated = elevated || (mode == .real && surface == .gui && spec.elevatedRealRunGUI)
         let command = ActionCommand(
-            args: action.argv(mode),
+            // `action.argv(mode)` is mo-style — mo runs LIVE by default, `--dry-run` previews.
+            // The bundled binary every RunTicket ultimately reaches is the engine (post-repoint),
+            // which inverts that (dry-run by default, `--apply` to run for real), so the mo-style
+            // table above is translated here, ONCE, for every surface and every mode alike —
+            // `BurrowConductor.engineArgv` is the same pure mapping the streaming GUI path uses,
+            // so there's exactly one place that knows the mo↔engine wire difference. Getting this
+            // backwards is the highest-severity class of bug in this file: a preview that gains
+            // `--apply` deletes on a "just show me what would happen" request.
+            args: BurrowConductor.engineArgv(fromMo: action.argv(mode)),
             // mo uninstall is interactive ("Proceed? [y/N]" + "Enter confirm");
             // feed yes so a non-TTY run doesn't block forever. The gate +
             // preflight are the consent, not these answers.

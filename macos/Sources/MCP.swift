@@ -1125,8 +1125,14 @@ struct ToolCatalog {
     private func callListApps() -> String {
         let res = Self.runMo(["uninstall", "--list"], timeout: 60)
         guard res.exitCode == 0 else {
+            // The bundled engine (post-repoint) has no app-listing command at all — `uninstall`
+            // takes exactly one bundle id and answers "--list" with "needs an app bundle id",
+            // written to STDOUT (the engine's error envelope), not stderr — so `stderr` alone is
+            // always empty here and told an agent nothing. Surface both so the actual reason is
+            // visible instead of an empty diagnostic next to a bare "apps": [].
             return Self.jsonString(["error": "mo uninstall --list failed",
                                     "exit_code": Int(res.exitCode),
+                                    "stdout": Self.stripANSI(res.stdout),
                                     "stderr": Self.stripANSI(res.stderr),
                                     "apps": []])
         }

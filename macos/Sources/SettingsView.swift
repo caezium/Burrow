@@ -105,12 +105,17 @@ struct SettingsView: View {
     @State private var aiOpenAIModel: String = Store.aiOpenAIModel
     @State private var aiOpenAIKey: String = Store.aiOpenAIKey
     @State private var moleVersion: String = "—"
-    @State private var moleUpdating = false
     @State private var copiedConfig = false
     @State private var touchIDStatus = "—"
     @State private var touchIDEnabled = false
     @State private var touchIDBusy = false
     @State private var touchIDAvailable = false
+    /// Separate from `touchIDAvailable` (hardware presence): whether the bundled engine itself
+    /// answers `touchid status` at all. The post-repoint engine has no `touchid` subcommand yet
+    /// (it answers "unknown command"), so this starts true and flips false the first time
+    /// `loadTouchIDStatus` sees that response — gates the Enable/Disable button so a Mac WITH a
+    /// sensor doesn't get told a false "Disabled" for a query the tool couldn't actually make.
+    @State private var touchIDEngineSupported = true
 
     /// Drop-in MCP config for Claude Code / Cursor / Codex / Cline — they
     /// all share the same `{command, args}` stdio shape, so one snippet
@@ -599,24 +604,25 @@ struct SettingsView: View {
 
             section("Touch ID for sudo", "touchid") {
                 infoRow("Status", touchIDStatus)
-                if touchIDAvailable {
+                if touchIDAvailable, touchIDEngineSupported {
                     HStack {
                         Spacer()
                         if touchIDBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }
                         PillButton(title: touchIDEnabled ? "Disable" : "Enable", filled: false) { toggleTouchID() }
                     }
                 }
-                footnote("Lets `sudo` in a terminal accept your fingerprint instead of a password — including `mo` commands you run yourself. It does NOT change Burrow's own admin prompts: those go through macOS authorization, which asks for your password regardless. Configured via `mo touchid` (pam_tid); turning it on or off needs your password once.")
+                footnote(touchIDEngineSupported
+                    ? "Lets `sudo` in a terminal accept your fingerprint instead of a password — including `mo` commands you run yourself. It does NOT change Burrow's own admin prompts: those go through macOS authorization, which asks for your password regardless. Configured via `mo touchid` (pam_tid); turning it on or off needs your password once."
+                    : "The bundled engine doesn't have a `touchid` command yet, so Burrow can't check or change this for you. Configure it directly with `sudo mo touchid enable` in a terminal if you have Mole installed separately.")
             }
 
             section("Mole engine", "shippingbox") {
                 infoRow("Version", moleVersion)
                 HStack {
                     Spacer()
-                    if moleUpdating { ProgressView().controlSize(.small).padding(.trailing, 4) }
-                    PillButton(title: moleUpdating ? "Updating…" : "Update Mole", filled: false) { updateMole() }
+                    PillButton(title: "Update Mole", filled: false) { updateMole() }
                 }
-                footnote("Runs `mo update` to update the Mole CLI engine Burrow drives. This is separate from Burrow's own app updates. If it needs a password or a confirmation it can't show here, run `mo update` in a terminal instead.")
+                footnote("Burrow bundles its own engine (Contents/Resources/burrow) — it updates automatically whenever Burrow does, so there's no separate `mo update` step anymore.")
             }
         }
     }
@@ -640,25 +646,19 @@ struct SettingsView: View {
         }
     }
 
+    /// The bundled engine (post-repoint) has no self-update command at all — `burrow-engine`'s
+    /// `cli.rs` dispatch table has no `update` arm, so it always answers "unknown command:
+    /// update". Spawning it and reporting THAT as "Update didn't complete, try running it in a
+    /// terminal" would be actively misleading (a terminal run hits the exact same bundled
+    /// binary and fails the exact same way) — so instead of running a command that can only
+    /// ever fail, say the true thing directly: Resources/burrow only changes when Burrow itself
+    /// does (bundle-burrow.sh stages a fresh one on every release), so there's nothing left for
+    /// this button to run.
     private func updateMole() {
-        guard !moleUpdating else { return }
-        moleUpdating = true
-        DispatchQueue.global(qos: .userInitiated).async {
-            let res = try? MoleCLI.run(args: ["update"], timeout: 600)
-            let newVersion = MoleCLI.version()
-            DispatchQueue.main.async {
-                moleUpdating = false
-                if let v = newVersion { moleVersion = "v\(v)" }
-                let ok = (res?.exitCode ?? 1) == 0
-                let alert = NSAlert()
-                alert.messageText = ok ? "Mole is up to date" : "Update didn't complete"
-                alert.informativeText = ok
-                    ? "Now on \(moleVersion)."
-                    : (res?.stderr.isEmpty == false ? String(res!.stderr.prefix(300))
-                                                    : "`mo update` exited non-zero. Try running it in a terminal.")
-                alert.runModalQuiet()
-            }
-        }
+        let alert = NSAlert()
+        alert.messageText = "No separate update needed"
+        alert.informativeText = "Burrow bundles its engine — it updates automatically whenever Burrow does. There's no separate `mo update` step to run."
+        alert.runModalQuiet()
     }
 
     // MARK: - Touch ID for sudo
@@ -679,20 +679,29 @@ struct SettingsView: View {
         let available = touchIDHardwarePresent()
         DispatchQueue.global(qos: .userInitiated).async {
             let res = try? MoleCLI.run(args: ["touchid", "status"], timeout: 15)
+            let raw = res?.stdout ?? ""
+            // The bundled engine (post-repoint) has no `touchid` subcommand at all —
+            // `burrow-engine`'s cli.rs answers every unrecognized command with the literal
+            // "unknown command: <name>". That must read as "can't ask," never as a false
+            // "Disabled": telling someone Touch ID for sudo is off when the tool actually
+            // couldn't ask is a materially wrong, actionable-looking answer.
+            let supported = !raw.contains("unknown command")
             // Strip ANSI colour codes Mole wraps the status line in before matching.
-            let out = Ansi.strip(res?.stdout ?? "").lowercased()
+            let out = Ansi.strip(raw).lowercased()
             let enabled = out.contains("is enabled")
             DispatchQueue.main.async {
                 touchIDAvailable = available
+                touchIDEngineSupported = supported
                 touchIDEnabled = enabled
                 touchIDStatus = !available ? "Not available on this Mac"
+                    : !supported ? "Not supported by this build of the engine yet"
                     : (out.isEmpty ? "Unknown" : (enabled ? "Enabled" : "Disabled"))
             }
         }
     }
 
     private func toggleTouchID() {
-        guard !touchIDBusy else { return }
+        guard !touchIDBusy, touchIDEngineSupported else { return }
         touchIDBusy = true
         let cmd = touchIDEnabled ? "disable" : "enable"
         DispatchQueue.global(qos: .userInitiated).async {

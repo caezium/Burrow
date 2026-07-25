@@ -73,12 +73,21 @@ enum MoleCLI {
         return nil
     }
 
-    /// The MIT engine bundled inside the app at Contents/Resources/engine/mole. Preferred
+    /// Test seam: when set, `bundledExecutable()` returns this instead of doing a real
+    /// `Bundle.main` lookup. The xctest host ships no "burrow" resource, so without this,
+    /// nothing can exercise the "did we resolve the bundled engine" check `OperationFlow`
+    /// does before translating argv on the non-conductor path. Reset in `tearDown`.
+    internal static var bundledExecutableOverride: String?
+
+    /// The single engine binary bundled inside the app at Contents/Resources/burrow. Preferred
     /// over any system `mo`: users run our engine with zero install and never touch upstream
     /// (GPL-relicensed) mo. It's part of the signed app bundle, so it's a trusted location.
     static func bundledExecutable() -> String? {
-        guard let url = Bundle.main.url(forResource: "mole", withExtension: nil,
-                                        subdirectory: "engine") else { return nil }
+        if let override = bundledExecutableOverride { return override }
+        // The single bundled `burrow-engine` binary, staged as Resources/burrow (bundle-burrow.sh).
+        // It replaced the old Resources/engine/mole digger — one binary that does the work AND
+        // speaks the envelope. Same file BurrowConductor.executableURL resolves.
+        guard let url = Bundle.main.url(forResource: "burrow", withExtension: nil) else { return nil }
         return FileManager.default.isExecutableFile(atPath: url.path) ? url.path : nil
     }
 

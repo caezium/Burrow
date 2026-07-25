@@ -145,11 +145,23 @@ struct OptimizeView: View {
             }
         }
         return ToolOperation(label: label, arguments: args, gate: gate, elevated: elevated,
+                             // The bundled engine streams NDJSON (both the real run at :160 and
+                             // the preview at :167 go through the same conductor `--stream` path
+                             // clean does) — reduce with BurrowStreamReport, not the old
+                             // human-text parseTaskReport, or every run reads back an empty
+                             // report and "0 areas refreshed". See BurrowStreamReport.
+                             //
+                             // TaskTicker.reduce still speaks only the old ➤/→ text grammar, so
+                             // the live ticker finds nothing on these NDJSON lines — that's the
+                             // view's existing "ticker found nothing it recognizes" fallback
+                             // (below, in `body`), not a new gap: it degrades to the raw
+                             // TaskReportView instead of an empty panel, same as any other format
+                             // drift.
                              reduce: { lines in
-                                 let (groups, summary) = parseTaskReport(lines)
+                                 let (groups, summary) = BurrowStreamReport.reduce(lines)
                                  return (groups, summary, TaskTicker.reduce(lines))
                              },
-                             hudLine: { TaskReportText.line($0) },
+                             hudLine: { BurrowStreamReport.hudLine($0) },
                              notifyOnEnd: notify,
                              finalDetail: finalDetail)
     }

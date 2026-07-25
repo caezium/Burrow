@@ -197,6 +197,24 @@ struct SoftwareView: View {
             if model.loading {
                 VStack { Spacer(); ProgressView("Reading installed apps…").controlSize(.large).tint(Tool.apps.accent)
                     .font(Brand.mono(11)); Spacer() }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if model.apps.isEmpty {
+                // A finished load that came back with nothing almost never means "this Mac has
+                // zero installed apps" — in practice it means the underlying `mo uninstall
+                // --list` call failed. Say that plainly instead of rendering a silent blank
+                // list, which reads as "you have no apps" rather than "this couldn't be read".
+                VStack(spacing: 8) {
+                    Spacer()
+                    Image(systemName: "questionmark.app.dashed")
+                        .font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+                    Text("App inventory isn't available")
+                        .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
+                    Text("Burrow couldn't list installed apps this time. You can still uninstall from Finder in the meantime.")
+                        .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 320)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {

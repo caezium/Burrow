@@ -51,60 +51,46 @@ jobs:
       # not be able to run new code here. Comment keeps the version legible.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      # Fetch the bundled MIT engine OUTSIDE the work tree (RUNNER_TEMP), at its
-      # pinned submodule commit. (This once looked like it hung SPM — the real
-      # cause was Sentry's SPM binary-artifact download, now vendored via
-      # scripts/fetch-sentry.sh so SPM never touches Sentry.) NON-FATAL: without
-      # ENGINE_PAT the app falls back to system `mo`. Token scoped via `git -c`.
-      - name: Fetch bundled engine (outside the work tree)
+      # Fetch the bundled `burrow-engine` (FSL-1.1) OUTSIDE the work tree (RUNNER_TEMP), at its
+      # pinned submodule commit. (This once looked like it hung SPM — the real cause was Sentry's
+      # SPM binary-artifact download, now vendored via scripts/fetch-sentry.sh so SPM never
+      # touches Sentry.)
+      #
+      # There is exactly ONE bundled binary after the repoint (no separate digger + conductor,
+      # see macos/scripts/bundle-burrow.sh's header for the full naming story) and NO fallback —
+      # a system `mo` doesn't exist anymore. So unlike the two fetch steps this replaces, a failed
+      # fetch here FAILS THE BUILD. It must not be downgraded to a warning: that is exactly how a
+      # broken release shipped from this pipeline before (a private-repo 403 silently produced an
+      # app with nothing bundled, and the run stayed green).
+      #
+      # caezium/burrow-engine is PRIVATE — verified live 2026-07-25 (the workflow used to assume
+      # this repo's predecessor needed no auth; that was true of the old burrow-digger, not of
+      # this one). So there is no unauthenticated attempt to try first; ENGINE_PAT is required.
+      - name: Fetch bundled burrow-engine (outside the work tree)
         env:
           ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
         run: |
           SHA="$(git ls-tree HEAD macos/vendor/burrow-engine | awk '{print $3}')"
           DEST="$RUNNER_TEMP/burrow-engine"
-          AUTH=()
-          [ -n "$ENGINE_PAT" ] && AUTH=(-c "url.https://x-access-token:${ENGINE_PAT}@github.com/.insteadOf=https://github.com/")
-          if git "${AUTH[@]}" clone --quiet https://github.com/caezium/burrow-digger.git "$DEST" \
-             && git -C "$DEST" -c advice.detachedHead=false checkout --quiet "$SHA"; then
-            echo "BURROW_ENGINE_SRC=$DEST" >> "$GITHUB_ENV"
-            echo "engine: cloned to $DEST @ ${SHA:0:7}"
-          else
-            echo "::warning::burrow-engine unavailable — set ENGINE_PAT or make it public. Shipping WITHOUT the bundled engine; app falls back to system \`mo\`."
+          if [ -z "$SHA" ]; then
+            echo "::error::no gitlink for macos/vendor/burrow-engine in HEAD (.gitmodules / the submodule entry may be missing). Failing the release — there is no engine to bundle without it."
+            exit 1
           fi
-
-      # Fetch the FSL `burrow` conductor at its pinned submodule commit, beside the
-      # engine (RUNNER_TEMP). Same NON-FATAL contract: without it the app falls back to
-      # the direct engine. Reuses ENGINE_PAT for the clone (same org); the bundle phase
-      # (bundle-burrow.sh) cargo-builds it universal from BURROW_CLI_SRC. macOS runners
-      # ship a Rust toolchain; the script adds the x86_64 cross target itself.
-      - name: Fetch bundled burrow conductor (outside the work tree)
-        env:
-          ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
-        run: |
-          SHA="$(git ls-tree HEAD macos/vendor/burrow-cli | awk '{print $3}')"
-          DEST="$RUNNER_TEMP/burrow-cli"
-          AUTH=()
-          [ -n "$ENGINE_PAT" ] && AUTH=(-c "url.https://x-access-token:${ENGINE_PAT}@github.com/.insteadOf=https://github.com/")
-          # burrow-cli is PUBLIC: clone unauthenticated FIRST. Injecting ENGINE_PAT (scoped to
-          # burrow-engine only) 403s the whole clone — exactly what silently dropped the
-          # conductor from the first 0.10.0 artifact.
-          if [ -n "$SHA" ] \
-             && { git clone --quiet https://github.com/caezium/burrow-cli.git "$DEST" \
-                  || git "${AUTH[@]}" clone --quiet https://github.com/caezium/burrow-cli.git "$DEST"; } \
-             && git -C "$DEST" -c advice.detachedHead=false checkout --quiet "$SHA"; then
-            echo "BURROW_CLI_SRC=$DEST" >> "$GITHUB_ENV"
-            echo "burrow: cloned to $DEST @ ${SHA:0:7}"
-          else
-            echo "::warning::burrow-cli unavailable — shipping WITHOUT the bundled conductor; app falls back to the direct engine."
+          if [ -z "$ENGINE_PAT" ]; then
+            echo "::error::ENGINE_PAT is not set. caezium/burrow-engine is PRIVATE and has no unauthenticated fallback. Add/refresh the secret (Settings > Secrets and variables > Actions) and confirm it grants read on caezium/burrow-engine specifically — a PAT scoped only to the old burrow-digger/burrow-cli repos will not work here."
+            exit 1
           fi
-
-      # Pin a Go that satisfies the engine's go.mod (>= 1.25) for the bundle
-      # phase's `go build`. Harmless when the engine isn't fetched.
-      - name: Set up Go (for the bundled engine)
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version: "1.26"
-          cache: false
+          if ! git -c "url.https://x-access-token:${ENGINE_PAT}@github.com/.insteadOf=https://github.com/" \
+                 clone --quiet https://github.com/caezium/burrow-engine.git "$DEST"; then
+            echo "::error::clone of caezium/burrow-engine failed. Most likely ENGINE_PAT is missing, expired, or not scoped to grant read on this repo. Failing the release rather than shipping without the bundled engine."
+            exit 1
+          fi
+          if ! git -C "$DEST" -c advice.detachedHead=false checkout --quiet "$SHA"; then
+            echo "::error::cloned caezium/burrow-engine, but commit ${SHA} does not exist on any branch there. If this is expected (the pinned commit hasn't been pushed yet), that is a real blocker, not a warning — failing rather than shipping without the bundled engine."
+            exit 1
+          fi
+          echo "BURROW_ENGINE_SRC=$DEST" >> "$GITHUB_ENV"
+          echo "engine: cloned to $DEST @ ${SHA:0:7}"
 
       # Use the newest Xcode on the runner so xcodebuild can read the project
       # format xcodegen emits (Homebrew's xcodegen targets the latest Xcode).
@@ -131,18 +117,14 @@ jobs:
           POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
           POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          # bundle-burrow.sh does `cargo build` on the vendored conductor, which now depends on the
-          # PRIVATE burrow-engine crate over git. Fetch it via the git CLI so the token below applies.
-          ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
-          # Let cargo read the private burrow-engine dependency during the conductor build. Set
-          # AFTER the conductor-fetch step (which clones burrow-cli unauthenticated) so this token —
-          # scoped to burrow-engine only — can't 403 that clone. No-op until the vendored burrow-cli
-          # actually carries the git dependency, so it's safe to land ahead of the submodule bump.
-          if [ -n "$ENGINE_PAT" ]; then
-            git config --global url."https://x-access-token:${ENGINE_PAT}@github.com/".insteadOf "https://github.com/"
-          fi
+          # scripts/release.sh forwards BURROW_ENGINE_SRC (set in GITHUB_ENV by the fetch step
+          # above) into xcodebuild, which macos/project.yml's bundle phase reads to cargo-build
+          # the already-fetched checkout in place. burrow-engine's own Cargo.toml has exactly one
+          # dependency (crates.io `image`) and no git dependencies, so — unlike the old
+          # burrow-cli-depends-on-burrow-engine-over-git arrangement this replaces — no further
+          # GitHub auth is needed here; ENGINE_PAT's job ended at the fetch step above.
+          #
           # Sentry is vendored as a local framework (scripts/fetch-sentry.sh),
           # not an SPM package, so the SPM binary-download hang is gone — this is
           # a plain build now. The step timeout-minutes above is the hard cap.
@@ -153,23 +135,33 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "app=$APP" >> "$GITHUB_OUTPUT"
 
-      # The bundle phases are non-fatal by design (dev builds fall back) — but a RELEASE
-      # without the conductor or engine ships with its headline features dead while the
-      # run stays green (how the first 0.10.0 artifact lost `burrow`). Assert both here.
-      - name: Verify the bundled conductor + engine made it into the app
+      # The bundle phase is non-fatal by design in dev builds (falls back to a system engine) —
+      # but a RELEASE without the bundled engine ships with every headline feature dead while the
+      # run stays green (how the first 0.10.0 artifact lost `burrow`). Assert against the actual
+      # built artifact, not the exit code of the step above — that inference is exactly how the
+      # previous broken release passed.
+      - name: Verify the bundled engine made it into the app
         run: |
           APP="${{ steps.build.outputs.app }}"
+          # One binary now: Resources/burrow IS burrow-engine (see bundle-burrow.sh's header for
+          # why the filename stayed "burrow"). There is no fallback left in a release build, so
+          # missing/incomplete/non-universal must fail here, not warn.
           [ -x "$APP/Contents/Resources/burrow" ] \
-            || { echo "::error::Resources/burrow missing — the conductor did not bundle. Failing the release."; exit 1; }
-          [ -x "$APP/Contents/Resources/engine/bin/analyze-go" ] \
-            || { echo "::error::Resources/engine incomplete — the engine did not bundle. Failing the release."; exit 1; }
-          lipo -archs "$APP/Contents/Resources/burrow" | grep -q "x86_64" \
-            || { echo "::error::bundled burrow is not universal (missing x86_64 slice)."; exit 1; }
+            || { echo "::error::Resources/burrow missing — burrow-engine did not bundle. Failing the release."; exit 1; }
+          ARCHS="$(lipo -archs "$APP/Contents/Resources/burrow")"
+          echo "$ARCHS" | grep -q "arm64" \
+            || { echo "::error::bundled burrow is not universal (missing arm64 slice): $ARCHS"; exit 1; }
+          echo "$ARCHS" | grep -q "x86_64" \
+            || { echo "::error::bundled burrow is not universal (missing x86_64 slice — issue #221, an arch-only binary hangs the app on the other arch): $ARCHS"; exit 1; }
+          # Resources/engine was the digger's runtime dir and is retired by the repoint — its
+          # presence would mean something stale is still bundling the old engine alongside the new.
+          [ ! -e "$APP/Contents/Resources/engine" ] \
+            || { echo "::error::Resources/engine exists — that directory belongs to the retired burrow-digger runtime and should never be bundled after the repoint."; exit 1; }
           [ -x "$APP/Contents/Resources/fclones" ] \
             || { echo "::error::Resources/fclones missing — the Duplicates sidecar did not bundle. Failing the release."; exit 1; }
           lipo -archs "$APP/Contents/Resources/fclones" | grep -q "x86_64" \
             || { echo "::error::bundled fclones is not universal (missing x86_64 slice)."; exit 1; }
-          echo "conductor: $(lipo -archs "$APP/Contents/Resources/burrow") ✓  engine: present ✓  fclones: $(lipo -archs "$APP/Contents/Resources/fclones") ✓"
+          echo "burrow-engine: $ARCHS ✓  fclones: $(lipo -archs "$APP/Contents/Resources/fclones") ✓"
 
       - name: Verify the tag matches the app version
         run: |
@@ -233,21 +225,11 @@ jobs:
               find "$APP/Contents/Frameworks" \( -name "*.framework" -o -name "*.dylib" \) -print0 \
                 | while IFS= read -r -d '' f; do codesign --force --sign - "$f"; done
             fi
-            # The bundled MIT engine ships nested Mach-O helpers (status-go,
-            # analyze-go). Re-sign them with the app's ad-hoc identity too, so
-            # the whole bundle carries one coherent signature — the same
-            # inside-out pass we do for frameworks. (bundle-engine.sh ad-hoc
-            # signs them at build time, but best-effort/`|| true`; this makes it
-            # authoritative and is what the Developer ID path below relies on.)
-            # Filter by Mach-O magic so the shell entrypoint + lib/*.sh skip.
-            if [ -d "$APP/Contents/Resources/engine" ]; then
-              find "$APP/Contents/Resources/engine" -type f -print0 \
-                | while IFS= read -r -d '' f; do
-                    if file -b "$f" | grep -q 'Mach-O'; then codesign --force --sign - "$f"; fi
-                  done
-            fi
-            # The FSL `burrow` conductor (Resources/burrow) is a sibling nested Mach-O —
-            # re-sign it inside-out too, or the app's resource seal goes stale (#177).
+            # Resources/burrow (the bundled burrow-engine binary — the app's only nested Mach-O
+            # since the repoint retired the separate Resources/engine runtime dir) needs re-signing
+            # inside-out too, or the app's resource seal goes stale (#177). (bundle-burrow.sh
+            # ad-hoc signs it at build time, but best-effort; this makes it authoritative and is
+            # what the Developer ID path below relies on.)
             if [ -f "$APP/Contents/Resources/burrow" ]; then codesign --force --sign - "$APP/Contents/Resources/burrow"; fi
             codesign --force --sign - --entitlements macos/Resources/Burrow.entitlements "$APP"
             codesign --verify --strict --verbose=2 "$APP"
@@ -276,20 +258,8 @@ jobs:
                   codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$f"
                 done
           fi
-          # The bundled engine's nested Mach-O helpers (status-go, analyze-go)
-          # need Developer ID + hardened runtime + secure timestamp too — every
-          # embedded Mach-O must be signed this way or notarization rejects the
-          # submission. (Mach-O filter skips the shell entrypoint + lib/*.sh.)
-          if [ -d "$APP/Contents/Resources/engine" ]; then
-            find "$APP/Contents/Resources/engine" -type f -print0 \
-              | while IFS= read -r -d '' f; do
-                  if file -b "$f" | grep -q 'Mach-O'; then
-                    codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$f"
-                  fi
-                done
-          fi
-          # The FSL `burrow` conductor (Resources/burrow) is a sibling nested Mach-O — it
-          # needs Developer ID + hardened runtime + secure timestamp too, or notarization rejects.
+          # Resources/burrow (the bundled burrow-engine binary) is a nested Mach-O — it needs
+          # Developer ID + hardened runtime + secure timestamp too, or notarization rejects it.
           if [ -f "$APP/Contents/Resources/burrow" ]; then
             codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/Resources/burrow"
           fi

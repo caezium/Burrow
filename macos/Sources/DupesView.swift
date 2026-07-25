@@ -525,6 +525,10 @@ final class DupesModel: ObservableObject {
 
     /// Scan `path` via the bundled conductor, off the main thread. The envelope's `data`
     /// is fclones' group report, decoded by the pure DupesReport.parse.
+    ///
+    /// `dupes` needs a subcommand (`group|dedupe|remove|link`) — a bare path errors with "needs a
+    /// subcommand" (`burrow-engine`'s `cli.rs::dupes`). `group` is the read-only report this scan
+    /// wants; see `dupes.golden.provenance.txt`, captured with argv `dupes group <path>`.
     func scan(_ path: String) {
         folder = path
         scanGen += 1
@@ -537,7 +541,7 @@ final class DupesModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async {
             let outcome: Result<DupesReport, Error>
             do {
-                let envelope = try BurrowConductor.capture("dupes", [path], timeout: 300)
+                let envelope = try BurrowConductor.capture("dupes", ["group", path], timeout: 300)
                 guard let data = envelope.data, let parsed = DupesReport.parse(data) else {
                     throw BurrowConductorError.engine(
                         kind: "error",

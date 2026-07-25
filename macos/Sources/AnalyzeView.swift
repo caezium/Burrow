@@ -557,9 +557,9 @@ final class AnalyzeModel: ObservableObject {
         let proc = Process()
         proc.executableURL = burrow
         proc.arguments = ["analyze", "--progress", path]
-        var env = Foundation.ProcessInfo.processInfo.environment
-        if let dir = BurrowConductor.engineDir() { env["BURROW_ENGINE_DIR"] = dir.path }
-        proc.environment = env
+        // No explicit `.environment` — Process inherits the app's own environment as-is, which is
+        // all this needs (the engine is self-contained; there is no sibling directory to point it
+        // at, unlike the old conductor this call site used to inject BURROW_ENGINE_DIR for).
         let out = Pipe()
         proc.standardOutput = out
         proc.standardError = Pipe()   // discard the human-readable line on stderr

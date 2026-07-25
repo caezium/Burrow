@@ -179,15 +179,38 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         var arguments = op.arguments
         switch op.executable {
         case .mo:
-            // Opt-in: route non-elevated streaming clean/optimize through the bundled conductor
-            // (`burrow … --stream`), which forwards the engine's live output line-by-line. When the
-            // switch is off / no conductor is bundled, `streamOverride` returns nil and the direct
-            // `mo` path below is byte-identical to before.
-            if let conductorRun = BurrowConductor.streamOverride(moArgs: op.arguments, elevated: op.elevated) {
+            // Opt-in TRANSPORT choice only: prefer streaming clean/optimize through the bundled
+            // conductor (`burrow … --stream`), which forwards the engine's live output
+            // line-by-line. Elevated runs go through this exactly like non-elevated ones — every
+            // real (non-preview) GUI clean/optimize call is elevated, so excluding elevated runs
+            // here would mean the app's actual Clean/Optimize buttons never stream at all.
+            //
+            // The mo→engine argv TRANSLATION is a separate concern from which of these two
+            // branches runs, and it must not depend on that choice: `resolveMo` below resolves
+            // the SAME bundled engine binary this branch would have used (MoleCLI.bundledExecutable(),
+            // the file `streamOverride`/`BurrowConductor.executableURL()` also targets) whenever
+            // one is bundled — which it will be in a shipped build regardless of the streaming
+            // switch. So when only the conductor branch translated, turning that switch off
+            // (`defaults write … BurrowStreamViaConductor -bool NO`) silently handed the SAME
+            // bundled engine mo's own untranslated argv, which it reads with the OPPOSITE meaning
+            // (`["clean"]` is mo's LIVE run and the engine's DRY RUN) — a transport kill switch
+            // that could turn a real clean into a silent no-op. Not "byte-identical to before":
+            // `MoleCLI.bundledExecutable()` is new in this same diff, so what `resolveMo` finds
+            // changed underneath this fallback even though the fallback's own code didn't.
+            if let conductorRun = BurrowConductor.streamOverride(moArgs: op.arguments) {
                 exe = conductorRun.executable
                 arguments = conductorRun.arguments
             } else {
-                exe = resolveMo(op.elevated)
+                let resolved = resolveMo(op.elevated)
+                exe = resolved
+                // Translate only when we can tell this IS the bundled engine — a genuine
+                // external mo/burrow-engine(MIT-fork) Homebrew fallback (reachable only when the
+                // bundle itself is missing) speaks mo's own convention, and translating that one
+                // unconditionally would turn an elevated preview ("Scan with admin") into a live
+                // delete on it instead.
+                if let resolved, resolved == MoleCLI.bundledExecutable() {
+                    arguments = BurrowConductor.engineArgv(fromMo: op.arguments)
+                }
             }
         case .path(let p): exe = p
         }
@@ -291,9 +314,11 @@ extension ToolOperation where Report == TaskRunReport {
     static func moleStream(_ args: [String], gate: Gate = .none,
                            elevated: Bool = false, label: String?,
                            notifyOnEnd: Bool = false) -> ToolOperation {
+        // The bundled engine streams NDJSON (clean/optimize --stream); reduce those events into the
+        // same (groups, summary) shape the human-text parser produced. See BurrowStreamReport.
         ToolOperation(label: label, arguments: args, gate: gate, elevated: elevated,
-                      reduce: { parseTaskReport($0) },
-                      hudLine: { TaskReportText.line($0) },
+                      reduce: { BurrowStreamReport.reduce($0) },
+                      hudLine: { BurrowStreamReport.hudLine($0) },
                       notifyOnEnd: notifyOnEnd,
                       finalDetail: { $0.summary?.completionLine ?? "" })
     }

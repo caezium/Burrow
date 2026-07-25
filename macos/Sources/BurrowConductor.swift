@@ -2,16 +2,25 @@
 //  BurrowConductor.swift
 //  Burrow
 //
-//  Runs the bundled `burrow` CONDUCTOR (caezium/burrow-cli) and returns parsed envelopes.
-//  The conductor wraps the engine with the stable Burrow contract — one JSON envelope per
-//  command, NDJSON streaming for progress — so the GUI parses ONE shape instead of each call
-//  site re-implementing "spawn the engine → parse its output".
+//  Runs the bundled `burrow` binary (Resources/burrow, from bundle-burrow.sh — the new
+//  `caezium/burrow-engine` Rust crate; see that script's header for the naming story) and returns
+//  parsed envelopes. One JSON envelope per command, NDJSON streaming for progress — so the GUI
+//  parses ONE shape instead of each call site re-implementing "spawn the engine → parse its
+//  output".
 //
-//  Resolution: the conductor ships beside the engine in the app bundle (Resources/burrow, from
-//  bundle-burrow.sh); we point it at the sibling-bundled engine via BURROW_ENGINE_DIR. Spawning
-//  reuses the tested capture stack (MoEngine + MoleProcess) via a `.executable(path)` target —
-//  no new process plumbing. When the conductor isn't bundled (dev/CI builds without the
-//  vendor/burrow-cli submodule) `isAvailable` is false and callers fall back to the direct engine.
+//  Resolution: the engine is entirely self-contained (it looks for nothing else — no sibling
+//  digger directory, unlike the old conductor this file used to front). Spawning reuses the
+//  tested capture stack (MoEngine + MoleProcess) via a `.executable(path)` target — no new
+//  process plumbing. When it isn't bundled (dev/CI builds without the vendor/burrow-engine
+//  submodule) `isAvailable` is false and callers fall back to the direct engine resolution in
+//  `MoleCLI`.
+//
+//  mo/engine argv are NOT the same wire format: `mo` runs a command LIVE by default and
+//  `--dry-run` previews it; the engine inverts that (dry-run by default, `--apply` to execute).
+//  `engineArgv(fromMo:)` is the one pure mapping between them, shared by every caller that still
+//  speaks mo-style argv (`MoActions`'s catalog, and this file's own streaming path) — see its doc
+//  for why a run reaching the engine with the wrong half of this translation is destructive in one
+//  direction and merely silent in the other.
 //
 
 import Foundation
@@ -22,20 +31,16 @@ enum BurrowConductor {
 
     /// The bundled conductor binary, or nil if this build didn't ship one — callers then fall
     /// back to the direct engine (MoEngine).
+    ///
+    /// Delegates to `MoleCLI.bundledExecutable()` rather than re-deriving the path with a
+    /// second `Bundle` API (this used to do its own `resourceURL.appendingPathComponent`
+    /// lookup, independent of `MoleCLI`'s `Bundle.main.url(forResource:)` one). Two resolvers
+    /// for the same file is exactly the kind of thing that can silently disagree — and if it
+    /// ever did, `streamOverride` would fire on one answer while `resolveMo`'s fallback (via
+    /// `trustedExecutable()`) fell through to a Homebrew `mo` on the other, on an ELEVATED run.
+    /// One implementation makes that impossible instead of merely unlikely.
     static func executableURL() -> URL? {
-        guard let res = Bundle.main.resourceURL else { return nil }
-        let burrow = res.appendingPathComponent("burrow")
-        return FileManager.default.isExecutableFile(atPath: burrow.path) ? burrow : nil
-    }
-
-    /// The bundled engine directory the conductor should target (Resources/engine, from
-    /// bundle-engine.sh), or nil if the engine isn't bundled either.
-    static func engineDir() -> URL? {
-        guard let res = Bundle.main.resourceURL else { return nil }
-        let dir = res.appendingPathComponent("engine")
-        var isDir: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir)
-        return (exists && isDir.boolValue) ? dir : nil
+        MoleCLI.bundledExecutable().map(URL.init(fileURLWithPath:))
     }
 
     /// The bundled `fclones` sidecar (Resources/fclones, from bundle-fclones.sh), or nil if this
@@ -60,14 +65,15 @@ enum BurrowConductor {
         [command] + args + ["--json"]
     }
 
-    /// The environment for a conductor run: the inherited environment plus BURROW_ENGINE_DIR
-    /// pointing at the bundled engine (the conductor otherwise walks up looking for a sibling
-    /// `burrow-engine/`, which the app layout — Resources/engine — deliberately doesn't match).
-    static func environment(engineDir: URL?) -> [String: String] {
+    /// The environment for a conductor run: the inherited environment, plus the bundled fclones
+    /// path and an augmented PATH. There used to be a third thing here — BURROW_ENGINE_DIR,
+    /// pointing the OLD conductor at a sibling digger directory it would otherwise walk up
+    /// looking for. The engine looks for nothing: it does the work itself, so that variable is
+    /// gone along with the digger it existed to locate.
+    static func environment() -> [String: String] {
         // Fully qualified: the Burrow module has its own `ProcessInfo` (a status model), which
         // would otherwise shadow Foundation's here.
         var env = Foundation.ProcessInfo.processInfo.environment
-        if let dir = engineDir { env["BURROW_ENGINE_DIR"] = dir.path }
         // Point the conductor at the bundled fclones for `dupes` — but don't OVERRIDE a user's
         // own $BURROW_FCLONES if they set one (they may prefer a newer/system fclones).
         if env["BURROW_FCLONES"] == nil, let fclones = fclonesURL() {
@@ -106,7 +112,7 @@ enum BurrowConductor {
         let cmd = MoCommand(
             target: .executable(exe.path),
             args: argv(command: command, args: args),
-            environment: environment(engineDir: engineDir()),
+            environment: environment(),
             timeout: timeout)
         let result = try engine.capture(cmd)
 
@@ -153,28 +159,58 @@ enum BurrowConductor {
     /// an interactive TUI (PTY) and uninstall is irreversible + matcher-gated — those stay direct.
     private static let streamableCommands: Set<String> = ["clean", "optimize"]
 
-    /// Translate a `mo` streaming argv into the conductor equivalent. `mo` runs LIVE by default and
-    /// `--dry-run` previews; burrow INVERTS that (dry-run by default, `--apply` to execute). So we
-    /// drop `--dry-run` (preview → burrow's default) or add `--apply` (live), then force `--stream`
-    /// so the engine's output flows line-by-line through the pipe instead of one buffered envelope.
-    /// Pure + unit-tested — the semantic mapping is the safety-critical part, so it's verified.
-    static func streamArgv(fromMo moArgs: [String]) -> [String] {
+    /// The pure mo→engine *semantic* mapping: `mo` runs a command LIVE by default and `--dry-run`
+    /// previews it; the engine inverts that (dry-run by default, `--apply` to execute). So this
+    /// drops `--dry-run` (preview → the engine's own default) or adds `--apply` (live) — nothing
+    /// else. No `--stream`: that flag is a transport concern for this file's own streaming path,
+    /// not part of what "mo-style" argv means, so `MoActions` (whose action catalog also speaks
+    /// mo-style argv, for the non-streaming capture path MCP and the Software tab's uninstall use)
+    /// shares exactly this function rather than a copy that also knows about streaming.
+    ///
+    /// Safety-critical, so it's directly unit-tested, not just through `streamArgv`: get the
+    /// direction backwards and a preview turns into a live destructive run (see `streamArgv`'s
+    /// doc), or a live run silently no-ops (the §2 bug this whole mapping exists to close).
+    static func engineArgv(fromMo moArgs: [String]) -> [String] {
         let isPreview = moArgs.contains("--dry-run")
         var out = moArgs.filter { $0 != "--dry-run" }
-        if !isPreview { out.append("--apply") }   // mo-live → burrow needs --apply
-        out.append("--stream")
+        if !isPreview { out.append("--apply") }   // mo-live → the engine needs --apply
         return out
     }
 
-    /// When the switch is on AND a conductor is bundled AND this is a non-elevated streamable
-    /// command, the (burrow path, translated argv) to spawn instead of `mo`. Otherwise nil, so the
-    /// caller keeps the direct-engine path UNCHANGED. Elevated runs (osascript, fresh env that
-    /// wouldn't inherit BURROW_ENGINE_DIR) deliberately stay on `mo`.
-    static func streamOverride(moArgs: [String], elevated: Bool) -> (executable: String, arguments: [String])? {
-        guard streamingEnabled,
-              !elevated,
-              let command = moArgs.first,
-              streamableCommands.contains(command),
+    /// `engineArgv`, plus `--stream` so the engine's output flows line-by-line through the pipe
+    /// instead of one buffered envelope. Pure + unit-tested.
+    static func streamArgv(fromMo moArgs: [String]) -> [String] {
+        engineArgv(fromMo: moArgs) + ["--stream"]
+    }
+
+    /// Whether a streaming run should be hand routed through the bundled conductor (`burrow <cmd>
+    /// --stream`) instead of spawning `mo`/the direct engine — pure, and independent of whether a
+    /// conductor binary actually resolves (that needs a real app bundle; see `streamOverride`).
+    ///
+    /// Deliberately takes no `elevated` parameter. It used to: a `!elevated` guard sent every
+    /// elevated run around this translation entirely, on the theory that an osascript-spawned
+    /// process wouldn't inherit BURROW_ENGINE_DIR (which told the OLD conductor where to find the
+    /// digger). That variable is gone — the engine looks for nothing — and with it the guard's
+    /// only stated reason. Removing the guard closes the §2 gap: EVERY real (non-preview) GUI
+    /// clean/optimize run is elevated — `CleanView`'s two `.moleStream` sites, `TuneUpView`'s two,
+    /// and `OptimizeView`'s own `operation(...)` call (a fifth `elevated: true` site, built the
+    /// same way but not through the `.moleStream` factory) all pass `elevated: true` — so a
+    /// `!elevated` guard here meant NONE of the app's actual Clean/Optimize buttons ever received
+    /// this translation: they always fell through to the direct-engine path with untranslated
+    /// mo-style argv, which after the repoint the engine reads with inverted meaning (`["clean"]`
+    /// is mo's LIVE run and the engine's DRY RUN). Elevation still matters downstream —
+    /// `ProcessSpec.elevated` still decides osascript vs a plain spawn in `SystemProcessPort` —
+    /// it just isn't a reason to skip translating the argv.
+    static func shouldStreamViaConductor(command: String) -> Bool {
+        streamingEnabled && streamableCommands.contains(command)
+    }
+
+    /// When `shouldStreamViaConductor` and a conductor is bundled, the (burrow path, translated
+    /// argv) to spawn instead of `mo` — elevated or not. Otherwise nil, so the caller keeps the
+    /// direct-engine path UNCHANGED.
+    static func streamOverride(moArgs: [String]) -> (executable: String, arguments: [String])? {
+        guard let command = moArgs.first,
+              shouldStreamViaConductor(command: command),
               let burrow = executableURL()?.path else { return nil }
         return (burrow, streamArgv(fromMo: moArgs))
     }

@@ -38,10 +38,21 @@ final class OperationFlowTests: XCTestCase {
     }
 
     /// Canned dry-run output in mo's report shape (parseTaskReport-compatible).
+    // The human-text output the `cleanOp()` fixture's `parseTaskReport` reducer consumes.
     static let cannedClean: [ProcessEvent] = [
         .line("➤ Developer tools"),
         .line("  → npm cache, 191.8MB"),
         .line("Potential space: 383.8MB | Items: 372 | Categories: 20"),
+        .exited(0),
+    ]
+
+    // The engine's `clean --stream` NDJSON preview, which the `moleStream(...)` op's
+    // BurrowStreamReport reducer consumes. A dry-run done carries `would_free_human` →
+    // summary.space (no freeChange), so the completion line reads "Cleaned 383.8MB · 372 items"
+    // — same summary the old human-text "Potential space" preview produced.
+    static let cannedCleanStream: [ProcessEvent] = [
+        .line(#"{"event":"would_remove","path":"/Users/x/Library/Caches/npm cache","bytes":201129000}"#),
+        .line(#"{"event":"done","dry_run":true,"would_free_bytes":402438000,"would_free_human":"383.8MB","count":372}"#),
         .exited(0),
     ]
 
@@ -166,7 +177,7 @@ final class OperationFlowTests: XCTestCase {
     // and the parsed summary replaces the last streamed line as the final
     // detail — that's the body a completion notification carries.
     func testNotifyOnEnd_andFinalDetail_reachOperationCenter() async throws {
-        let port = FakeProcessPort(script: Self.cannedClean)
+        let port = FakeProcessPort(script: Self.cannedCleanStream)
         let center = OperationCenter()
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
                                                 resolveMo: { _ in "/usr/local/bin/mo" }, center: center)
@@ -198,6 +209,55 @@ final class OperationFlowTests: XCTestCase {
         flow.start(Self.cleanOp())
         guard case .finished(.failed) = flow.state else { return XCTFail("expected failed") }
         XCTAssertTrue(port.specs.isEmpty)
+    }
+
+    // MARK: - A routing switch must not change destructive semantics (the §2 bug, fallback half)
+    //
+    // `streamOverride` returning nil (the streaming switch off, or no conductor bundled) used to
+    // mean the fallback spawn sent `op.arguments` straight through, untranslated. Once
+    // `MoleCLI.bundledExecutable()` became part of `resolveMo`'s resolution chain, that fallback
+    // started resolving the SAME bundled engine the conductor branch would have — so the switch
+    // stopped being a transport-only decision and started being able to flip a live clean into a
+    // silent no-op. These pin that the fallback branch now translates whenever it resolves the
+    // bundled engine, and does NOT translate when it resolves anything else.
+
+    func testFallbackPath_stillTranslatesArgv_whenResolveMoFindsTheBundledEngine() async throws {
+        MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
+        defer { MoleCLI.bundledExecutableOverride = nil }
+        let port = FakeProcessPort(script: Self.cannedCleanStream)
+        let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
+                                                resolveMo: { _ in "/fake/bundled/burrow" },
+                                                center: OperationCenter())
+        // A live real clean — mo-style, no --dry-run — is exactly the destructive case: reaching
+        // the engine without --apply would silently no-op it (the §2 bug).
+        flow.start(.moleStream(["clean"], elevated: true, label: "Cleaning caches"))
+        await settle(flow)
+        let spec = try XCTUnwrap(port.specs.first)
+        XCTAssertEqual(spec.executable, "/fake/bundled/burrow")
+        XCTAssertEqual(spec.arguments, ["clean", "--apply"],
+                       "a live mo-style run that falls through to the (still bundled-engine) " +
+                       "direct path must gain --apply just like the conductor path would, or a " +
+                       "real clean silently no-ops against the engine's dry-run default")
+    }
+
+    func testFallbackPath_leavesArgvUntranslated_whenResolveMoFindsAnExternalMo() async throws {
+        // The override is set (so `bundledExecutable()` resolves to something) but `resolveMo`
+        // deliberately returns a DIFFERENT path — the "bundle itself is missing, Homebrew has a
+        // real mo" case. That binary speaks mo's own convention, so translating it would turn
+        // this elevated PREVIEW into a live delete instead — the dangerous direction.
+        MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
+        defer { MoleCLI.bundledExecutableOverride = nil }
+        let port = FakeProcessPort(script: Self.cannedClean)
+        let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
+                                                resolveMo: { _ in "/opt/homebrew/bin/mo" },
+                                                center: OperationCenter())
+        flow.start(.moleStream(["clean", "--dry-run"], elevated: true, label: "Scanning caches"))
+        await settle(flow)
+        let spec = try XCTUnwrap(port.specs.first)
+        XCTAssertEqual(spec.executable, "/opt/homebrew/bin/mo")
+        XCTAssertEqual(spec.arguments, ["clean", "--dry-run"],
+                       "a genuine external mo fallback must keep mo-style argv untouched — " +
+                       "translating it would turn a preview into a live delete on that binary")
     }
 }
 

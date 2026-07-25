@@ -411,12 +411,16 @@ struct CleanView: View {
         ToolOperation(label: NSLocalizedString("Scanning caches", comment: ""),
                       arguments: ["clean", "--dry-run"],
                       gate: .fullDiskAccess(adminBypass: true),
+                      // The bundled engine streams NDJSON here too (this scan goes through the
+                      // same conductor `--stream` path as a real clean/optimize) — reduce with
+                      // BurrowStreamReport, not the old human-text parseTaskReport, or every scan
+                      // reads back "0 B found" with no summary and no forward path. See BurrowStreamReport.
                       reduce: { lines in
-                          let (groups, summary) = parseTaskReport(lines)
-                          let bytes = lines.reduce(Int64(0)) { $0 + CleanList.streamedItemBytes($1) }
+                          let (groups, summary) = BurrowStreamReport.reduce(lines)
+                          let bytes = lines.reduce(Int64(0)) { $0 + BurrowStreamReport.streamedBytes($1) }
                           return (groups, summary, bytes)
                       },
-                      hudLine: { TaskReportText.line($0) })
+                      hudLine: { BurrowStreamReport.hudLine($0) })
     }
 
     private func startDry() {
