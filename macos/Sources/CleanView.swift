@@ -301,7 +301,11 @@ struct CleanView: View {
     private func confirmDirectClean() {
         let alert = NSAlert()
         alert.messageText = NSLocalizedString("Clean caches for real?", comment: "")
-        alert.informativeText = NSLocalizedString("Burrow will run `mo clean` with administrator rights. Cache files are removed permanently; Mole's whitelist and safety rules still apply.", comment: "")
+        // Both clauses used to be false. The engine now moves cleaned items to the Trash unless
+        // `--permanent` is passed (which this path deliberately does not), and it now actually loads
+        // ~/.config/mole/whitelist — it previously passed an empty pattern list at every call site,
+        // so the protection promise was a lie and deletion was unrecoverable.
+        alert.informativeText = NSLocalizedString("Burrow will run `mo clean` with administrator rights. Cache files are moved to the Trash, so you can put them back; your whitelist and safety rules apply.", comment: "")
         alert.alertStyle = .warning
         alert.addButton(withTitle: NSLocalizedString("Clean", comment: ""))
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
