@@ -175,7 +175,15 @@ final class TuneUpModel: ObservableObject {
     /// missing — a dev build, or a broken install) and THAT still speaks the marker text
     /// `parseTaskReport` was built for, so fall back to it rather than going blank in that
     /// narrower case too.
-    static func cleanableSpace(fromCaptureStdout stdout: String) -> String {
+    ///
+    /// `nonisolated`: this is pure and touches no actor state, and it MUST stay callable from a
+    /// nonisolated context — `scanCleanable()` below calls it from inside a `Task.detached`
+    /// closure (deliberately off the main actor), and `TuneUpModelEnvelopeParsingTests` calls it
+    /// directly from plain (non-`@MainActor`) test methods. Without this, both call sites are a
+    /// hard `main actor-isolated static method cannot be called from outside of the actor`
+    /// compile error — confirmed with `swiftc -typecheck` reproducing this file's exact shape;
+    /// `swiftc -parse` alone does not catch it, which is how it shipped in the first place.
+    nonisolated static func cleanableSpace(fromCaptureStdout stdout: String) -> String {
         guard let envelope = try? BurrowEnvelope.parse(stdout) else {
             let (_, summary) = parseTaskReport(stdout.components(separatedBy: "\n"))
             let space = summary?.space ?? ""
@@ -196,7 +204,11 @@ final class TuneUpModel: ObservableObject {
     /// TuneUpView only ever checks `optimizeAreas.isEmpty` and `.count` (never the strings
     /// themselves), so the exact wording doesn't matter — it just needs to be non-empty and one
     /// entry per task (or per legacy group, on the fallback path).
-    static func optimizeAreas(fromCaptureStdout stdout: String) -> [String] {
+    ///
+    /// `nonisolated` for the same reason as `cleanableSpace` above — `scanOptimize()`'s
+    /// `Task.detached` closure and the plain-XCTestCase tests both call this from outside the
+    /// main actor.
+    nonisolated static func optimizeAreas(fromCaptureStdout stdout: String) -> [String] {
         guard let envelope = try? BurrowEnvelope.parse(stdout) else {
             let (groups, _) = parseTaskReport(stdout.components(separatedBy: "\n"))
             return groups.map { TaskReportText.title($0.title) }

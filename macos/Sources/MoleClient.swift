@@ -18,13 +18,33 @@ enum MoleClient {
 
     // MARK: - Installed apps (`mo uninstall --list`)
 
-    /// Installed apps + the exact names `mo uninstall` accepts. Sizes can take a
-    /// while on a full /Applications, so callers give it room.
-    static func listApps(timeout: TimeInterval = 180) -> [InstalledApp] {
+    /// `listAppsResult`'s outcome — kept distinct from a plain `[InstalledApp]` because an empty
+    /// ARRAY collapses two very different situations: "the lookup failed" (the bundled engine
+    /// has no `--list` at all, post-repoint — every real call today) and "the lookup succeeded
+    /// and there are genuinely no apps". A caller (a human reading the Software tab, or an agent
+    /// deciding whether to keep looking for something to uninstall) needs to tell those apart
+    /// rather than treat both as "no apps installed".
+    enum ListAppsResult {
+        case ok([InstalledApp])
+        case unavailable
+    }
+
+    /// Installed apps + the exact names `mo uninstall` accepts, distinguishing a failed lookup
+    /// from a genuinely empty result. Sizes can take a while on a full /Applications, so callers
+    /// give it room.
+    static func listAppsResult(timeout: TimeInterval = 180) -> ListAppsResult {
         guard let res = try? MoEngine.shared.capture(
                 MoCommand(target: .mo, args: ["uninstall", "--list"], timeout: timeout)),
-              res.exitCode == 0 else { return [] }
-        return parseApps(Data(res.stdout.utf8))
+              res.exitCode == 0 else { return .unavailable }
+        return .ok(parseApps(Data(res.stdout.utf8)))
+    }
+
+    /// Convenience for callers that don't need to distinguish "couldn't check" from "genuinely
+    /// empty" — both collapse to `[]`. Prefer `listAppsResult` wherever the caller can act on, or
+    /// must surface, that distinction (see `SoftwareModel.fetch`, `ToolCatalog.callListApps`).
+    static func listApps(timeout: TimeInterval = 180) -> [InstalledApp] {
+        if case .ok(let apps) = listAppsResult(timeout: timeout) { return apps }
+        return []
     }
 
     /// Pure parser for `mo uninstall --list` JSON. Drops rows without the fields

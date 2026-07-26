@@ -851,11 +851,15 @@ struct ToolCatalog {
         return "{\"now\":\(now),\"retention_days\":\(Store.retentionDays),\"sample_interval_seconds\":\(Store.sampleIntervalSeconds),\"decode_skipped_total\":\(counters.decodeSkippedTotal),\"last_drift\":\(lastDrift),\"readers\":[\(pieces.joined(separator: ","))]}"
     }
 
-    /// Itemised cleanup history (issue #2). Passes through `mo history
-    /// --json` — already the exact shape an agent wants (sessions[] with
-    /// command/time/items/size/actions). We don't reshape it so the
-    /// contract tracks Mole's, not ours. Degrades to a valid empty/error
-    /// object when `mo` isn't installed so the tool never throws.
+    /// Itemised cleanup history (issue #2). The BUNDLED ENGINE always answers `history --json`
+    /// wrapped in the standard conductor envelope (`{"ok":true,…,"data":{"sessions":[…],…}}`) —
+    /// passing that straight through used to hand an agent the WRONG SHAPE (an envelope where
+    /// this tool has always promised the bare `{"sessions":[…]}` mo/digger contract). That is
+    /// worse than an empty result: it looks populated, and anything reading `.sessions` off the
+    /// top level silently finds nothing instead of getting an obviously-empty or obviously-wrong
+    /// answer. Unwrap it like every other consumer (`BurrowEnvelope.parse`); degrade to a valid
+    /// empty/error object when `mo` isn't installed, or when the run failed, so the tool never
+    /// throws.
     private func callCleanupHistory(_ args: [String: Any]) -> String {
         let limit = max(1, min((args["limit"] as? Int) ?? 20, 200))
         let res = try? MoEngine.shared.capture(
@@ -863,17 +867,36 @@ struct ToolCatalog {
         return Self.cleanupHistoryResult(exitCode: res?.exitCode ?? 127, stdout: res?.stdout ?? "")
     }
 
-    /// Shape `mo history --json` output into the tool's reply. Pure so both
-    /// the mo-present and mo-absent (exit 127) branches are deterministically
-    /// testable. Mole-present → its JSON verbatim (or an empty `sessions`);
-    /// otherwise a valid error object — never a throw, so an agent never sees
-    /// -32603 just because Mole isn't installed.
+    /// Shape `mo history --json` output into the tool's reply. Pure so every branch is
+    /// deterministically testable without a real spawn. Three outcomes, in this order:
+    ///  1. Non-zero exit (mo missing, or the run failed) → a valid error object, never a throw.
+    ///  2. Envelope-shaped stdout (the bundled engine, always) → unwrap `data` and return THAT —
+    ///     still `sessions[…]` at the top level (plus the `logs`/`deletions` fields the engine's
+    ///     `data` also carries) — or a classified error object when the envelope itself is
+    ///     `ok:false`.
+    ///  3. Anything else (a real legacy `mo`, which emits no envelope at all) → passed through
+    ///     verbatim, exactly as before this fix — that binary's own `--json` IS the bare shape.
+    /// `BurrowEnvelope.parse` "succeeds" on ANY JSON object — a bare `{"sessions":[…]}` blob with
+    /// no `ok` key just makes `.ok` default to false — so outcome 2 only fires when `burrow_cli`
+    /// (present on every real envelope, success or failure, and never emitted by legacy mo's own
+    /// `--json`) is actually there; otherwise this falls through to outcome 3 unchanged.
     static func cleanupHistoryResult(exitCode: Int32, stdout: String) -> String {
         guard exitCode == 0 else {
             return "{\"error\":\"mo history unavailable\",\"hint\":\"call burrow_info to check whether Burrow is recording data at all\",\"sessions\":[]}"
         }
         let out = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        return out.isEmpty ? "{\"sessions\":[]}" : out
+        guard !out.isEmpty else { return "{\"sessions\":[]}" }
+        guard let envelope = try? BurrowEnvelope.parse(out), envelope.burrowCli != nil else {
+            return out
+        }
+        guard envelope.ok, let data = envelope.data,
+              let dataStr = String(data: data, encoding: .utf8) else {
+            let message = envelope.error?.message ?? "mo history --json returned an error"
+            return Self.jsonString(["error": message,
+                                    "hint": "call burrow_info to check whether Burrow is recording data at all",
+                                    "sessions": []])
+        }
+        return dataStr
     }
 
     /// Exact deleted file paths (issue #2). Reads Mole's append-only
@@ -920,21 +943,37 @@ struct ToolCatalog {
         return entries.reversed()
     }
 
-    /// Resolve Mole's deletion-log path from `mo history --json` (the
-    /// source of truth), falling back to the standard location when `mo`
-    /// isn't reachable.
+    /// Resolve Mole's deletion-log path from `mo history --json` (the source of truth), falling
+    /// back to the standard location when it can't be read from either shape `history` might
+    /// answer in.
     private static func deletionsLogPath() -> String {
         let fallback = (NSHomeDirectory() as NSString)
             .appendingPathComponent("Library/Logs/mole/deletions.log")
         guard let res = try? MoEngine.shared.capture(
                 MoCommand(target: .mo, args: ["history", "--json"], timeout: 10)),
-              res.exitCode == 0,
-              let data = res.stdout.data(using: .utf8),
+              res.exitCode == 0 else { return fallback }
+        return Self.deletionsLogPath(fromCaptureStdout: res.stdout) ?? fallback
+    }
+
+    /// Pure extraction so both shapes are unit-tested without a real spawn. The bundled engine
+    /// ALWAYS envelope-wraps, so `logs` sits under `data`, not at the top level — reading
+    /// `obj["logs"]` directly (the pre-fix code) silently found nothing on every real build and
+    /// always fell through to `fallback` above. That fallback happens to equal the engine's own
+    /// standard path today, which is why nothing looked broken in practice; it stops being a
+    /// coincidence once this reads the field the engine actually reports. A real legacy `mo`
+    /// (no envelope at all) still puts `logs` at the top level, so that shape is tried too.
+    static func deletionsLogPath(fromCaptureStdout stdout: String) -> String? {
+        if let envelope = try? BurrowEnvelope.parse(stdout), envelope.burrowCli != nil {
+            guard envelope.ok, let data = envelope.data,
+                  let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let logs = payload["logs"] as? [String: Any],
+                  let p = logs["deletions"] as? String, !p.isEmpty else { return nil }
+            return p
+        }
+        guard let data = stdout.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let logs = obj["logs"] as? [String: Any],
-              let p = logs["deletions"] as? String, !p.isEmpty else {
-            return fallback
-        }
+              let p = logs["deletions"] as? String, !p.isEmpty else { return nil }
         return p
     }
 
@@ -1124,19 +1163,31 @@ struct ToolCatalog {
     /// accepts. Read-only.
     private func callListApps() -> String {
         let res = Self.runMo(["uninstall", "--list"], timeout: 60)
-        guard res.exitCode == 0 else {
+        return Self.listAppsToolResult(exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr)
+    }
+
+    /// Shape `mo uninstall --list` output into the tool's reply. Pure so the failure branch is
+    /// deterministically testable without a real spawn (mirrors `cleanupHistoryResult` above —
+    /// same "may be absent on a CI runner" reasoning).
+    static func listAppsToolResult(exitCode: Int32, stdout: String, stderr: String) -> String {
+        guard exitCode == 0 else {
             // The bundled engine (post-repoint) has no app-listing command at all — `uninstall`
             // takes exactly one bundle id and answers "--list" with "needs an app bundle id",
             // written to STDOUT (the engine's error envelope), not stderr — so `stderr` alone is
             // always empty here and told an agent nothing. Surface both so the actual reason is
-            // visible instead of an empty diagnostic next to a bare "apps": [].
+            // visible. Deliberately NO `"apps": []` alongside the error: this tool's own
+            // description tells an agent to call it before `burrow_uninstall` for exact names,
+            // and an agent that reads `.apps` without checking `.error` first must not find an
+            // empty array sitting right next to it — that reads as "zero apps installed" and is
+            // exactly the wrong-shape trap this fix closes (an agent can act on a false "no
+            // apps" with more confidence than a human glancing at a blank list would).
             return Self.jsonString(["error": "mo uninstall --list failed",
-                                    "exit_code": Int(res.exitCode),
-                                    "stdout": Self.stripANSI(res.stdout),
-                                    "stderr": Self.stripANSI(res.stderr),
-                                    "apps": []])
+                                    "hint": "the bundled engine has no app-listing command yet, so burrow_uninstall cannot be preflighted with an exact name from this build",
+                                    "exit_code": Int(exitCode),
+                                    "stdout": Self.stripANSI(stdout),
+                                    "stderr": Self.stripANSI(stderr)])
         }
-        let out = Self.stripANSI(res.stdout).trimmingCharacters(in: .whitespacesAndNewlines)
+        let out = Self.stripANSI(stdout).trimmingCharacters(in: .whitespacesAndNewlines)
         return out.isEmpty ? "{\"apps\":[]}" : out
     }
 

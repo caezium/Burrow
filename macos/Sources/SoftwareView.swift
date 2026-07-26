@@ -198,23 +198,41 @@ struct SoftwareView: View {
                 VStack { Spacer(); ProgressView("Reading installed apps…").controlSize(.large).tint(Tool.apps.accent)
                     .font(Brand.mono(11)); Spacer() }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.apps.isEmpty {
-                // A finished load that came back with nothing almost never means "this Mac has
-                // zero installed apps" — in practice it means the underlying `mo uninstall
-                // --list` call failed. Say that plainly instead of rendering a silent blank
-                // list, which reads as "you have no apps" rather than "this couldn't be read".
-                VStack(spacing: 8) {
-                    Spacer()
-                    Image(systemName: "questionmark.app.dashed")
-                        .font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
-                    Text("App inventory isn't available")
-                        .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
-                    Text("Burrow couldn't list installed apps this time. You can still uninstall from Finder in the meantime.")
-                        .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 320)
-                    Spacer()
+                // `MoleClient.listAppsResult()` is what makes these two cases distinguishable —
+                // an empty ARRAY used to mean either "the lookup failed" or "genuinely zero
+                // apps" with no way to tell them apart, so this used to always render the
+                // failure copy below as a blanket guess. Say the true one plainly instead of
+                // rendering a silent blank list either way.
+                if model.inventoryUnavailable {
+                    // In practice this is the ONLY case that happens today: the bundled engine
+                    // has no `--list` at all (post-repoint), so every real call fails.
+                    VStack(spacing: 8) {
+                        Spacer()
+                        Image(systemName: "questionmark.app.dashed")
+                            .font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+                        Text("App inventory isn't available")
+                            .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
+                        Text("Burrow couldn't list installed apps this time. You can still uninstall from Finder in the meantime.")
+                            .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 320)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // The lookup genuinely ran and found nothing — rare (a fresh or minimal
+                    // account), and a materially different claim from the failure above, so it
+                    // gets its own copy rather than reusing it.
+                    VStack(spacing: 8) {
+                        Spacer()
+                        Image(systemName: "checkmark.circle")
+                            .font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+                        Text("No apps found")
+                            .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -543,6 +561,11 @@ final class SoftwareModel: ObservableObject {
     @Published var apps: [InstalledApp] = [] { didSet { rebuildLoweredNames() } }
     @Published var loading = false
     @Published var error: String?
+    /// True when the last `load()` came back empty BECAUSE `mo uninstall --list` failed (the
+    /// bundled engine has no such command post-repoint), as opposed to a genuinely empty result.
+    /// `apps.isEmpty` alone can't tell those apart — see `MoleClient.ListAppsResult` and the
+    /// empty-state branch in `content` above, which is the only reader.
+    @Published var inventoryUnavailable = false
     @Published var query = ""
     @Published var sort: AppSort = .size
     @Published var sortAscending = false
@@ -654,13 +677,8 @@ final class SoftwareModel: ObservableObject {
         expandedAppID = app.id
         guard previews[app.id] == nil, !previewLoading.contains(app.id) else { return }
         previewLoading.insert(app.id)
-        let name = app.uninstallName
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            // EOF after the prompt makes --dry-run print the enumeration and exit.
-            let res = try? MoEngine.shared.capture(
-                MoCommand(target: .mo, args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120))
-            let text = Ansi.strip((res?.stdout ?? "") + "\n" + (res?.stderr ?? ""))
-            let preview = UninstallPreview.parse(text.components(separatedBy: "\n"))
+            let preview = Self.fetchPreview(for: app)
             Task { @MainActor in
                 guard let self else { return }
                 self.previewLoading.remove(app.id)
@@ -670,6 +688,79 @@ final class SoftwareModel: ObservableObject {
                     self.pathSelections[app.id] = Set(preview.entries.filter(\.kind.autoSelected).map(\.path))
                 }
             }
+        }
+    }
+
+    /// Which argv the dry-run enumeration below should send, given whether `.mo` is about to
+    /// resolve to the bundled engine. Pure and separated from the actual spawn (`fetchPreview`)
+    /// so the one dangerous decision here — when it's safe to send a bundle id vs. when to
+    /// refuse outright — is unit-tested without a real process.
+    enum PreviewSource: Equatable {
+        /// Ask the bundled engine for this exact bundle id.
+        case engine(bundleId: String)
+        /// Ask a real legacy `mo`/MIT-fork binary for this display name — unchanged pre-repoint
+        /// behavior.
+        case legacy(name: String)
+        /// Don't ask anything. See `fetchPreview`'s doc comment for why an empty bundle id must
+        /// refuse rather than guess.
+        case unavailable
+    }
+
+    nonisolated static func previewSource(for app: InstalledApp, resolvedIsBundledEngine: Bool) -> PreviewSource {
+        guard resolvedIsBundledEngine else { return .legacy(name: app.uninstallName) }
+        guard !app.bundleId.isEmpty else { return .unavailable }
+        return .engine(bundleId: app.bundleId)
+    }
+
+    /// The dry-run enumeration behind the expanded leftover review. Two incompatible output
+    /// contracts reach this call depending on which binary `.mo` resolves to:
+    ///
+    ///  - The BUNDLED ENGINE wants a bundle id positionally and answers JSON, never the ANSI
+    ///    text this used to always send/parse. `app.uninstallName` is a DISPLAY NAME (sourced
+    ///    from the old digger-era `--list`, i.e. mo's own matcher convention, not the engine's),
+    ///    so sending it to the engine only coincidentally resolves — for the apps whose support
+    ///    directory happens to be named after the display name — and silently misses everything
+    ///    else; it must never reach the engine. `app.bundleId` is what the engine wants, but
+    ///    ONLY when non-empty: an empty string still satisfies the engine's own
+    ///    `args.iter().find(|a| !a.starts_with("--"))` positional-arg scan (confirmed against the
+    ///    real binary), which turns into `leftover_paths(home, "")` — literally
+    ///    `~/Library/Caches/`, `~/Library/Containers/`, etc, whole PARENT directories reported as
+    ///    if they were this one app's leftovers. `previewSource` refuses in that case rather than
+    ///    guess; a preview that confidently shows the wrong app's leftovers is worse than one
+    ///    that shows nothing.
+    ///  - A real legacy `mo`/MIT fork resolved instead — unchanged from before this fix: its
+    ///    `--dry-run <name>` prompts, EOF-on-stdin prints the ANSI enumeration
+    ///    `UninstallPreview.parse` already understands, and it wants the display name, not a
+    ///    bundle id.
+    ///
+    /// `resolved == MoleCLI.bundledExecutable()` is the same check `OperationFlow`/`MoActions`
+    /// already use to decide when engine-specific argv translation applies — not a new pattern
+    /// introduced here.
+    ///
+    /// UNREACHED in a shipped build today: `MoleClient.listAppsResult()` returns `.unavailable`
+    /// whenever the bundled engine resolves (it has no `--list` at all), so no `InstalledApp` row
+    /// exists to expand in the first place — this whole function only ever takes the `.legacy`
+    /// branch in practice right now. Written correctly anyway (and verified against the real
+    /// engine binary's actual JSON), so the day the engine gains app listing this doesn't become
+    /// the next undiscovered gap in the same call graph.
+    nonisolated private static func fetchPreview(for app: InstalledApp) -> UninstallPreview {
+        let resolved = MoleCLI.findExecutable()
+        let source = previewSource(for: app,
+                                   resolvedIsBundledEngine: resolved != nil && resolved == MoleCLI.bundledExecutable())
+        switch source {
+        case .unavailable:
+            return UninstallPreview(appName: nil, totalText: nil, entries: [])
+        case .engine(let bundleId):
+            let res = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ["uninstall", "--dry-run", bundleId], timeout: 120))
+            return UninstallPreview.fromEngineEnvelope(res?.stdout ?? "")
+                ?? UninstallPreview(appName: nil, totalText: nil, entries: [])
+        case .legacy(let name):
+            // EOF after the prompt makes --dry-run print the enumeration and exit.
+            let res = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120))
+            let text = Ansi.strip((res?.stdout ?? "") + "\n" + (res?.stderr ?? ""))
+            return UninstallPreview.parse(text.components(separatedBy: "\n"))
         }
     }
 
@@ -695,9 +786,10 @@ final class SoftwareModel: ObservableObject {
         loading = true
         error = nil
         DispatchQueue.global(qos: .userInitiated).async {
-            let parsed = Self.fetch()
+            let (parsed, unavailable) = Self.fetch()
             Task { @MainActor in
                 self.apps = parsed
+                self.inventoryUnavailable = unavailable
                 self.loading = false
                 self.recentLoaded = false
                 self.previews = [:]
@@ -708,16 +800,22 @@ final class SoftwareModel: ObservableObject {
         }
     }
 
-    private static func fetch() -> [InstalledApp] {
-        // `mo uninstall --list` computes a size for every installed app, which can
-        // take a while on a full /Applications — the client gives it room.
-        let apps = MoleClient.listApps()
-        // Pre-warm the icon + version cache here — `fetch` always runs on a
-        // background queue, so the per-bundle icon/Info.plist disk reads happen
-        // off-main and the rows then render from a pure cache read instead of
-        // hitting the disk during layout (Sentry BURROW-20: InstalledApp hang).
-        SoftwareIcons.prewarm(apps)
-        return apps
+    /// `mo uninstall --list` computes a size for every installed app, which can take a while on
+    /// a full /Applications — the client gives it room. `unavailable` is true exactly when the
+    /// underlying command failed (see `MoleClient.ListAppsResult`) — NOT when it succeeded with
+    /// zero rows — so the empty-state view can tell "couldn't check" from "genuinely nothing".
+    nonisolated private static func fetch() -> (apps: [InstalledApp], unavailable: Bool) {
+        switch MoleClient.listAppsResult() {
+        case .ok(let apps):
+            // Pre-warm the icon + version cache here — `fetch` always runs on a
+            // background queue, so the per-bundle icon/Info.plist disk reads happen
+            // off-main and the rows then render from a pure cache read instead of
+            // hitting the disk during layout (Sentry BURROW-20: InstalledApp hang).
+            SoftwareIcons.prewarm(apps)
+            return (apps, false)
+        case .unavailable:
+            return ([], true)
+        }
     }
 
     /// Best-effort "last used" from the filesystem (access date, falling back to
@@ -909,9 +1007,10 @@ final class SoftwareModel: ObservableObject {
                 return
             }
 
-            let parsed = Self.fetch()
+            let (parsed, unavailable) = Self.fetch()
             Task { @MainActor in
                 self.apps = parsed
+                self.inventoryUnavailable = unavailable
                 self.selected = []
                 self.loading = false
                 // Re-fetched apps have lastUsed == nil; recompute dates if the

@@ -263,6 +263,83 @@ final class MCPTests: XCTestCase {
         XCTAssertEqual((obj["sessions"] as? [Any])?.count, 0)
     }
 
+    // MARK: - Envelope unwrapping (the bundled engine ALWAYS wraps `history --json`; passing that
+    // straight through used to hand an agent the WRONG SHAPE — an envelope where this tool has
+    // always promised the bare `{"sessions":[…]}` contract). Fixture captured verbatim from
+    // `burrow-engine history --json --limit 2` (0.1.0) — shape matches this repo's own
+    // `history.golden.json` (logs/limit/sessions/deletions under `data`).
+
+    func testCleanupHistory_realEngineEnvelope_unwrapsSessionsToTopLevel() throws {
+        let envelope = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"history","data":{"logs":{"operations":"/Users/henry/Library/Logs/mole/operations.log","deletions":"/Users/henry/Library/Logs/mole/deletions.log"},"limit":2,"sessions":[{"command":"optimize","started_at":"2026-07-25 08:27:26","ended_at":"2026-07-25 08:27:30","items":22,"size":"0B","operation_count":0,"actions":{"removed":0,"trashed":0,"skipped":0,"failed":0,"rebuilt":0,"other":0}},{"command":"clean","started_at":"2026-07-25 08:25:50","ended_at":"2026-07-25 08:27:25","items":647,"size":"585.5MB","operation_count":162,"actions":{"removed":0,"trashed":0,"skipped":162,"failed":0,"rebuilt":0,"other":0}}],"deletions":[]}}"#
+        let json = ToolCatalog.cleanupHistoryResult(exitCode: 0, stdout: envelope)
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertNil(obj["ok"], "must be unwrapped, not the raw envelope")
+        XCTAssertNil(obj["data"], "sessions belongs at the top level, not nested under data")
+        let sessions = try XCTUnwrap(obj["sessions"] as? [[String: Any]])
+        XCTAssertEqual(sessions.count, 2)
+        XCTAssertEqual(sessions.first?["command"] as? String, "optimize")
+        // A bonus over the bare pre-repoint contract, not a requirement — but must survive.
+        XCTAssertNotNil(obj["logs"])
+    }
+
+    func testCleanupHistory_engineErrorEnvelope_yieldsErrorObjectNotThePassthroughEnvelope() throws {
+        let envelope = #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"history","error":{"kind":"error","message":"boom","platform":"macos"}}"#
+        let json = ToolCatalog.cleanupHistoryResult(exitCode: 0, stdout: envelope)
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(obj["error"] as? String, "boom")
+        XCTAssertEqual((obj["sessions"] as? [Any])?.count, 0)
+    }
+
+    // MARK: - Deletions log path (Fix 1, secondary check: `logs` sits under `data` in a real
+    // envelope, not at the top level — the pre-fix code read the top level directly and always
+    // missed it, silently falling back to the (today accidentally-correct) hardcoded path).
+
+    func testDeletionsLogPath_realEngineEnvelope_readsNestedDataLogs() {
+        let envelope = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"history","data":{"logs":{"operations":"/Users/henry/Library/Logs/mole/operations.log","deletions":"/Users/henry/Library/Logs/mole/deletions.log"},"limit":20,"sessions":[],"deletions":[]}}"#
+        XCTAssertEqual(ToolCatalog.deletionsLogPath(fromCaptureStdout: envelope),
+                       "/Users/henry/Library/Logs/mole/deletions.log")
+    }
+
+    func testDeletionsLogPath_legacyTopLevelShape_stillReads() {
+        let legacy = #"{"logs":{"operations":"/x/operations.log","deletions":"/x/deletions.log"},"sessions":[]}"#
+        XCTAssertEqual(ToolCatalog.deletionsLogPath(fromCaptureStdout: legacy), "/x/deletions.log")
+    }
+
+    func testDeletionsLogPath_garbage_returnsNil() {
+        XCTAssertNil(ToolCatalog.deletionsLogPath(fromCaptureStdout: "not json"))
+        XCTAssertNil(ToolCatalog.deletionsLogPath(fromCaptureStdout: ""))
+    }
+
+    // MARK: - burrow_list_apps: an explicit error an agent can act on, never an empty list next
+    // to it that reads as "no apps installed" (the engine has no `--list` at all post-repoint).
+
+    func testListApps_engineHasNoListCommand_yieldsExplicitErrorNoAppsKey() throws {
+        // `burrow-engine uninstall --list` finds no non-flag arg, so it answers its own "needs an
+        // app bundle id" error envelope on STDOUT at exit 1 (never stderr) — captured verbatim.
+        let stdout = #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","error":{"kind":"error","message":"uninstall needs an app bundle id (e.g. com.foo.Bar)","platform":"macos"}}"#
+        let json = ToolCatalog.listAppsToolResult(exitCode: 1, stdout: stdout, stderr: "")
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertNotNil(obj["error"], "must surface an explicit error")
+        XCTAssertNil(obj["apps"], "must NOT carry an empty apps list next to the error — an agent "
+                     + "that reads .apps without checking .error first must not find \"no apps\"")
+    }
+
+    func testListApps_moAbsent_yieldsExplicitErrorNoAppsKey() throws {
+        let json = ToolCatalog.listAppsToolResult(exitCode: 127, stdout: "", stderr: "")
+        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertNotNil(obj["error"])
+        XCTAssertNil(obj["apps"])
+    }
+
+    func testListApps_realList_passesThroughVerbatim() {
+        let stdout = #"[{"name":"Slack","bundle_id":"com.tinyspeck.slackmacgap","path":"/Applications/Slack.app","size":"250MB"}]"#
+        XCTAssertEqual(ToolCatalog.listAppsToolResult(exitCode: 0, stdout: stdout, stderr: ""), stdout)
+    }
+
+    func testListApps_realListEmptyOutput_yieldsEmptyAppsObject() {
+        XCTAssertEqual(ToolCatalog.listAppsToolResult(exitCode: 0, stdout: "   ", stderr: ""), "{\"apps\":[]}")
+    }
+
     func testDeletedFiles_emptyLog_yieldsZeroCount() throws {
         let json = ToolCatalog.deletedFilesResult(logText: "", logPath: "/tmp/x.log", limit: 10)
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])

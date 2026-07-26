@@ -86,3 +86,53 @@ final class UninstallPreviewTests: XCTestCase {
         XCTAssertEqual(auto.count, 4, "the cache row needs review")
     }
 }
+
+/// `UninstallPreview.fromEngineEnvelope` — the JSON side of the per-app leftover preview fix
+/// (the bundled engine never emits the ANSI text `parse(_:)` above understands; it only ever
+/// speaks its JSON envelope). Primary fixture captured VERBATIM from
+/// `burrow-engine uninstall --dry-run com.tinyspeck.slackmacgap` (0.1.0) against a real Slack
+/// install on this machine.
+final class UninstallPreviewEngineEnvelopeTests: XCTestCase {
+    private static let realEnvelope = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","data":{"dry_run":true,"bundle_id":"com.tinyspeck.slackmacgap","total_bytes":803812,"total_human":"804KB","items":[{"path":"/Users/henry/Library/Caches/com.tinyspeck.slackmacgap","label":"Cache","size":683472,"size_human":"683KB"},{"path":"/Users/henry/Library/Preferences/com.tinyspeck.slackmacgap.plist","label":"Preferences","size":1044,"size_human":"1KB"},{"path":"/Users/henry/Library/HTTPStorages/com.tinyspeck.slackmacgap","label":"HTTP storage","size":119296,"size_human":"119KB"}]}}"#
+
+    func testFromEngineEnvelope_realCapture_readsAllEntriesAndTotal() throws {
+        let preview = try XCTUnwrap(UninstallPreview.fromEngineEnvelope(Self.realEnvelope))
+        XCTAssertEqual(preview.totalText, "804KB")
+        XCTAssertEqual(preview.entries.map(\.path), [
+            "/Users/henry/Library/Caches/com.tinyspeck.slackmacgap",
+            "/Users/henry/Library/Preferences/com.tinyspeck.slackmacgap.plist",
+            "/Users/henry/Library/HTTPStorages/com.tinyspeck.slackmacgap",
+        ])
+    }
+
+    /// `classify(_:)` is shared with the ANSI-text parser above, so a JSON-derived entry sorts
+    /// into Auto-selected / Needs-review exactly as a text-derived one would — HTTPStorages
+    /// matches none of `classify`'s specific branches and falls to `.other` (needs review, same
+    /// as an unrecognized path from the legacy parser).
+    func testFromEngineEnvelope_classifiesEntriesByPathShape() throws {
+        let preview = try XCTUnwrap(UninstallPreview.fromEngineEnvelope(Self.realEnvelope))
+        XCTAssertEqual(preview.entries.map(\.kind), [.cache, .preferences, .other])
+    }
+
+    func testFromEngineEnvelope_errorEnvelope_yieldsEmptyNotNil() {
+        let error = #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","error":{"kind":"error","message":"boom","platform":"macos"}}"#
+        let preview = UninstallPreview.fromEngineEnvelope(error)
+        XCTAssertNotNil(preview, "an error envelope IS a recognized shape — empty, not nil")
+        XCTAssertTrue(preview?.isEmpty ?? false)
+    }
+
+    func testFromEngineEnvelope_malformedData_yieldsEmptyNotNil() {
+        let malformed = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","data":{"dry_run":true}}"#
+        let preview = UninstallPreview.fromEngineEnvelope(malformed)
+        XCTAssertNotNil(preview)
+        XCTAssertTrue(preview?.isEmpty ?? false)
+    }
+
+    func testFromEngineEnvelope_notEnvelopeShaped_returnsNilSoCallerFallsBackToLegacyParser() {
+        XCTAssertNil(UninstallPreview.fromEngineEnvelope("garbage, not json"))
+        XCTAssertNil(UninstallPreview.fromEngineEnvelope(""))
+        // Bare JSON with no envelope marker field (`burrow_cli`) must not be mistaken for a real
+        // envelope just because it happens to parse as a JSON object.
+        XCTAssertNil(UninstallPreview.fromEngineEnvelope(#"{"items":[{"path":"/x"}]}"#))
+    }
+}
