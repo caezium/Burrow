@@ -91,6 +91,31 @@ read_entitlements() {
   printf '%s' "$plist"
 }
 
+plist_has_key() {
+  local key="$1"
+  local xml
+  if ! xml="$(plutil -convert xml1 -o - - 2>/dev/null)"; then
+    return 2
+  fi
+  if grep -Fq "<key>$key</key>" <<< "$xml"; then
+    return 0
+  fi
+  return 1
+}
+
+required_plist_raw() {
+  local key="$1"
+  local expected_type="$2"
+  local value
+  if ! value="$(
+    plutil -extract "$key" raw -expect "$expected_type" -o - - 2>/dev/null
+  )"; then
+    echo "error: could not extract plist key '$key' as $expected_type" >&2
+    return 1
+  fi
+  printf '%s' "$value"
+}
+
 echo "==> signing nested Mach-O files ($MODE)"
 SIGNED_MACHO=0
 while IFS= read -r -d '' candidate; do
@@ -154,8 +179,7 @@ if [ -d "$SPARKLE_FRAMEWORK" ]; then
   SPARKLE_ENTITLEMENTS="$(read_entitlements "$SPARKLE_AUTOUPDATE")"
   SPARKLE_APP_ID="$(
     printf '%s' "$SPARKLE_ENTITLEMENTS" \
-      | plutil -extract 'com\.apple\.application-identifier' raw -o - - 2>/dev/null \
-      || true
+      | required_plist_raw 'com\.apple\.application-identifier' string
   )"
   [ "$SPARKLE_APP_ID" = "org.sparkle-project.Sparkle.Autoupdate" ] || {
     echo "error: Sparkle Autoupdate entitlement was lost while re-signing" >&2
@@ -164,17 +188,22 @@ if [ -d "$SPARKLE_FRAMEWORK" ]; then
 fi
 
 APP_ENTITLEMENTS="$(read_entitlements "$APP")"
-GET_TASK_ALLOW="$(
-  printf '%s' "$APP_ENTITLEMENTS" \
-    | plutil -extract 'com\.apple\.security\.get-task-allow' raw -o - - 2>/dev/null \
-    || true
-)"
-case "$GET_TASK_ALLOW" in
-  ""|false) ;;
-  *)
+GET_TASK_ALLOW_KEY='com.apple.security.get-task-allow'
+if printf '%s' "$APP_ENTITLEMENTS" | plist_has_key "$GET_TASK_ALLOW_KEY"; then
+  GET_TASK_ALLOW="$(
+    printf '%s' "$APP_ENTITLEMENTS" \
+      | required_plist_raw 'com\.apple\.security\.get-task-allow' bool
+  )"
+  if [ "$GET_TASK_ALLOW" != false ]; then
     echo "error: release app contains invalid com.apple.security.get-task-allow=$GET_TASK_ALLOW" >&2
     exit 1
-    ;;
-esac
+  fi
+else
+  KEY_STATUS=$?
+  if [ "$KEY_STATUS" -ne 1 ]; then
+    echo "error: could not inspect app entitlements for $GET_TASK_ALLOW_KEY" >&2
+    exit 1
+  fi
+fi
 
 echo "signed $SIGNED_MACHO Mach-O file(s) and $SIGNED_CONTAINERS code container(s); strict verification passed"
