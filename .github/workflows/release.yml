@@ -298,8 +298,25 @@ jobs:
           APP="${{ steps.build.outputs.app }}"
           KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
           KPW="$(uuidgen)"
+          if ! ORIGINAL_KEYCHAIN_OUTPUT="$(security list-keychains -d user)"; then
+            echo "::error::Could not read the runner's original keychain search list"
+            exit 1
+          fi
+          if ! PARSED_KEYCHAIN_OUTPUT="$(
+            sed -e 's/^[[:space:]]*"//' -e 's/"[[:space:]]*$//' \
+              <<< "$ORIGINAL_KEYCHAIN_OUTPUT"
+          )"; then
+            echo "::error::Could not parse the runner's original keychain search list"
+            exit 1
+          fi
+          ORIGINAL_KEYCHAINS=()
+          while IFS= read -r existing_keychain; do
+            [ -n "$existing_keychain" ] && ORIGINAL_KEYCHAINS+=("$existing_keychain")
+          done <<< "$PARSED_KEYCHAIN_OUTPUT"
           cleanup_signing_keychain() {
             rm -f "$RUNNER_TEMP/cert.p12"
+            security list-keychains -d user -s "${ORIGINAL_KEYCHAINS[@]}" \
+              >/dev/null 2>&1 || true
             security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true
           }
           trap cleanup_signing_keychain EXIT
@@ -310,9 +327,15 @@ jobs:
           security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KPW" "$KEYCHAIN" >/dev/null
           rm -f "$RUNNER_TEMP/cert.p12"
-          security find-identity -v -p codesigning "$KEYCHAIN" | grep -F "\"$SIGN_IDENTITY\"" \
+          # codesign --keychain restricts lookup to that single file, which
+          # hides Apple's Developer ID intermediate certificates in the
+          # runner's existing keychains. Add our temporary keychain to the
+          # normal search list instead, then prove the exact identity resolves
+          # through the same search path codesign will use.
+          security list-keychains -d user -s "$KEYCHAIN" "${ORIGINAL_KEYCHAINS[@]}"
+          security find-identity -v -p codesigning | grep -F "\"$SIGN_IDENTITY\"" \
             || { echo "::error::Imported keychain does not contain $SIGN_IDENTITY"; exit 1; }
-          CODESIGN_KEYCHAIN="$KEYCHAIN" bash scripts/sign-macos-app.sh \
+          bash scripts/sign-macos-app.sh \
             "$APP" "$SIGN_IDENTITY" developer-id macos/Resources/Burrow.entitlements
           codesign -d --verbose=4 "$APP" 2>&1 \
             | grep -E '^(Authority=Developer ID Application:|TeamIdentifier=|Timestamp=|Runtime Version=)'

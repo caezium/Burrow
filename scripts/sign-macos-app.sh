@@ -38,11 +38,6 @@ case "$MODE" in
       exit 1
     fi
     SIGN_ARGS=(--force --options runtime --timestamp --sign "$IDENTITY")
-    if [ -n "${CODESIGN_KEYCHAIN:-}" ]; then
-      [ -f "$CODESIGN_KEYCHAIN" ] \
-        || { echo "error: signing keychain not found: $CODESIGN_KEYCHAIN" >&2; exit 1; }
-      SIGN_ARGS+=(--keychain "$CODESIGN_KEYCHAIN")
-    fi
     ;;
   adhoc)
     [ "$IDENTITY" = "-" ] || { echo "error: ad-hoc mode requires identity '-'" >&2; exit 1; }
