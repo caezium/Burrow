@@ -16,6 +16,11 @@ echo "==> fetching vendored Sentry.xcframework"
 # download hard-hangs the release runner — see scripts/fetch-sentry.sh).
 bash scripts/fetch-sentry.sh
 
+echo "==> fetching vendored Sparkle.framework"
+# Sparkle's package also wraps a binary artifact. Fetch the official framework
+# with curl so xcodebuild never enters SwiftPM's hanging artifact downloader.
+bash scripts/fetch-sparkle.sh
+
 echo "==> xcodegen generate"
 # The macOS app lives under macos/ (monorepo: macos/ + windows/). Generate the
 # project there; build artifacts still land at the repo root (build_dist/, dist/).

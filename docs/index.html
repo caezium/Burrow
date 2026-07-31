@@ -500,7 +500,7 @@
       <a class="btn btn-fill" href="https://github.com/caezium/Burrow/releases/latest" target="_blank" rel="noopener" style="padding:15px 40px; font-size:16px;">Get Burrow</a>
       <div class="price-lines">All five tools, the menu-bar HUD, history, and the MCP server included.<br>
         <span style="color:var(--ink-3)">or <a class="u" href="#build">build it from source</a></span></div>
-      <div class="price-meta">unlimited Macs<span class="dot">·</span>no account<span class="dot">·</span>Developer ID release gate<span class="dot">·</span>engine + conductor bundled — nothing else to install</div>
+      <div class="price-meta">unlimited Macs<span class="dot">·</span>no account<span class="dot">·</span>Developer ID release gate<span class="dot">·</span>official downloads bundle the engine + conductor</div>
     </div>
 
     <div class="installs" id="build">
@@ -517,10 +517,12 @@ brew install --cask caezium/tap/burrow</div>
       </div>
       <div class="inst">
         <h3>Build from source</h3>
-        <p>Needs <code class="k">xcodegen</code> plus the repository submodules; the build stages the engine into the app. Every line is yours to read first.</p>
+        <p>Needs <code class="k">xcodegen</code>. This builds a locally ad-hoc-signed GUI with checksum-pinned frameworks; unlike official downloads, a plain public checkout falls back to compatible command-line tools already installed on your Mac.</p>
         <div class="code" data-copy="git clone https://github.com/caezium/Burrow.git
-cd Burrow/macos && xcodegen generate"><button class="copy">copy</button>git clone …/caezium/Burrow.git
-cd Burrow/macos && xcodegen generate</div>
+cd Burrow
+bash scripts/release.sh"><button class="copy">copy</button>git clone …/caezium/Burrow.git
+cd Burrow
+bash scripts/release.sh</div>
       </div>
     </div>
 

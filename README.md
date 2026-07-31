@@ -488,6 +488,7 @@ bridge still posts to `/mcp`.
 ```bash
 cd macos        # the macOS app lives here (monorepo: macos/ + windows/)
 bash ../scripts/fetch-sentry.sh   # vendor Sentry.xcframework (it's a local framework, not an SPM dep)
+bash ../scripts/fetch-sparkle.sh  # vendor the checksum-pinned official Sparkle.framework
 xcodegen generate
 xcodebuild -project Burrow.xcodeproj -scheme Burrow \
   -configuration Debug -destination 'platform=macOS' test

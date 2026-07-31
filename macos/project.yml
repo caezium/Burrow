@@ -27,17 +27,14 @@ settings:
 # Both are inert unless a release injects keys (see the per-target settings
 # below): a plain `xcodegen + xcodebuild` dev build ships with empty keys and
 # never touches either network.
-# Pinned EXACTLY (not `from:`): the .xcodeproj — and with it the only
-# Package.resolved — is gitignored, so a range would let every CI release
-# resolve whatever the latest compatible SDK is at build time. Exact pins
-# keep releases reproducible from a tag; bump deliberately.
+# PostHog is pinned EXACTLY (not `from:`): the .xcodeproj — and with it the
+# only Package.resolved — is gitignored, so a range would let every CI release
+# resolve whatever the latest compatible SDK is at build time. The exact pin
+# keeps releases reproducible from a tag; bump deliberately.
 packages:
   PostHog:
     url: https://github.com/PostHog/posthog-ios
     exactVersion: 3.59.3
-  Sparkle:
-    url: https://github.com/sparkle-project/Sparkle
-    exactVersion: 2.9.4
 # Sentry is NOT an SPM package: SPM eagerly downloads ALL of sentry-cocoa's
 # binary xcframework variants during resolution (Sentry, -Dynamic, -WithARM64e,
 # …, ~500 MB), and on the release runner that download hard-hangs xcodebuild
@@ -45,6 +42,10 @@ packages:
 # vendor only the one static Sentry.xcframework we actually use, fetched by
 # scripts/fetch-sentry.sh (curl), and link it directly. Pin matches the old SPM
 # exactVersion. Crash reporting (CrashReporter.swift) is unchanged.
+# Sparkle is also a local framework: its Swift package wraps a binary artifact,
+# and that artifact-resolution step hard-hung both v0.11.0 release attempts.
+# scripts/fetch-sparkle.sh downloads the official 2.9.4 release archive with a
+# pinned checksum and validates the universal framework before xcodegen runs.
 
 targets:
   Burrow:
@@ -107,7 +108,8 @@ targets:
         SENTRY_DSN: ""
     dependencies:
       - package: PostHog
-      - package: Sparkle
+      - framework: vendor/Sparkle.framework
+        embed: true
       - framework: vendor/Sentry.xcframework
         embed: false
     postBuildScripts:
@@ -177,6 +179,12 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.BurrowTests
     dependencies:
       - target: Burrow
+      # The tests import Burrow's compiled Swift module, which records Sparkle
+      # as a module dependency. Local frameworks are not propagated through a
+      # target dependency the way Swift package products are, so expose its
+      # module to the test compiler without embedding another copy.
+      - framework: vendor/Sparkle.framework
+        embed: false
 
 # Shared scheme so `xcodebuild test` works headlessly (CI and CLI runs)
 # instead of depending on Xcode auto-creating a local scheme on first open.

@@ -17,6 +17,8 @@ cd "$(dirname "$0")/.."   # macos/
 CONFIG="${1:-Debug}"
 ENGINE_SRC="${BURROW_ENGINE_SRC:-$PWD/vendor/burrow-engine}"
 
+bash ../scripts/fetch-sentry.sh
+bash ../scripts/fetch-sparkle.sh
 xcodegen generate >/dev/null
 
 BURROW_ENGINE_SRC="$ENGINE_SRC" xcodebuild -project Burrow.xcodeproj -scheme Burrow \

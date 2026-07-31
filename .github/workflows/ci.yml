@@ -63,6 +63,12 @@ jobs:
       - name: Fetch vendored Sentry framework
         run: bash ../scripts/fetch-sentry.sh
 
+      # Sparkle's Swift package wraps a binary artifact, and that artifact
+      # downloader hard-hung both v0.11.0 release attempts. Fetch the official
+      # checksum-pinned universal framework directly instead.
+      - name: Fetch vendored Sparkle framework
+        run: bash ../scripts/fetch-sparkle.sh
+
       - name: Generate project
         run: xcodegen generate
 

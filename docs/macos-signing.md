@@ -167,7 +167,8 @@ public tag.
 The workflow order is:
 
 1. Require all Apple, Sparkle, and external-tap secrets.
-2. Build and confirm the bundled conductor, engine, and fclones sidecar.
+2. Fetch and checksum-validate the official Sentry and Sparkle frameworks,
+   then build and confirm the bundled conductor, engine, and fclones sidecar.
 3. Require the Sparkle private seed to match the public key embedded in the app.
 4. Sign every executable and the outer app with Developer ID.
 5. Require Apple’s notarization result to be `Accepted`.

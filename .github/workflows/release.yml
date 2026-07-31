@@ -89,9 +89,9 @@ jobs:
 
       # Fetch the bundled MIT engine OUTSIDE the work tree (RUNNER_TEMP), at its
       # pinned submodule commit. (This once looked like it hung SPM — the real
-      # cause was Sentry's SPM binary-artifact download, now vendored via
-      # scripts/fetch-sentry.sh so SPM never touches Sentry.) NON-FATAL: without
-      # ENGINE_PAT the app falls back to system `mo`. Token scoped via `git -c`.
+      # cause was binary-artifact resolution. Sentry and Sparkle are now both
+      # fetched directly with pinned checksums.) NON-FATAL: without ENGINE_PAT
+      # the app falls back to system `mo`. Token scoped via `git -c`.
       - name: Fetch bundled engine (outside the work tree)
         env:
           ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
@@ -186,9 +186,9 @@ jobs:
           if [ -n "$ENGINE_PAT" ]; then
             git config --global url."https://x-access-token:${ENGINE_PAT}@github.com/".insteadOf "https://github.com/"
           fi
-          # Sentry is vendored as a local framework (scripts/fetch-sentry.sh),
-          # not an SPM package, so the SPM binary-download hang is gone — this is
-          # a plain build now. The step timeout-minutes above is the hard cap.
+          # Sentry and Sparkle are vendored as checksum-pinned local frameworks
+          # (scripts/fetch-{sentry,sparkle}.sh), so SwiftPM has no binary
+          # artifacts left to download. The step timeout above remains the cap.
           bash scripts/release.sh
           APP="build_dist/Build/Products/Release/Burrow.app"
           [ -d "$APP" ] || { echo "::error::build produced no app at $APP"; exit 1; }
@@ -366,24 +366,9 @@ jobs:
           echo "Built Burrow ${{ steps.build.outputs.version }} (Developer ID signed + notarized) sha256=$SHA"
 
       - name: Install pinned Sparkle release tools
-        env:
-          SPARKLE_VERSION: "2.9.4"
-          SPARKLE_SHA256: "ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9"
         run: |
-          ARCHIVE="$RUNNER_TEMP/Sparkle-${SPARKLE_VERSION}.tar.xz"
           TOOLS="$RUNNER_TEMP/sparkle-release-tools"
-          curl --fail --location --silent --show-error \
-            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
-            --output "$ARCHIVE"
-          ACTUAL="$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')"
-          if [ "$ACTUAL" != "$SPARKLE_SHA256" ]; then
-            echo "::error::Sparkle tools checksum mismatch: got $ACTUAL"
-            exit 1
-          fi
-          mkdir -p "$TOOLS"
-          tar -xf "$ARCHIVE" -C "$TOOLS"
-          [ -x "$TOOLS/bin/generate_appcast" ] && [ -x "$TOOLS/bin/sign_update" ] \
-            || { echo "::error::Pinned Sparkle archive is missing release tools."; exit 1; }
+          bash scripts/fetch-sparkle.sh --tools "$TOOLS"
           echo "SPARKLE_TOOLS=$TOOLS/bin" >> "$GITHUB_ENV"
 
       - name: Generate and verify signed Sparkle appcast
