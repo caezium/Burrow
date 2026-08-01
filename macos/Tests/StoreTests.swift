@@ -91,13 +91,32 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(Store.d.object(forKey: "auto_check_for_updates"))
     }
 
-    func testAutoCheckForUpdates_migratesLegacyOptOutOnce() {
+    func testUpdatePreferences_migrateLegacyValuesOnce() {
+        let lastCheck = Date(timeIntervalSince1970: 1_722_470_400)
         Store.d.set(false, forKey: "auto_check_for_updates")
+        Store.d.set(lastCheck, forKey: "last_update_check_at")
 
-        XCTAssertEqual(Store.migrateLegacyAutoCheckForUpdates(), false)
+        XCTAssertEqual(Store.migrateLegacyUpdatePreferences(), false)
         XCTAssertEqual(Store.d.object(forKey: "SUEnableAutomaticChecks") as? Bool, false)
+        XCTAssertEqual(Store.d.object(forKey: "SULastCheckTime") as? Date, lastCheck)
         XCTAssertNil(Store.d.object(forKey: "auto_check_for_updates"))
-        XCTAssertNil(Store.migrateLegacyAutoCheckForUpdates())
+        XCTAssertNil(Store.d.object(forKey: "last_update_check_at"))
+        XCTAssertNil(Store.migrateLegacyUpdatePreferences())
+    }
+
+    func testUpdatePreferences_keepExistingSparkleValues() {
+        let legacyDate = Date(timeIntervalSince1970: 1_722_470_400)
+        let sparkleDate = Date(timeIntervalSince1970: 1_725_062_400)
+        Store.d.set(false, forKey: "auto_check_for_updates")
+        Store.d.set(legacyDate, forKey: "last_update_check_at")
+        Store.d.set(true, forKey: "SUEnableAutomaticChecks")
+        Store.d.set(sparkleDate, forKey: "SULastCheckTime")
+
+        XCTAssertNil(Store.migrateLegacyUpdatePreferences())
+        XCTAssertEqual(Store.d.object(forKey: "SUEnableAutomaticChecks") as? Bool, true)
+        XCTAssertEqual(Store.d.object(forKey: "SULastCheckTime") as? Date, sparkleDate)
+        XCTAssertNil(Store.d.object(forKey: "auto_check_for_updates"))
+        XCTAssertNil(Store.d.object(forKey: "last_update_check_at"))
     }
 
     func testSampleInterval_defaultsTo60() {

@@ -78,6 +78,43 @@ jobs:
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
+  # GitHub's Xcode 27 public-preview image currently runs macOS 26.5.2, so
+  # this catches compiler and macOS 27 SDK incompatibilities rather than the
+  # macOS 27 MenuBarAgent runtime regression. Keep the stable macOS 15 job as
+  # the release gate until GitHub offers a macOS 27 host image.
+  xcode-27-compatibility:
+    runs-on: xcode-27
+    continue-on-error: true
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Show preview environment
+        run: |
+          sw_vers
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Fetch vendored Sentry framework
+        run: bash ../scripts/fetch-sentry.sh
+
+      - name: Fetch vendored Sparkle framework
+        run: bash ../scripts/fetch-sparkle.sh
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Test against Xcode 27 and the macOS 27 SDK
+        run: |
+          xcodebuild test -project Burrow.xcodeproj -scheme Burrow \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
   # Validate the fclones sidecar cross-compiles universal (the Duplicates dependency). Runs on
   # the fclones scripts so it proves + caches the build before a release relies on it.
   fclones-sidecar:

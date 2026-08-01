@@ -34,6 +34,19 @@ class ReleaseWorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("git push", workflow)
 
+    def test_xcode_27_preview_lane_is_advisory_and_runs_the_full_suite(self) -> None:
+        workflow = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+        start = workflow.index("  xcode-27-compatibility:")
+        end = workflow.index("  fclones-sidecar:", start)
+        job = workflow[start:end]
+
+        self.assertIn("runs-on: xcode-27", job)
+        self.assertIn("continue-on-error: true", job)
+        self.assertIn("bash ../scripts/fetch-sentry.sh", job)
+        self.assertIn("bash ../scripts/fetch-sparkle.sh", job)
+        self.assertIn("xcodegen generate", job)
+        self.assertIn("xcodebuild test", job)
+
 
 if __name__ == "__main__":
     unittest.main()

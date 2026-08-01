@@ -633,7 +633,9 @@ enum Store {
     // MARK: - App updates (Burrow's own self-update)
 
     private static let legacyAutoCheckKey = "auto_check_for_updates"
+    private static let legacyLastCheckKey = "last_update_check_at"
     private static let sparkleAutoCheckKey = "SUEnableAutomaticChecks"
+    private static let sparkleLastCheckKey = "SULastCheckTime"
 
     /// Sparkle's own persisted preference is the source of truth. Until the
     /// one-time migration runs, the getter still reflects Burrow's legacy key
@@ -654,22 +656,34 @@ enum Store {
         }
     }
 
-    /// Move 0.10.5's preference into Sparkle once. Returning the migrated
-    /// value lets AppUpdate apply it before starting the updater; later
-    /// launches leave Sparkle entirely in charge of its own preference.
-    static func migrateLegacyAutoCheckForUpdates() -> Bool? {
-        guard d.object(forKey: sparkleAutoCheckKey) == nil,
-              let legacy = d.object(forKey: legacyAutoCheckKey) as? Bool else {
-            if d.object(forKey: legacyAutoCheckKey) != nil {
-                d.removeObject(forKey: legacyAutoCheckKey)
-                d.synchronize()
-            }
-            return nil
+    /// Move 0.10.5's update preferences into Sparkle once. Preserving the
+    /// last-check date avoids treating every upgrade as immediately overdue;
+    /// existing Sparkle values always win if it has already run.
+    ///
+    /// Returning the migrated automatic-check choice lets AppUpdate apply it
+    /// before starting the updater. Later launches leave Sparkle entirely in
+    /// charge of both values.
+    static func migrateLegacyUpdatePreferences() -> Bool? {
+        let legacyChoice = d.object(forKey: legacyAutoCheckKey) as? Bool
+        let legacyLastCheck = d.object(forKey: legacyLastCheckKey) as? Date
+        var migratedChoice: Bool?
+
+        if d.object(forKey: sparkleAutoCheckKey) == nil, let legacyChoice {
+            d.set(legacyChoice, forKey: sparkleAutoCheckKey)
+            migratedChoice = legacyChoice
         }
-        write(legacy, sparkleAutoCheckKey)
-        d.removeObject(forKey: legacyAutoCheckKey)
-        d.synchronize()
-        return legacy
+        if d.object(forKey: sparkleLastCheckKey) == nil, let legacyLastCheck {
+            d.set(legacyLastCheck, forKey: sparkleLastCheckKey)
+        }
+
+        let hasLegacyValues = d.object(forKey: legacyAutoCheckKey) != nil
+            || d.object(forKey: legacyLastCheckKey) != nil
+        if hasLegacyValues {
+            d.removeObject(forKey: legacyAutoCheckKey)
+            d.removeObject(forKey: legacyLastCheckKey)
+            d.synchronize()
+        }
+        return migratedChoice
     }
 
     // MARK: - History view

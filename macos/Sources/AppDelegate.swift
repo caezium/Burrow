@@ -58,6 +58,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
+        // Move 0.10.5's update settings before Sparkle's controller is ever
+        // constructed, so it sees both the opt-out and last-check timestamp
+        // on its first 0.11 launch.
+        _ = Store.migrateLegacyUpdatePreferences()
+
         // Point the bundled `burrow` conductor at the bundled engine ONCE, so every conductor
         // spawn (capture + streaming) resolves it without per-call env plumbing. Only when a
         // conductor+engine are bundled and no override is already present (respects a dev's
@@ -172,9 +177,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         self.setupMainMenu()
 
-        // Start Sparkle's signed updater with the user's existing automatic-
-        // check preference. Downloads and installs always remain manual.
-        Task { @MainActor in AppUpdate.shared.begin() }
+        // Sparkle is the only new launch-time service in 0.11. Keep it out of
+        // the status-item setup window: macOS 27 beta reports show MenuBarAgent
+        // and WindowServer stalls around status-item activity (issue #319).
+        // An explicit "Check for Updates" still starts Sparkle immediately.
+        // Downloads and installs always remain manual.
+        if Store.autoCheckForUpdates {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                guard !Task.isCancelled else { return }
+                AppUpdate.shared.begin()
+            }
+        }
 
         // Crash safety for the Clean review's whitelist session: a fenced
         // block left by a previous run must never outlive it.

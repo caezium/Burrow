@@ -31,7 +31,7 @@ final class AppUpdate {
     /// rejects that configuration before building.
     func begin() {
         guard !started, Self.hasValidPublicKey else { return }
-        if let legacyChoice = Store.migrateLegacyAutoCheckForUpdates() {
+        if let legacyChoice = Store.migrateLegacyUpdatePreferences() {
             controller.updater.automaticallyChecksForUpdates = legacyChoice
         }
         controller.startUpdater()
