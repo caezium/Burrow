@@ -180,6 +180,13 @@ The workflow order is:
    quarantine bypass and unsigned warning only after the verified artifact
    exists.
 
+CI waits up to 60 minutes for Apple and preserves the submission ID even when
+that wait expires. A timeout still blocks stapling, packaging, the GitHub
+release, and the tap update. Query the existing ID with `notarytool info`
+instead of submitting a duplicate; a failed runner cannot resume its discarded
+build, so create one fresh release build only after the existing submission
+reaches a terminal state.
+
 Download the release asset and verify the distributed copy:
 
 ```bash

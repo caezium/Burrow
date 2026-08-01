@@ -47,8 +47,9 @@ jobs:
   release:
     runs-on: macos-15
     # The build is capped at 38 minutes and Apple's synchronous notarization
-    # wait at 30 minutes, so the job cap must leave room for both plus packaging.
-    timeout-minutes: 75
+    # wait at 60 minutes. Keep bounded headroom for setup, signing, stapling,
+    # packaging, publication, and the external tap update.
+    timeout-minutes: 120
     steps:
       # Pinned to a commit SHA, not a floating tag: this job holds
       # contents:write, the signing cert, and TAP_PAT, so a moved tag must
@@ -353,20 +354,44 @@ jobs:
           set +e
           xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
             --key "$RUNNER_TEMP/ac_key.p8" --key-id "$AC_KEY_ID" --issuer "$AC_ISSUER_ID" \
-            --wait --timeout 30m --output-format json > "$RUNNER_TEMP/notary-result.json"
+            --wait --timeout 60m --output-format json \
+            > "$RUNNER_TEMP/notary-result.json" 2>&1
           NOTARY_EXIT=$?
           set -e
           cat "$RUNNER_TEMP/notary-result.json"
-          SUBMISSION_ID="$(jq -r '.id // empty' "$RUNNER_TEMP/notary-result.json")"
-          STATUS="$(jq -r '.status // empty' "$RUNNER_TEMP/notary-result.json")"
-          if [ "$NOTARY_EXIT" -ne 0 ] || [ "$STATUS" != "Accepted" ]; then
-            if [ -n "$SUBMISSION_ID" ]; then
+          # notarytool writes its timeout JSON to stderr, so capture both
+          # streams above. A timeout response still carries the submission ID;
+          # retain it and make one authoritative status query to cover a race
+          # where Apple accepts just as the local wait expires.
+          SUBMISSION_ID="$(
+            jq -r '.id // empty' "$RUNNER_TEMP/notary-result.json" 2>/dev/null || true
+          )"
+          STATUS="$(
+            jq -r '.status // empty' "$RUNNER_TEMP/notary-result.json" 2>/dev/null || true
+          )"
+          if [ -n "$SUBMISSION_ID" ] && [ "$STATUS" != "Accepted" ]; then
+            set +e
+            xcrun notarytool info "$SUBMISSION_ID" \
+              --key "$RUNNER_TEMP/ac_key.p8" --key-id "$AC_KEY_ID" --issuer "$AC_ISSUER_ID" \
+              --output-format json > "$RUNNER_TEMP/notary-info.json" 2>&1
+            INFO_EXIT=$?
+            set -e
+            cat "$RUNNER_TEMP/notary-info.json"
+            if [ "$INFO_EXIT" -eq 0 ]; then
+              INFO_STATUS="$(
+                jq -r '.status // empty' "$RUNNER_TEMP/notary-info.json" 2>/dev/null || true
+              )"
+              [ -n "$INFO_STATUS" ] && STATUS="$INFO_STATUS"
+            fi
+          fi
+          if [ -z "$SUBMISSION_ID" ] || [ "$STATUS" != "Accepted" ]; then
+            if [ -n "$SUBMISSION_ID" ] && [ "$STATUS" != "In Progress" ]; then
               xcrun notarytool log "$SUBMISSION_ID" \
                 --key "$RUNNER_TEMP/ac_key.p8" --key-id "$AC_KEY_ID" --issuer "$AC_ISSUER_ID" \
                 "$RUNNER_TEMP/notary-log.json" || true
               [ -f "$RUNNER_TEMP/notary-log.json" ] && cat "$RUNNER_TEMP/notary-log.json"
             fi
-            echo "::error::Notarization failed (status=${STATUS:-unknown}, submission=${SUBMISSION_ID:-unknown})."
+            echo "::error::Notarization blocked (status=${STATUS:-unknown}, submission=${SUBMISSION_ID:-unknown}, command_exit=$NOTARY_EXIT)."
             exit 1
           fi
           xcrun stapler staple "$APP"
