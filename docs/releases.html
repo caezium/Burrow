@@ -123,13 +123,47 @@
 <header class="hero page">
   <h1>Changelog</h1>
   <p>Every version at a glance — what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">20 releases · latest 0.10.5 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p class="count">21 releases · latest 0.11.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
 </header>
 
 <main class="page">
+    <article class="entry" id="v0.11.0">
+      <div class="ver-col">
+        <h2 class="ver">0.11.0<span class="latest">latest</span></h2>
+        <span class="date mono">Aug 1, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.0" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">Burrow's first Developer ID-signed and Apple-notarized release — Gatekeeper can verify the app, Full Disk Access gets a stable identity, and Sparkle establishes the signed foundation for native updates.</p>
+        <div class="sblock">
+          <div class="slabel mono">improved</div>
+          <ul class="slist">
+            <li><b>Official downloads are trusted by Gatekeeper.</b> The app and every bundled executable carry a Developer ID signature, hardened runtime, secure timestamp, and a stapled Apple notarization ticket. Direct-download users no longer need to strip quarantine or use the right-click Open workaround. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
+            <li><b>Full Disk Access has a stable identity.</b> Developer ID gives macOS one consistent code identity across releases, so privacy grants can survive normal updates after the one-time transition from an older ad-hoc build. (<a href="https://github.com/caezium/Burrow/issues/177" target="_blank" rel="noopener">#177</a>, <a href="https://github.com/caezium/Burrow/issues/181" target="_blank" rel="noopener">#181</a>)</li>
+            <li><b>The signed update foundation is in place.</b> Burrow now uses Sparkle's native UI. Automatic checks remain on by default, but downloads and installs wait for approval. The update ZIP and appcast carry Ed25519 signatures that CI and the app verify; the first live 0.11-to-successor upgrade remains tracked in <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
+            <li><b>The bundled engine no longer rewrites the app.</b> It updates only with a signed Burrow release, preserving the Developer ID resource seal. Source builds using an external engine still expose its manual updater.</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">privacy</div>
+          <ul class="slist">
+            <li><b>The privacy manifest matches the shipped app.</b> Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data are declared unlinked and non-tracking. Analytics and crash reporting remain opt-out, and signing adds no telemetry.</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">security</div>
+          <ul class="slist">
+            <li><b>A tag cannot publish a partially trusted build.</b> CI stops before publication unless signing, notarization, ticket stapling, strict code-sign verification, Gatekeeper assessment, the Sparkle keypair match, and both update signatures all succeed. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
+            <li><b>Delayed Apple responses stay fail closed.</b> The release retains Apple's submission ID, waits up to 60 minutes, and checks that same submission once more at the timeout boundary; it never treats an unknown or in-progress result as accepted. (<a href="https://github.com/caezium/Burrow/pull/317" target="_blank" rel="noopener">#317</a>)</li>
+            <li><b>Homebrew keeps Apple's security checks intact.</b> The live cask preserves quarantine, removes the old unsigned warning, and is marked <code>auto_updates true</code> because Sparkle owns future in-app updates.</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
     <article class="entry" id="v0.10.5">
       <div class="ver-col">
-        <h2 class="ver">0.10.5<span class="latest">latest</span></h2>
+        <h2 class="ver">0.10.5</h2>
         <span class="date mono">Jul 25, 2026</span>
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.5" target="_blank" rel="noopener">full notes ↗</a>
       </div>

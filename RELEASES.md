@@ -26,6 +26,8 @@ of publishing an unsigned or un-notarized build.
   native UI. Automatic checks remain on by default, but downloads and installs
   always wait for approval. Both `Burrow-0.11.0.zip` and `appcast.xml` carry
   Ed25519 signatures that are verified before publication and again on-device.
+  This release proves that foundation; the first live 0.11-to-successor update
+  remains tracked in [#281](https://github.com/caezium/Burrow/issues/281).
 - **The bundled engine no longer rewrites the app.** It updates only with a
   signed Burrow release, preserving the Developer ID resource seal. Source
   builds using an external engine still expose its manual updater.

@@ -158,11 +158,11 @@ Downloads and into the password manager’s encrypted file storage. Keep tested
 backups of the `.p12` and Sparkle seed: losing either one prevents future
 releases from extending its respective trust chain.
 
-## 6. Cut and verify the first signed release
+## 6. Cut and verify a signed release
 
-Merge the signing change, choose the next app version and build number, and
-update the release notes before tagging. Do not reuse or move an existing
-public tag.
+Choose the next app version and build number, update the release notes, and
+merge the release change before tagging. Never move a tag after its GitHub
+release has published.
 
 The workflow order is:
 
@@ -205,28 +205,32 @@ Check that Homebrew’s live `Casks/burrow.rb` no longer contains `postflight`,
 `https://github.com/caezium/Burrow/releases/latest/download/appcast.xml`
 resolves to that feed.
 
-Once those checks pass, make one post-release documentation PR. It must:
+### 0.11.0 trust-chain baseline
 
-1. Add the shipped release to `docs/releases.json`, move “Signed & notarized
-   macOS builds” from **Building** to **Recently shipped** in
-   `docs/roadmap.json`, and run `python3 scripts/site-release.py`.
-2. Update the README and `SECURITY.md` from pre-release wording to the verified
-   version and remove `packaging/burrow.rb`, which is retained only as a legacy
-   cask reference until this first release succeeds.
-3. Confirm the external tap README and cask no longer contain `postflight`,
-   `xattr -cr`, or Burrow's unsigned-build warning.
-4. Install the downloaded notarized artifact on the affected macOS/FDA setup,
-   verify the stable identity behavior, then close #177 and #181. Do not close
-   them merely because the workflow was green.
+The first signed release was verified on August 1, 2026. Tag `v0.11.0` points
+to `b79c077df365041db6006ace4fdf6b30c9b40fe9`; the published ZIP has SHA-256
+`ae3a31f15a16bdf2e87bb0ca6ae5938d22d1a8c3181dac28ec9d0fb8d05f2b65`.
+The downloaded and Homebrew-installed copies both passed strict nested-signature
+verification, stapler validation, and Gatekeeper assessment as
+`Notarized Developer ID`. The embedded app reports version 0.11.0, build 21,
+Team ID `YGSM2722TZ`, a hardened runtime, a secure timestamp,
+`ITSAppUsesNonExemptEncryption=false`, and the checked-in privacy manifest.
+
+The live `caezium/homebrew-tap` cask is 0.11.0 with the same SHA, has
+`auto_updates true`, preserves quarantine, and contains no `postflight`,
+`xattr -cr`, or unsigned-build warning. A real Homebrew upgrade from 0.10.2 to
+0.11.0 retained `com.apple.quarantine` and passed Gatekeeper. Issues #177 and
+#181 were closed only after those checks completed.
+
+The GitHub release notes carry the #281 end-to-end caveat. The verified ZIP and
+signed appcast remain byte-for-byte unchanged after publication: copy-only
+clarifications belong in the release notes and site, not in a replacement
+signed feed. Replace and re-sign a published feed only for a correctness or
+security defect, then repeat the full asset verification above.
 
 Keep #281 open until a real 0.11-to-successor Sparkle update completes; the
 first Sparkle-enabled build cannot prove its own upgrade path without a newer
 signed feed entry.
-
-Do not publish those claims or remove the historical workaround before the
-distributed artifact and live cask have both been verified. Keeping the website
-on the last released version until then prevents a failed notarization from
-leaving public release copy that claims an artifact exists when it does not.
 
 ## Telemetry and signing
 

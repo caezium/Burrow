@@ -1,23 +1,12 @@
 {
   "_comment": "Source of truth for the site roadmap (docs/roadmap.html) and the README '## Roadmap' block. Edit this, then run `python3 scripts/site-release.py`. Columns render top to bottom; empty columns are skipped. Item fields: title (req), type (feat|fix|infra), issue (GitHub #, links to vote), note, version (for shipped — links to the changelog). Voting happens on GitHub issues (upvote) — keep this curated and honest; it's a guide, not a promise.",
-  "updated": "2026-07-31",
+  "updated": "2026-08-01",
   "columns": [
     {
       "key": "building",
       "title": "Building",
       "blurb": "In progress now.",
-      "items": [
-        {
-          "title": "Signed & notarized macOS builds",
-          "type": "infra",
-          "note": "The fail-closed pipeline and credentials are ready; the first Developer ID release awaits end-to-end verification."
-        },
-        {
-          "title": "Signed in-app updates",
-          "type": "feat",
-          "note": "Sparkle's native updater and the signed ZIP/appcast release gate are implemented; the first notarized release still needs end-to-end verification."
-        }
-      ]
+      "items": []
     },
     {
       "key": "planned",
@@ -50,6 +39,9 @@
       "title": "Recently shipped",
       "blurb": "Landed in the latest releases.",
       "items": [
+        { "title": "Developer ID signed & Apple-notarized macOS releases", "version": "0.11.0" },
+        { "title": "Signed Sparkle feed + updater foundation", "version": "0.11.0" },
+        { "title": "Stable Full Disk Access identity across updates", "version": "0.11.0" },
         { "title": "Bundled MIT engine — no separate `mo` install", "version": "0.9.0" },
         { "title": "Process inspector + CPU watchdog", "version": "0.9.0" },
         { "title": "Get Online connectivity companion", "version": "0.9.0" },

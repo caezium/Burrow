@@ -2,6 +2,62 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.11.0",
+      "date": "2026-08-01",
+      "tag": "v0.11.0",
+      "tagline": "Burrow's first Developer ID-signed and Apple-notarized release — Gatekeeper can verify the app, Full Disk Access gets a stable identity, and Sparkle establishes the signed foundation for native updates.",
+      "highlights": [
+        {
+          "icon": "shield",
+          "color": "green",
+          "title": "Trusted by Gatekeeper",
+          "line": "The app and every bundled executable carry a Developer ID signature, hardened runtime, secure timestamp, and stapled Apple notarization ticket."
+        },
+        {
+          "icon": "fingerprint",
+          "color": "azure",
+          "title": "Full Disk Access keeps its identity",
+          "line": "Burrow now has one stable Team ID across releases, so macOS privacy grants can survive normal updates after the one-time move from an ad-hoc build."
+        },
+        {
+          "icon": "sparkle",
+          "color": "lilac",
+          "title": "Signed update foundation",
+          "line": "Sparkle checks a signed feed and verifies every update archive, then waits for approval. The first live 0.11-to-successor upgrade remains tracked in [#281](https://github.com/caezium/Burrow/issues/281)."
+        }
+      ],
+      "chips": [
+        "Official tags cannot publish unless signing, notarization, stapling, Gatekeeper, and Sparkle verification all pass",
+        "Homebrew preserves quarantine — no `xattr` bypass or unsigned warning",
+        "Privacy declarations are unlinked and non-tracking; opt-out analytics and crash reporting are unchanged"
+      ],
+      "sections": [
+        {
+          "label": "improved",
+          "items": [
+            "**Official downloads are trusted by Gatekeeper.** The app and every bundled executable carry a Developer ID signature, hardened runtime, secure timestamp, and a stapled Apple notarization ticket. Direct-download users no longer need to strip quarantine or use the right-click Open workaround. ([#312](https://github.com/caezium/Burrow/pull/312))",
+            "**Full Disk Access has a stable identity.** Developer ID gives macOS one consistent code identity across releases, so privacy grants can survive normal updates after the one-time transition from an older ad-hoc build. ([#177](https://github.com/caezium/Burrow/issues/177), [#181](https://github.com/caezium/Burrow/issues/181))",
+            "**The signed update foundation is in place.** Burrow now uses Sparkle's native UI. Automatic checks remain on by default, but downloads and installs wait for approval. The update ZIP and appcast carry Ed25519 signatures that CI and the app verify; the first live 0.11-to-successor upgrade remains tracked in [#281](https://github.com/caezium/Burrow/issues/281).",
+            "**The bundled engine no longer rewrites the app.** It updates only with a signed Burrow release, preserving the Developer ID resource seal. Source builds using an external engine still expose its manual updater."
+          ]
+        },
+        {
+          "label": "privacy",
+          "items": [
+            "**The privacy manifest matches the shipped app.** Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data are declared unlinked and non-tracking. Analytics and crash reporting remain opt-out, and signing adds no telemetry."
+          ]
+        },
+        {
+          "label": "security",
+          "items": [
+            "**A tag cannot publish a partially trusted build.** CI stops before publication unless signing, notarization, ticket stapling, strict code-sign verification, Gatekeeper assessment, the Sparkle keypair match, and both update signatures all succeed. ([#312](https://github.com/caezium/Burrow/pull/312))",
+            "**Delayed Apple responses stay fail closed.** The release retains Apple's submission ID, waits up to 60 minutes, and checks that same submission once more at the timeout boundary; it never treats an unknown or in-progress result as accepted. ([#317](https://github.com/caezium/Burrow/pull/317))",
+            "**Homebrew keeps Apple's security checks intact.** The live cask preserves quarantine, removes the old unsigned warning, and is marked `auto_updates true` because Sparkle owns future in-app updates."
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.10.5",
       "date": "2026-07-25",
       "tag": "v0.10.5",
