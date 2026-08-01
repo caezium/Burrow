@@ -153,6 +153,18 @@ gh secret list --app actions --repo caezium/Burrow \
   | grep -E '^(MACOS_|AC_API_|SPARKLE_|TAP_PAT)'
 ```
 
+After creating or rotating `TAP_PAT`, run the manual credential check before
+cutting a tag:
+
+```bash
+gh workflow run homebrew-tap-credential-check.yml --repo caezium/Burrow
+```
+
+The check reads GitHub's authenticated repository permissions and requires
+`push: true`; it does not modify the tap. The tag workflow runs the same check
+before any build, signing, or notarization work. Open the run URL printed by
+`gh` and require a successful result.
+
 After the secrets are stored, move every exported private-key file out of
 Downloads and into the password manager’s encrypted file storage. Keep tested
 backups of the `.p12` and Sparkle seed: losing either one prevents future
@@ -166,7 +178,8 @@ release has published.
 
 The workflow order is:
 
-1. Require all Apple, Sparkle, and external-tap secrets.
+1. Require all Apple, Sparkle, and external-tap secrets, then verify that
+   `TAP_PAT` can write `caezium/homebrew-tap`.
 2. Fetch and checksum-validate the official Sentry and Sparkle frameworks,
    then build and confirm the bundled conductor, engine, and fclones sidecar.
 3. Require the Sparkle private seed to match the public key embedded in the app.
@@ -176,9 +189,9 @@ The workflow order is:
 7. Package the exact verified app, generate the signed appcast, and
    cryptographically verify the ZIP and feed before publishing either asset.
 8. Keep a new release draft until both assets exist, then publish it.
-9. Update `caezium/homebrew-tap`: add `auto_updates true` and remove the legacy
-   quarantine bypass and unsigned warning only after the verified artifact
-   exists.
+9. Update `caezium/homebrew-tap`: normalize `auto_updates true` beside the
+   homepage stanza and fail if the legacy quarantine bypass, unsigned warning,
+   or stale security note ever reappears.
 
 CI waits up to 60 minutes for Apple and preserves the submission ID even when
 that wait expires. A timeout still blocks stapling, packaging, the GitHub

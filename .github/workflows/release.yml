@@ -10,7 +10,8 @@ name: release
 # the Homebrew cask in caezium/homebrew-tap so `brew upgrade --cask
 # caezium/tap/burrow` picks it up. Pushing ordinary commits to main does NOT
 # touch the tap — only a tag. Releases fail closed when any signing or
-# notarization credential is absent.
+# notarization credential is absent, or when the external-tap token cannot
+# write its target repository.
 #
 # Required secrets:
 #   MACOS_CERT_P12        base64 of a "Developer ID Application" .p12
@@ -87,6 +88,11 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Verify Homebrew tap write access
+        env:
+          GH_TOKEN: ${{ secrets.TAP_PAT }}
+        run: bash scripts/verify-homebrew-tap-access.sh
 
       # Fetch the bundled MIT engine OUTSIDE the work tree (RUNNER_TEMP), at its
       # pinned submodule commit. (This once looked like it hung SPM — the real
@@ -485,82 +491,13 @@ jobs:
           SHA="${{ steps.pkg.outputs.sha }}"
           gh auth setup-git
           git clone "https://github.com/caezium/homebrew-tap.git" tap
-          CASK="tap/Casks/burrow.rb"
-          /usr/bin/sed -i '' -E \
-            -e "s/version \"[^\"]+\"/version \"${VERSION}\"/" \
-            -e "s/sha256 \"[^\"]+\"/sha256 \"${SHA}\"/" \
-            "$CASK"
-          # This step only runs after Developer ID signing, accepted
-          # notarization, stapling, and Gatekeeper assessment. Remove the
-          # legacy quarantine bypass now that preserving quarantine is what
-          # lets Gatekeeper validate the notarization ticket.
-          ruby <<'RUBY'
-          cask_path = "tap/Casks/burrow.rb"
-          cask = File.read(cask_path)
-          unless cask.match?(/^\s*auto_updates true\s*$/)
-            changed = cask.sub!(/^(\s*version "[^"]+"\s*\n)/, "\\1  auto_updates true\n")
-            abort "Burrow cask has no version line for auto_updates" unless changed
-          end
-          legacy = <<'LEGACY'
-            # Pre-1.0 builds aren't notarized yet, so clear the quarantine flag to
-            # avoid a Gatekeeper block on first launch. Remove this once the app
-            # ships signed + notarized.
-            postflight do
-              system_command "/usr/bin/xattr", args: ["-cr", "#{appdir}/Burrow.app"], sudo: false
-            end
-
-            caveats <<~EOS
-              Burrow is an unsigned pre-1.0 build. If macOS still blocks it, right-click
-              the app and choose Open, or run:  xattr -cr "#{appdir}/Burrow.app"
-            EOS
-
-          LEGACY
-          if cask.include?(legacy)
-            File.write(cask_path, cask.sub(legacy, ""))
-          elsif cask.match?(/xattr.*-cr|Burrow is an unsigned pre-1\.0 build/)
-            abort "Burrow cask security block has drifted; remove it deliberately"
-          end
-
-          path = "tap/README.md"
-          text = File.read(path)
-          old = <<~'OLD'
-            - These are currently self-signed pre-1.0 builds (not yet notarized), so the
-              casks clear the Gatekeeper quarantine flag automatically on install. If macOS
-              still blocks an app, right-click it and choose **Open**.
-          OLD
-          replacement = <<~'NEW'
-            - Burrow's current cask is Developer ID signed and notarized. It preserves
-              quarantine so Gatekeeper can validate Apple's notarization ticket.
-            - Wisp and Nib are currently self-signed pre-1.0 builds, so their casks clear
-              quarantine automatically. If macOS still blocks either app, right-click it
-              and choose **Open**.
-          NEW
-          if text.include?(old)
-            File.write(path, text.sub(old, replacement))
-          elsif !text.include?("Burrow's current cask is Developer ID signed and notarized")
-            abort "tap README security note has drifted; update it deliberately"
-          end
-          RUBY
-          # Guard against a silent no-op: if the cask's format ever drifts so
-          # the sed matches nothing, the version/sha won't be present and the
-          # `git diff --quiet` below would otherwise report success while the
-          # tap stays stale. Fail loudly instead.
-          if ! grep -q "version \"${VERSION}\"" "$CASK" || ! grep -q "sha256 \"${SHA}\"" "$CASK"; then
-            echo "::error::cask edit didn't take — $CASK is missing version \"${VERSION}\" or the new sha256 after sed. Its format may have drifted; bump it by hand."
-            exit 1
-          fi
-          if grep -qE 'xattr.*-cr|unsigned pre-1\.0' "$CASK"; then
-            echo "::error::legacy Gatekeeper-bypass text remains in $CASK after notarization."
-            exit 1
-          fi
-          if ! grep -qE '^\s*auto_updates true\s*$' "$CASK"; then
-            echo "::error::Burrow cask is missing auto_updates true after enabling Sparkle."
-            exit 1
-          fi
-          if grep -qF 'These are currently self-signed pre-1.0 builds' tap/README.md; then
-            echo "::error::tap README still claims Burrow is unsigned after notarization."
-            exit 1
-          fi
+          # This runs only after signing, notarization, stapling, Gatekeeper,
+          # and Sparkle verification. The helper also normalizes
+          # auto_updates beside the homepage stanza and fails closed if the
+          # cask or its security copy has drifted.
+          python3 scripts/update-homebrew-tap.py tap \
+            --version "$VERSION" \
+            --sha256 "$SHA"
           cd tap
           if git diff --quiet; then
             echo "cask already at ${VERSION}; nothing to do"
