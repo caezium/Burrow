@@ -15,24 +15,50 @@ if ! current_sha="$(
 fi
 
 # The repository API's `.permissions.push` field describes the account's role,
-# and `git push --dry-run` does not send an update for GitHub to authorize.
-# GitHub documents the Update a reference endpoint as requiring fine-grained
-# Contents: write. Pointing main at its exact current SHA exercises that write
-# endpoint without moving the ref, creating a commit, or triggering a release.
-if ! verified_sha="$(
-  gh api --method PATCH \
-    repos/caezium/homebrew-tap/git/refs/heads/main \
+# `git push --dry-run` sends no update, and a same-SHA ref update is treated as
+# a no-op. Create a unique temporary ref so GitHub must authorize a real write,
+# then remove it before continuing. No commit is created and a successful probe
+# leaves the tap exactly as it found it.
+probe_branch="burrow-release-access-probe-${GITHUB_RUN_ID:-local-$$}-${GITHUB_RUN_ATTEMPT:-0}"
+probe_ref="refs/heads/$probe_branch"
+probe_created=false
+
+cleanup_probe() {
+  if [ "$probe_created" != true ]; then
+    return 0
+  fi
+
+  if ! gh api --method DELETE \
+    "repos/caezium/homebrew-tap/git/refs/heads/$probe_branch" >/dev/null; then
+    echo "::error::Created $probe_ref but could not remove it from caezium/homebrew-tap." >&2
+    return 1
+  fi
+
+  probe_created=false
+}
+trap cleanup_probe EXIT
+
+if ! created_ref="$(
+  gh api --method POST \
+    repos/caezium/homebrew-tap/git/refs \
+    -f ref="$probe_ref" \
     -f sha="$current_sha" \
-    -F force=false \
-    --jq '.object.sha'
+    --jq '.ref'
 )"; then
-  echo "::error::TAP_PAT cannot push to caezium/homebrew-tap. Replace it with a fine-grained token scoped only to that repository with Contents: Read and write." >&2
+  echo "::error::TAP_PAT cannot create a temporary ref in caezium/homebrew-tap. Replace it with a fine-grained token scoped only to that repository with Contents: Read and write." >&2
+  exit 1
+fi
+probe_created=true
+
+if [ "$created_ref" != "$probe_ref" ]; then
+  echo "::error::Homebrew tap write probe created an unexpected ref." >&2
   exit 1
 fi
 
-if [ "$verified_sha" != "$current_sha" ]; then
-  echo "::error::Homebrew tap write probe returned an unexpected ref SHA." >&2
+if ! cleanup_probe; then
+  trap - EXIT
   exit 1
 fi
+trap - EXIT
 
-echo "Homebrew tap write access verified without moving its main ref."
+echo "Homebrew tap write access verified; the temporary ref was removed."
