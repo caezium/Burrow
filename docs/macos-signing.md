@@ -254,7 +254,9 @@ a same-SHA ref update both return false positives. The current verifier pushes,
 verifies, and removes a unique temporary ref through Git itself, exercising the
 release's actual authentication path. The engine rewrite is now process-scoped,
 and the tap step uses an isolated Git configuration so the two credentials
-cannot cross. Require the manual credential workflow to pass before the next
+cannot cross. The stored `TAP_PAT` then passed a
+[real Git push-and-delete credential check](https://github.com/caezium/Burrow/actions/runs/30766229249),
+so it does not need rotation. Require that manual workflow to pass before every
 tag.
 
 A real Sparkle update then moved the installed signed app from 0.11.0 build 21
