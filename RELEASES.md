@@ -36,10 +36,11 @@ failure without collecting screen contents or user files.
   a bounded serialized retry queue and no session replay, autocapture, remote
   feature flags, AppKit timer, or main-thread disk I/O. Existing 0.11.0 anonymous
   identities are migrated once so release-to-release funnels remain accurate.
-- **The first signed Sparkle successor is ready to test.** This is the first
-  update after 0.11.0, so it exercises the complete signed in-app update path
-  tracked in [#281](https://github.com/caezium/Burrow/issues/281). The issue stays
-  open until a real 0.11.0-to-0.11.1 update succeeds.
+- **The first signed Sparkle successor passed a real update.** An installed
+  Developer ID-signed 0.11.0 copy found, downloaded, installed, and relaunched
+  0.11.1 through Sparkle's native UI without Terminal or Homebrew. The updated
+  app then passed strict signing, stapler, and Gatekeeper checks, completing
+  [#281](https://github.com/caezium/Burrow/issues/281).
 
 ## Privacy
 - **Telemetry remains optional, unlinked, and non-tracking.** One Settings

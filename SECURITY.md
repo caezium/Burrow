@@ -15,11 +15,11 @@ bundled executable with a **Developer ID Application** certificate, enable the
 hardened runtime, obtain secure timestamps, receive an accepted notarization
 result, staple the ticket, and pass Gatekeeper assessment. The external
 Homebrew cask is updated only after that verified artifact exists, and its live
-0.11.0 definition preserves quarantine so Gatekeeper can verify the stapled
+0.11.1 definition preserves quarantine so Gatekeeper can verify the stapled
 ticket. Maintainer setup and release verification are in the [macOS signing
 runbook](docs/macos-signing.md).
 
-The published 0.11.0 app was independently checked after download: its bundle
+The published 0.11.1 app was independently checked after download: its bundle
 identifier is `dev.caezium.Burrow`, its Developer ID Team ID is `YGSM2722TZ`,
 the hardened runtime and secure timestamp are present, `stapler validate`
 succeeds, and Gatekeeper reports `source=Notarized Developer ID`.
@@ -30,10 +30,12 @@ signatures and the private/public key match, and keeps a new GitHub release in
 draft until both assets exist. Sparkle verifies the signed feed and archive
 again on the Mac before installing.
 
-Version 0.11.0 is the first Sparkle-enabled release, so it proves the signed
-feed, archive, and updater integration but cannot yet prove an upgrade to a
-newer build. Issue [#281](https://github.com/caezium/Burrow/issues/281) remains
-open until the first 0.11-to-successor update completes on a shipped app.
+Version 0.11.0 was the first Sparkle-enabled release. The first real successor
+test then updated the installed signed app from 0.11.0 build 21 to 0.11.1 build
+22 through Sparkle's native UI, without Terminal or Homebrew, and the relaunched
+copy passed strict signing, stapler, and Gatekeeper checks. Issue
+[#281](https://github.com/caezium/Burrow/issues/281) was closed after that
+end-to-end verification.
 
 Burrow 0.10.5 predates this release gate and used a coherent ad-hoc signature,
 not Developer ID or notarization; its Homebrew cask used a quarantine bypass.

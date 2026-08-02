@@ -173,10 +173,11 @@ A live, glanceable read of your Mac's vitals, refreshed continuously:
 - **MCP server** — a stdio JSON-RPC server (`burrow mcp` / `Burrow --mcp`) plus
   an optional localhost HTTP API, so any AI agent can query your Mac's recent
   state. See [Use it with your AI agent](#use-it-with-your-ai-agent).
-- **Signed update foundation** — Sparkle checks a signed feed and presents its
+- **Signed native updates** — Sparkle checks a signed feed and presents its
   native update UI; archives and the feed are both Ed25519-signed, and nothing
-  downloads or installs automatically. The first live 0.11-to-successor update
-  remains tracked in [#281](https://github.com/caezium/Burrow/issues/281).
+  downloads or installs automatically. A real 0.11.0-to-0.11.1 update completed
+  without Terminal or Homebrew and relaunched the notarized app successfully.
+  ([#281](https://github.com/caezium/Burrow/issues/281))
 
 
 ## Platforms

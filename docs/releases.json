@@ -44,7 +44,7 @@
           "items": [
             "**Sentry can now explain hangs that never become crashes.** Release-health sessions, hang tracking, low-memory context, fixed-name sampled performance spans, and coarse launch/updater state cover failure modes that a normal crash report misses. Outbound data is scrubbed fail closed, with no screenshots, view hierarchies, user paths, URLs, request bodies, or automatic UI, file, database, and network tracing.",
             "**PostHog analytics no longer bring an AppKit-facing SDK into startup.** Burrow still sends the same opt-out semantic product, screen, and operation events to PostHog, but a small background HTTPS transport replaces `posthog-ios`. It has a bounded serialized retry queue and no session replay, autocapture, remote feature flags, AppKit timer, or main-thread disk I/O. Existing 0.11.0 anonymous identities are migrated once so release-to-release funnels remain accurate.",
-            "**The first signed Sparkle successor is ready to test.** This is the first update after 0.11.0, so it exercises the complete signed in-app update path tracked in [#281](https://github.com/caezium/Burrow/issues/281). That issue stays open until a real 0.11.0-to-0.11.1 update succeeds."
+            "**The first signed Sparkle successor passed a real update.** An installed Developer ID-signed 0.11.0 copy found, downloaded, installed, and relaunched 0.11.1 through Sparkle's native UI without Terminal or Homebrew. The updated app then passed strict signing, stapler, and Gatekeeper checks, completing [#281](https://github.com/caezium/Burrow/issues/281)."
           ]
         },
         {
@@ -83,7 +83,7 @@
           "icon": "sparkle",
           "color": "lilac",
           "title": "Signed update foundation",
-          "line": "Sparkle checks a signed feed and verifies every update archive, then waits for approval. The first live 0.11-to-successor upgrade remains tracked in [#281](https://github.com/caezium/Burrow/issues/281)."
+          "line": "Sparkle checks a signed feed and verifies every update archive, then waits for approval. The first live 0.11.0-to-0.11.1 upgrade later completed successfully in [#281](https://github.com/caezium/Burrow/issues/281)."
         }
       ],
       "chips": [
@@ -97,7 +97,7 @@
           "items": [
             "**Official downloads are trusted by Gatekeeper.** The app and every bundled executable carry a Developer ID signature, hardened runtime, secure timestamp, and a stapled Apple notarization ticket. Direct-download users no longer need to strip quarantine or use the right-click Open workaround. ([#312](https://github.com/caezium/Burrow/pull/312))",
             "**Full Disk Access has a stable identity.** Developer ID gives macOS one consistent code identity across releases, so privacy grants can survive normal updates after the one-time transition from an older ad-hoc build. ([#177](https://github.com/caezium/Burrow/issues/177), [#181](https://github.com/caezium/Burrow/issues/181))",
-            "**The signed update foundation is in place.** Burrow now uses Sparkle's native UI. Automatic checks remain on by default, but downloads and installs wait for approval. The update ZIP and appcast carry Ed25519 signatures that CI and the app verify; the first live 0.11-to-successor upgrade remains tracked in [#281](https://github.com/caezium/Burrow/issues/281).",
+            "**The signed update foundation is in place.** Burrow now uses Sparkle's native UI. Automatic checks remain on by default, but downloads and installs wait for approval. The update ZIP and appcast carry Ed25519 signatures that CI and the app verify; the first live 0.11.0-to-0.11.1 upgrade later completed successfully in [#281](https://github.com/caezium/Burrow/issues/281).",
             "**The bundled engine no longer rewrites the app.** It updates only with a signed Burrow release, preserving the Developer ID resource seal. Source builds using an external engine still expose its manual updater."
           ]
         },

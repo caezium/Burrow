@@ -160,8 +160,11 @@ cutting a tag:
 gh workflow run homebrew-tap-credential-check.yml --repo caezium/Burrow
 ```
 
-The check reads GitHub's authenticated repository permissions and requires
-`push: true`; it does not modify the tap. The tag workflow runs the same check
+The check clones the tap with `TAP_PAT` and performs a `git push --dry-run` to a
+unique probe ref. That reaches GitHub's real receive-pack authorization without
+creating a branch or commit; the repository API's `permissions.push` field is
+not sufficient because it describes the account's role rather than a
+fine-grained token's Contents scope. The tag workflow runs this same check
 before any build, signing, or notarization work. Open the run URL printed by
 `gh` and require a successful result.
 
@@ -218,32 +221,57 @@ Check that Homebrew’s live `Casks/burrow.rb` no longer contains `postflight`,
 `https://github.com/caezium/Burrow/releases/latest/download/appcast.xml`
 resolves to that feed.
 
-### 0.11.0 trust-chain baseline
+### 0.11.1 current trust-chain baseline
+
+The current release was verified on August 3, 2026. Tag `v0.11.1` points to
+`d482544e415d10cf9cb0c606c8a8ce149ddad99d`; the published ZIP has SHA-256
+`d9b2267cce68ff091d898bdfca30e0b0f861a411ee92c4a4b60b70bcf0b8bceb`, and
+the signed `appcast.xml` asset has SHA-256
+`1be59389da7ad1df8c8c90bc8492ad86c31f1295e29170eed0f72ddc435a5d3f`.
+The downloaded copy passed strict nested-signature verification, stapler
+validation, and Gatekeeper assessment as `Notarized Developer ID`. The embedded
+app reports version 0.11.1, build 22, bundle ID `dev.caezium.Burrow`, Team ID
+`YGSM2722TZ`, a hardened runtime, a secure timestamp,
+`ITSAppUsesNonExemptEncryption=false`, the checked-in privacy manifest, and
+non-empty PostHog/Sentry release configuration. Burrow, the bundled conductor,
+and fclones each contain both arm64 and x86_64 slices.
+
+The live `caezium/homebrew-tap` cask is 0.11.1 with the same ZIP SHA, has
+`auto_updates true`, preserves quarantine, and contains no `postflight`,
+`xattr -cr`, or unsigned-build warning. The release job passed Developer ID
+signing, notarization, stapling, Gatekeeper, Sparkle verification, and GitHub
+publication, then its final tap push received HTTP 403 because the stored
+`TAP_PAT` could read the repository but lacked effective Contents write scope.
+The cask was repaired with the owner credential at tap commit
+`9a2357bf9419b9e39836cd69391dfa2a5d5bd421`; [#324](https://github.com/caezium/Burrow/pull/324)
+replaced the misleading API role check with a non-mutating Git dry-run probe.
+Replace `TAP_PAT` before the next tag and require the manual credential workflow
+to pass.
+
+A real Sparkle update then moved the installed signed app from 0.11.0 build 21
+to 0.11.1 build 22 through the native UI without Terminal or Homebrew. The app
+relaunched and again passed strict signing, stapler, and Gatekeeper checks; a
+separate `Burrow --mcp` process stayed alive. This completed
+[#281](https://github.com/caezium/Burrow/issues/281). Full Disk Access was
+already off on that test Mac, so this run does not prove preservation of an
+existing FDA grant. [#319](https://github.com/caezium/Burrow/issues/319)
+remains open until an affected macOS 27 Beta 4 user verifies the notarized
+compatibility build.
+
+### 0.11.0 historical first-signed baseline
 
 The first signed release was verified on August 1, 2026. Tag `v0.11.0` points
-to `b79c077df365041db6006ace4fdf6b30c9b40fe9`; the published ZIP has SHA-256
+to `b79c077df365041db6006ace4fdf6b30c9b40fe9`; its published ZIP has SHA-256
 `ae3a31f15a16bdf2e87bb0ca6ae5938d22d1a8c3181dac28ec9d0fb8d05f2b65`.
-The downloaded and Homebrew-installed copies both passed strict nested-signature
-verification, stapler validation, and Gatekeeper assessment as
-`Notarized Developer ID`. The embedded app reports version 0.11.0, build 21,
-Team ID `YGSM2722TZ`, a hardened runtime, a secure timestamp,
-`ITSAppUsesNonExemptEncryption=false`, and the checked-in privacy manifest.
+The downloaded and Homebrew-installed copies passed strict nested-signature,
+stapler, and Gatekeeper checks. A Homebrew upgrade from 0.10.2 retained
+quarantine and passed Gatekeeper, after which #177 and #181 were closed.
 
-The live `caezium/homebrew-tap` cask is 0.11.0 with the same SHA, has
-`auto_updates true`, preserves quarantine, and contains no `postflight`,
-`xattr -cr`, or unsigned-build warning. A real Homebrew upgrade from 0.10.2 to
-0.11.0 retained `com.apple.quarantine` and passed Gatekeeper. Issues #177 and
-#181 were closed only after those checks completed.
-
-The GitHub release notes carry the #281 end-to-end caveat. The verified ZIP and
-signed appcast remain byte-for-byte unchanged after publication: copy-only
-clarifications belong in the release notes and site, not in a replacement
-signed feed. Replace and re-sign a published feed only for a correctness or
-security defect, then repeat the full asset verification above.
-
-Keep #281 open until a real 0.11-to-successor Sparkle update completes; the
-first Sparkle-enabled build cannot prove its own upgrade path without a newer
-signed feed entry.
+Published ZIPs and signed appcasts remain byte-for-byte unchanged after
+publication: copy-only clarifications belong in the GitHub release body and
+site, not in replacement signed assets. Replace and re-sign a published feed
+only for a correctness or security defect, then repeat the full verification
+above.
 
 ## Telemetry and signing
 
