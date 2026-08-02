@@ -2,6 +2,66 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.11.1",
+      "date": "2026-08-03",
+      "tag": "v0.11.1",
+      "tagline": "A guarded-startup and diagnostics patch for the system-wide input freeze reported on macOS 27 Beta 4, with a safer exact-build fallback and privacy-hardened hang telemetry.",
+      "highlights": [
+        {
+          "icon": "shield",
+          "color": "green",
+          "title": "Safer on the affected macOS beta",
+          "line": "On macOS 27 Beta 4 build `26A5388g`, Burrow starts in Dock-based compatibility mode instead of creating the menu-bar status item; normal behavior is retried after Burrow or macOS changes."
+        },
+        {
+          "icon": "pulse",
+          "color": "azure",
+          "title": "Startup tells us where it stopped",
+          "line": "A durable launch journal isolates the status item and Sparkle behind separate stability windows, then suppresses only the component implicated by an interrupted launch."
+        },
+        {
+          "icon": "fingerprint",
+          "color": "lilac",
+          "title": "Useful diagnostics, tighter privacy",
+          "line": "Sentry can detect hangs and PostHog keeps semantic product analytics, while both exclude screen contents, user files, paths, replay, autocapture, and automatic UI or network tracing."
+        }
+      ],
+      "chips": [
+        "Manual update checks remain available when automatic Sparkle startup is paused",
+        "Existing PostHog anonymous identities are preserved; no session replay or autocapture",
+        "[#319](https://github.com/caezium/Burrow/issues/319) stays open until the affected macOS beta is verified"
+      ],
+      "sections": [
+        {
+          "label": "fixed",
+          "items": [
+            "**The affected macOS 27 beta gets a safer launch path.** On Beta 4 build `26A5388g`, Burrow starts with a Dock icon instead of creating its menu-bar status item. The fallback is limited to that exact build and is retried after either Burrow or macOS changes. Manual update checks remain available even when automatic Sparkle startup is paused.",
+            "**Interrupted launches recover one component at a time.** A durable launch journal gives the status item and Sparkle separate 30-second stability windows. If launch is interrupted, the next run suppresses only the component whose window was active, shows a recovery alert, and offers a one-click redacted diagnostic report. ([#321](https://github.com/caezium/Burrow/pull/321))"
+          ]
+        },
+        {
+          "label": "improved",
+          "items": [
+            "**Sentry can now explain hangs that never become crashes.** Release-health sessions, hang tracking, low-memory context, fixed-name sampled performance spans, and coarse launch/updater state cover failure modes that a normal crash report misses. Outbound data is scrubbed fail closed, with no screenshots, view hierarchies, user paths, URLs, request bodies, or automatic UI, file, database, and network tracing.",
+            "**PostHog analytics no longer bring an AppKit-facing SDK into startup.** Burrow still sends the same opt-out semantic product, screen, and operation events to PostHog, but a small background HTTPS transport replaces `posthog-ios`. It has a bounded serialized retry queue and no session replay, autocapture, remote feature flags, AppKit timer, or main-thread disk I/O. Existing 0.11.0 anonymous identities are migrated once so release-to-release funnels remain accurate.",
+            "**The first signed Sparkle successor is ready to test.** This is the first update after 0.11.0, so it exercises the complete signed in-app update path tracked in [#281](https://github.com/caezium/Burrow/issues/281). That issue stays open until a real 0.11.0-to-0.11.1 update succeeds."
+          ]
+        },
+        {
+          "label": "privacy",
+          "items": [
+            "**Telemetry remains optional, unlinked, and non-tracking.** One Settings switch disables both PostHog analytics and Sentry diagnostics. The privacy manifest continues to declare Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data; this release adds no signing-specific telemetry and records no screen content."
+          ]
+        },
+        {
+          "label": "security",
+          "items": [
+            "**The release chain remains fail closed.** The tag cannot publish unless the app is Developer ID signed, notarized, stapled, accepted by Gatekeeper, and both the update archive and appcast pass Sparkle signature verification."
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.11.0",
       "date": "2026-08-01",
       "tag": "v0.11.0",

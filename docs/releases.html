@@ -123,13 +123,51 @@
 <header class="hero page">
   <h1>Changelog</h1>
   <p>Every version at a glance — what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">21 releases · latest 0.11.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p class="count">22 releases · latest 0.11.1 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
 </header>
 
 <main class="page">
+    <article class="entry" id="v0.11.1">
+      <div class="ver-col">
+        <h2 class="ver">0.11.1<span class="latest">latest</span></h2>
+        <span class="date mono">Aug 3, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.1" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">A guarded-startup and diagnostics patch for the system-wide input freeze reported on macOS 27 Beta 4, with a safer exact-build fallback and privacy-hardened hang telemetry.</p>
+        <div class="sblock">
+          <div class="slabel mono">fixed</div>
+          <ul class="slist">
+            <li><b>The affected macOS 27 beta gets a safer launch path.</b> On Beta 4 build <code>26A5388g</code>, Burrow starts with a Dock icon instead of creating its menu-bar status item. The fallback is limited to that exact build and is retried after either Burrow or macOS changes. Manual update checks remain available even when automatic Sparkle startup is paused.</li>
+            <li><b>Interrupted launches recover one component at a time.</b> A durable launch journal gives the status item and Sparkle separate 30-second stability windows. If launch is interrupted, the next run suppresses only the component whose window was active, shows a recovery alert, and offers a one-click redacted diagnostic report. (<a href="https://github.com/caezium/Burrow/pull/321" target="_blank" rel="noopener">#321</a>)</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">improved</div>
+          <ul class="slist">
+            <li><b>Sentry can now explain hangs that never become crashes.</b> Release-health sessions, hang tracking, low-memory context, fixed-name sampled performance spans, and coarse launch/updater state cover failure modes that a normal crash report misses. Outbound data is scrubbed fail closed, with no screenshots, view hierarchies, user paths, URLs, request bodies, or automatic UI, file, database, and network tracing.</li>
+            <li><b>PostHog analytics no longer bring an AppKit-facing SDK into startup.</b> Burrow still sends the same opt-out semantic product, screen, and operation events to PostHog, but a small background HTTPS transport replaces <code>posthog-ios</code>. It has a bounded serialized retry queue and no session replay, autocapture, remote feature flags, AppKit timer, or main-thread disk I/O. Existing 0.11.0 anonymous identities are migrated once so release-to-release funnels remain accurate.</li>
+            <li><b>The first signed Sparkle successor is ready to test.</b> This is the first update after 0.11.0, so it exercises the complete signed in-app update path tracked in <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>. That issue stays open until a real 0.11.0-to-0.11.1 update succeeds.</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">privacy</div>
+          <ul class="slist">
+            <li><b>Telemetry remains optional, unlinked, and non-tracking.</b> One Settings switch disables both PostHog analytics and Sentry diagnostics. The privacy manifest continues to declare Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data; this release adds no signing-specific telemetry and records no screen content.</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">security</div>
+          <ul class="slist">
+            <li><b>The release chain remains fail closed.</b> The tag cannot publish unless the app is Developer ID signed, notarized, stapled, accepted by Gatekeeper, and both the update archive and appcast pass Sparkle signature verification.</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
     <article class="entry" id="v0.11.0">
       <div class="ver-col">
-        <h2 class="ver">0.11.0<span class="latest">latest</span></h2>
+        <h2 class="ver">0.11.0</h2>
         <span class="date mono">Aug 1, 2026</span>
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.0" target="_blank" rel="noopener">full notes ↗</a>
       </div>
