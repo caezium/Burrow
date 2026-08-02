@@ -34,6 +34,15 @@ class ReleaseWorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("git push", workflow)
 
+    def test_tap_verifier_checks_token_write_scope_without_mutating(self) -> None:
+        verifier = (ROOT / "scripts" / "verify-homebrew-tap-access.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('git -C "$tap_dir" push --dry-run', verifier)
+        self.assertIn("refs/heads/burrow-release-access-probe-", verifier)
+        self.assertNotIn("--jq", verifier)
+
     def test_xcode_27_preview_lane_is_advisory_and_runs_the_full_suite(self) -> None:
         workflow = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
         start = workflow.index("  xcode-27-compatibility:")
