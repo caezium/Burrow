@@ -160,11 +160,13 @@ cutting a tag:
 gh workflow run homebrew-tap-credential-check.yml --repo caezium/Burrow
 ```
 
-The check clones the tap with `TAP_PAT` and performs a `git push --dry-run` to a
-unique probe ref. That reaches GitHub's real receive-pack authorization without
-creating a branch or commit; the repository API's `permissions.push` field is
-not sufficient because it describes the account's role rather than a
-fine-grained token's Contents scope. The tag workflow runs this same check
+The check reads the tap's `main` ref, then calls GitHub's write-only
+**Update a reference** endpoint with that exact same SHA. GitHub requires
+fine-grained **Contents: Read and write** permission for the endpoint, while
+the same-SHA request leaves the ref unchanged and creates no branch or commit.
+Neither the repository API's `permissions.push` field nor `git push --dry-run`
+is sufficient: the former describes the account's role and the latter sends no
+update for GitHub to authorize. The tag workflow runs the same same-SHA check
 before any build, signing, or notarization work. Open the run URL printed by
 `gh` and require a successful result.
 
@@ -243,10 +245,11 @@ signing, notarization, stapling, Gatekeeper, Sparkle verification, and GitHub
 publication, then its final tap push received HTTP 403 because the stored
 `TAP_PAT` could read the repository but lacked effective Contents write scope.
 The cask was repaired with the owner credential at tap commit
-`9a2357bf9419b9e39836cd69391dfa2a5d5bd421`; [#324](https://github.com/caezium/Burrow/pull/324)
-replaced the misleading API role check with a non-mutating Git dry-run probe.
-Replace `TAP_PAT` before the next tag and require the manual credential workflow
-to pass.
+`9a2357bf9419b9e39836cd69391dfa2a5d5bd421`. The first correction in
+[#324](https://github.com/caezium/Burrow/pull/324) proved that Git's dry run
+also returns a false positive; the current verifier uses GitHub's Contents-write
+reference endpoint while keeping `main` on its existing SHA. Replace `TAP_PAT`
+before the next tag and require the manual credential workflow to pass.
 
 A real Sparkle update then moved the installed signed app from 0.11.0 build 21
 to 0.11.1 build 22 through the native UI without Terminal or Homebrew. The app

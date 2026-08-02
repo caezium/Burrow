@@ -7,39 +7,32 @@ if [ -z "${GH_TOKEN:-}" ]; then
   exit 1
 fi
 
-if ! gh api repos/caezium/homebrew-tap >/dev/null; then
+if ! current_sha="$(
+  gh api repos/caezium/homebrew-tap/git/ref/heads/main --jq '.object.sha'
+)"; then
   echo "::error::TAP_PAT cannot read caezium/homebrew-tap." >&2
   exit 1
 fi
 
-if ! gh auth setup-git; then
-  echo "::error::Unable to configure Git authentication from TAP_PAT." >&2
-  exit 1
-fi
-
-probe_root="$(
-  mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/burrow-tap-write.XXXXXX"
-)"
-trap 'rm -rf "$probe_root"' EXIT
-tap_dir="$probe_root/tap"
-
-if ! git clone --quiet --depth 1 \
-  https://github.com/caezium/homebrew-tap.git "$tap_dir"; then
-  echo "::error::TAP_PAT cannot clone caezium/homebrew-tap." >&2
-  exit 1
-fi
-
 # The repository API's `.permissions.push` field describes the account's role,
-# not a fine-grained token's Contents scope. Exercise the same receive-pack
-# authorization as the release's final push, but --dry-run guarantees this
-# probe creates no branch or commit on the external tap.
-probe_ref="refs/heads/burrow-release-access-probe-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
-if ! push_output="$(
-  git -C "$tap_dir" push --dry-run origin "HEAD:$probe_ref" 2>&1
+# and `git push --dry-run` does not send an update for GitHub to authorize.
+# GitHub documents the Update a reference endpoint as requiring fine-grained
+# Contents: write. Pointing main at its exact current SHA exercises that write
+# endpoint without moving the ref, creating a commit, or triggering a release.
+if ! verified_sha="$(
+  gh api --method PATCH \
+    repos/caezium/homebrew-tap/git/refs/heads/main \
+    -f sha="$current_sha" \
+    -F force=false \
+    --jq '.object.sha'
 )"; then
-  printf '%s\n' "$push_output" >&2
   echo "::error::TAP_PAT cannot push to caezium/homebrew-tap. Replace it with a fine-grained token scoped only to that repository with Contents: Read and write." >&2
   exit 1
 fi
 
-echo "Homebrew tap write access verified with a non-mutating Git dry run."
+if [ "$verified_sha" != "$current_sha" ]; then
+  echo "::error::Homebrew tap write probe returned an unexpected ref SHA." >&2
+  exit 1
+fi
+
+echo "Homebrew tap write access verified without moving its main ref."
