@@ -160,15 +160,15 @@ cutting a tag:
 gh workflow run homebrew-tap-credential-check.yml --repo caezium/Burrow
 ```
 
-The check reads the tap's `main` ref, creates a uniquely named temporary ref at
-that SHA through GitHub's **Create a reference** endpoint, and immediately
-deletes it. Creating the ref requires fine-grained **Contents: Read and write**
-permission and forces GitHub to authorize a real write; a successful check
-leaves no branch or commit behind. The repository API's `permissions.push`
-field, `git push --dry-run`, and a same-SHA ref update are all insufficient
-because GitHub can accept them without authorizing a change. The tag workflow
-runs the same create-and-delete check before any build, signing, or notarization
-work. Open the run URL printed by `gh` and require a successful result.
+The check clones the tap, pushes a uniquely named temporary ref through the
+same Git transport used by the release, verifies it, and immediately deletes
+it. The real push requires effective **Contents: Read and write** permission; a
+successful check leaves no branch or commit behind. The repository API's
+`permissions.push` field, `git push --dry-run`, and a same-SHA API update are
+all insufficient because GitHub can accept them without authorizing a Git
+write. The tag workflow runs the same create-and-delete check before any build,
+signing, or notarization work. Open the run URL printed by `gh` and require a
+successful result.
 
 After the secrets are stored, move every exported private-key file out of
 Downloads and into the password manager’s encrypted file storage. Keep tested
@@ -242,16 +242,20 @@ The live `caezium/homebrew-tap` cask is 0.11.1 with the same ZIP SHA, has
 `auto_updates true`, preserves quarantine, and contains no `postflight`,
 `xattr -cr`, or unsigned-build warning. The release job passed Developer ID
 signing, notarization, stapling, Gatekeeper, Sparkle verification, and GitHub
-publication, then its final tap push received HTTP 403 because the stored
-`TAP_PAT` could read the repository but lacked effective Contents write scope.
-The cask was repaired with the owner credential at tap commit
+publication, then its final tap push received HTTP 403 because the build step's
+global GitHub URL rewrite made Git authenticate with `ENGINE_PAT` instead of
+the valid `TAP_PAT`. That engine token is deliberately scoped only to the
+private engine repository. The cask was repaired with the owner credential at
+tap commit
 `9a2357bf9419b9e39836cd69391dfa2a5d5bd421`. The first corrections in
 [#324](https://github.com/caezium/Burrow/pull/324) and
 [#326](https://github.com/caezium/Burrow/pull/326) proved that Git's dry run and
-a same-SHA ref update both return false positives. The current verifier creates
-and removes a unique temporary ref, forcing GitHub to authorize a real write.
-Replace `TAP_PAT` before the next tag and require the manual credential workflow
-to pass.
+a same-SHA ref update both return false positives. The current verifier pushes,
+verifies, and removes a unique temporary ref through Git itself, exercising the
+release's actual authentication path. The engine rewrite is now process-scoped,
+and the tap step uses an isolated Git configuration so the two credentials
+cannot cross. Require the manual credential workflow to pass before the next
+tag.
 
 A real Sparkle update then moved the installed signed app from 0.11.0 build 21
 to 0.11.1 build 22 through the native UI without Terminal or Homebrew. The app

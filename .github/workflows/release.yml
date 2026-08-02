@@ -56,6 +56,8 @@ jobs:
       # contents:write, the signing cert, and TAP_PAT, so a moved tag must
       # not be able to run new code here. Comment keeps the version legible.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Require release credentials
         env:
@@ -186,12 +188,14 @@ jobs:
           ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
-          # Let cargo read the private burrow-engine dependency during the conductor build. Set
-          # AFTER the conductor-fetch step (which clones burrow-cli unauthenticated) so this token —
-          # scoped to burrow-engine only — can't 403 that clone. No-op until the vendored burrow-cli
-          # actually carries the git dependency, so it's safe to land ahead of the submodule bump.
+          # Let cargo read the private burrow-engine dependency during the conductor build. Keep
+          # the URL rewrite in this process only: a global rewrite would make the later Homebrew
+          # push authenticate with ENGINE_PAT instead of TAP_PAT. No-op until the vendored
+          # burrow-cli actually carries the git dependency.
           if [ -n "$ENGINE_PAT" ]; then
-            git config --global url."https://x-access-token:${ENGINE_PAT}@github.com/".insteadOf "https://github.com/"
+            export GIT_CONFIG_COUNT=1
+            export GIT_CONFIG_KEY_0="url.https://x-access-token:${ENGINE_PAT}@github.com/.insteadOf"
+            export GIT_CONFIG_VALUE_0="https://github.com/"
           fi
           # Sentry and Sparkle are vendored as checksum-pinned local frameworks
           # (scripts/fetch-{sentry,sparkle}.sh), so SwiftPM has no binary
@@ -489,16 +493,21 @@ jobs:
         run: |
           VERSION="${{ steps.build.outputs.version }}"
           SHA="${{ steps.pkg.outputs.sha }}"
+          SOURCE_ROOT="$PWD"
+          TAP_DIR="$RUNNER_TEMP/homebrew-tap"
+          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/burrow-tap-gitconfig"
+          touch "$GIT_CONFIG_GLOBAL"
           gh auth setup-git
-          git clone "https://github.com/caezium/homebrew-tap.git" tap
+          (cd "$RUNNER_TEMP" && git clone \
+            "https://github.com/caezium/homebrew-tap.git" "$TAP_DIR")
           # This runs only after signing, notarization, stapling, Gatekeeper,
           # and Sparkle verification. The helper also normalizes
           # auto_updates beside the homepage stanza and fails closed if the
           # cask or its security copy has drifted.
-          python3 scripts/update-homebrew-tap.py tap \
+          python3 "$SOURCE_ROOT/scripts/update-homebrew-tap.py" "$TAP_DIR" \
             --version "$VERSION" \
             --sha256 "$SHA"
-          cd tap
+          cd "$TAP_DIR"
           if git diff --quiet; then
             echo "cask already at ${VERSION}; nothing to do"
             exit 0

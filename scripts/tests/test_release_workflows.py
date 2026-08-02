@@ -21,7 +21,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             workflow[verify_tap:build_release],
         )
 
-    def test_manual_tap_check_is_read_only_and_uses_the_same_verifier(self) -> None:
+    def test_manual_tap_check_uses_the_same_isolated_verifier(self) -> None:
         workflow = (WORKFLOWS / "homebrew-tap-credential-check.yml").read_text(
             encoding="utf-8"
         )
@@ -32,19 +32,34 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "run: bash scripts/verify-homebrew-tap-access.sh",
             workflow,
         )
-        self.assertNotIn("git push", workflow)
+        self.assertIn("persist-credentials: false", workflow)
 
-    def test_tap_verifier_creates_and_removes_a_temporary_ref(self) -> None:
+    def test_tap_verifier_pushes_and_removes_a_temporary_ref(self) -> None:
         verifier = (ROOT / "scripts" / "verify-homebrew-tap-access.sh").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("gh api --method POST", verifier)
-        self.assertIn("gh api --method DELETE", verifier)
         self.assertIn("burrow-release-access-probe-", verifier)
-        self.assertIn('-f ref="$probe_ref"', verifier)
-        self.assertIn('-f sha="$current_sha"', verifier)
-        self.assertNotIn("--method PATCH", verifier)
+        self.assertIn('push --quiet origin "HEAD:$probe_ref"', verifier)
+        self.assertIn('push --quiet origin ":$probe_ref"', verifier)
+        self.assertNotIn('push --dry-run origin "HEAD:$probe_ref"', verifier)
+
+    def test_release_does_not_leak_engine_credentials_into_tap_push(self) -> None:
+        workflow = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+        tap_start = workflow.index(
+            "- name: Bump Homebrew cask in caezium/homebrew-tap"
+        )
+        tap_step = workflow[tap_start:]
+
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertIn("export GIT_CONFIG_COUNT=1", workflow)
+        self.assertNotIn("git config --global url.", workflow)
+        self.assertIn(
+            'export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/burrow-tap-gitconfig"',
+            tap_step,
+        )
+        self.assertIn('(cd "$RUNNER_TEMP" && git clone', tap_step)
+        self.assertIn('cd "$TAP_DIR"', tap_step)
 
     def test_xcode_27_preview_lane_is_advisory_and_runs_the_full_suite(self) -> None:
         workflow = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
