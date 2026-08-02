@@ -384,11 +384,12 @@ enum Store {
 
     // MARK: - Telemetry
 
-    /// Anonymous usage + crash-reporting opt-in (active-day counts + app/OS/arch
-    /// breakdown). ON by default and opt-out — flipping it off in Settings sends
-    /// one final opt-out event, then mutes both SDKs (PostHog + Sentry). Their
-    /// local files (random ids, queued events) stay on disk but nothing further
-    /// is sent. No account, no PII, no file contents; see `Telemetry.swift`.
+    /// Anonymous usage + diagnostics opt-in (product events, crash/hang reports,
+    /// release health, and sampled fixed-name performance spans). ON by default
+    /// and opt-out — flipping it off in Settings sends one final opt-out event,
+    /// then mutes the PostHog transport and closes Sentry. Their local random
+    /// ids and any Sentry cache stay on disk, but nothing further is sent. No
+    /// account, no PII, no file contents; see `Telemetry.swift`.
     static var telemetryEnabled: Bool {
         get { d.object(forKey: "telemetry_enabled") as? Bool ?? true }
         set { write(newValue, "telemetry_enabled") }
@@ -628,6 +629,14 @@ enum Store {
     static var telemetryNoticeAcknowledged: Bool {
         get { d.object(forKey: "telemetry_notice_acknowledged") as? Bool ?? false }
         set { write(newValue, "telemetry_notice_acknowledged") }
+    }
+
+    /// The component/app/OS recovery key for which the explanation was shown.
+    /// A changed build can have a different AppKit or updater result, so it
+    /// gets its own notice while repeat launches on one build stay quiet.
+    static var lastCompatibilityNoticeBuild: String {
+        get { d.string(forKey: "last_compatibility_notice_build") ?? "" }
+        set { write(newValue, "last_compatibility_notice_build") }
     }
 
     // MARK: - App updates (Burrow's own self-update)

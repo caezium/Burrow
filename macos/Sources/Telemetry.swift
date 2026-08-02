@@ -2,45 +2,68 @@
 //  Telemetry.swift
 //  Burrow
 //
-//  Product analytics, via PostHog. Answers "how many installs stay active,
-//  on which versions, and which features do people actually use" — so we can
-//  see adoption/retention and where to invest, without an account or anything
-//  that identifies a person.
-//
-//  Privacy rules (enforced here, not just promised):
-//    * OPT-OUT, on by default. `Store.telemetryEnabled` gates everything; the
-//      Settings toggle calls `setEnabled`. When off, the SDK is hard-muted
-//      (`config.optOut`) and `capture` is a no-op.
-//    * No PII. `sanitize()` drops sensitive keys and only lets through
-//      primitives. Sizes/counts/durations are BUCKETED (`bytesBucket` etc.),
-//      never raw values — coarse enough to identify nobody.
-//    * Inert without a key. The PostHog project key is injected at release
-//      time (Info.plist `PHPostHogApiKey`, from a build setting). A dev build
-//      ships it empty, so `start()` returns before any network setup.
-//    * Identity is PostHog's own random distinct id — not derived from the
-//      serial, MAC, hardware, or account.
-//
-//  Crash reporting (Sentry) is a separate concern in `CrashReporter.swift`,
-//  but it follows the same opt-in flag and is started/stopped from here so
-//  there's one switch for "share anonymous data."
+//  Anonymous product analytics sent to PostHog through a deliberately small
+//  first-party transport. All disk and network work runs on a private serial
+//  queue; there is no SDK run-loop timer, remote config, autocapture, replay,
+//  or logging integration in the process.
 //
 
 import Foundation
-import PostHog
 
 enum Telemetry {
 
-    /// One-time guard so a stray second `start()` can't re-init the SDK.
+    enum DeliveryDisposition: Equatable {
+        case delivered
+        case retry
+        case discard
+    }
+
+    private enum Signal {
+        case event(String, [String: Any])
+        case screen(String)
+    }
+
+    private struct DeliveryConfiguration {
+        let projectKey: String
+        let endpoint: URL
+    }
+
+    private static let stateLock = NSLock()
+    private static let workQueue = DispatchQueue(
+        label: "dev.caezium.Burrow.telemetry.posthog",
+        qos: .utility
+    )
+    private static let deliveries = DispatchGroup()
+    private static let timestampFormatter = ISO8601DateFormatter()
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 10
+        configuration.timeoutIntervalForResource = 15
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
+        return URLSession(configuration: configuration)
+    }()
+
     private static var started = false
+    private static var deliveryConfiguration: DeliveryConfiguration?
+    /// Accessed only on `workQueue`.
+    private static var distinctID: String?
+    /// Accessed only on `workQueue`.
+    private static var inFlightTasks: [UUID: URLSessionDataTask] = [:]
+    /// Accessed only on `workQueue`.
+    private static var inFlightOutboxFiles: Set<URL> = []
+    /// Accessed only on `workQueue`. Historical outbox delivery is serialized
+    /// and driven by later semantic events, never by a run-loop timer.
+    private static var outboxRetryInFlight = false
+    /// Accessed only on `workQueue`.
+    private static var outboxRetryFailures = 0
+    /// Accessed only on `workQueue`.
+    private static var nextOutboxRetryAt = Date.distantPast
+    private static let outboxLimit = 64
 
-    /// True once `PostHogSDK.setup` actually ran — i.e. a release key was
-    /// present. `started` alone is set even in keyless dev builds, where
-    /// calling into the never-configured SDK would only produce console
-    /// warnings; every PostHog call below is gated on BOTH.
-    private static var configured = false
-
-    /// The single opt-in switch, persisted in `Store`. Reused as the gate for
-    /// both PostHog and Sentry.
+    /// The single persisted gate shared with Sentry.
     static var isEnabled: Bool {
         get { Store.telemetryEnabled }
         set { Store.telemetryEnabled = newValue }
@@ -48,95 +71,106 @@ enum Telemetry {
 
     // MARK: - Lifecycle
 
-    /// Call once, at launch. Reads the release-injected key; with no key (dev
-    /// builds) it starts crash reporting's no-op path and returns — nothing
-    /// networked. With a key and opt-in, it configures PostHog, registers the
-    /// non-identifying super properties, and emits `app_opened`.
+    /// Installs Sentry synchronously, then schedules PostHog delivery only when
+    /// the release key is present and the user has not opted out. With analytics
+    /// disabled, no PostHog object, identifier, file, or request is created.
     static func start() {
-        guard !started else { return }
+        stateLock.lock()
+        guard !started else {
+            stateLock.unlock()
+            return
+        }
         started = true
 
         let info = Bundle.main.infoDictionary
-        let apiKey = (info?["PHPostHogApiKey"] as? String) ?? ""
+        let projectKey = (info?["PHPostHogApiKey"] as? String) ?? ""
         let host = (info?["PHPostHogHost"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             ?? "https://us.i.posthog.com"
+        if !projectKey.isEmpty, let endpoint = postHogEndpoint(host: host) {
+            deliveryConfiguration = DeliveryConfiguration(projectKey: projectKey, endpoint: endpoint)
+        }
+        let delivery = deliveryConfiguration
+        stateLock.unlock()
 
-        // Crash reporting shares the opt-in flag; safe no-op if no DSN is set.
-        // Stays on the main thread so the crash handler installs at launch.
+        // The crash handler must be installed at launch, before background
+        // service setup. It is a no-op without a release DSN.
         CrashReporter.start(enabled: isEnabled)
 
-        guard !apiKey.isEmpty else { return }  // unconfigured / dev build → no analytics
-
-        // PostHog schedules its periodic-flush Timer on whatever run loop `setup`
-        // runs on. Doing setup on the main thread put that timer on the MAIN run
-        // loop, so every flush ran on main and could hang the UI for >2 s
-        // (App-Hang BURROW-4S: __NSFireTimer → PostHogQueue.flush → take). Set up
-        // off-main so the queue and its timer never touch the main thread; events
-        // still flush by batch size and on quit (Telemetry.flush()).
-        DispatchQueue.global(qos: .utility).async {
-            let config = PostHogConfig(projectToken: apiKey, host: host)
-            config.captureApplicationLifecycleEvents = false  // we emit our own lifecycle events
-            config.captureScreenViews = false                 // AppKit; no autocapture
-            config.optOut = !isEnabled                         // hard-mute the network when opted out
-            // Burrow uses no feature flags; preloading them would add an extra
-            // network call at every launch that TELEMETRY.md doesn't list.
-            config.preloadFeatureFlags = false
-            PostHogSDK.shared.setup(config)
-            configured = true
-
-            guard isEnabled else { return }
-            registerSuperProperties()
-            capture("app_opened", ["cold_start": true])
-        }
+        guard let delivery, isEnabled else { return }
+        CrashReporter.breadcrumb("app_opened", category: "lifecycle")
+        enqueue(.event("app_opened", ["cold_start": true]), using: delivery)
     }
 
-    /// Best-effort flush on quit so the final session's events aren't lost.
+    /// Best-effort termination flush. Every event has already started its own
+    /// background request; this only gives those requests a short grace period.
     static func flush() {
-        guard configured, isEnabled else { return }
-        PostHogSDK.shared.flush()
+        stateLock.lock()
+        let canFlush = started && deliveryConfiguration != nil
+        stateLock.unlock()
+        guard canFlush else { return }
+
+        CrashReporter.withoutAppHangTracking {
+            // Ensure all caller-side enqueue blocks have started their request
+            // before waiting on the in-flight group.
+            workQueue.sync {}
+            _ = deliveries.wait(timeout: .now() + 1)
+        }
     }
 
     // MARK: - Capture
 
-    /// Record an event. No-op unless started AND opted in. Props are sanitized;
-    /// pass already-bucketed values (see the `*Bucket` helpers) for anything
-    /// derived from sizes, counts, or durations.
+    /// Records a fixed-name product event. Properties are sanitized before any
+    /// background work; callers must bucket sizes/counts/durations first.
     static func capture(_ event: String, _ props: [String: Any] = [:]) {
-        guard configured, isEnabled else { return }
-        PostHogSDK.shared.capture(event, properties: sanitize(props))
+        guard DiagnosticPrivacy.isSafeIdentifier(event), isEnabled else { return }
+        let sanitized = DiagnosticPrivacy.sanitize(props)
+        guard let delivery = activeDeliveryConfiguration() else { return }
+
+        CrashReporter.breadcrumb(event, category: "product", data: sanitized)
+        enqueue(.event(event, sanitized), using: delivery)
     }
 
-    // MARK: - Opt-in toggle
+    /// Semantic navigation only. `$screen` contains a fixed pane name, never a
+    /// screenshot, element tree, typed text, window title, or pixel recording.
+    static func screen(_ pane: Pane) {
+        let name: String
+        switch pane {
+        case .home: name = "home"
+        case .settings: name = "settings"
+        case .tool(let tool): name = "tool.\(tool.rawValue)"
+        }
+        guard DiagnosticPrivacy.isSafeIdentifier(name), isEnabled,
+              let delivery = activeDeliveryConfiguration() else { return }
 
-    /// Flip the shared "share anonymous data" switch. Symmetric for PostHog and
-    /// Sentry. On opt-out we send one final explicit signal, flush, then mute.
+        CrashReporter.breadcrumb("screen_viewed", category: "navigation", data: ["screen": name])
+        enqueue(.screen(name), using: delivery)
+    }
+
+    // MARK: - Opt-out toggle
+
+    /// Applies the shared switch immediately. A launch that begins opted out
+    /// performs no PostHog request. When an enabled user turns it off, one final
+    /// fixed opt-out event is queued before all subsequent events are rejected.
     static func setEnabled(_ enabled: Bool) {
         let previous = isEnabled
+        guard previous != enabled else { return }
+
         isEnabled = enabled
         CrashReporter.setEnabled(enabled)
+        guard let delivery = configuredDelivery() else { return }
 
-        guard configured else { return }
         if enabled {
-            PostHogSDK.shared.optIn()
-            // start() only registers these when launched enabled — an
-            // opt-in mid-session must add them too, or every event until
-            // relaunch goes out missing the promised app/OS/arch context.
-            registerSuperProperties()
-            if previous != enabled { capture("telemetry_opt_in_changed", ["enabled": true]) }
+            capture("telemetry_opt_in_changed", ["enabled": true])
         } else {
-            if previous != enabled {
-                // Bypass the (now-false) `isEnabled` gate for this one event so
-                // the opt-out itself is recorded, then flush before muting.
-                PostHogSDK.shared.capture("telemetry_opt_in_changed", properties: ["enabled": false])
-                PostHogSDK.shared.flush()
+            workQueue.async {
+                cancelInFlightDeliveries()
+                sendNow(.event("telemetry_opt_in_changed", ["enabled": false]), using: delivery)
             }
-            PostHogSDK.shared.optOut()
         }
     }
 
     // MARK: - Bucketing (never send raw sizes/counts/durations)
 
-    /// Reclaimable/used bytes → a coarse magnitude bucket.
     static func bytesBucket(_ bytes: Int64) -> String {
         let mb = Double(bytes) / 1_000_000
         switch mb {
@@ -149,7 +183,6 @@ enum Telemetry {
         }
     }
 
-    /// Item/file counts → a coarse bucket.
     static func countBucket(_ n: Int) -> String {
         switch n {
         case ..<1:    return "0"
@@ -160,7 +193,6 @@ enum Telemetry {
         }
     }
 
-    /// Seconds → a coarse duration bucket.
     static func secondsBucket(_ s: Double) -> String {
         switch s {
         case ..<1:   return "<1s"
@@ -171,59 +203,341 @@ enum Telemetry {
         }
     }
 
-    // MARK: - Internals
+    // MARK: - Background transport
 
-    private static func registerSuperProperties() {
-        let info = Bundle.main.infoDictionary
-        // Fully qualified: Burrow has its own `ProcessInfo` model that would
-        // otherwise shadow Foundation's here.
-        let v = Foundation.ProcessInfo.processInfo.operatingSystemVersion
-        PostHogSDK.shared.register([
-            // Keep events anonymous: PostHog uses this in place of the
-            // connection IP, so no real IP is stored and GeoIP is skipped.
-            // Belt-and-suspenders with "Discard client IP data" in the project.
-            "$ip":          "0",
-            "app_version":  (info?["CFBundleShortVersionString"] as? String) ?? "?",
-            "build_number": (info?["CFBundleVersion"] as? String) ?? "?",
-            "os_version":   "macOS \(v.majorVersion).\(v.minorVersion).\(v.patchVersion)",
-            "arch":         cpuArch(),
-            "locale":       Locale.current.identifier,
-        ])
+    private static func activeDeliveryConfiguration() -> DeliveryConfiguration? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard started, isEnabled else { return nil }
+        return deliveryConfiguration
     }
 
-    /// Defense in depth: even if a caller fat-fingers a sensitive value into an
-    /// event, drop known-sensitive keys and anything non-primitive.
-    private static func sanitize(_ props: [String: Any]) -> [String: Any] {
-        let blocked: Set<String> = [
-            "api_key", "token", "authorization", "password", "secret",
-            "file_path", "path", "url", "home", "home_dir", "username",
-            "user", "email", "clipboard", "file_name", "contents",
+    private static func configuredDelivery() -> DeliveryConfiguration? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard started else { return nil }
+        return deliveryConfiguration
+    }
+
+    private static func enqueue(_ signal: Signal, using delivery: DeliveryConfiguration) {
+        workQueue.async {
+            // Re-check at execution time so a queued event cannot escape after
+            // the user flips the switch off.
+            guard isEnabled else { return }
+            drainOutbox(using: delivery)
+            sendNow(signal, using: delivery)
+        }
+    }
+
+    /// Runs exclusively on `workQueue`; JSON encoding, identifier disk I/O,
+    /// and URLSession request construction never block AppKit's main thread.
+    private static func sendNow(_ signal: Signal, using delivery: DeliveryConfiguration) {
+        let event: String
+        var properties: [String: Any]
+        switch signal {
+        case .event(let name, let supplied):
+            event = name
+            properties = supplied
+        case .screen(let name):
+            event = "$screen"
+            properties = ["$screen_name": name]
+        }
+
+        properties.merge(superProperties()) { current, _ in current }
+        let now = timestampFormatter.string(from: Date())
+        let eventPayload: [String: Any] = [
+            "event": event,
+            "distinct_id": resolveDistinctID(projectKey: delivery.projectKey),
+            "properties": properties,
+            "timestamp": now,
+            "uuid": UUID().uuidString.lowercased(),
         ]
-        var out: [String: Any] = [:]
-        for (k, v) in props {
-            if blocked.contains(k) { continue }
-            if v is Int || v is Int64 || v is Double || v is Bool {
-                out[k] = v
-            } else {
-                // Strings (and coerced enum labels) get a value-level check
-                // too: a path smuggled under a non-blocked key must still
-                // never leave the Mac.
-                let s = (v as? String) ?? String(describing: v)
-                out[k] = s.contains("/Users/") ? "<redacted>" : s
+        let payload: [String: Any] = [
+            "api_key": delivery.projectKey,
+            "batch": [eventPayload],
+            "sent_at": now,
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+
+        let outboxFile = persistToOutbox(body)
+        deliver(body, outboxFile: outboxFile, isOutboxRetry: false, using: delivery)
+    }
+
+    private static func deliver(
+        _ body: Data,
+        outboxFile: URL?,
+        isOutboxRetry: Bool,
+        using delivery: DeliveryConfiguration
+    ) {
+        if let outboxFile {
+            guard !inFlightOutboxFiles.contains(outboxFile) else { return }
+            inFlightOutboxFiles.insert(outboxFile)
+        }
+
+        var request = URLRequest(url: delivery.endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.setValue("Burrow/\(RuntimeEnvironment.current.appVersion)", forHTTPHeaderField: "User-Agent")
+        request.httpBody = body
+
+        let requestID = UUID()
+        deliveries.enter()
+        let task = session.dataTask(with: request) { _, response, error in
+            let status = (response as? HTTPURLResponse)?.statusCode
+            let disposition = deliveryDisposition(statusCode: status, hasTransportError: error != nil)
+            workQueue.async {
+                inFlightTasks.removeValue(forKey: requestID)
+                if let outboxFile {
+                    inFlightOutboxFiles.remove(outboxFile)
+                    if disposition != .retry {
+                        try? FileManager.default.removeItem(at: outboxFile)
+                    }
+                }
+                if isOutboxRetry {
+                    outboxRetryInFlight = false
+                    switch disposition {
+                    case .delivered, .discard:
+                        outboxRetryFailures = 0
+                        nextOutboxRetryAt = .distantPast
+                    case .retry:
+                        outboxRetryFailures += 1
+                        nextOutboxRetryAt = Date().addingTimeInterval(
+                            retryDelay(afterFailure: outboxRetryFailures)
+                        )
+                    }
+                }
+                deliveries.leave()
             }
         }
-        return out
+        inFlightTasks[requestID] = task
+        task.resume()
     }
 
-    /// "arm64" (Apple Silicon) vs "x86_64" (Intel) — a useful product split,
-    /// and coarse enough to identify nobody.
-    private static func cpuArch() -> String {
-        var sys = utsname()
-        uname(&sys)
-        let machine = withUnsafeBytes(of: &sys.machine) { raw -> String in
-            let ptr = raw.baseAddress!.assumingMemoryBound(to: CChar.self)
-            return String(cString: ptr)
+    /// A bounded disk outbox makes startup/update breadcrumbs survive a lost
+    /// network or forced reboot. It is touched only while telemetry is enabled,
+    /// and contains the same already-sanitized JSON that is sent to PostHog.
+    private static func persistToOutbox(_ body: Data) -> URL? {
+        guard let directory = applicationSupportDirectory()?.appendingPathComponent(
+            "telemetry-outbox",
+            isDirectory: true
+        ) else { return nil }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let existing = outboxFiles(in: directory)
+        var remainingCount = existing.count
+        if remainingCount >= outboxLimit {
+            for file in existing where remainingCount >= outboxLimit {
+                guard !inFlightOutboxFiles.contains(file) else { continue }
+                try? FileManager.default.removeItem(at: file)
+                remainingCount -= 1
+            }
         }
-        return machine.isEmpty ? "?" : machine
+        guard remainingCount < outboxLimit else { return nil }
+
+        let fileURL = directory.appendingPathComponent("\(UUID().uuidString.lowercased()).json")
+        do {
+            try body.write(to: fileURL, options: .atomic)
+            return fileURL
+        } catch {
+            return nil
+        }
+    }
+
+    private static func drainOutbox(using delivery: DeliveryConfiguration) {
+        guard !outboxRetryInFlight, Date() >= nextOutboxRetryAt else { return }
+        guard let directory = applicationSupportDirectory()?.appendingPathComponent(
+            "telemetry-outbox",
+            isDirectory: true
+        ) else { return }
+
+        // Retry at most one historical event at a time. This prevents a full
+        // 64-item outbox from turning one product event into 65 requests during
+        // an outage; later semantic events advance the drain after backoff.
+        for file in outboxFiles(in: directory) where !inFlightOutboxFiles.contains(file) {
+            guard let body = try? Data(contentsOf: file) else {
+                try? FileManager.default.removeItem(at: file)
+                continue
+            }
+            outboxRetryInFlight = true
+            deliver(body, outboxFile: file, isOutboxRetry: true, using: delivery)
+            return
+        }
+    }
+
+    private static func outboxFiles(in directory: URL) -> [URL] {
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey]
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        return files
+            .filter { $0.pathExtension == "json" }
+            .sorted {
+                let lhs = try? $0.resourceValues(forKeys: keys).contentModificationDate
+                let rhs = try? $1.resourceValues(forKeys: keys).contentModificationDate
+                return (lhs ?? .distantPast) < (rhs ?? .distantPast)
+            }
+    }
+
+    private static func cancelInFlightDeliveries() {
+        for task in inFlightTasks.values { task.cancel() }
+    }
+
+    static func deliveryDisposition(
+        statusCode: Int?,
+        hasTransportError: Bool
+    ) -> DeliveryDisposition {
+        if hasTransportError || statusCode == nil { return .retry }
+        guard let statusCode else { return .retry }
+        if (200 ... 299).contains(statusCode) { return .delivered }
+        if statusCode == 408 || statusCode == 425 || statusCode == 429 || statusCode >= 500 {
+            return .retry
+        }
+        // Redirects have already been followed by URLSession. Any remaining
+        // 3xx/4xx is a permanent payload/auth/configuration rejection; keeping
+        // it would retry forever and eventually crowd out useful new events.
+        return .discard
+    }
+
+    static func retryDelay(afterFailure failure: Int) -> TimeInterval {
+        let exponent = min(max(failure - 1, 0), 7)
+        return min(30 * pow(2, Double(exponent)), 3_600)
+    }
+
+    private static func superProperties() -> [String: Any] {
+        let environment = RuntimeEnvironment.current
+        return [
+            // PostHog uses this instead of the connection IP, which disables
+            // IP persistence and GeoIP enrichment for the event.
+            "$ip": "0",
+            "$lib": "burrow-macos",
+            "$lib_version": environment.appVersion,
+            "$process_person_profile": false,
+            "platform": "macos",
+            "app_version": environment.appVersion,
+            "build_number": environment.appBuild,
+            "os_version": environment.osVersion,
+            "os_build": environment.osBuild,
+            "os_prerelease": environment.isPrereleaseOS,
+            "arch": environment.architecture,
+            "locale": Locale.current.identifier,
+        ]
+    }
+
+    static func postHogEndpoint(host: String) -> URL? {
+        guard let base = URL(string: host),
+              base.scheme == "https",
+              base.host != nil,
+              base.user == nil,
+              base.password == nil,
+              base.query == nil,
+              base.fragment == nil else { return nil }
+        return base.appendingPathComponent("batch")
+    }
+
+    /// Stable random install id, resolved only after telemetry is enabled. For
+    /// existing 0.11.0 installs, migrate the UUID created by posthog-ios so an
+    /// updater release does not split retention and update funnels.
+    private static func resolveDistinctID(projectKey: String) -> String {
+        if let distinctID { return distinctID }
+
+        guard let directory = applicationSupportDirectory() else {
+            let generated = UUID().uuidString.lowercased()
+            distinctID = generated
+            return generated
+        }
+        let fileURL = directory.appendingPathComponent("telemetry-id")
+        if let existing = try? String(contentsOf: fileURL, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           let normalized = normalizedAnonymousID(existing) {
+            distinctID = normalized
+            return normalized
+        }
+
+        if let root = applicationSupportRoot(),
+           let migrated = migrateLegacyPostHogAnonymousID(
+               projectKey: projectKey,
+               applicationSupportRoot: root,
+               destination: fileURL
+           ) {
+            distinctID = migrated
+            return migrated
+        }
+
+        let generated = UUID().uuidString.lowercased()
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? Data(generated.utf8).write(to: fileURL, options: .atomic)
+        distinctID = generated
+        return generated
+    }
+
+    /// posthog-ios 3.x stored its anonymous UUID as a tiny JSON object under
+    /// Application Support/<bundle id>/<project key>/posthog.anonymousId.
+    /// Read only that exact, bounded file and accept only a UUID before copying
+    /// it into Burrow's first-party transport location.
+    @discardableResult
+    static func migrateLegacyPostHogAnonymousID(
+        projectKey: String,
+        applicationSupportRoot: URL,
+        destination: URL
+    ) -> String? {
+        guard isSafePostHogProjectKey(projectKey) else { return nil }
+        let source = applicationSupportRoot
+            .appendingPathComponent("dev.caezium.Burrow", isDirectory: true)
+            .appendingPathComponent(projectKey, isDirectory: true)
+            .appendingPathComponent("posthog.anonymousId")
+        guard let values = try? source.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
+              values.isRegularFile == true,
+              let size = values.fileSize,
+              (1 ... 1_024).contains(size),
+              let data = try? Data(contentsOf: source),
+              let decoded = try? JSONSerialization.jsonObject(with: data),
+              let object = decoded as? [String: Any],
+              let rawID = object["posthog.anonymousId"] as? String,
+              let anonymousID = normalizedAnonymousID(rawID) else { return nil }
+
+        do {
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data(anonymousID.utf8).write(to: destination, options: .atomic)
+            return anonymousID
+        } catch {
+            return nil
+        }
+    }
+
+    private static func normalizedAnonymousID(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let uuid = UUID(uuidString: trimmed) else { return nil }
+        return uuid.uuidString.lowercased()
+    }
+
+    private static func isSafePostHogProjectKey(_ value: String) -> Bool {
+        let bytes = value.utf8
+        guard (1 ... 256).contains(bytes.count) else { return false }
+        return bytes.allSatisfy { byte in
+            (48 ... 57).contains(byte)
+                || (65 ... 90).contains(byte)
+                || (97 ... 122).contains(byte)
+                || byte == 45
+                || byte == 95
+        }
+    }
+
+    private static func applicationSupportDirectory() -> URL? {
+        applicationSupportRoot()?.appendingPathComponent("Burrow", isDirectory: true)
+    }
+
+    private static func applicationSupportRoot() -> URL? {
+        FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first
     }
 }

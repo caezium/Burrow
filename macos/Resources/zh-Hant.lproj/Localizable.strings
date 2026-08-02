@@ -412,7 +412,7 @@
 "OFF by default. Agents can always read metrics and run dry-run previews. With this on, an agent can run a real `mo clean` / `optimize` / `uninstall` — but ONLY when it also passes an explicit confirm flag, so a deletion is never one stray sentence away. Turn it off and agents are read-only again. Data stays on this Mac." = "預設為關閉。AI 代理永遠可以讀取指標並執行模擬預覽。開啟後，代理可以真正執行 `mo clean` / `optimize` / `uninstall` — 但必須同時傳入明確的確認旗標，因此絕不會因一句話就誤刪。關閉後代理即恢復唯讀。資料始終留在這台 Mac 上。";
 "Runs against a local Ollama model — nothing leaves this Mac. Start it with `ollama run <model>`." = "在本機的 Ollama 模型上執行 — 資料不會離開這台 Mac。用 `ollama run <model>` 啟動。";
 "Any OpenAI-compatible server. For LM Studio: load a model, open Developer ▸ Start Server, and leave the key blank — the default URL is already LM Studio's. A hosted endpoint (e.g. OpenAI) needs a key and sends the metrics summary off-device (never file contents)." = "任何相容 OpenAI 的伺服器。LM Studio：載入模型，開啟 Developer ▸ Start Server，金鑰留空 — 預設 URL 就是 LM Studio 的。託管端點（例如 OpenAI）需要金鑰，且會將指標摘要送出裝置（絕不會傳送檔案內容）。";
-"Sparkle checks Burrow's signed update feed on launch and about once a day. It asks before downloading or installing anything." = "Sparkle 會在啟動時及大約每天一次檢查 Burrow 的簽名更新來源。下載或安裝前都會先詢問。";
+"Sparkle checks Burrow's signed update feed after startup settles and about once a day. It asks before downloading or installing anything." = "Sparkle 會在啟動穩定後及大約每天一次檢查 Burrow 的簽名更新來源。下載或安裝前都會先詢問。";
 "Check for updates automatically" = "自動檢查更新";
 "Check for Updates" = "檢查更新";
 "About Burrow" = "關於 Burrow";
@@ -449,8 +449,16 @@
 /* ===== parity backfill (2026-06): audit/consent/installer strings (zh-Hant, Taiwan) ===== */
 "Anonymous usage" = "匿名使用情況";
 "Share anonymous usage & crash reports" = "分享匿名使用情況與當機報告";
+"Share anonymous usage & diagnostics" = "分享匿名使用情況與診斷資料";
 "Share anonymous usage & crash reports?" = "分享匿名使用情況與當機報告？";
 "Sends anonymous product analytics (PostHog) and crash reports (Sentry): a random install id (not tied to you or your hardware), the app + macOS version, CPU type, and which features you use — with sizes and counts bucketed. Never file names, contents, paths, or your metrics. It helps gauge retention and catch crashes. On by default; turn it off and both stop. Full list in TELEMETRY.md." = "傳送匿名產品分析（PostHog）與當機報告（Sentry）：一個隨機安裝 ID（與你本人和硬體無關）、應用程式與 macOS 版本、CPU 類型，以及你使用了哪些功能 — 大小與數量都按區間歸檔。絕不包含檔案名稱、檔案內容、路徑或你的指標資料。它用於了解留存並發現當機。預設開啟；關閉後兩者都會停止。完整列表見 TELEMETRY.md。";
+"Sends anonymous product analytics (PostHog) plus crash, hang, startup, update, and sampled performance diagnostics (Sentry): random install IDs, app and exact macOS build, CPU type, screens and features used, and fixed-name diagnostic milestones. Never screenshots, screen recordings, your file names, contents, user paths, URLs, or metrics. On by default; turn it off and both stop. Full list in TELEMETRY.md." = "傳送匿名產品分析（PostHog），以及當機、卡住、啟動、更新與抽樣效能診斷（Sentry）：包括隨機安裝 ID、App 與精確的 macOS 組建版本、CPU 類型、使用的畫面和功能，以及固定名稱的診斷節點。絕不包含螢幕截圖、螢幕錄影、你的檔案名稱、檔案內容、使用者路徑、URL 或指標資料。預設開啟；關閉後兩者都會停止。完整列表見 TELEMETRY.md。";
+"Burrow started in compatibility mode" = "Burrow 已以相容模式啟動";
+"Burrow detected that creating its menu bar item could freeze this macOS build. The menu bar item is disabled on this build, and Burrow will stay available in the Dock. Updating macOS will automatically retry the normal menu bar mode." = "Burrow 偵測到在此 macOS 組建版本中建立選單列項目可能導致系統卡住。此組建版本已停用選單列項目，Burrow 仍可從 Dock 使用。更新 macOS 後，Burrow 會自動重試正常的選單列模式。";
+"Burrow detected that creating its menu bar item could freeze this macOS build. The menu bar item and automatic update checks are paused on this build, and Burrow will stay available in the Dock. Manual update checks remain available. Updating macOS will automatically retry the normal mode." = "Burrow 偵測到在此 macOS 版本上建立選單列項目可能導致系統卡住。此版本上的選單列項目與自動更新檢查已暫停，Burrow 將繼續顯示在 Dock 中。你仍可手動檢查更新。更新 macOS 後將自動重試正常模式。";
+"Burrow paused automatic update checks" = "Burrow 已暫停自動更新檢查";
+"Burrow detected that its automatic updater did not reach a stable state on the previous launch. Automatic checks are paused for this app and macOS build so the same startup problem cannot repeat. You can still check manually; updating Burrow or macOS will retry automatic checks." = "Burrow 偵測到自動更新程式在上次啟動時未能達到穩定狀態。為避免相同的啟動問題再次發生，目前 App 與 macOS 版本的自動檢查已暫停。你仍可手動檢查；更新 Burrow 或 macOS 後將重試自動檢查。";
+"Copy Diagnostics" = "複製診斷資訊";
 "Helps prioritize fixes: app/OS version, coarse bucketed feature counts, and crash traces. Never files, paths, file contents, or your metrics — the exact list is in TELEMETRY.md. You can change this anytime in Settings → Anonymous usage." = "協助確定修復優先順序：應用程式/系統版本、按區間歸檔的功能使用次數與當機記錄。絕不包含檔案、路徑、檔案內容或你的指標資料 — 完整列表見 TELEMETRY.md。可隨時在「設定 → 匿名使用情況」中變更。";
 "Share" = "分享";
 "Don't Share" = "不分享";

@@ -23,25 +23,16 @@ settings:
     CODE_SIGNING_ALLOWED: NO
     DEAD_CODE_STRIPPING: YES
 
-# Telemetry SDKs. Product analytics (PostHog) + crash reporting (Sentry).
-# Both are inert unless a release injects keys (see the per-target settings
-# below): a plain `xcodegen + xcodebuild` dev build ships with empty keys and
-# never touches either network.
-# PostHog is pinned EXACTLY (not `from:`): the .xcodeproj — and with it the
-# only Package.resolved — is gitignored, so a range would let every CI release
-# resolve whatever the latest compatible SDK is at build time. The exact pin
-# keeps releases reproducible from a tag; bump deliberately.
-packages:
-  PostHog:
-    url: https://github.com/PostHog/posthog-ios
-    exactVersion: 3.59.3
+# Telemetry. PostHog analytics use Burrow's small background HTTPS transport;
+# Sentry is the only telemetry SDK. Both paths are inert unless a release
+# injects keys below, so a plain dev build never touches either network.
 # Sentry is NOT an SPM package: SPM eagerly downloads ALL of sentry-cocoa's
 # binary xcframework variants during resolution (Sentry, -Dynamic, -WithARM64e,
 # …, ~500 MB), and on the release runner that download hard-hangs xcodebuild
 # (curl pulls the same artifact in <1s — it's an SPM-downloader problem). So we
 # vendor only the one static Sentry.xcframework we actually use, fetched by
-# scripts/fetch-sentry.sh (curl), and link it directly. Pin matches the old SPM
-# exactVersion. Crash reporting (CrashReporter.swift) is unchanged.
+# scripts/fetch-sentry.sh (curl), and link it directly. The version is pinned;
+# CrashReporter.swift owns the explicit privacy, hang, trace, and profile policy.
 # Sparkle is also a local framework: its Swift package wraps a binary artifact,
 # and that artifact-resolution step hard-hung both v0.11.0 release attempts.
 # scripts/fetch-sparkle.sh downloads the official 2.9.4 release archive with a
@@ -107,7 +98,6 @@ targets:
         POSTHOG_HOST: "https://us.i.posthog.com"
         SENTRY_DSN: ""
     dependencies:
-      - package: PostHog
       - framework: vendor/Sparkle.framework
         embed: true
       - framework: vendor/Sentry.xcframework

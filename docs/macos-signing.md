@@ -247,13 +247,15 @@ signed feed entry.
 
 ## Telemetry and signing
 
-Signing and notarization do not require new in-app telemetry. CI records only
+Signing and notarization do not require in-app telemetry. CI records only
 release-operational evidence in the private Actions log: the number of signed
 Mach-O files, certificate authority and team ID, Apple submission ID/status,
-stapler result, and Gatekeeper verdict. No new PostHog or Sentry event is added.
+stapler result, and Gatekeeper verdict.
 
-Burrow’s existing opt-out telemetry behavior remains unchanged. The checked-in
-privacy manifest is the store-facing declaration, while
+Burrow independently records fixed-name Sparkle update milestones and sampled
+launch diagnostics through its existing opt-out switch; those events contain
+no signing credential, submission ID, request URL, or certificate detail. The
+checked-in privacy manifest is the store-facing declaration, while
 [`TELEMETRY.md`](../TELEMETRY.md) remains the human-readable source of truth.
 
 ## Mac App Store later

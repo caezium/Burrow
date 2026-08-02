@@ -360,6 +360,12 @@ tag builds use the private Developer ID identity and Apple notarization.
 
 Burrow lives in the menu bar (it's a menu-bar agent). Click the icon → **Open
 Burrow** — or turn the menu-bar icon off in Settings to run it as a Dock app.
+If a macOS build freezes while Burrow creates that status item, the next launch
+stays in Dock-based compatibility mode on the same OS build and offers a
+one-click redacted diagnostic report. Automatic Sparkle startup waits until
+the status item is stable; if the updater then fails its own stability window,
+later automatic checks pause for that app/OS build while manual checks remain
+available. Updating Burrow or macOS retries the guarded path.
 
 ### Windows preview build
 
@@ -387,9 +393,11 @@ unsigned Inno Setup installer, creates a portable ZIP fallback, writes
 Burrow drives a bundled, open-source Mole engine (an MIT fork of `mo`). The honest privacy picture:
 
 - **No accounts, no ads.** Your metrics, history, and file contents stay on
-  your machine. The macOS app sends opt-out, anonymous usage analytics and crash
-  reports (no files, paths, metrics, or stored IP — sizes/counts are
-  bucketed); turn it off in Settings. Full list in **[TELEMETRY.md](TELEMETRY.md)**.
+  your machine. The macOS app sends opt-out anonymous usage plus crash, hang,
+  startup, update, and sampled performance diagnostics. It sends no screen
+  recordings, user files, user paths, metrics, or stored IP; turn it off in
+  Settings. PostHog delivery and its bounded sanitized retry outbox run entirely
+  off AppKit's main thread. Full list in **[TELEMETRY.md](TELEMETRY.md)**.
 - **No background root helper.** When Clean/Optimize need admin rights, macOS's
   own dialog asks you and Burrow runs that one `mo` command, then exits — you
   approve every elevation.

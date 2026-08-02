@@ -319,7 +319,7 @@ struct SettingsView: View {
                 toggleRow("Check for updates automatically", isOn: $autoCheckUpdates) { on in
                     AppUpdate.shared.setAutomaticChecks(on)
                 }
-                Text("Sparkle checks Burrow's signed update feed on launch and about once a day. It asks before downloading or installing anything.")
+                Text("Sparkle checks Burrow's signed update feed after startup settles and about once a day. It asks before downloading or installing anything.")
                     .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
@@ -591,10 +591,10 @@ struct SettingsView: View {
             }
 
             section("Anonymous usage", "chart.bar") {
-                toggleRow("Share anonymous usage & crash reports", isOn: $telemetryEnabled) { on in
+                toggleRow("Share anonymous usage & diagnostics", isOn: $telemetryEnabled) { on in
                     Telemetry.setEnabled(on)
                 }
-                footnote("Sends anonymous product analytics (PostHog) and crash reports (Sentry): a random install id (not tied to you or your hardware), the app + macOS version, CPU type, and which features you use — with sizes and counts bucketed. Never file names, contents, paths, or your metrics. It helps gauge retention and catch crashes. On by default; turn it off and both stop. Full list in TELEMETRY.md.")
+                footnote("Sends anonymous product analytics (PostHog) plus crash, hang, startup, update, and sampled performance diagnostics (Sentry): random install IDs, app and exact macOS build, CPU type, screens and features used, and fixed-name diagnostic milestones. Never screenshots, screen recordings, your file names, contents, user paths, URLs, or metrics. On by default; turn it off and both stop. Full list in TELEMETRY.md.")
             }
 
             section("Touch ID for sudo", "touchid") {

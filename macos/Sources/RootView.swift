@@ -22,6 +22,40 @@ extension Notification.Name {
     static let burrowWindowVisibility = Notification.Name("dev.caezium.burrow.windowVisibility")
 }
 
+struct ScreenTelemetryDeduper {
+    private var isVisible = true
+    private var presentation = 0
+    private var lastEmittedPresentation = -1
+    private var lastEmittedPane: Pane?
+
+    mutating func appeared(on pane: Pane) -> Bool {
+        isVisible = true
+        return shouldEmit(pane)
+    }
+
+    mutating func paneChanged(to pane: Pane) -> Bool {
+        guard isVisible else { return false }
+        return shouldEmit(pane)
+    }
+
+    mutating func visibilityChanged(to visible: Bool, pane: Pane) -> Bool {
+        let wasVisible = isVisible
+        isVisible = visible
+        guard visible, !wasVisible else { return false }
+        presentation += 1
+        return shouldEmit(pane)
+    }
+
+    private mutating func shouldEmit(_ pane: Pane) -> Bool {
+        guard lastEmittedPresentation != presentation || lastEmittedPane != pane else {
+            return false
+        }
+        lastEmittedPresentation = presentation
+        lastEmittedPane = pane
+        return true
+    }
+}
+
 struct RootView: View {
     let db: DB
     let producer: SnapshotProducer
@@ -33,6 +67,7 @@ struct RootView: View {
     /// for an installed-but-hidden hierarchy, so Home/Settings would keep
     /// polling forever behind a closed window without this flag.
     @State private var windowVisible = true
+    @State private var screenTelemetry = ScreenTelemetryDeduper()
     /// The ambient Full Disk Access state (issue #3, demoted from blocking
     /// gates). Probed at mount and on every app activation, so granting
     /// access in System Settings dismisses the banner by itself.
@@ -106,9 +141,13 @@ struct RootView: View {
         .frame(minWidth: 940, minHeight: 640)
         .animation(.easeInOut(duration: 0.22), value: pane)
         // Sample fast only while a live metrics pane is on screen.
-        .onAppear { producer.setForeground(Self.isMetricsPane(pane)) }
+        .onAppear {
+            producer.setForeground(Self.isMetricsPane(pane))
+            if screenTelemetry.appeared(on: pane) { Telemetry.screen(pane) }
+        }
         .onChange(of: pane) { _, p in
-            producer.setForeground(Self.isMetricsPane(p))
+            producer.setForeground(windowVisible && Self.isMetricsPane(p))
+            if screenTelemetry.paneChanged(to: p) { Telemetry.screen(p) }
             if p != .settings { lastNonSettingsPane = p }
             if case .tool(let t) = p { visitedTools.insert(t) }
         }
@@ -117,8 +156,12 @@ struct RootView: View {
             if let p = note.object as? Pane { pane = Self.normalize(p) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .burrowWindowVisibility)) { note in
-            if let visible = note.object as? Bool { windowVisible = visible }
+            guard let visible = note.object as? Bool else { return }
+            windowVisible = visible
             producer.setForeground(windowVisible && Self.isMetricsPane(pane))
+            if screenTelemetry.visibilityChanged(to: visible, pane: pane) {
+                Telemetry.screen(pane)
+            }
         }
         // Re-probe FDA whenever the user comes back from System Settings —
         // the banner auto-dismisses the moment access is granted.

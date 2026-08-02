@@ -25,4 +25,9 @@ final class UpdateCheckTests: XCTestCase {
         XCTAssertFalse(UpdateCheck.isNewer("v0.6.7", than: "v0.6.7"))
     }
 
+    func testAutomaticCheckToggleStartsUpdaterOnlyWhenEnabled() {
+        XCTAssertFalse(UpdateStartPolicy.shouldStartForAutomaticChecks(enabled: false))
+        XCTAssertTrue(UpdateStartPolicy.shouldStartForAutomaticChecks(enabled: true))
+    }
+
 }

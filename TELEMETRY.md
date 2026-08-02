@@ -8,10 +8,10 @@ is the detail.
 
 ## What and who
 
-| Concern | SDK | Host (default) |
+| Concern | Client | Host (default) |
 |---|---|---|
-| Product analytics | [PostHog](https://posthog.com) | `us.i.posthog.com` |
-| Crash / error reporting | [Sentry](https://sentry.io) | `*.ingest.us.sentry.io` (from the release DSN) |
+| Product analytics | Burrow's background HTTPS transport → [PostHog](https://posthog.com) | `us.i.posthog.com` |
+| Crash / error reporting | [Sentry Cocoa](https://sentry.io) | `*.ingest.us.sentry.io` (from the release DSN) |
 
 Client code: [`macos/Sources/Telemetry.swift`](macos/Sources/Telemetry.swift)
 (PostHog) and [`macos/Sources/CrashReporter.swift`](macos/Sources/CrashReporter.swift)
@@ -24,94 +24,158 @@ Performance, and Other Diagnostic Data for app functionality. Every category
 is unlinked and non-tracking. The manifest changes no collection behavior; it
 describes the opt-out behavior enforced below.
 
-Sparkle update checks are operational network traffic, not telemetry. Sparkle
-requests the signed `appcast.xml` asset from GitHub and, after user approval,
-the signed release ZIP; Burrow adds no analytics event, device profile, or
-identifier to those requests. Sparkle system profiling is explicitly disabled
-with `SUEnableSystemProfiling=false`; GitHub necessarily sees the request IP at
-the network layer. Signing and notarization add no PostHog or Sentry event and
-do not require another privacy-manifest data category.
+Sparkle update checks are operational network traffic. Sparkle requests the
+signed `appcast.xml` asset from GitHub and, after user approval, the signed
+release ZIP; Burrow adds no identifier or device profile to those requests.
+Burrow separately records fixed-name update milestones such as
+`update_found`, `update_download_failed`, and `update_install_started` through
+the opt-out telemetry pipeline. Depending on the milestone, properties contain
+only the update version, check source, result, and error domain/code. Sparkle
+system profiling is explicitly disabled with `SUEnableSystemProfiling=false`;
+GitHub necessarily sees the request IP at the network layer. Signing and
+notarization themselves add no telemetry and require no additional
+privacy-manifest category.
 
-Unlike PostHog's fixed host, Sentry has no separate host setting — the ingest
-endpoint is encoded in the **DSN injected at release time**. For official
-builds that's the maintainer's Sentry project; a fork built with its own DSN
-reports to its own project instead.
+PostHog's host defaults to `https://us.i.posthog.com` and can be replaced by a
+release build setting. Sentry has no separate host setting: its ingest endpoint
+is encoded in the **DSN injected at release time**. For official builds that's
+the maintainer's Sentry project; a fork built with its own DSN reports to its
+own project instead.
 
 ## Ground rules (enforced in code, not just promised)
 
 - **Opt-out, on by default.** One switch — **Settings → Anonymous usage** —
-  gates both SDKs (`Store.telemetryEnabled`). Off → PostHog is hard-muted
-  (`config.optOut`) and Sentry is `close()`d.
+  gates both pipelines (`Store.telemetryEnabled`). When it is off, Burrow
+  creates no PostHog request and Sentry is `close()`d.
 - **Inert without keys.** The PostHog key and Sentry DSN are injected only at
   release time (Info.plist `PHPostHogApiKey` / `SentryDSN`, from build
   settings). A build from this repo ships them empty and touches neither
   network. See `scripts/release.env.example`.
-- **Identity is random.** PostHog's own distinct id plus Sentry's own install
-  id (two ids total) — neither derived from serial, MAC, hardware, or
-  account. Opting out stops all sending but leaves the SDKs' local caches
-  (ids, any queued events) on disk; deleting the app's Application Support
-  and Caches folders removes them.
-- **No PII, ever.** `sanitize()` drops sensitive keys (paths, file names,
-  contents, urls, tokens, email, username, …) and only lets primitives through.
-- **Sizes/counts/durations are bucketed**, never raw — see `bytesBucket`,
-  `countBucket`, `secondsBucket`. E.g. `120MB → "100MB-1GB"`, `7 items → "1-9"`.
+- **Identity is random.** Burrow's random PostHog distinct id plus Sentry's own
+  install id (two ids total) are not derived from a serial, MAC address,
+  hardware identifier, or account. The PostHog id is created on the background
+  telemetry queue only after analytics is enabled. Existing 0.11.0 installs
+  retain the random anonymous UUID previously created by posthog-ios through a
+  validated one-time local migration, so updates do not reset retention.
+  Opting out leaves those ids and any Sentry cache on disk; deleting the app's
+  Application Support and Caches folders removes them.
+- **No PII, ever.** `DiagnosticPrivacy.sanitize()` drops sensitive keys (paths,
+  file names, contents, URLs, tokens, email, username, identifiers, …), accepts
+  only primitive values, and replaces complete path-like strings. Sentry event
+  frames keep symbols/modules/debug IDs while all package, source-file, and
+  binary-image path fields are removed.
+- **PostHog sizes/counts/durations are bucketed**, never raw — see
+  `bytesBucket`, `countBucket`, `secondsBucket`. Sentry's sampled performance
+  traces necessarily contain precise span timing, but every span has a fixed
+  name and automatic network, file, Core Data, and UI tracing is disabled.
+- **No screen capture.** Burrow sends fixed semantic screen names such as
+  `home`, `settings`, and `tool.clean`. The macOS PostHog client has no session
+  replay, element autocapture, remote config, error tracking, or logs; Sentry
+  screenshots and view-hierarchy capture are never enabled.
 
 ## Super properties (attached to every event)
 
-`app_version`, `build_number`, `os_version` (e.g. `macOS 26.5.0`), `arch`
-(`arm64` / `x86_64`), `locale`.
+`platform: "macos"`, `app_version`, `build_number`, `os_version` (e.g.
+`macOS 27.0.0`), exact `os_build` (e.g. `26A5388g`), `os_prerelease`, `arch`
+(`arm64` / `x86_64`), and `locale`.
 
-**Plus what the PostHog SDK attaches on its own** (its standard `$` context
-properties): device model (e.g. `Mac14,9`), device marketing name (e.g.
-`MacBook Pro` — not your hostname), bundle id, OS name/version, locale,
-timezone, screen size, app version/build. No feature-flag preloading
-(`preloadFeatureFlags = false`), so the only endpoint hit is event delivery.
+Burrow's first-party client attaches no hidden SDK context. It additionally
+sends fixed PostHog protocol fields: `$ip: "0"`, `$lib: "burrow-macos"`,
+`$lib_version`, and `$process_person_profile: false`. A later feature-flag
+rollout will be separately reviewed and will use cached, conservative defaults.
 
 **IP address:** as with any HTTPS request, the TCP connection still exposes
-your IP to the receiving service at the network layer — but neither SDK
-*stores* it. PostHog events carry `$ip = "0"`, so PostHog records no IP and
-derives no GeoIP; the project additionally has **"Discard client IP data"**
-enabled (defence in depth). Sentry runs with `sendDefaultPii = false`, so no
-IP is attached to events either.
+your IP to the receiving service at the network layer, but neither pipeline
+stores it as event data. PostHog events carry `$ip = "0"`, so PostHog records
+no IP and derives no GeoIP; the project additionally has **"Discard client IP
+data"** enabled (defence in depth). Sentry runs with `sendDefaultPii = false`,
+so no IP is attached to events either.
 
 ## Events
 
 ### Wired now
-| Event | Props | Source |
-|---|---|---|
-| `app_opened` | `cold_start: bool` | `Telemetry.start()` |
-| `app_terminated` | — | `AppDelegate.applicationWillTerminate` |
-| `engine_missing` | — (launched without a bundled or external engine; an activation signal) | `AppDelegate` |
-| `onboarding_completed` | — | `AppDelegate` |
-| `telemetry_opt_in_changed` | `enabled: bool` | `Telemetry.setEnabled` |
 
-Plus whatever crashes/unhandled errors Sentry captures automatically (no
-screenshots, no performance traces, `sendDefaultPii = false`). Sentry's
-auto session tracking is **off** — there is no per-launch "release health"
-ping; Sentry traffic happens only when something actually crashed or
-errored. Crash reports carry the loaded binaries' file paths; Burrow scrubs
-`/Users/<name>` from them before upload (`CrashReporter.scrubUserPaths`).
+| Events | Properties |
+|---|---|
+| `app_opened`, `app_ready`, `app_terminated` | cold-start; menu-bar availability; compatibility-mode boolean |
+| `app_updated` | previous/current app version and build |
+| `engine_missing`, `install_window_ready`, `onboarding_completed` | none |
+| `telemetry_opt_in_changed` | enabled boolean |
+| PostHog `$screen` | fixed name: `home`, `settings`, or `tool.<known tool>` |
+| `feature_operation_started`, `feature_operation_completed` | `clean`/`optimize`, dry-run/elevated booleans, fixed result, bucketed duration |
+| `previous_launch_incomplete` | previous phase, app version/build, OS build, bucketed elapsed time |
+| `compatibility_fallback_activated`, `compatibility_fallback_reaffirmed` | fixed reason, OS build, menu-bar mode |
+| `diagnostic_report_copied` | fixed recovery reason |
+| `updater_started`, `updater_stabilized` | `automatic`, `manual`, or `settings` source on start; none on stabilization |
+| `automatic_updater_suppressed` | fixed recovery reason, app build, and OS build |
+| `update_check_started` | `manual` source |
+| `update_found`, `update_not_found` | target version on `update_found`; none on `update_not_found` |
+| `update_download_started`, `update_download_completed`, `update_download_failed` | target version; failures add error domain/code |
+| `update_install_started`, `update_choice_made` | target version, fixed choice, numeric Sparkle stage |
+| `update_cycle_completed`, `update_cycle_failed` | source, fixed result/update-found boolean; failures add error domain/code |
 
-### Planned (not yet wired — listed so this doc stays the source of truth)
-| Event | Props (all bucketed / non-PII) | Where it'll live |
-|---|---|---|
-| `screen_viewed` | `pane: home\|history\|cleanup\|analyze\|software\|settings\|tool` | `RootView` |
-| `clean_performed` | `reclaimed_bucket`, `item_count_bucket`, `dry_run: bool` | `OperationCenter` |
-| `purge_performed` | `reclaimed_bucket`, `category` | `OperationCenter` |
-| `uninstall_performed` | `item_count_bucket` | `OperationCenter` |
-| `analyze_run` / `optimize_run` | `duration_bucket` | respective views |
-| `fda_state` | `granted: bool` | Privacy gate |
-| `mcp_tool_invoked` | `tool: <burrow_*>` (agent-native usage signal) | `MCP.swift` — needs SDK init + per-call flush in the stdio subprocess; deferred for that reason |
+Sentry captures crashes, unhandled errors, and app hangs automatically. Release
+health sessions are enabled and the fixed-name launch trace is sampled at 10%.
+For apps running from `/Applications`, 10% of those sampled traces are profiled,
+for about 1% of launches overall; profiling is disabled from Downloads, home
+directories, mounted volumes, and other relocated paths because profile
+envelopes contain binary-image paths. Pre-main profiling is always disabled.
+Burrow adds at most 50 fixed-name manual breadcrumbs and fixed-name
+warning/error logs. Automatic network breadcrumbs, failed-request capture,
+file I/O tracing, Core Data tracing, UI tracing, screenshots, and view-hierarchy
+capture remain disabled.
 
-When you wire one, move its row up and keep the props bucketed.
+Automatic Sparkle startup begins only after the status item has remained
+responsive for 30 seconds, then receives a separate 30-second durable
+`updater_scheduled` → `updater_ready` stability window. If that window is
+interrupted, later automatic starts are suppressed for the same app and OS
+build while manual checks stay available. This keeps a Sparkle failure from
+being misattributed to the menu-bar component or repeated every launch.
+
+App hangs are grouped by coarse launch phase and the top Burrow frame. The first
+hang in each distinct group is retained; only identical repeats are limited to
+one per minute. Low-memory hangs are tagged `critical`, `low`, or `normal`
+rather than discarded, so an affected macOS beta cohort cannot disappear from
+reporting.
+
+Burrow also keeps a local atomic launch journal at
+`~/Library/Application Support/Burrow/launch-state.json`. It contains a random
+per-run ID, app/OS versions, architecture, coarse launch phase, timestamps, and
+the OS build for a remembered status-item recovery plus an app-build/OS-build
+key for a remembered updater recovery. It contains no paths, filenames, window
+contents, hardware ID, or account data. The journal is written even when
+telemetry is off because it powers local crash recovery; nothing from it is
+transmitted unless anonymous usage is enabled, and the run ID is never
+transmitted or included in copied diagnostics.
+
+The PostHog distinct id lives beside it at
+`~/Library/Application Support/Burrow/telemetry-id`. Burrow creates that file
+only after analytics is enabled; the file contains one random UUID. On the
+first enabled launch after replacing posthog-ios, Burrow validates and copies
+that SDK's existing anonymous UUID into this file rather than assigning the
+installation a new identity. A bounded `telemetry-outbox/` keeps at most 64
+already-sanitized event payloads so a startup/update diagnostic can survive a
+lost network or forced reboot. It retries only one historical payload at a
+time, backs transient failures off from 30 seconds to at most one hour, and
+drops permanent 3xx/4xx rejections (except retryable 408/425/429 responses).
+All of that disk work runs on the background telemetry queue.
+
+### Deliberately deferred
+
+`fda_state`, uninstall/purge detail, and MCP subprocess events are not wired.
+PostHog feature flags are also deferred to a separate change so flags can be
+cached, telemetry-gated, and restricted to non-safety-critical UI/rollout
+choices. Burrow will not build a custom pixel recorder for macOS.
 
 ## Turning it off
 
-Settings → **Anonymous usage** → off. Both SDKs stop immediately (PostHog sends
-one final `telemetry_opt_in_changed`, flushes, then mutes; Sentry closes).
-The SDKs' local files — the two random ids and any not-yet-sent queue — stay
-on disk so a later re-enable reuses the same anonymous identity; nothing is
-transmitted while opted out. There is no server-side deletion call.
+Settings → **Anonymous usage** → off. PostHog sends one final
+`telemetry_opt_in_changed` through Burrow's transport, then all later events are
+rejected; Sentry closes. The two random ids and any Sentry cache stay on disk
+so a later re-enable reuses the same anonymous identity. The sanitized PostHog
+outbox also stays on disk but is not read or transmitted until telemetry is
+enabled again. A launch that begins opted out makes no PostHog request. There
+is no server-side deletion call.
 
 ## Windows app
 
@@ -125,11 +189,11 @@ DSN), but its projects differ:
   caps an org at one project, so rather than gate this on a paid upgrade the
   Windows app reuses the macOS project and tags every event with
   **`platform: "windows"`** (plus `$lib: "burrow-win"`) so the two platforms
-  filter apart cleanly in dashboards. macOS events carry no `platform` key.
+  filter apart cleanly in dashboards. macOS events now carry `platform: "macos"`.
 
 Either way nothing here changes the macOS pipeline. Client code:
 [`windows/Services/AppTelemetry.cs`](windows/Services/AppTelemetry.cs) (both
-SDKs) and
+telemetry paths) and
 [`windows/Services/TelemetryConfig.cs`](windows/Services/TelemetryConfig.cs).
 
 Same ground rules, enforced the same way:

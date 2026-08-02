@@ -67,23 +67,28 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
   pointing the optional AI "Explain" lens at a **hosted** endpoint sends the
   metrics fact sheet you're explaining to that endpoint (it's off by default
   and local-first; see below).
-- **Anonymous analytics + crash reporting (opt-out).** Burrow uses
+- **Anonymous analytics + diagnostics (opt-out).** Burrow uses
   [PostHog](https://posthog.com) for product analytics and
-  [Sentry](https://sentry.io) for crash/error reports, so we can see how many
+  [Sentry](https://sentry.io) for crash, hang, release-health, and sampled
+  performance diagnostics, so we can see how many
   installs stay active, which versions to support, which features get used,
-  and when something crashes. **What's sent:** a random install id per SDK
-  (two ids, minted by the SDKs, not derived from your hardware, serial, or
-  account), the app + macOS version, CPU architecture, device model, locale,
-  and coarse feature-usage events with sizes and counts **bucketed into
-  ranges**. **What's never sent:** file names, file contents, paths (crash
-  reports scrub `/Users/<name>`), your home folder, your metrics/history, or
-  any account identity. **Your IP isn't stored**, either — PostHog events
-  carry `$ip = "0"` (and the project discards client IPs), and Sentry sets
-  `sendDefaultPii = false`. It's **on by default**; turn it off in **Settings → Anonymous
-  usage** and both PostHog and Sentry stop. The exact event list is in
-  **[TELEMETRY.md](TELEMETRY.md)**; the client code is
+  and where a launch or update stopped. **What's sent:** two random install ids
+  (one used by Burrow for PostHog and one by Sentry, neither derived from
+  hardware, a serial, or an account), the app version, exact macOS
+  version/build, CPU architecture, locale, fixed semantic
+  screen/feature/update events, crash stacks, and sampled fixed-name launch
+  spans/profiles. PostHog sizes, counts, and durations are **bucketed into
+  ranges**. **What's never sent:** screenshots, screen recordings, file names,
+  file contents, user paths, URLs, your metrics/history, or any account
+  identity. Crash events remove path-bearing image/frame fields; profiling is
+  limited to apps under `/Applications` because profile envelopes bypass that
+  event scrubber. Automatic network/file tracing is disabled. **Your IP isn't
+  stored** — PostHog events carry `$ip = "0"` (and the project discards client
+  IPs), and Sentry sets `sendDefaultPii = false`. It's **on by default**; turn
+  it off in **Settings → Anonymous usage** and both pipelines stop. The exact
+  event list is in **[TELEMETRY.md](TELEMETRY.md)**; the client code is
   [`macos/Sources/Telemetry.swift`](macos/Sources/Telemetry.swift) and
-  [`macos/Sources/CrashReporter.swift`](macos/Sources/CrashReporter.swift). Both SDKs are
+  [`macos/Sources/CrashReporter.swift`](macos/Sources/CrashReporter.swift). Both integrations are
   **inert in source/dev builds** — keys are injected only at release time, so
   a build from this repo phones neither home. The **Windows app** does the same
   thing (opt-out via **Settings → Share crash reports & analytics**) — its own
@@ -92,6 +97,18 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
   [`windows/Services/AppTelemetry.cs`](windows/Services/AppTelemetry.cs), keys
   injected via `BURROWWIN_SENTRY_DSN` / `BURROWWIN_POSTHOG_API_KEY` — see
   **[TELEMETRY.md](TELEMETRY.md)**.
+- **Telemetry stays off the UI thread.** macOS PostHog delivery uses Burrow's
+  own serial background transport rather than the SDK timer that previously
+  ran on AppKit's main run loop. A local 64-event sanitized outbox retries one
+  historical event at a time with bounded backoff, discards permanent HTTP
+  rejections, and runs only while telemetry is enabled; an opted-out launch
+  does not read it or contact PostHog.
+- **Local launch recovery journal.** Burrow atomically stores a coarse launch
+  phase plus app/OS versions under Application Support so it can avoid a
+  status-item path that failed on the same macOS build. This local safety file
+  contains no user content or hardware/account ID and is written even when
+  telemetry is off; only redacted, run-ID-free fields are reported when the
+  telemetry switch is on.
 - **Local-only surfaces:**
   - The MCP **HTTP query server** binds `127.0.0.1:9277` (loopback only; **on
     by default**). It serves your local metrics to local MCP clients; it is not
@@ -105,10 +122,16 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
 - **Other outbound paths:**
   - **Burrow self-update check:** when "Check for updates automatically" is on
     (Settings → About, on by default), Sparkle makes an unauthenticated GET to
-    the signed `appcast.xml` GitHub Release asset on launch and about once a
-    day. It sends no Burrow analytics or device profile. If an update exists,
+    the signed `appcast.xml` GitHub Release asset after startup settles and
+    about once a day. Automatic Sparkle startup waits until the menu-bar item
+    has remained responsive for 30 seconds and then gets its own durable
+    stability phase; an interrupted updater start pauses later automatic
+    checks for that app/OS build while manual checks stay available. It sends
+    no Burrow analytics or device profile. If an update exists,
     Sparkle presents its native UI and waits for approval before downloading
-    or installing it. Turn the toggle off to make checks fully manual; the
+    or installing it. Fixed-name check/download/install milestones are sent
+    through the same opt-out telemetry switch, without request URLs or a
+    Sparkle device profile. Turn the toggle off to make checks fully manual; the
     menu and Settings buttons still work.
   - The Software → **Updates** tab runs `brew outdated`, which contacts
     Homebrew's update feeds — the same check `brew` does for itself. It reads

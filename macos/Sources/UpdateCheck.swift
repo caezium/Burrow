@@ -10,50 +10,190 @@
 import Foundation
 import Sparkle
 
+enum UpdateStartPolicy {
+    /// Disabling a delayed automatic check is a persistence-only operation;
+    /// enabling it is an explicit request that may initialize Sparkle now.
+    static func shouldStartForAutomaticChecks(enabled: Bool) -> Bool { enabled }
+}
+
 @MainActor
-final class AppUpdate {
+final class AppUpdate: NSObject, SPUUpdaterDelegate {
     static let shared = AppUpdate()
 
-    private let controller: SPUStandardUpdaterController
+    private lazy var controller = SPUStandardUpdaterController(
+        startingUpdater: false,
+        updaterDelegate: self,
+        userDriverDelegate: nil
+    )
     private var started = false
+    private var updateFoundInCycle = false
+    private var noUpdateInCycle = false
+    private var stabilityTask: Task<Void, Never>?
 
-    private init() {
-        controller = SPUStandardUpdaterController(
-            startingUpdater: false,
-            updaterDelegate: nil,
-            userDriverDelegate: nil
-        )
+    private override init() {
+        super.init()
     }
 
     /// Starts Sparkle once and migrates Burrow's existing auto-check choice.
     /// Info.plist disallows background downloads entirely. A missing
     /// development key leaves local source builds usable; the tag workflow
     /// rejects that configuration before building.
-    func begin() {
-        guard !started, Self.hasValidPublicKey else { return }
+    @discardableResult
+    func begin(source: String = "automatic") -> Bool {
+        guard !started, Self.hasValidPublicKey else { return false }
+        // Every start path (automatic, Settings, or manual) records the same
+        // durable boundary before constructing Sparkle. A synchronous wedge
+        // or an immediate AppKit callback therefore suppresses the next
+        // automatic start instead of repeating it on every launch.
+        LaunchJournal.live.mark(.updaterScheduled)
+        CrashReporter.setLaunchPhase(.updaterScheduled)
         if let legacyChoice = Store.migrateLegacyUpdatePreferences() {
             controller.updater.automaticallyChecksForUpdates = legacyChoice
         }
         controller.startUpdater()
         started = true
+        Telemetry.capture("updater_started", ["source": source])
+        scheduleStabilityMarker()
+        return true
+    }
+
+    private func scheduleStabilityMarker() {
+        stabilityTask?.cancel()
+        stabilityTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.stabilityTask = nil
+            LaunchJournal.live.markAutomaticUpdaterStable()
+            LaunchJournal.live.mark(.updaterReady)
+            CrashReporter.setLaunchPhase(.updaterReady)
+            Telemetry.capture("updater_stabilized")
+        }
     }
 
     func setAutomaticChecks(_ enabled: Bool) {
-        begin()
+        // Persisting "off" must not construct/start Sparkle during Burrow's
+        // guarded launch window. Turning checks on, or checking manually, is
+        // an explicit action and may start it immediately.
+        Store.autoCheckForUpdates = enabled
+        if UpdateStartPolicy.shouldStartForAutomaticChecks(enabled: enabled) {
+            begin(source: "settings")
+        }
         if started {
             controller.updater.automaticallyChecksForUpdates = enabled
-        } else {
-            // Local source builds without a configured public key still keep
-            // the user's choice for the next valid build.
-            Store.autoCheckForUpdates = enabled
         }
     }
 
     /// A manual check always uses Sparkle's native progress/result/update UI.
     func checkNow() {
-        begin()
+        begin(source: "manual")
         guard started else { return }
+        updateFoundInCycle = false
+        noUpdateInCycle = false
+        Telemetry.capture("update_check_started", ["source": "manual"])
         controller.checkForUpdates(nil)
+    }
+
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        updateFoundInCycle = true
+        noUpdateInCycle = false
+        Telemetry.capture("update_found", [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
+        noUpdateInCycle = true
+        Telemetry.capture("update_not_found")
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        willDownloadUpdate item: SUAppcastItem,
+        with request: NSMutableURLRequest
+    ) {
+        Telemetry.capture("update_download_started", [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
+        Telemetry.capture("update_download_completed", [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: Error) {
+        let nsError = error as NSError
+        let properties: [String: Any] = [
+            "target_version": item.displayVersionString,
+            "error_domain": nsError.domain,
+            "error_code": nsError.code,
+        ]
+        Telemetry.capture("update_download_failed", properties)
+        CrashReporter.logError("update_download_failed", data: properties)
+        CrashReporter.captureDiagnostic("update_download_failed", error: error, data: [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        Telemetry.capture("update_install_started", [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        userDidMake choice: SPUUserUpdateChoice,
+        forUpdate updateItem: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        let choiceName: String
+        switch choice.rawValue {
+        case 0: choiceName = "skip"
+        case 1: choiceName = "install"
+        default: choiceName = "dismiss"
+        }
+        Telemetry.capture("update_choice_made", [
+            "choice": choiceName,
+            "stage": state.stage.rawValue,
+            "target_version": updateItem.displayVersionString,
+        ])
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+        error: Error?
+    ) {
+        let source: String
+        switch updateCheck.rawValue {
+        case 0: source = "manual"
+        case 1: source = "automatic"
+        default: source = "information"
+        }
+        if let error, !noUpdateInCycle {
+            let nsError = error as NSError
+            let properties: [String: Any] = [
+                "source": source,
+                "update_found": updateFoundInCycle,
+                "error_domain": nsError.domain,
+                "error_code": nsError.code,
+            ]
+            Telemetry.capture("update_cycle_failed", properties)
+            CrashReporter.logError("update_cycle_failed", data: properties)
+            CrashReporter.captureDiagnostic("update_cycle_failed", error: error, data: [
+                "source": source,
+                "update_found": updateFoundInCycle,
+            ])
+        } else {
+            Telemetry.capture("update_cycle_completed", [
+                "source": source,
+                "result": noUpdateInCycle ? "no_update" : (updateFoundInCycle ? "update_found" : "completed"),
+            ])
+        }
+        updateFoundInCycle = false
+        noUpdateInCycle = false
     }
 
     private static var hasValidPublicKey: Bool {
