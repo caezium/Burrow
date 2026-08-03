@@ -1,10 +1,11 @@
-# Burrow telemetry
+# Burrow telemetry and website analytics
 
-Burrow collects **anonymous, opt-out** product analytics and crash reports so we
+Burrow's apps collect **anonymous, opt-out** product analytics and crash reports so we
 can see how many installs stay active, which versions to support, which features
 get used, and when something breaks. This file is the exact, honest list of
 what that means. The privacy summary lives in [SECURITY.md](SECURITY.md); this
-is the detail.
+is the detail. The public website uses a separate cookieless configuration,
+documented below; the app's Settings switch does not control website requests.
 
 ## What and who
 
@@ -176,6 +177,54 @@ so a later re-enable reuses the same anonymous identity. The sanitized PostHog
 outbox also stays on disk but is not read or transmitted until telemetry is
 enabled again. A launch that begins opted out makes no PostHog request. There
 is no server-side deletion call.
+
+## Website analytics
+
+The production site at [`burrow.henryzh.dev`](https://burrow.henryzh.dev)
+loads [`docs/analytics.js`](docs/analytics.js), then PostHog's Web JavaScript
+bundle from `us-assets.i.posthog.com`; events go directly to
+`us.i.posthog.com`. The committed source contains only a placeholder project
+key and runs only on that exact production hostname, so local previews and
+forks are inert. The deploy workflow and `scripts/deploy-site.sh` stage a copy,
+inject the same PostHog project key used by the apps, and fail before publishing
+when that key is unavailable or malformed. Running `npx wrangler deploy`
+directly is unsupported because it bypasses that guard.
+
+The site uses PostHog's **stateful cookieless mode**. It sets no PostHog cookie,
+local-storage value, or session-storage value, never calls `identify`, and
+creates no person profile. PostHog derives a rotating daily hash from the
+request IP, user agent, and site domain, uses temporary server-side state for a
+30-minute session boundary, then strips the raw IP before event processing; the
+project's separate **Discard client IP data** setting remains enabled as a
+second guard. The daily hash is unrelated to either app's random install ID and
+cannot follow a browser across days.
+
+The captured website events and fields are:
+
+| Events | Properties |
+|---|---|
+| `$pageview`, `$pageleave` | Page title, host/path, query- and fragment-free current/referrer URLs, visit duration, and PostHog's scroll-depth percentages/pixel maximums |
+| `$web_vitals` | CLS, INP, and LCP values plus bounded name, value, delta, rating, navigation type, and a query- and fragment-free page URL. Raw browser performance-entry arrays, element data, metric IDs, and nested timestamps are removed |
+| `website_download_clicked` | Fixed `destination: "github_release"`; fixed placement: `navigation`, `hero`, `pricing`, `windows`, `changelog`, or `roadmap` |
+| `website_homebrew_copy_clicked` | Fixed `command: "install"`; fixed placement: `hero` or `install_card` |
+
+PostHog also attaches ordinary web context: browser and OS family/version,
+device type, language/time zone, viewport and screen dimensions, page host/path
+and title, sanitized referrer, and PostHog library version. URL query strings
+and fragments are removed before sending, the complete raw user-agent event
+property is discarded, campaign-parameter persistence is off, and Do Not Track
+is honored. PostHog still receives the user-agent request header needed for the
+rotating cookieless hash described above.
+
+Generic element autocapture, session replay, heatmaps, rage/dead-click capture,
+JavaScript exception capture, console capture, network timing, person profiles,
+surveys, and remote feature flags are all disabled. Only the annotated download
+and Homebrew-copy controls emit interaction events; copied command text is
+represented by the fixed word `install`, not read from the clipboard or DOM.
+The site uses PostHog directly rather than hiding it behind a reverse proxy, so
+browsers and content blockers can block it and aggregate counts can be lower
+than real traffic. Signing and notarization add no website telemetry, and the
+website is outside the macOS app's `PrivacyInfo.xcprivacy` declaration.
 
 ## Windows app
 

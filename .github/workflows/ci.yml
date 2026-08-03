@@ -29,6 +29,8 @@ jobs:
         run: greenlight preflight macos --exit-code
       - name: Test release safety helpers
         run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+      - name: Test website analytics boundaries
+        run: node --test scripts/tests/test_site_analytics.mjs
 
   test:
     runs-on: macos-15

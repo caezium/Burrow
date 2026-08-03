@@ -62,3 +62,4 @@ macos/vendor/Sentry.xcframework/
 macos/vendor/.sentry-*.ok
 macos/vendor/Sparkle.framework/
 macos/vendor/.sparkle-cache/
+.site-deploy/

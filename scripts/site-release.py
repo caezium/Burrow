@@ -196,6 +196,7 @@ def page_html(*, title, desc, og_url, hero_h1, hero_p, hero_extra, main_html, ex
 <meta property="og:description" content="{desc}">
 <meta property="og:image" content="https://burrow.henryzh.dev/burrow-icon-512.png">
 <meta property="og:url" content="{og_url}">
+<script src="/analytics.js" defer></script>
 <style>
 {SHARED_CSS}{extra_css}</style>
 </head>
@@ -205,7 +206,7 @@ def page_html(*, title, desc, og_url, hero_h1, hero_p, hero_extra, main_html, ex
   <div class="page in">
     <a class="brand" href="./" aria-label="Burrow">{LOGO_SVG}<span class="nm">burrow</span></a>
     {nav}
-    <a class="btn" href="{REPO}/releases/latest" target="_blank" rel="noopener">Download</a>
+    <a class="btn" href="{REPO}/releases/latest" target="_blank" rel="noopener" data-burrow-analytics="download.{active}">Download</a>
   </div>
 </div>
 
