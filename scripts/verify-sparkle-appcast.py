@@ -41,6 +41,7 @@ def validate(
     expected_version: str,
     expected_build: str,
     expected_url: str,
+    expected_release_notes_path: Path | None = None,
 ) -> str:
     if not appcast_path.is_file():
         raise ValidationError(f"appcast does not exist: {appcast_path}")
@@ -105,6 +106,26 @@ def validate(
                 f"item {name} is {actual!r}, expected {expected_value!r}"
             )
 
+    if expected_release_notes_path is not None:
+        try:
+            expected_release_notes = expected_release_notes_path.read_text(
+                encoding="utf-8"
+            )
+        except OSError as error:
+            raise ValidationError(
+                f"could not read expected release notes: {error}"
+            ) from error
+        description = item.find("description")
+        if description is None:
+            raise ValidationError("item is missing embedded release notes")
+        if description.attrib.get(f"{{{SPARKLE_NS}}}format") != "markdown":
+            raise ValidationError("embedded release notes are not marked as markdown")
+        actual_release_notes = description.text or ""
+        if actual_release_notes != expected_release_notes:
+            raise ValidationError(
+                "embedded release notes do not exactly match the validated source"
+            )
+
     archive_signature = enclosure.attrib.get(f"{{{SPARKLE_NS}}}edSignature")
     if archive_signature is None:
         raise ValidationError("archive enclosure is missing sparkle:edSignature")
@@ -124,6 +145,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="write the validated archive signature for sign_update --verify",
     )
+    parser.add_argument(
+        "--release-notes",
+        type=Path,
+        help="require embedded markdown to exactly match this file",
+    )
     return parser.parse_args()
 
 
@@ -131,7 +157,12 @@ def main() -> int:
     args = parse_args()
     try:
         archive_signature = validate(
-            args.appcast, args.archive, args.version, args.build, args.url
+            args.appcast,
+            args.archive,
+            args.version,
+            args.build,
+            args.url,
+            args.release_notes,
         )
         if args.signature_output is not None:
             args.signature_output.write_text(archive_signature, encoding="ascii")

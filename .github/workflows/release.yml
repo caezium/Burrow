@@ -438,6 +438,7 @@ jobs:
           ZIP="$PWD/dist/Burrow-${VERSION}.zip"
           APPCAST="$PWD/dist/appcast.xml"
           ARCHIVE_URL="https://github.com/caezium/Burrow/releases/download/${GITHUB_REF_NAME}/Burrow-${VERSION}.zip"
+          python3 scripts/validate-release-notes.py RELEASES.md --version "$VERSION"
           cp RELEASES.md "dist/Burrow-${VERSION}.md"
           printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SPARKLE_TOOLS/generate_appcast" \
             --ed-key-file - \
@@ -452,6 +453,7 @@ jobs:
             --version "$VERSION" \
             --build "$BUILD_NUMBER" \
             --url "$ARCHIVE_URL" \
+            --release-notes RELEASES.md \
             --signature-output "$RUNNER_TEMP/sparkle-archive-signature.txt"
           printf '%s' "$SPARKLE_PRIVATE_KEY" | \
             "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - \

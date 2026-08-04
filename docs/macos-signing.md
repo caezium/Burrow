@@ -181,6 +181,13 @@ Choose the next app version and build number, update the release notes, and
 merge the release change before tagging. Never move a tag after its GitHub
 release has published.
 
+`RELEASES.md` is user-facing runtime content: the release workflow embeds it
+verbatim in Sparkle's signed appcast and also uses it as the GitHub release
+body. Keep only the newest release, begin directly with `# Burrow VERSION`, and
+put contributor instructions in this runbook rather than HTML comments—Sparkle
+renders those comments as visible text. Full site history belongs in
+`docs/releases.json` and is generated into `docs/releases.html`.
+
 The workflow order is:
 
 1. Require all Apple, Sparkle, and external-tap secrets, then verify that
@@ -283,6 +290,12 @@ publication: copy-only clarifications belong in the GitHub release body and
 site, not in replacement signed assets. Replace and re-sign a published feed
 only for a correctness or security defect, then repeat the full verification
 above.
+
+For that exceptional repair, first merge corrected `RELEASES.md`, then run the
+manual `repair-sparkle-release-notes` workflow with the current release tag.
+The job refuses historical or draft releases, preserves the published ZIP,
+re-signs the feed with the existing Sparkle key, verifies the embedded Markdown
+byte-for-byte, replaces `appcast.xml`, and updates the GitHub release body.
 
 ## Telemetry and signing
 

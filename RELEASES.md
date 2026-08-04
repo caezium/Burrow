@@ -1,5 +1,3 @@
-<!-- Latest release ONLY. This file is the GitHub release body (release.yml --notes-file), so it must contain just the newest version. OVERWRITE it each release; do not accumulate. Full prose history lives in docs/releases.json → docs/releases.html (the site Releases page). -->
-
 # Burrow 0.11.2
 
 A system-metrics, updater, and launch-reliability patch. This release corrects

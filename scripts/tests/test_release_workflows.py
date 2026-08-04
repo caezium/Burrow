@@ -61,6 +61,36 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('(cd "$RUNNER_TEMP" && git clone', tap_step)
         self.assertIn('cd "$TAP_DIR"', tap_step)
 
+    def test_release_notes_are_validated_before_sparkle_embeds_them(self) -> None:
+        workflow = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+
+        validate = workflow.index("scripts/validate-release-notes.py")
+        embed = workflow.index('cp RELEASES.md "dist/Burrow-${VERSION}.md"')
+
+        self.assertLess(validate, embed)
+
+    def test_manual_notes_repair_is_narrow_and_fail_closed(self) -> None:
+        workflow = (WORKFLOWS / "repair-sparkle-release-notes.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertNotIn("push:", workflow)
+        self.assertIn("contents: write", workflow)
+        self.assertIn("group: release", workflow)
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertIn('if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]', workflow)
+        self.assertIn("scripts/validate-release-notes.py", workflow)
+        self.assertIn("scripts/verify-sparkle-appcast.py", workflow)
+        self.assertIn("SPARKLE_ED_PRIVATE_KEY", workflow)
+        self.assertIn('gh release upload "$TAG" "$APPCAST"', workflow)
+        self.assertIn("--clobber", workflow)
+        self.assertIn('gh release edit "$TAG"', workflow)
+        self.assertIn("--notes-file RELEASES.md", workflow)
+        self.assertNotIn('gh release upload "$TAG" "$ZIP"', workflow)
+        self.assertIn('sign_update" --verify', workflow)
+        self.assertIn('if [ "$PUBLISHED_DIGEST" != "$EXPECTED_DIGEST" ]', workflow)
+
     def test_xcode_27_preview_lane_is_advisory_and_runs_the_full_suite(self) -> None:
         workflow = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
         start = workflow.index("  xcode-27-compatibility:")
