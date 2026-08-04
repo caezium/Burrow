@@ -89,7 +89,18 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("--notes-file RELEASES.md", workflow)
         self.assertNotIn('gh release upload "$TAG" "$ZIP"', workflow)
         self.assertIn('sign_update" --verify', workflow)
-        self.assertIn('if [ "$PUBLISHED_DIGEST" != "$EXPECTED_DIGEST" ]', workflow)
+
+        verify_start = workflow.index("- name: Verify the published repair")
+        verify_step = workflow[verify_start:]
+        self.assertIn(
+            "ASSET_NAME: ${{ steps.target.outputs.asset_name }}", verify_step
+        )
+        self.assertIn(
+            "EXPECTED_DIGEST: ${{ steps.target.outputs.asset_digest }}", verify_step
+        )
+        self.assertIn(
+            'if [ "$PUBLISHED_DIGEST" != "$EXPECTED_DIGEST" ]', verify_step
+        )
 
     def test_xcode_27_preview_lane_is_advisory_and_runs_the_full_suite(self) -> None:
         workflow = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")

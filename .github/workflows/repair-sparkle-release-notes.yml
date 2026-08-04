@@ -129,8 +129,6 @@ jobs:
           TAG: ${{ steps.target.outputs.tag }}
           VERSION: ${{ steps.target.outputs.version }}
           BUILD_NUMBER: ${{ steps.archive.outputs.build_number }}
-          ASSET_NAME: ${{ steps.target.outputs.asset_name }}
-          EXPECTED_DIGEST: ${{ steps.target.outputs.asset_digest }}
           INFO_PLIST: ${{ steps.archive.outputs.info_plist }}
         run: |
           set -euo pipefail
@@ -186,6 +184,8 @@ jobs:
           TAG: ${{ steps.target.outputs.tag }}
           VERSION: ${{ steps.target.outputs.version }}
           BUILD_NUMBER: ${{ steps.archive.outputs.build_number }}
+          ASSET_NAME: ${{ steps.target.outputs.asset_name }}
+          EXPECTED_DIGEST: ${{ steps.target.outputs.asset_digest }}
         run: |
           set -euo pipefail
           PUBLISHED="$RUNNER_TEMP/published"
