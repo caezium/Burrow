@@ -16,6 +16,175 @@ enum UpdateStartPolicy {
     static func shouldStartForAutomaticChecks(enabled: Bool) -> Bool { enabled }
 }
 
+enum UpdateFailureCategory: String, Equatable {
+    case appTranslocation = "app_translocation"
+    case transientDownload = "transient_download"
+    case noUpdate = "no_update"
+    case cancelled
+    case configuration
+    case signatureValidation = "signature_validation"
+    case installation
+    case other
+}
+
+enum UpdateFailureRecovery: String, Equatable {
+    case moveToApplications = "move_to_applications"
+    case sparkleScheduledRetry = "sparkle_scheduled_retry"
+    case none
+}
+
+struct UpdateFailureDisposition: Equatable {
+    let category: UpdateFailureCategory
+    let recovery: UpdateFailureRecovery
+    let shouldCaptureInSentry: Bool
+}
+
+enum UpdateFailurePolicy {
+    // Sparkle 2.9.4 SUErrors.h: SURunningTranslocated. Keep this explicit so
+    // the policy is testable even though Swift does not import SUError cases.
+    private static let runningTranslocatedCode = 1005
+    private static let runningFromDiskImageCode = 1003
+    private static let noUpdateCode = 1001
+    private static let downloadErrorCode = 2001
+    private static let installationCancelledCodes: Set<Int> = [4007, 4008]
+    private static let developerActionableURLCodes: Set<Int> = [
+        NSURLErrorBadURL,
+        NSURLErrorUnsupportedURL,
+        NSURLErrorRedirectToNonExistentLocation,
+        NSURLErrorBadServerResponse,
+        NSURLErrorUserAuthenticationRequired,
+        NSURLErrorZeroByteResource,
+        NSURLErrorCannotDecodeRawData,
+        NSURLErrorCannotDecodeContentData,
+        NSURLErrorCannotParseResponse,
+        NSURLErrorAppTransportSecurityRequiresSecureConnection,
+        NSURLErrorFileDoesNotExist,
+        NSURLErrorNoPermissionsToReadFile,
+        NSURLErrorSecureConnectionFailed,
+        NSURLErrorServerCertificateHasBadDate,
+        NSURLErrorServerCertificateUntrusted,
+        NSURLErrorServerCertificateHasUnknownRoot,
+        NSURLErrorServerCertificateNotYetValid,
+        NSURLErrorClientCertificateRejected,
+        NSURLErrorClientCertificateRequired,
+    ]
+
+    static func classify(_ error: NSError) -> UpdateFailureDisposition {
+        let underlying = deepestUnderlyingError(in: error)
+        let sparkleInstallationCancelled = error.domain == SUSparkleErrorDomain
+            && installationCancelledCodes.contains(error.code)
+        let underlyingRequestCancelled = underlying?.domain == NSURLErrorDomain
+            && underlying?.code == NSURLErrorCancelled
+        if sparkleInstallationCancelled || underlyingRequestCancelled {
+            return UpdateFailureDisposition(
+                category: .cancelled,
+                recovery: .none,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, error.code == noUpdateCode {
+            return UpdateFailureDisposition(
+                category: .noUpdate,
+                recovery: .none,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == SUSparkleErrorDomain,
+           error.code == runningTranslocatedCode || error.code == runningFromDiskImageCode {
+            return UpdateFailureDisposition(
+                category: .appTranslocation,
+                recovery: .moveToApplications,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, error.code == downloadErrorCode {
+            if let underlying,
+               underlying.domain == NSURLErrorDomain,
+               developerActionableURLCodes.contains(underlying.code) {
+                return UpdateFailureDisposition(
+                    category: .configuration,
+                    recovery: .none,
+                    shouldCaptureInSentry: true
+                )
+            }
+            return UpdateFailureDisposition(
+                category: .transientDownload,
+                recovery: .sparkleScheduledRetry,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == NSURLErrorDomain {
+            if developerActionableURLCodes.contains(error.code) {
+                return UpdateFailureDisposition(
+                    category: .configuration,
+                    recovery: .none,
+                    shouldCaptureInSentry: true
+                )
+            }
+            return UpdateFailureDisposition(
+                category: error.code == NSURLErrorCancelled ? .cancelled : .transientDownload,
+                recovery: error.code == NSURLErrorCancelled ? .none : .sparkleScheduledRetry,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, (1...7).contains(error.code) {
+            return UpdateFailureDisposition(
+                category: .configuration,
+                recovery: .none,
+                shouldCaptureInSentry: true
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, (3001...3002).contains(error.code) {
+            return UpdateFailureDisposition(
+                category: .signatureValidation,
+                recovery: .none,
+                shouldCaptureInSentry: true
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, (4000...4012).contains(error.code) {
+            return UpdateFailureDisposition(
+                category: .installation,
+                recovery: .none,
+                shouldCaptureInSentry: true
+            )
+        }
+        return UpdateFailureDisposition(
+            category: .other,
+            recovery: .none,
+            shouldCaptureInSentry: true
+        )
+    }
+
+    /// Sparkle wraps URLSession failures. Preserve only bounded domains/codes;
+    /// descriptions and failing URLs can contain private network information.
+    static func telemetryProperties(for error: NSError) -> [String: Any] {
+        let disposition = classify(error)
+        var properties: [String: Any] = [
+            "error_domain": error.domain,
+            "error_code": error.code,
+            "failure_category": disposition.category.rawValue,
+            "recovery": disposition.recovery.rawValue,
+        ]
+        if let underlying = deepestUnderlyingError(in: error),
+           underlying.domain != error.domain || underlying.code != error.code {
+            properties["underlying_error_domain"] = underlying.domain
+            properties["underlying_error_code"] = underlying.code
+        }
+        return properties
+    }
+
+    private static func deepestUnderlyingError(in error: NSError) -> NSError? {
+        var current = error
+        var visited = Set<ObjectIdentifier>()
+        while let next = current.userInfo[NSUnderlyingErrorKey] as? NSError {
+            let identity = ObjectIdentifier(next)
+            guard visited.insert(identity).inserted else { break }
+            current = next
+        }
+        return current === error ? nil : current
+    }
+}
+
 @MainActor
 final class AppUpdate: NSObject, SPUUpdaterDelegate {
     static let shared = AppUpdate()
@@ -29,6 +198,7 @@ final class AppUpdate: NSObject, SPUUpdaterDelegate {
     private var updateFoundInCycle = false
     private var noUpdateInCycle = false
     private var stabilityTask: Task<Void, Never>?
+    private var startSource = "automatic"
 
     private override init() {
         super.init()
@@ -52,6 +222,7 @@ final class AppUpdate: NSObject, SPUUpdaterDelegate {
         }
         controller.startUpdater()
         started = true
+        startSource = source
         Telemetry.capture("updater_started", ["source": source])
         scheduleStabilityMarker()
         return true
@@ -66,7 +237,7 @@ final class AppUpdate: NSObject, SPUUpdaterDelegate {
             LaunchJournal.live.markAutomaticUpdaterStable()
             LaunchJournal.live.mark(.updaterReady)
             CrashReporter.setLaunchPhase(.updaterReady)
-            Telemetry.capture("updater_stabilized")
+            Telemetry.capture("updater_stabilized", ["source": self.startSource])
         }
     }
 
@@ -103,7 +274,11 @@ final class AppUpdate: NSObject, SPUUpdaterDelegate {
 
     func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
         noUpdateInCycle = true
-        Telemetry.capture("update_not_found")
+        let nsError = error as NSError
+        let userInitiated = nsError.userInfo[SPUNoUpdateFoundUserInitiatedKey] as? Bool ?? false
+        Telemetry.capture("update_not_found", [
+            "source": userInitiated ? "manual" : "automatic",
+        ])
     }
 
     func updater(
@@ -124,16 +299,11 @@ final class AppUpdate: NSObject, SPUUpdaterDelegate {
 
     func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: Error) {
         let nsError = error as NSError
-        let properties: [String: Any] = [
-            "target_version": item.displayVersionString,
-            "error_domain": nsError.domain,
-            "error_code": nsError.code,
-        ]
+        var properties = UpdateFailurePolicy.telemetryProperties(for: nsError)
+        properties["target_version"] = item.displayVersionString
         Telemetry.capture("update_download_failed", properties)
-        CrashReporter.logError("update_download_failed", data: properties)
-        CrashReporter.captureDiagnostic("update_download_failed", error: error, data: [
-            "target_version": item.displayVersionString,
-        ])
+        // Sentry receives only one actionable diagnostic at cycle completion.
+        // Expected network/translocation failures remain PostHog-only.
     }
 
     func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
@@ -174,18 +344,25 @@ final class AppUpdate: NSObject, SPUUpdaterDelegate {
         }
         if let error, !noUpdateInCycle {
             let nsError = error as NSError
-            let properties: [String: Any] = [
-                "source": source,
-                "update_found": updateFoundInCycle,
-                "error_domain": nsError.domain,
-                "error_code": nsError.code,
-            ]
-            Telemetry.capture("update_cycle_failed", properties)
-            CrashReporter.logError("update_cycle_failed", data: properties)
-            CrashReporter.captureDiagnostic("update_cycle_failed", error: error, data: [
-                "source": source,
-                "update_found": updateFoundInCycle,
-            ])
+            let disposition = UpdateFailurePolicy.classify(nsError)
+            if disposition.category == .cancelled {
+                Telemetry.capture("update_cycle_completed", [
+                    "source": source,
+                    "result": "cancelled",
+                ])
+            } else {
+                var properties = UpdateFailurePolicy.telemetryProperties(for: nsError)
+                properties["source"] = source
+                properties["update_found"] = updateFoundInCycle
+                Telemetry.capture("update_cycle_failed", properties)
+                if disposition.shouldCaptureInSentry {
+                    CrashReporter.captureDiagnostic(
+                        "update_cycle_failed",
+                        error: error,
+                        data: properties
+                    )
+                }
+            }
         } else {
             Telemetry.capture("update_cycle_completed", [
                 "source": source,

@@ -14,8 +14,8 @@ failure without collecting screen contents or user files.
 ## Fixed
 - **The affected macOS 27 beta gets a safer launch path.** On Beta 4 build
   `26A5388g`, Burrow starts with a Dock icon instead of creating its menu-bar
-  status item. The fallback is deliberately limited to that exact build and is
-  retried after either Burrow or macOS changes. Manual update checks remain
+  status item. The fallback is deliberately limited to that exact build; a new
+  macOS build restores the normal guarded path. Manual update checks remain
   available even when automatic Sparkle startup is paused.
 - **Interrupted launches recover one component at a time.** A durable launch
   journal gives the status item and Sparkle separate 30-second stability

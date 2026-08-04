@@ -294,6 +294,21 @@ enum LaunchRecovery {
     }
 }
 
+enum StatusItemStartupPolicy {
+    /// `applicationDidFinishLaunching` runs before AppKit processes the first
+    /// event. Leave that launch turn before asking AppKit/WindowServer to wake
+    /// the status-item scene; this reduces coupling menu-bar scene creation to
+    /// unrelated launch-time remote views (Sentry BURROW-9V).
+    static let initialDelayNanoseconds: UInt64 = 1_000_000_000
+
+    static func shouldScheduleInitialCreation(
+        showMenuBarIcon: Bool,
+        recoveryReason: LaunchRecoveryReason?
+    ) -> Bool {
+        showMenuBarIcon && recoveryReason == nil
+    }
+}
+
 enum DiagnosticPrivacy {
     private static let blockedKeys: Set<String> = [
         "api_key", "token", "authorization", "password", "secret",

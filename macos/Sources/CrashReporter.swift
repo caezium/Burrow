@@ -49,6 +49,7 @@ struct AppHangRateLimiter {
 enum StatusItemDiagnosticState: String {
     case notRequested = "not_requested"
     case compatibilityMode = "compatibility_mode"
+    case scheduled
     case stabilizing
     case stable
     case disabled
@@ -90,6 +91,15 @@ enum CrashReporter {
     private static var appHangLimiter = AppHangRateLimiter()
     private static var launchPhase = LaunchPhase.launchStarted.rawValue
     private static var launchTransaction: (any Span)?
+
+    /// Bounded updater and launch fields that may leave the Mac in a Sentry
+    /// diagnostic context. Free-form descriptions and URLs remain excluded.
+    static let diagnosticContextFields: Set<String> = [
+        "attempt", "elapsed_bucket", "error_code", "error_domain",
+        "failure_category", "phase", "reason", "recovery", "source", "state",
+        "status", "target_version", "underlying_error_code",
+        "underlying_error_domain", "update_found", "update_source",
+    ]
 
     /// Run a synchronous, USER-PACED block (a modal confirm, an auth prompt)
     /// without Sentry's app-hang monitor flagging the expected main-thread
@@ -431,11 +441,7 @@ enum CrashReporter {
             "burrow_runtime": [
                 "app_build", "app_version", "architecture", "os_build", "os_version",
             ],
-            "diagnostic": [
-                "attempt", "elapsed_bucket", "error_code", "error_domain", "phase",
-                "reason", "source", "state", "status", "target_version", "update_found",
-                "update_source",
-            ],
+            "diagnostic": diagnosticContextFields,
             // Preserve only the identifiers needed to connect a captured
             // error to Burrow's fixed-name custom launch trace.
             "trace": [

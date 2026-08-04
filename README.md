@@ -364,9 +364,11 @@ Burrow** — or turn the menu-bar icon off in Settings to run it as a Dock app.
 If a macOS build freezes while Burrow creates that status item, the next launch
 stays in Dock-based compatibility mode on the same OS build and offers a
 one-click redacted diagnostic report. Automatic Sparkle startup waits until
-the status item is stable; if the updater then fails its own stability window,
+the initial AppKit launch turn has settled and the status item is stable; if
+the updater then fails its own stability window,
 later automatic checks pause for that app/OS build while manual checks remain
-available. Updating Burrow or macOS retries the guarded path.
+available. A new macOS build retries a guarded status item; a new Burrow or
+macOS build retries an updater that previously failed its stability window.
 
 ### Windows preview build
 

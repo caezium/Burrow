@@ -36,6 +36,34 @@ final class LaunchDiagnosticsTests: XCTestCase {
         XCTAssertNil(LaunchRecovery.reason(environment: environment, previous: nil))
     }
 
+    func testNormalInitialStatusItemCreationIsDeferredPastTheLaunchTurn() {
+        XCTAssertTrue(
+            StatusItemStartupPolicy.shouldScheduleInitialCreation(
+                showMenuBarIcon: true,
+                recoveryReason: nil
+            )
+        )
+        XCTAssertGreaterThanOrEqual(
+            StatusItemStartupPolicy.initialDelayNanoseconds,
+            1_000_000_000
+        )
+    }
+
+    func testCompatibilityAndIconDisabledLaunchesDoNotScheduleAStatusItem() {
+        XCTAssertFalse(
+            StatusItemStartupPolicy.shouldScheduleInitialCreation(
+                showMenuBarIcon: false,
+                recoveryReason: nil
+            )
+        )
+        XCTAssertFalse(
+            StatusItemStartupPolicy.shouldScheduleInitialCreation(
+                showMenuBarIcon: true,
+                recoveryReason: .macOS27Beta4
+            )
+        )
+    }
+
     func testInterruptedStatusItemCreationUsesSafeModeOnNextLaunch() {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("burrow-launch-\(UUID().uuidString).json")

@@ -31,7 +31,9 @@ release ZIP; Burrow adds no identifier or device profile to those requests.
 Burrow separately records fixed-name update milestones such as
 `update_found`, `update_download_failed`, and `update_install_started` through
 the opt-out telemetry pipeline. Depending on the milestone, properties contain
-only the update version, check source, result, and error domain/code. Sparkle
+only the update version, check source, result, fixed failure category/recovery,
+and bounded outer/underlying error domain/code. Error descriptions, request
+URLs, response bodies, and network names are never sent. Sparkle
 system profiling is explicitly disabled with `SUEnableSystemProfiling=false`;
 GitHub necessarily sees the request IP at the network layer. Signing and
 notarization themselves add no telemetry and require no additional
@@ -98,7 +100,7 @@ so no IP is attached to events either.
 
 | Events | Properties |
 |---|---|
-| `app_opened`, `app_ready`, `app_terminated` | cold-start; menu-bar availability; compatibility-mode boolean |
+| `app_opened`, `app_ready`, `app_terminated` | cold-start; menu-bar availability; compatibility-mode boolean and fixed status-item state |
 | `app_updated` | previous/current app version and build |
 | `engine_missing`, `install_window_ready`, `onboarding_completed` | none |
 | `telemetry_opt_in_changed` | enabled boolean |
@@ -106,14 +108,15 @@ so no IP is attached to events either.
 | `feature_operation_started`, `feature_operation_completed` | `clean`/`optimize`, dry-run/elevated booleans, fixed result, bucketed duration |
 | `previous_launch_incomplete` | previous phase, app version/build, OS build, bucketed elapsed time |
 | `compatibility_fallback_activated`, `compatibility_fallback_reaffirmed` | fixed reason, OS build, menu-bar mode |
+| `status_item_creation_scheduled`, `status_item_stability_started`, `status_item_stabilized` | fixed `launch` or `settings` source |
 | `diagnostic_report_copied` | fixed recovery reason |
-| `updater_started`, `updater_stabilized` | `automatic`, `manual`, or `settings` source on start; none on stabilization |
+| `updater_started`, `updater_stabilized` | `automatic`, `manual`, or `settings` source |
 | `automatic_updater_suppressed` | fixed recovery reason, app build, and OS build |
 | `update_check_started` | `manual` source |
-| `update_found`, `update_not_found` | target version on `update_found`; none on `update_not_found` |
-| `update_download_started`, `update_download_completed`, `update_download_failed` | target version; failures add error domain/code |
+| `update_found`, `update_not_found` | target version on `update_found`; fixed manual/automatic source on `update_not_found` |
+| `update_download_started`, `update_download_completed`, `update_download_failed` | target version; failures add fixed category/recovery and bounded outer/underlying error domain/code |
 | `update_install_started`, `update_choice_made` | target version, fixed choice, numeric Sparkle stage |
-| `update_cycle_completed`, `update_cycle_failed` | source, fixed result/update-found boolean; failures add error domain/code |
+| `update_cycle_completed`, `update_cycle_failed` | source, fixed result/update-found boolean; failures add fixed category/recovery and bounded outer/underlying error domain/code |
 
 Sentry captures crashes, unhandled errors, and app hangs automatically. Release
 health sessions are enabled and the fixed-name launch trace is sampled at 10%.
@@ -125,6 +128,17 @@ Burrow adds at most 50 fixed-name manual breadcrumbs and fixed-name
 warning/error logs. Automatic network breadcrumbs, failed-request capture,
 file I/O tracing, Core Data tracing, UI tracing, screenshots, and view-hierarchy
 capture remain disabled.
+
+Expected updater conditions do not become Sentry issues. Sparkle's
+running-translocated/running-from-disk-image errors stay in PostHog with the
+fixed `move_to_applications` recovery, ordinary network download failures stay
+in PostHog with `sparkle_scheduled_retry`, and user cancellations are recorded
+as completed cycles. Configuration, signature/validation, installation, and
+otherwise unknown failures still create a scrubbed Sentry diagnostic. The
+GitHub bridge includes bounded release, OS-build, launch-phase, status-item,
+count, and stack information on every new issue. App-Hang groups are aggregated
+into a weekly digest instead of being silently skipped or opening one issue per
+sampled frame.
 
 Automatic Sparkle startup begins only after the status item has remained
 responsive for 30 seconds, then receives a separate 30-second durable

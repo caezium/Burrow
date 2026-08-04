@@ -11,7 +11,7 @@
           "icon": "shield",
           "color": "green",
           "title": "Safer on the affected macOS beta",
-          "line": "On macOS 27 Beta 4 build `26A5388g`, Burrow starts in Dock-based compatibility mode instead of creating the menu-bar status item; normal behavior is retried after Burrow or macOS changes."
+          "line": "On macOS 27 Beta 4 build `26A5388g`, Burrow starts in Dock-based compatibility mode instead of creating the menu-bar status item; a new macOS build restores the normal guarded path."
         },
         {
           "icon": "pulse",
@@ -35,7 +35,7 @@
         {
           "label": "fixed",
           "items": [
-            "**The affected macOS 27 beta gets a safer launch path.** On Beta 4 build `26A5388g`, Burrow starts with a Dock icon instead of creating its menu-bar status item. The fallback is limited to that exact build and is retried after either Burrow or macOS changes. Manual update checks remain available even when automatic Sparkle startup is paused.",
+            "**The affected macOS 27 beta gets a safer launch path.** On Beta 4 build `26A5388g`, Burrow starts with a Dock icon instead of creating its menu-bar status item. The fallback is limited to that exact build; a new macOS build restores the normal guarded path. Manual update checks remain available even when automatic Sparkle startup is paused.",
             "**Interrupted launches recover one component at a time.** A durable launch journal gives the status item and Sparkle separate 30-second stability windows. If launch is interrupted, the next run suppresses only the component whose window was active, shows a recovery alert, and offers a one-click redacted diagnostic report. ([#321](https://github.com/caezium/Burrow/pull/321))"
           ]
         },

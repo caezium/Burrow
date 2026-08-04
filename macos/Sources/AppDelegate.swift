@@ -55,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var safeModeActive = false
     private var recoveryNoticePresented = false
     private var launchCompleted = false
+    private var initialStatusItemCreationTask: Task<Void, Never>?
     private var statusItemStabilityTask: Task<Void, Never>?
     private var statusItemStabilityGeneration = 0
     private var statusItemStabilitySpan: DiagnosticSpan?
@@ -221,13 +222,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         safeModeActive = Store.showMenuBarIcon && recoveryReason != nil
-        if Store.showMenuBarIcon, !safeModeActive {
-            markLaunch(.statusItemCreating)
-            let statusItemSpan = CrashReporter.startLaunchSpan("status_item_create")
-            self.statusBar = StatusBarController(db: db, producer: producer, delegate: self)
-            statusItemSpan?.finish()
-            markLaunch(.statusItemReady)
-            scheduleStatusItemStabilityMarker()
+        if StatusItemStartupPolicy.shouldScheduleInitialCreation(
+            showMenuBarIcon: Store.showMenuBarIcon,
+            recoveryReason: recoveryReason
+        ) {
+            scheduleInitialStatusItemCreation(db: db, producer: producer)
         } else if safeModeActive, let recoveryReason {
             CrashReporter.setStatusItemState(.compatibilityMode)
             NSApp.setActivationPolicy(.regular)
@@ -383,6 +382,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        initialStatusItemCreationTask?.cancel()
+        initialStatusItemCreationTask = nil
         statusItemStabilityTask?.cancel()
         statusItemStabilityTask = nil
         statusItemStabilitySpan?.finish()
@@ -538,16 +539,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     openMainWindow(initial: .home)
                 }
                 Telemetry.capture("compatibility_fallback_reaffirmed", [
+                    "reason": recoveryReason?.rawValue ?? "unknown",
                     "os_build": runtimeEnvironment.osBuild,
+                    "menu_bar_mode": Store.menuBarDisplayMode.rawValue,
                 ])
                 presentRecoveryNoticeIfNeeded()
                 return
             }
-            if statusBar == nil {
-                markLaunch(.statusItemCreating)
-                statusBar = StatusBarController(db: db, producer: producer, delegate: self)
-                markLaunch(.statusItemReady)
-                scheduleStatusItemStabilityMarker()
+            if statusBar == nil, initialStatusItemCreationTask == nil {
+                createStatusItem(db: db, producer: producer, source: "settings")
             } else {
                 statusBar?.applyDisplayMode()   // Icon ↔ Metrics flip
             }
@@ -571,7 +571,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         CrashReporter.setLaunchPhase(phase)
     }
 
-    private func scheduleStatusItemStabilityMarker() {
+    private func scheduleInitialStatusItemCreation(db: DB, producer: SnapshotProducer) {
+        initialStatusItemCreationTask?.cancel()
+        CrashReporter.setStatusItemState(.scheduled)
+        Telemetry.capture("status_item_creation_scheduled", ["source": "launch"])
+        initialStatusItemCreationTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(
+                    nanoseconds: StatusItemStartupPolicy.initialDelayNanoseconds
+                )
+            } catch {
+                return
+            }
+            guard let self else { return }
+            self.initialStatusItemCreationTask = nil
+            guard Store.showMenuBarIcon,
+                  self.recoveryReason == nil,
+                  self.statusBar == nil else {
+                if self.launchCompleted { CrashReporter.finishLaunchTrace() }
+                return
+            }
+            self.createStatusItem(db: db, producer: producer, source: "launch")
+        }
+    }
+
+    private func createStatusItem(
+        db: DB,
+        producer: SnapshotProducer,
+        source: String
+    ) {
+        markLaunch(.statusItemCreating)
+        let statusItemSpan = CrashReporter.startLaunchSpan("status_item_create")
+        statusBar = StatusBarController(db: db, producer: producer, delegate: self)
+        statusItemSpan?.finish()
+        markLaunch(.statusItemReady)
+        scheduleStatusItemStabilityMarker(source: source)
+    }
+
+    private func scheduleStatusItemStabilityMarker(source: String) {
         statusItemStabilityTask?.cancel()
         statusItemStabilitySpan?.finish()
         if automaticUpdaterSchedulingArmed {
@@ -584,6 +621,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let generation = statusItemStabilityGeneration
         statusItemStabilitySpan = CrashReporter.startLaunchSpan("status_item_stabilizing")
         CrashReporter.setStatusItemState(.stabilizing)
+        Telemetry.capture("status_item_stability_started", ["source": source])
 
         statusItemStabilityTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 30_000_000_000)
@@ -598,6 +636,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self.statusItemStabilitySpan = nil
             CrashReporter.setStatusItemState(.stable)
             CrashReporter.breadcrumb("status_item_stable", category: "launch")
+            Telemetry.capture("status_item_stabilized", ["source": source])
             if self.launchCompleted { CrashReporter.finishLaunchTrace() }
             if self.automaticUpdaterSchedulingArmed {
                 self.scheduleAutomaticUpdaterStart(afterNanoseconds: 0)
@@ -606,6 +645,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func cancelStatusItemStabilityMarker(state: StatusItemDiagnosticState) {
+        initialStatusItemCreationTask?.cancel()
+        initialStatusItemCreationTask = nil
         statusItemStabilityGeneration += 1
         statusItemStabilityTask?.cancel()
         statusItemStabilityTask = nil
@@ -667,10 +708,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // A menu-bar launch is not considered healthy until AppKit's status
         // item has survived 30 responsive seconds. Its child span and separate
         // status_item_state tag remain live across this app_ready phase.
-        if statusItemStabilityTask == nil { CrashReporter.finishLaunchTrace() }
+        if statusItemStabilityTask == nil, initialStatusItemCreationTask == nil {
+            CrashReporter.finishLaunchTrace()
+        }
+        let statusItemState: String
+        if safeModeActive {
+            statusItemState = StatusItemDiagnosticState.compatibilityMode.rawValue
+        } else if initialStatusItemCreationTask != nil {
+            statusItemState = StatusItemDiagnosticState.scheduled.rawValue
+        } else if statusBar == nil {
+            statusItemState = StatusItemDiagnosticState.notRequested.rawValue
+        } else {
+            statusItemState = StatusItemDiagnosticState.stabilizing.rawValue
+        }
         Telemetry.capture("app_ready", [
             "menu_bar_available": statusBar != nil,
             "compatibility_mode": safeModeActive,
+            "status_item_state": statusItemState,
         ])
         if presentRecoveryNotice {
             DispatchQueue.main.async { [weak self] in self?.presentRecoveryNoticeIfNeeded() }

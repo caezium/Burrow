@@ -8,6 +8,7 @@
 //
 
 import XCTest
+import Sparkle
 @testable import Burrow
 
 final class UpdateCheckTests: XCTestCase {
@@ -28,6 +29,96 @@ final class UpdateCheckTests: XCTestCase {
     func testAutomaticCheckToggleStartsUpdaterOnlyWhenEnabled() {
         XCTAssertFalse(UpdateStartPolicy.shouldStartForAutomaticChecks(enabled: false))
         XCTAssertTrue(UpdateStartPolicy.shouldStartForAutomaticChecks(enabled: true))
+    }
+
+    func testTranslocatedSparkleFailureRequiresMovingTheAppWithoutCreatingASentryIssue() {
+        let error = NSError(domain: SUSparkleErrorDomain, code: 1005)
+
+        let failure = UpdateFailurePolicy.classify(error)
+
+        XCTAssertEqual(failure.category, .appTranslocation)
+        XCTAssertEqual(failure.recovery, .moveToApplications)
+        XCTAssertFalse(failure.shouldCaptureInSentry)
+    }
+
+    func testOfflineDownloadFailureUsesSparklesScheduledRetryAndKeepsOnlyBoundedCauseFields() {
+        let underlying = NSError(
+            domain: NSURLErrorDomain,
+            code: NSURLErrorNotConnectedToInternet,
+            userInfo: [NSLocalizedDescriptionKey: "private network detail"]
+        )
+        let error = NSError(
+            domain: SUSparkleErrorDomain,
+            code: 2001,
+            userInfo: [NSUnderlyingErrorKey: underlying]
+        )
+
+        let failure = UpdateFailurePolicy.classify(error)
+        let properties = UpdateFailurePolicy.telemetryProperties(for: error)
+
+        XCTAssertEqual(failure.category, .transientDownload)
+        XCTAssertEqual(failure.recovery, .sparkleScheduledRetry)
+        XCTAssertFalse(failure.shouldCaptureInSentry)
+        XCTAssertEqual(properties["underlying_error_domain"] as? String, NSURLErrorDomain)
+        XCTAssertEqual(properties["underlying_error_code"] as? Int, NSURLErrorNotConnectedToInternet)
+        XCTAssertEqual(properties["failure_category"] as? String, "transient_download")
+        XCTAssertEqual(properties["recovery"] as? String, "sparkle_scheduled_retry")
+        XCTAssertNil(properties["description"])
+    }
+
+    func testUserCancelledUpdateDoesNotCreateASentryIssue() {
+        let error = NSError(domain: SUSparkleErrorDomain, code: 4007)
+
+        let failure = UpdateFailurePolicy.classify(error)
+
+        XCTAssertEqual(failure.category, .cancelled)
+        XCTAssertEqual(failure.recovery, .none)
+        XCTAssertFalse(failure.shouldCaptureInSentry)
+    }
+
+    func testNonSparkleErrorWithCancellationCodeRemainsActionable() {
+        let error = NSError(domain: "ExampleDomain", code: 4007)
+
+        let failure = UpdateFailurePolicy.classify(error)
+
+        XCTAssertEqual(failure.category, .other)
+        XCTAssertEqual(failure.recovery, .none)
+        XCTAssertTrue(failure.shouldCaptureInSentry)
+    }
+
+    func testSignatureFailureRemainsADeveloperActionableSentryIssue() {
+        let error = NSError(domain: SUSparkleErrorDomain, code: 3001)
+
+        let failure = UpdateFailurePolicy.classify(error)
+
+        XCTAssertEqual(failure.category, .signatureValidation)
+        XCTAssertEqual(failure.recovery, .none)
+        XCTAssertTrue(failure.shouldCaptureInSentry)
+    }
+
+    func testInvalidDownloadConfigurationStillCreatesASentryIssue() {
+        let underlying = NSError(domain: NSURLErrorDomain, code: NSURLErrorBadURL)
+        let error = NSError(
+            domain: SUSparkleErrorDomain,
+            code: 2001,
+            userInfo: [NSUnderlyingErrorKey: underlying]
+        )
+
+        let failure = UpdateFailurePolicy.classify(error)
+
+        XCTAssertEqual(failure.category, .configuration)
+        XCTAssertEqual(failure.recovery, .none)
+        XCTAssertTrue(failure.shouldCaptureInSentry)
+    }
+
+    func testDirectInvalidURLFailureIsConfigurationRatherThanTransientNetwork() {
+        let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorBadURL)
+
+        let failure = UpdateFailurePolicy.classify(error)
+
+        XCTAssertEqual(failure.category, .configuration)
+        XCTAssertEqual(failure.recovery, .none)
+        XCTAssertTrue(failure.shouldCaptureInSentry)
     }
 
 }

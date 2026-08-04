@@ -62,4 +62,13 @@ final class CrashReporterPolicyTests: XCTestCase {
         XCTAssertTrue(LaunchTraceEndReason.completed.shouldFinish)
         XCTAssertFalse(LaunchTraceEndReason.telemetryDisabled.shouldFinish)
     }
+
+    func testUpdaterDiagnosticContextKeepsOnlyBoundedClassificationFields() {
+        XCTAssertTrue(CrashReporter.diagnosticContextFields.contains("failure_category"))
+        XCTAssertTrue(CrashReporter.diagnosticContextFields.contains("recovery"))
+        XCTAssertTrue(CrashReporter.diagnosticContextFields.contains("underlying_error_domain"))
+        XCTAssertTrue(CrashReporter.diagnosticContextFields.contains("underlying_error_code"))
+        XCTAssertFalse(CrashReporter.diagnosticContextFields.contains("description"))
+        XCTAssertFalse(CrashReporter.diagnosticContextFields.contains("url"))
+    }
 }
