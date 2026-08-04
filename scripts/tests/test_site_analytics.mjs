@@ -118,7 +118,7 @@ test('production analytics is cookieless and limited to the approved features', 
         },
     })
 
-    assert.equal('$raw_user_agent' in event.properties, false)
+    assert.equal(event.properties.$raw_user_agent, 'PrivateBrowser/1.0 exact-build-details')
     assert.equal(event.properties.$current_url, 'https://burrow.henryzh.dev/')
     assert.equal(event.properties.$initial_current_url, 'https://burrow.henryzh.dev/releases.html')
     assert.equal(event.properties.$referrer, 'https://search.example/results')

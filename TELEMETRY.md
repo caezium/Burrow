@@ -193,11 +193,11 @@ directly is unsupported because it bypasses that guard.
 The site uses PostHog's **stateful cookieless mode**. It sets no PostHog cookie,
 local-storage value, or session-storage value, never calls `identify`, and
 creates no person profile. PostHog derives a rotating daily hash from the
-request IP, user agent, and site domain, uses temporary server-side state for a
-30-minute session boundary, then strips the raw IP before event processing; the
-project's separate **Discard client IP data** setting remains enabled as a
-second guard. The daily hash is unrelated to either app's random install ID and
-cannot follow a browser across days.
+request IP, the SDK's raw user-agent field, and the site domain, then removes
+both raw inputs before writing the event. It uses temporary server-side state
+for a 30-minute session boundary; the project's separate **Discard client IP
+data** setting remains enabled as a second guard. The daily hash is unrelated
+to either app's random install ID and cannot follow a browser across days.
 
 The captured website events and fields are:
 
@@ -211,10 +211,10 @@ The captured website events and fields are:
 PostHog also attaches ordinary web context: browser and OS family/version,
 device type, language/time zone, viewport and screen dimensions, page host/path
 and title, sanitized referrer, and PostHog library version. URL query strings
-and fragments are removed before sending, the complete raw user-agent event
-property is discarded, campaign-parameter persistence is off, and Do Not Track
-is honored. PostHog still receives the user-agent request header needed for the
-rotating cookieless hash described above.
+and fragments are removed before sending. The SDK transmits its raw user-agent
+field only because cookieless preprocessing requires it; PostHog removes that
+field after deriving the rotating hash described above. Campaign-parameter
+persistence is off, and Do Not Track is honored.
 
 Generic element autocapture, session replay, heatmaps, rage/dead-click capture,
 JavaScript exception capture, console capture, network timing, person profiles,

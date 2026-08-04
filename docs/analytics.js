@@ -21,11 +21,8 @@
   function sanitizeEvent(event) {
     if (!event || !event.properties) return event;
 
-    // PostHog can attach the complete browser user-agent string as an event
-    // property. The server may still use the request header to derive its
-    // rotating cookieless identifier, but the raw value is not retained with
-    // Burrow's analytics events.
-    delete event.properties.$raw_user_agent;
+    // Keep PostHog's $raw_user_agent input: cookieless ingestion requires it
+    // to derive the rotating hash, then removes it before storing the event.
 
     ['$current_url', '$initial_current_url', '$referrer', '$initial_referrer'].forEach(function (name) {
       if (!(name in event.properties)) return;

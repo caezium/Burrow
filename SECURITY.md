@@ -101,12 +101,13 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
   **[TELEMETRY.md](TELEMETRY.md)**.
 - **The public website uses separate cookieless analytics.** On the exact
   `burrow.henryzh.dev` production host, PostHog records page views/leaves,
-  scroll depth, CLS/INP/LCP, and fixed download/Homebrew-copy events. It stores
-  no browser identifier, creates no person profile, strips URL queries and
-  fragments, honors Do Not Track, and disables replay, generic click capture,
-  exceptions, console/network capture, surveys, and flags. Requests go directly
-  to PostHog so content blockers remain effective; the exact fields and
-  server-side daily-hash behavior are in **[TELEMETRY.md](TELEMETRY.md)**.
+  scroll depth, CLS/INP/LCP, and fixed download/Homebrew-copy events. It sets no
+  browser identifier in client storage, creates no person profile, strips URL
+  queries and fragments, honors Do Not Track, and disables replay, generic
+  click capture, exceptions, console/network capture, surveys, and flags.
+  Requests go directly to PostHog so content blockers remain effective; the
+  exact fields and server-side daily-hash behavior are in
+  **[TELEMETRY.md](TELEMETRY.md)**.
 - **Telemetry stays off the UI thread.** macOS PostHog delivery uses Burrow's
   own serial background transport rather than the SDK timer that previously
   ran on AppKit's main run loop. A local 64-event sanitized outbox retries one
