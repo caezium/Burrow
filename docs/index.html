@@ -397,23 +397,23 @@
 
     <div class="grid3 wn-grid">
       <article class="tcard" style="--c: var(--green)">
+        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-7 4 14 2.5-7h5"/></svg></div><div class="nm">CPU usage matches the sampling window</div></div>
+        <p class="ds">The bundled engine keeps a baseline across refreshes, samples before collector fan-out, and sums tick deltas instead of reporting the collector's own burst.</p>
+      </article>
+      <article class="tcard" style="--c: var(--azure)">
         <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l1.8 4.6L18 10l-4.2 1.4L12 16l-1.8-4.6L6 10l4.2-1.4z"/><path d="M18.5 15.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg></div><div class="nm">Updates report the right outcome</div></div>
         <p class="ds">Translocation, ordinary network failures, and cancellation stay measurable without becoming Sentry defects; actionable failures still produce one scrubbed diagnostic.</p>
       </article>
-      <article class="tcard" style="--c: var(--azure)">
+      <article class="tcard" style="--c: var(--lilac)">
         <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9.5 11.5l2 2 3.5-3.5"/></svg></div><div class="nm">AppKit gets a settled launch turn</div></div>
         <p class="ds">Normal menu-bar creation waits one second after launch before entering its existing stability window, while the exact macOS 27 Beta 4 safeguard remains in place.</p>
-      </article>
-      <article class="tcard" style="--c: var(--lilac)">
-        <div class="top"><div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-7 4 14 2.5-7h5"/></svg></div><div class="nm">Hang evidence reaches the tracker</div></div>
-        <p class="ds">The Sentry bridge paginates older groups and rolls bounded weekly App-Hang digests instead of silently dropping them.</p>
       </article>
     </div>
 
     <div class="extra-label mono">// also tightened in 0.11.2</div>
     <div class="wn-chips">
       <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Sparkle keeps its native move-to-Applications and retry UI</span>
-      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Expected updater conditions are PostHog-only; actionable failures create one Sentry diagnostic</span>
+      <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>App-Hang digests paginate and roll over instead of dropping older groups</span>
       <span class="wn-chip"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg><a href="https://github.com/caezium/Burrow/issues/319" target="_blank" rel="noopener">#319</a> stays open until an affected macOS 27 Mac verifies the notarized build</span>
     </div>
     <!-- WN:END -->

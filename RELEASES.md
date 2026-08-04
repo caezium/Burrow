@@ -2,10 +2,10 @@
 
 # Burrow 0.11.2
 
-An updater and launch-reliability patch. This release stops expected Sparkle
-conditions from looking like product defects, gives AppKit a settled launch turn
-before creating the menu-bar item, and makes sampled app hangs reliably reach
-the issue tracker with bounded diagnostic context.
+A system-metrics, updater, and launch-reliability patch. This release corrects
+CPU sampling, stops expected Sparkle conditions from looking like product
+defects, gives AppKit a settled launch turn before creating the menu-bar item,
+and makes sampled app hangs reliably reach the issue tracker.
 
 > **Affected macOS 27 beta users:** please install 0.11.2 and report the result
 > in [#319](https://github.com/caezium/Burrow/issues/319). The exact Beta 4
@@ -13,6 +13,13 @@ the issue tracker with bounded diagnostic context.
 > notarized build is verified on a Mac that reproduced the freeze.
 
 ## Fixed
+- **CPU usage now reflects a representative sampling interval.** The bundled
+  engine keeps a tick baseline across refreshes, samples before the other
+  collectors fan out, and derives total usage from summed tick deltas. This
+  removes the roughly doubled readings and coarse per-core fractions reported in
+  [#335](https://github.com/caezium/Burrow/issues/335). A cold one-shot status
+  command can take about 600 ms longer; ongoing GUI sampling reuses its existing
+  refresh interval and adds no wait. ([#340](https://github.com/caezium/Burrow/pull/340))
 - **Updater failures now mean what they say.** Running from a disk image or a
   translocated location, ordinary network failures, and user cancellation remain
   measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of

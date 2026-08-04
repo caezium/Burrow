@@ -5,36 +5,37 @@
       "version": "0.11.2",
       "date": "2026-08-05",
       "tag": "v0.11.2",
-      "tagline": "An updater and launch-reliability patch with accurate Sparkle outcomes, a settled AppKit status-item start, and hang reports that reliably reach the issue tracker.",
+      "tagline": "A system-metrics, updater, and launch-reliability patch with accurate CPU sampling, accurate Sparkle outcomes, a settled AppKit start, and reliable hang reports.",
       "highlights": [
         {
-          "icon": "sparkle",
+          "icon": "pulse",
           "color": "green",
+          "title": "CPU usage matches the sampling window",
+          "line": "The bundled engine keeps a baseline across refreshes, samples before collector fan-out, and sums tick deltas instead of reporting the collector's own burst."
+        },
+        {
+          "icon": "sparkle",
+          "color": "azure",
           "title": "Updates report the right outcome",
           "line": "Translocation, ordinary network failures, and cancellation stay measurable without becoming Sentry defects; actionable failures still produce one scrubbed diagnostic."
         },
         {
           "icon": "shield",
-          "color": "azure",
+          "color": "lilac",
           "title": "AppKit gets a settled launch turn",
           "line": "Normal menu-bar creation waits one second after launch before entering its existing stability window, while the exact macOS 27 Beta 4 safeguard remains in place."
-        },
-        {
-          "icon": "pulse",
-          "color": "lilac",
-          "title": "Hang evidence reaches the tracker",
-          "line": "The Sentry bridge paginates older groups and rolls bounded weekly App-Hang digests instead of silently dropping them."
         }
       ],
       "chips": [
         "Sparkle keeps its native move-to-Applications and retry UI",
-        "Expected updater conditions are PostHog-only; actionable failures create one Sentry diagnostic",
+        "App-Hang digests paginate and roll over instead of dropping older groups",
         "[#319](https://github.com/caezium/Burrow/issues/319) stays open until an affected macOS 27 Mac verifies the notarized build"
       ],
       "sections": [
         {
           "label": "fixed",
           "items": [
+            "**CPU usage now reflects a representative sampling interval.** The bundled engine keeps a tick baseline across refreshes, samples before the other collectors fan out, and derives total usage from summed tick deltas. This removes the roughly doubled readings and coarse per-core fractions reported in [#335](https://github.com/caezium/Burrow/issues/335). A cold one-shot status command can take about 600 ms longer; ongoing GUI sampling reuses its existing refresh interval and adds no wait. ([#340](https://github.com/caezium/Burrow/pull/340))",
             "**Updater failures now mean what they say.** Running from a disk image or translocated location, ordinary network failures, and user cancellation remain measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of its native move-to-Applications and scheduled-retry UI. Configuration, signature, installation, and unknown failures still create exactly one scrubbed Sentry diagnostic per cycle. ([#339](https://github.com/caezium/Burrow/pull/339))",
             "**The normal menu-bar path no longer races the first AppKit launch turn.** Burrow waits one second before creating its status item, then retains the existing 30-second stability window. The safeguard for macOS 27 Beta 4 build `26A5388g` remains exact-build-only; a later macOS build returns to the normal guarded path automatically. ([#339](https://github.com/caezium/Burrow/pull/339))"
           ]

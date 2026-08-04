@@ -135,10 +135,11 @@
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.2" target="_blank" rel="noopener">full notes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">An updater and launch-reliability patch with accurate Sparkle outcomes, a settled AppKit status-item start, and hang reports that reliably reach the issue tracker.</p>
+        <p class="lead">A system-metrics, updater, and launch-reliability patch with accurate CPU sampling, accurate Sparkle outcomes, a settled AppKit start, and reliable hang reports.</p>
         <div class="sblock">
           <div class="slabel mono">fixed</div>
           <ul class="slist">
+            <li><b>CPU usage now reflects a representative sampling interval.</b> The bundled engine keeps a tick baseline across refreshes, samples before the other collectors fan out, and derives total usage from summed tick deltas. This removes the roughly doubled readings and coarse per-core fractions reported in <a href="https://github.com/caezium/Burrow/issues/335" target="_blank" rel="noopener">#335</a>. A cold one-shot status command can take about 600 ms longer; ongoing GUI sampling reuses its existing refresh interval and adds no wait. (<a href="https://github.com/caezium/Burrow/pull/340" target="_blank" rel="noopener">#340</a>)</li>
             <li><b>Updater failures now mean what they say.</b> Running from a disk image or translocated location, ordinary network failures, and user cancellation remain measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of its native move-to-Applications and scheduled-retry UI. Configuration, signature, installation, and unknown failures still create exactly one scrubbed Sentry diagnostic per cycle. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
             <li><b>The normal menu-bar path no longer races the first AppKit launch turn.</b> Burrow waits one second before creating its status item, then retains the existing 30-second stability window. The safeguard for macOS 27 Beta 4 build <code>26A5388g</code> remains exact-build-only; a later macOS build returns to the normal guarded path automatically. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
           </ul>
