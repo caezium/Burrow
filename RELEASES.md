@@ -1,55 +1,52 @@
 <!-- Latest release ONLY. This file is the GitHub release body (release.yml --notes-file), so it must contain just the newest version. OVERWRITE it each release; do not accumulate. Full prose history lives in docs/releases.json → docs/releases.html (the site Releases page). -->
 
-# Burrow 0.11.1
+# Burrow 0.11.2
 
-A guarded-startup and diagnostics patch for the system-wide input freeze
-reported on macOS 27 Beta 4. This release reduces the risky launch surface on
-the affected build and records enough redacted state to isolate any remaining
-failure without collecting screen contents or user files.
+An updater and launch-reliability patch. This release stops expected Sparkle
+conditions from looking like product defects, gives AppKit a settled launch turn
+before creating the menu-bar item, and makes sampled app hangs reliably reach
+the issue tracker with bounded diagnostic context.
 
-> **Affected macOS 27 beta users:** please install 0.11.1 and report the result
-> in [#319](https://github.com/caezium/Burrow/issues/319). The issue remains open
-> until the notarized release is verified on a Mac that reproduced the freeze.
+> **Affected macOS 27 beta users:** please install 0.11.2 and report the result
+> in [#319](https://github.com/caezium/Burrow/issues/319). The exact Beta 4
+> compatibility guard remains in place, and the issue stays open until a
+> notarized build is verified on a Mac that reproduced the freeze.
 
 ## Fixed
-- **The affected macOS 27 beta gets a safer launch path.** On Beta 4 build
-  `26A5388g`, Burrow starts with a Dock icon instead of creating its menu-bar
-  status item. The fallback is deliberately limited to that exact build; a new
-  macOS build restores the normal guarded path. Manual update checks remain
-  available even when automatic Sparkle startup is paused.
-- **Interrupted launches recover one component at a time.** A durable launch
-  journal gives the status item and Sparkle separate 30-second stability
-  windows. If launch is interrupted, the next run suppresses only the component
-  whose window was active, shows a recovery alert, and offers a one-click
-  redacted diagnostic report. ([#321](https://github.com/caezium/Burrow/pull/321))
+- **Updater failures now mean what they say.** Running from a disk image or a
+  translocated location, ordinary network failures, and user cancellation remain
+  measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of
+  its native move-to-Applications and scheduled-retry UI. Configuration,
+  signature, installation, and unknown failures still create exactly one
+  scrubbed Sentry diagnostic per cycle. ([#339](https://github.com/caezium/Burrow/pull/339))
+- **The normal menu-bar path no longer races the first AppKit launch turn.**
+  Burrow waits one second before creating its status item, then retains the
+  existing 30-second stability window. The safeguard for macOS 27 Beta 4 build
+  `26A5388g` remains exact-build-only; a later macOS build returns to the normal
+  guarded path automatically. ([#339](https://github.com/caezium/Burrow/pull/339))
 
 ## Improved
-- **Sentry can now explain hangs that never become crashes.** Release-health
-  sessions, hang tracking, low-memory context, fixed-name sampled performance
-  spans, and coarse launch/updater state cover the failure modes that a normal
-  crash report misses. Outbound data is scrubbed fail closed, with no
-  screenshots, view hierarchies, user paths, URLs, request bodies, or automatic
-  UI, file, database, and network tracing.
-- **PostHog analytics no longer bring an AppKit-facing SDK into startup.** Burrow
-  still sends the same opt-out semantic product, screen, and operation events to
-  PostHog, but a small background HTTPS transport replaces `posthog-ios`. It has
-  a bounded serialized retry queue and no session replay, autocapture, remote
-  feature flags, AppKit timer, or main-thread disk I/O. Existing 0.11.0 anonymous
-  identities are migrated once so release-to-release funnels remain accurate.
-- **The first signed Sparkle successor passed a real update.** An installed
-  Developer ID-signed 0.11.0 copy found, downloaded, installed, and relaunched
-  0.11.1 through Sparkle's native UI without Terminal or Homebrew. The updated
-  app then passed strict signing, stapler, and Gatekeeper checks, completing
-  [#281](https://github.com/caezium/Burrow/issues/281).
+- **App-hang evidence can no longer disappear at the Sentry bridge.** Sampled
+  hangs are collected into bounded weekly GitHub digests instead of being
+  silently skipped. Cursor pagination reaches older unseen groups, full digests
+  roll into numbered parts, and deferred groups remain eligible for the next
+  run. ([#339](https://github.com/caezium/Burrow/pull/339))
+- **Launch and updater health now have explicit lifecycle outcomes.** Fixed-name
+  scheduled, stabilizing, and stable milestones include bounded app release,
+  macOS build, launch phase, and status-item state, so future failures can be
+  separated without collecting free text or user data.
 
 ## Privacy
 - **Telemetry remains optional, unlinked, and non-tracking.** One Settings
-  switch disables both PostHog analytics and Sentry diagnostics. The privacy
-  manifest continues to declare Product Interaction, Other Usage, Crash,
-  Performance, and Other Diagnostic data; this release adds no signing-specific
-  telemetry and records no screen content.
+  switch disables both PostHog analytics and Sentry diagnostics. Updater
+  diagnostics contain fixed categories and bounded error domains/codes—never
+  descriptions, URLs, response bodies, network names, paths, screen content, or
+  files. The privacy manifest remains unchanged and accurate.
 
 ## Security
-- **The release chain remains fail closed.** The tag cannot publish unless the
-  app is Developer ID signed, notarized, stapled, accepted by Gatekeeper, and
-  both the update archive and appcast pass Sparkle signature verification.
+- **Publishing still fails closed, including the external Homebrew tap.** Before
+  any release build begins, CI requires every signing, notarization, Sparkle,
+  and tap credential, then proves the tap token with a reversible Git
+  write. The tap credential is isolated from the engine checkout so a successful
+  notarized release cannot fail at the final cask push because the wrong token
+  was left in Git configuration.

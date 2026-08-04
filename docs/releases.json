@@ -2,6 +2,65 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.11.2",
+      "date": "2026-08-05",
+      "tag": "v0.11.2",
+      "tagline": "An updater and launch-reliability patch with accurate Sparkle outcomes, a settled AppKit status-item start, and hang reports that reliably reach the issue tracker.",
+      "highlights": [
+        {
+          "icon": "sparkle",
+          "color": "green",
+          "title": "Updates report the right outcome",
+          "line": "Translocation, ordinary network failures, and cancellation stay measurable without becoming Sentry defects; actionable failures still produce one scrubbed diagnostic."
+        },
+        {
+          "icon": "shield",
+          "color": "azure",
+          "title": "AppKit gets a settled launch turn",
+          "line": "Normal menu-bar creation waits one second after launch before entering its existing stability window, while the exact macOS 27 Beta 4 safeguard remains in place."
+        },
+        {
+          "icon": "pulse",
+          "color": "lilac",
+          "title": "Hang evidence reaches the tracker",
+          "line": "The Sentry bridge paginates older groups and rolls bounded weekly App-Hang digests instead of silently dropping them."
+        }
+      ],
+      "chips": [
+        "Sparkle keeps its native move-to-Applications and retry UI",
+        "Expected updater conditions are PostHog-only; actionable failures create one Sentry diagnostic",
+        "[#319](https://github.com/caezium/Burrow/issues/319) stays open until an affected macOS 27 Mac verifies the notarized build"
+      ],
+      "sections": [
+        {
+          "label": "fixed",
+          "items": [
+            "**Updater failures now mean what they say.** Running from a disk image or translocated location, ordinary network failures, and user cancellation remain measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of its native move-to-Applications and scheduled-retry UI. Configuration, signature, installation, and unknown failures still create exactly one scrubbed Sentry diagnostic per cycle. ([#339](https://github.com/caezium/Burrow/pull/339))",
+            "**The normal menu-bar path no longer races the first AppKit launch turn.** Burrow waits one second before creating its status item, then retains the existing 30-second stability window. The safeguard for macOS 27 Beta 4 build `26A5388g` remains exact-build-only; a later macOS build returns to the normal guarded path automatically. ([#339](https://github.com/caezium/Burrow/pull/339))"
+          ]
+        },
+        {
+          "label": "improved",
+          "items": [
+            "**App-hang evidence can no longer disappear at the Sentry bridge.** Sampled hangs are collected into bounded weekly GitHub digests instead of being silently skipped. Cursor pagination reaches older unseen groups, full digests roll into numbered parts, and deferred groups remain eligible for the next run. ([#339](https://github.com/caezium/Burrow/pull/339))",
+            "**Launch and updater health now have explicit lifecycle outcomes.** Fixed-name scheduled, stabilizing, and stable milestones include bounded app release, macOS build, launch phase, and status-item state, so future failures can be separated without collecting free text or user data."
+          ]
+        },
+        {
+          "label": "privacy",
+          "items": [
+            "**Telemetry remains optional, unlinked, and non-tracking.** One Settings switch disables both PostHog analytics and Sentry diagnostics. Updater diagnostics contain fixed categories and bounded error domains/codes—never descriptions, URLs, response bodies, network names, paths, screen content, or files. The privacy manifest remains unchanged and accurate."
+          ]
+        },
+        {
+          "label": "security",
+          "items": [
+            "**Publishing still fails closed, including the external Homebrew tap.** Before any release build begins, CI requires every signing, notarization, Sparkle, and tap credential, then proves the tap token with a reversible Git write. The tap credential is isolated from the engine checkout so a successful notarized release cannot fail at the final cask push because the wrong token was left in Git configuration."
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.11.1",
       "date": "2026-08-03",
       "tag": "v0.11.1",
