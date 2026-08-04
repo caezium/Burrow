@@ -48,14 +48,40 @@ or notarization and changes between builds.
 
 This is the part people rightly scrutinize in cleaners. Burrow's model:
 
-- **Burrow installs no privileged/background helper and no XPC root
-  service.** There is nothing persistently running as root and nothing for
-  another local process to connect to.
+- **By default Burrow installs no privileged helper.** Out of the box there
+  is nothing running as root and nothing for another local process to
+  connect to.
 - When **Clean** or **Optimize** needs admin rights, **macOS's own
   authorization dialog** asks for your password, and Burrow runs the
   matching `mo` command for that single action, then exits. You see and
-  approve every elevation. (See `CommandRunner.runElevated` in
-  `macos/Sources/TaskReport.swift`.)
+  approve every elevation.
+- **Optional privileged helper.** Settings ▸ Advanced can install a small
+  signed launch daemon (`SMAppService`) so those same operations can
+  authenticate with Touch ID instead of a password-only prompt. It is
+  strictly opt-in and takes its own one-time macOS approval. If you install
+  it:
+  - **It grants no standing privilege.** Installing the helper authorizes
+    nothing. Every operation that runs as root requires a fresh
+    authentication — no grace period, no cached credential, no
+    "authenticate once for this launch". This is enforced by the
+    authorization right's own definition (`timeout: 0`, `shared: false`,
+    `allow-root: false`), not merely by convention.
+  - **It cannot be asked to run anything else.** The helper accepts three
+    typed operations — scan, clean, optimize — and derives the command line
+    itself. There is no field in its API for a path, an argument, a shell
+    string, or an executable, so a caller that fully controls the message
+    still cannot express "run this".
+  - **Only Burrow can talk to it.** The daemon pins its callers to Burrow's
+    bundle identifier and signing team via the XPC connection's code-signing
+    requirement, so another local process cannot reach it or use it to raise
+    a credential prompt.
+  - **It runs only your engine.** The binary it executes is the signed
+    engine inside the app bundle, resolved relative to the helper's own
+    path, never through `PATH` or an environment variable, and its signature
+    is checked before it is run as root.
+  - **You can remove it** from Settings, or from System Settings ▸ General ▸
+    Login Items & Extensions.
+  - Code: `macos/Sources/PrivilegedHelper/`, `macos/HelperSources/`.
 - **Honest caveat:** official builds elevate the engine sealed inside the
   Developer ID signed app. A source build can fall back to an external `mo`;
   if it does, that executable is only as trustworthy as its install location

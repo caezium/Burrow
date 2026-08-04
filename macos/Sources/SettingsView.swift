@@ -115,6 +115,9 @@ struct SettingsView: View {
     @State private var touchIDEnabled = false
     @State private var touchIDBusy = false
     @State private var touchIDAvailable = false
+    @State private var helperStatus: HelperRegistrationStatus = .notRegistered
+    @State private var helperBusy = false
+    @State private var helperError: String?
 
     /// Drop-in MCP config for Claude Code / Cursor / Codex / Cline — they
     /// all share the same `{command, args}` stdio shape, so one snippet
@@ -165,6 +168,7 @@ struct SettingsView: View {
         }
         .onAppear {
             refreshStatusLabels(); loadMoleVersion(); loadTouchIDStatus(); loadLaunchAtLogin()
+            loadHelperStatus()
             whitelistPatterns = MoleWhitelist.live.patterns()
             menuBarSuppressed = AppDelegate.shared?.menuBarSuppressedByCompatibilityGuard ?? false
         }
@@ -632,6 +636,19 @@ struct SettingsView: View {
                 footnote("Sends anonymous product analytics (PostHog) plus crash, hang, startup, update, and sampled performance diagnostics (Sentry): random install IDs, app and exact macOS build, CPU type, screens and features used, and fixed-name diagnostic milestones. Never screenshots, screen recordings, your file names, contents, user paths, URLs, or metrics. On by default; turn it off and both stop. Full list in TELEMETRY.md.")
             }
 
+            section("Privileged helper", "lock.shield") {
+                infoRow("Status", helperStatusLabel)
+                HStack {
+                    Spacer()
+                    if helperBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }
+                    PillButton(title: helperInstalled ? "Remove" : "Install", filled: false) { toggleHelper() }
+                }
+                if let helperError {
+                    footnote(helperError)
+                }
+                footnote("Runs Burrow's admin operations — scan, clean, optimize — through a small signed helper instead of a password-only prompt, so macOS can offer Touch ID. Installing it needs your approval once. It grants no standing access: every operation that runs as administrator still asks you to authenticate, every time, and the helper can only perform those three operations — it cannot be asked to run anything else.")
+            }
+
             section("Touch ID for sudo", "touchid") {
                 infoRow("Status", touchIDStatus)
                 if touchIDAvailable {
@@ -641,7 +658,7 @@ struct SettingsView: View {
                         PillButton(title: touchIDEnabled ? "Disable" : "Enable", filled: false) { toggleTouchID() }
                     }
                 }
-                footnote("Lets `sudo` in a terminal accept your fingerprint instead of a password — including `mo` commands you run yourself. It does NOT change Burrow's own admin prompts: those go through macOS authorization, which asks for your password regardless. Configured via `mo touchid` (pam_tid); turning it on or off needs your password once.")
+                footnote("Lets `sudo` in a terminal accept your fingerprint instead of a password — including `mo` commands you run yourself. Separate from Burrow's own admin prompts, which are covered by the privileged helper above. Configured via `mo touchid` (pam_tid); turning it on or off needs your password once.")
             }
 
             section("Mole engine", "shippingbox") {
@@ -705,6 +722,53 @@ struct SettingsView: View {
                     : (res?.stderr.isEmpty == false ? String(res!.stderr.prefix(300))
                                                     : NSLocalizedString("The external engine updater exited non-zero. Try running `mo update` in a terminal.", comment: ""))
                 alert.runModalQuiet()
+            }
+        }
+    }
+
+    // MARK: - Privileged helper
+
+    private var helperInstalled: Bool { helperStatus != .notRegistered }
+
+    private var helperStatusLabel: String {
+        switch helperStatus {
+        case .enabled: return "Installed"
+        case .requiresApproval: return "Waiting for your approval in Login Items & Extensions"
+        case .notRegistered: return "Not installed"
+        }
+    }
+
+    private func loadHelperStatus() {
+        let status = PrivilegedHelperClient.shared.registrationStatus
+        DispatchQueue.main.async { helperStatus = status }
+    }
+
+    /// Install or remove the daemon. Both directions can throw — macOS refuses
+    /// registration if the user declines, and we surface that rather than
+    /// leaving the row silently unchanged.
+    private func toggleHelper() {
+        guard !helperBusy else { return }
+        helperBusy = true
+        helperError = nil
+        let install = !helperInstalled
+        DispatchQueue.global(qos: .userInitiated).async {
+            var failure: String?
+            do {
+                if install {
+                    try PrivilegedHelperClient.shared.register()
+                } else {
+                    try PrivilegedHelperClient.shared.unregister()
+                }
+            } catch {
+                failure = install
+                    ? "Couldn't install the helper. Burrow keeps using the password prompt."
+                    : "Couldn't remove the helper. You can also turn it off in System Settings ▸ General ▸ Login Items & Extensions."
+            }
+            let status = PrivilegedHelperClient.shared.registrationStatus
+            DispatchQueue.main.async {
+                helperBusy = false
+                helperError = failure
+                helperStatus = status
             }
         }
     }

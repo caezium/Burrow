@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd configuration for Burrow's privileged helper.
+
+  Staged into Contents/Library/LaunchDaemons/, which is where
+  SMAppService.daemon(plistName:) looks. BundleProgram is resolved relative to
+  the app bundle, so the daemon is always the copy inside the signed app —
+  there is no separate install into /Library/PrivilegedHelperTools that could
+  drift from, or outlive, the app.
+
+  Deliberately absent:
+    * RunAtLoad / KeepAlive — the daemon starts on demand when the app
+      connects and exits once idle. A root process should exist only while it
+      is doing something.
+    * ProgramArguments — nothing is passed on the command line, so there is no
+      argument surface to influence.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>dev.caezium.Burrow.helper</string>
+
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/BurrowHelper</string>
+
+	<key>MachServices</key>
+	<dict>
+		<key>dev.caezium.Burrow.helper</key>
+		<true/>
+	</dict>
+
+	<!-- Attributes the daemon to Burrow in Login Items & Extensions, so the
+	     user sees which app installed it and can remove it there. -->
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>dev.caezium.Burrow</string>
+	</array>
+
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>

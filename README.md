@@ -407,9 +407,13 @@ Burrow drives a bundled, open-source Mole engine (an MIT fork of `mo`). The hone
   recordings, user files, user paths, metrics, or stored IP; turn it off in
   Settings. PostHog delivery and its bounded sanitized retry outbox run entirely
   off AppKit's main thread. Full list in **[TELEMETRY.md](TELEMETRY.md)**.
-- **No background root helper.** When Clean/Optimize need admin rights, macOS's
-  own dialog asks you and Burrow runs that one `mo` command, then exits — you
-  approve every elevation.
+- **No background root helper by default.** When Clean/Optimize need admin
+  rights, macOS's own dialog asks you and Burrow runs that one `mo` command,
+  then exits — you approve every elevation. You can opt in to a small signed
+  helper so those prompts accept Touch ID; it grants no standing privilege
+  (every root operation still authenticates, every time), performs only scan,
+  clean, and optimize, and can be removed from Settings. Details in
+  **[SECURITY.md](SECURITY.md)**.
 - **Local-only surfaces:** the MCP/HTTP surfaces bind to loopback only
   (`127.0.0.1`) and history is stored locally. On Windows, the HTTP REST toggle
   disables REST endpoints but keeps the local `/mcp` bridge route available for

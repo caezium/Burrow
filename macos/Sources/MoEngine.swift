@@ -129,7 +129,11 @@ final class MoEngine {
 
     init(processPort: MoleProcessPort = SystemMoleProcess(),
          locator: MoLocator = SystemMoLocator(),
-         streamPort: ProcessPort = SystemProcessPort(),
+         // Elevated streaming runs prefer the privileged helper when it is
+         // registered, approved, and build-matched; everything else — and any
+         // elevated run the helper doesn't recognise — falls through to the
+         // osascript port unchanged. See `PrivilegeRoute`.
+         streamPort: ProcessPort = HelperAwareProcessPort(),
          makePTY: @escaping @Sendable () -> PTYPort = { PTYTask() }) {
         self.processPort = processPort
         self.locator = locator

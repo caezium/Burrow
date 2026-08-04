@@ -201,4 +201,63 @@ else
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# Privileged helper gate.
+#
+# The helper runs as ROOT, so a build that ships it half-wired is worse than
+# one that doesn't ship it at all: a missing plist key or an unsigned binary
+# turns into a launchd failure, or worse a daemon nobody vetted. Every check
+# below is fail-closed, and the whole block is mandatory — the helper is not an
+# optional component, so "absent" is an error, not a skip.
+HELPER="$APP/Contents/MacOS/BurrowHelper"
+HELPER_PLIST="$APP/Contents/Library/LaunchDaemons/dev.caezium.Burrow.helper.plist"
+
+echo "==> verifying the privileged helper"
+[ -f "$HELPER" ] || { echo "error: privileged helper missing: $HELPER" >&2; exit 1; }
+is_macho "$HELPER" || { echo "error: privileged helper is not a Mach-O binary" >&2; exit 1; }
+[ -f "$HELPER_PLIST" ] || { echo "error: launchd plist missing: $HELPER_PLIST" >&2; exit 1; }
+plutil -lint "$HELPER_PLIST" >/dev/null \
+  || { echo "error: launchd plist is not a valid property list" >&2; exit 1; }
+
+helper_plist_value() {
+  plutil -extract "$1" raw -expect "$2" -o - "$HELPER_PLIST" 2>/dev/null
+}
+
+# The label and the Mach service name are what SMAppService and the client
+# connect through. A typo in either is a silent "helper never starts".
+HELPER_LABEL="$(helper_plist_value Label string || true)"
+[ "$HELPER_LABEL" = "dev.caezium.Burrow.helper" ] \
+  || { echo "error: launchd Label is '${HELPER_LABEL:-missing}', expected dev.caezium.Burrow.helper" >&2; exit 1; }
+
+helper_plist_value 'MachServices.dev\.caezium\.Burrow\.helper' bool >/dev/null \
+  || { echo "error: launchd plist does not vend the dev.caezium.Burrow.helper Mach service" >&2; exit 1; }
+
+# BundleProgram is resolved relative to the app bundle. If it points anywhere
+# other than the executable we just signed, the daemon that actually runs as
+# root is not the one this pipeline verified.
+HELPER_PROGRAM="$(helper_plist_value BundleProgram string || true)"
+[ "$HELPER_PROGRAM" = "Contents/MacOS/BurrowHelper" ] \
+  || { echo "error: BundleProgram is '${HELPER_PROGRAM:-missing}', expected Contents/MacOS/BurrowHelper" >&2; exit 1; }
+[ -f "$APP/$HELPER_PROGRAM" ] \
+  || { echo "error: BundleProgram does not resolve to a file inside the app" >&2; exit 1; }
+
+codesign --verify --strict --verbose=2 "$HELPER" \
+  || { echo "error: privileged helper failed strict signature verification" >&2; exit 1; }
+
+if [ "$MODE" = "developer-id" ]; then
+  # The client pins callers to our signing team, and the helper verifies the
+  # engine the same way. An ad-hoc helper has no team to pin, so it would fall
+  # back to identifier-only matching — fine for local development, never for a
+  # release.
+  HELPER_TEAM="$(codesign -d --verbose=4 "$HELPER" 2>&1 | awk -F= '$1 == "TeamIdentifier" { print $2; exit }')"
+  [ "$HELPER_TEAM" = "$EXPECTED_TEAM" ] \
+    || { echo "error: helper team is '${HELPER_TEAM:-missing}', expected '$EXPECTED_TEAM'" >&2; exit 1; }
+
+  # Hardened runtime on a root daemon is not optional.
+  codesign -d --verbose=2 "$HELPER" 2>&1 | grep -q "flags=.*runtime" \
+    || { echo "error: privileged helper is not built with the hardened runtime" >&2; exit 1; }
+fi
+
+echo "privileged helper verified: signed, hardened, and correctly declared to launchd"
+
 echo "signed $SIGNED_MACHO Mach-O file(s) and $SIGNED_CONTAINERS code container(s); strict verification passed"

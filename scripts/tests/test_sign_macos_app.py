@@ -17,6 +17,9 @@ class SignMacOSAppTests(unittest.TestCase):
         root: Path,
         *,
         get_task_allow: bool | str | None = None,
+        helper: bool = True,
+        helper_plist_overrides: dict[str, object] | None = None,
+        helper_plist: bool = True,
     ) -> tuple[Path, Path]:
         app = root / "Burrow.app"
         executable = app / "Contents" / "MacOS" / "Burrow"
@@ -25,6 +28,30 @@ class SignMacOSAppTests(unittest.TestCase):
         # an unprivileged process cannot apply to a temporary file on macOS.
         shutil.copyfile("/usr/bin/true", executable)
         executable.chmod(0o755)
+
+        # The privileged helper and its launchd declaration. Present by
+        # default because the signer treats them as mandatory: a release that
+        # ships the helper half-wired is worse than one without it, so
+        # "absent" has to be an error rather than a skip.
+        if helper:
+            helper_binary = app / "Contents" / "MacOS" / "BurrowHelper"
+            shutil.copyfile("/usr/bin/true", helper_binary)
+            helper_binary.chmod(0o755)
+
+        if helper_plist:
+            plist_path = (
+                app / "Contents" / "Library" / "LaunchDaemons"
+                / "dev.caezium.Burrow.helper.plist"
+            )
+            plist_path.parent.mkdir(parents=True, exist_ok=True)
+            contents: dict[str, object] = {
+                "Label": "dev.caezium.Burrow.helper",
+                "BundleProgram": "Contents/MacOS/BurrowHelper",
+                "MachServices": {"dev.caezium.Burrow.helper": True},
+            }
+            contents.update(helper_plist_overrides or {})
+            with plist_path.open("wb") as handle:
+                plistlib.dump(contents, handle)
 
         with (app / "Contents" / "Info.plist").open("wb") as handle:
             plistlib.dump(
@@ -148,6 +175,101 @@ exec /usr/bin/plutil "$@"
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("could not extract plist key", result.stderr)
+
+
+class PrivilegedHelperGateTests(SignMacOSAppTests):
+    """The signer's fail-closed checks on the root helper.
+
+    Each case here is a way to ship a helper that launchd would either refuse
+    to start or, worse, start as something other than the binary this pipeline
+    verified. None of them is caught by `codesign --verify --deep`, which is
+    why they are checked explicitly.
+    """
+
+    def test_missing_helper_binary_blocks_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app, entitlements = self.make_app(root, helper=False)
+
+            result = self.run_signer(app, entitlements)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("privileged helper missing", result.stderr)
+
+    def test_missing_launchd_plist_blocks_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app, entitlements = self.make_app(root, helper_plist=False)
+
+            result = self.run_signer(app, entitlements)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("launchd plist missing", result.stderr)
+
+    def test_wrong_label_blocks_release(self) -> None:
+        # SMAppService and launchd both key off the label; a typo means a
+        # daemon that silently never runs.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app, entitlements = self.make_app(
+                root, helper_plist_overrides={"Label": "dev.caezium.Burrow.helpr"}
+            )
+
+            result = self.run_signer(app, entitlements)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("launchd Label is", result.stderr)
+
+    def test_missing_mach_service_blocks_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app, entitlements = self.make_app(
+                root, helper_plist_overrides={"MachServices": {"something.else": True}}
+            )
+
+            result = self.run_signer(app, entitlements)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("does not vend the dev.caezium.Burrow.helper Mach service", result.stderr)
+
+    def test_bundle_program_pointing_elsewhere_blocks_release(self) -> None:
+        """The sharpest one.
+
+        BundleProgram is what launchd actually executes as root. If it names
+        anything other than the executable the pipeline just signed and
+        verified, the daemon running with full privileges is not the binary
+        this release vouched for.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app, entitlements = self.make_app(
+                root, helper_plist_overrides={"BundleProgram": "Contents/MacOS/Burrow"}
+            )
+
+            result = self.run_signer(app, entitlements)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("BundleProgram is", result.stderr)
+
+    def test_bundle_program_that_does_not_exist_blocks_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app, entitlements = self.make_app(root, helper=False)
+            # Restore only the plist so the failure is specifically the
+            # dangling BundleProgram rather than the missing-binary check.
+            result = self.run_signer(app, entitlements)
+
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_wellformed_helper_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app, entitlements = self.make_app(root, get_task_allow=False)
+
+            result = self.run_signer(app, entitlements)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("privileged helper verified", result.stdout)
 
 
 if __name__ == "__main__":
