@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="burrow-icon.png">
 <link rel="canonical" href="https://burrow.henryzh.dev/roadmap.html">
+<link rel="stylesheet" href="assets/chrome.css">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Burrow · Roadmap">
 <meta property="og:description" content="What's shipped, building, and being weighed for Burrow, and how to vote.">
@@ -42,35 +43,6 @@
   ::selection { background: rgba(217,160,102,0.26); }
   .page { max-width: var(--page); margin: 0 auto; padding: 0 var(--pad); }
   .mono { font-family: var(--mono); }
-  /* Floating pill nav, same shell as the landing page (docs/index.html). */
-  .topbar { position:sticky; top:0; z-index:50; padding-top:16px; margin-bottom:-8px; }
-  .topbar .in { height:60px; display:flex; align-items:center; justify-content:space-between; gap:16px;
-    padding:0 10px 0 16px; border-radius:999px; border:1px solid var(--hair); background:rgba(18,18,23,0.72);
-    backdrop-filter:saturate(150%) blur(14px); -webkit-backdrop-filter:saturate(150%) blur(14px);
-    box-shadow:0 1px 2px rgba(0,0,0,0.28); }
-  .brand { display:flex; align-items:center; gap:10px; font-size:1.05rem; font-weight:600;
-    letter-spacing:-0.02em; transition:transform .18s; }
-  .brand:hover { transform:scale(1.03); }
-  .brand .mk { width:28px; height:28px; border-radius:8px; flex:none; }
-  .nav { flex:1; min-width:0; display:flex; align-items:center; justify-content:center; gap:22px; }
-  .nav a { font-size:0.9rem; color:var(--ink-2); transition:color .18s; }
-  .nav a:hover { color:var(--ink); }
-  .nav a.on { color:var(--accent); }
-  .nav-right { display:flex; align-items:center; gap:12px; flex:none; }
-  .nav-github { display:inline-flex; align-items:center; color:var(--ink-2); transition:color .18s, transform .18s; }
-  .nav-github:hover { color:var(--ink); transform:scale(1.04); }
-  .icon { fill:currentColor; flex:none; display:block; }
-  .icon--github { width:19px; height:19px; }
-  .icon--apple { width:14px; height:17px; }
-  .btn { font-weight:600; font-size:0.875rem; display:inline-flex; align-items:center; justify-content:center;
-    padding:8px 15px; border-radius:999px; border:1px solid var(--accent); background:var(--accent);
-    color:var(--on-accent); white-space:nowrap; transition:background .18s, border-color .18s; }
-  .btn:hover { background:#E7C49A; border-color:#E7C49A; }
-  .btn-inner { display:inline-flex; align-items:center; gap:8px; }
-  @media (prefers-reduced-motion: no-preference) {
-    .btn-inner { transition:transform .18s; }
-    .btn:hover .btn-inner { transform:scale(.95); }
-  }
   .hero { padding-top: 72px; padding-bottom: 8px; }
   .hero h1 { font-family:var(--heading); font-weight:600; font-size:clamp(40px,7vw,64px); line-height:1.04;
     letter-spacing:-0.025em; margin:0; }
@@ -83,9 +55,6 @@
   main { padding-top: 8px; padding-bottom: 24px; }
   .hero p { max-width:680px; }
   main .entry, main > .rcol { max-width:940px; }
-  /* Minimal footer, same shape as the landing page. */
-  footer { padding:34px 0 48px; border-top:1px solid var(--hair-2); margin-top:8px; }
-  .footer-top { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
     font-size:12.5px; color:var(--ink-3); }
   .footer-links { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
   .footer-links a { transition:color .18s; }
