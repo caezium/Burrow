@@ -90,8 +90,8 @@
     background-color: var(--bg);
     background-image:
       url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='180'%20height='180'%3E%3Cfilter%20id='g'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.82'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23g)'%20opacity='0.06'/%3E%3C/svg%3E"),
-      radial-gradient(1200px 600px at 82% -10%, rgba(217,160,102,0.09), transparent 60%),
-      radial-gradient(1000px 520px at -10% 108%, rgba(217,160,102,0.07), transparent 60%);
+      radial-gradient(1200px 600px at 82% -10%, rgba(217,160,102,0.09), rgba(217,160,102,0) 60%),
+      radial-gradient(1000px 520px at -10% 108%, rgba(217,160,102,0.07), rgba(217,160,102,0) 60%);
     background-repeat: repeat, no-repeat, no-repeat;
     background-size: 180px 180px, auto, auto;
     background-attachment: fixed;
@@ -107,12 +107,12 @@
     border: 1px solid var(--line-soft); padding: 2px 6px; border-radius: 6px; color: var(--ink); white-space: nowrap; }
 
   /* ---------- hero ---------- */
-  .hero { position: relative; overflow: hidden; padding-top: 104px; padding-bottom: 64px; }
+  .hero { position: relative; padding-top: 104px; padding-bottom: 64px; }
   .hero::before {
-    content: ""; position: absolute; inset: -10% -10% auto; height: 560px; z-index: 0; pointer-events: none;
+    content: ""; position: absolute; inset: -180px 0 auto; height: 740px; z-index: 0; pointer-events: none;
     background:
-      radial-gradient(620px 360px at 72% 8%, rgba(217,160,102,0.14), transparent 70%),
-      radial-gradient(520px 320px at 8% 0, rgba(214,198,255,0.07), transparent 70%);
+      radial-gradient(620px 360px at 72% 8%, rgba(217,160,102,0.14), rgba(217,160,102,0) 70%),
+      radial-gradient(520px 320px at 8% 0, rgba(214,198,255,0.07), rgba(214,198,255,0) 70%);
   }
   .hero-inner { position: relative; z-index: 1; text-align: center; }
   .hero-mark { width: 112px; height: 112px; margin: 0 auto 26px; display: block;

@@ -307,7 +307,7 @@ SHARED_CSS = """  @font-face { font-family: "Geist"; src: url("assets/fonts/Geis
   body { margin:0; color:var(--ink); font-family:var(--serif); font-size:17px; line-height:1.6;
     -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; overflow-x:hidden;
     background-color:var(--bg);
-    background-image:radial-gradient(1200px 600px at 82% -10%, rgba(217,160,102,0.10), transparent 60%);
+    background-image:radial-gradient(1200px 600px at 82% -10%, rgba(217,160,102,0.10), rgba(217,160,102,0) 60%);
     background-repeat:no-repeat; background-attachment:fixed; }
   a { color: inherit; text-decoration: none; }
   ::selection { background: rgba(217,160,102,0.26); }
