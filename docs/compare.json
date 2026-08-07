@@ -1,0 +1,63 @@
+{
+  "intro": "Burrow covers jobs people usually split across a cleaner, an uninstaller, a disk mapper, and a menu-bar monitor. This table is about scope and licence, not quality: every tool listed here is good at the thing it was built for, and several are better at that one thing than Burrow is. What Burrow offers is one window, one licence, and a machine-readable surface for agents.",
+  "columns": [
+    { "key": "burrow", "name": "Burrow", "note": "free, MIT", "self": true },
+    { "key": "cmm", "name": "CleanMyMac", "note": "$40/yr" },
+    { "key": "pear", "name": "Pearcleaner", "note": "free, GPL" },
+    { "key": "daisy", "name": "DaisyDisk", "note": "$10 once" },
+    { "key": "istat", "name": "iStat Menus", "note": "$14 once" }
+  ],
+  "groups": [
+    {
+      "title": "Reclaiming space",
+      "rows": [
+        { "label": "Cache and log cleanup", "burrow": "yes", "cmm": "yes", "pear": "partial", "daisy": "no", "istat": "no" },
+        { "label": "Developer build artifacts", "burrow": "yes", "cmm": "partial", "pear": "no", "daisy": "no", "istat": "no",
+          "note": "node_modules, DerivedData, target, .next, with rebuild cost shown" },
+        { "label": "Duplicate finder", "burrow": "yes", "cmm": "yes", "pear": "no", "daisy": "no", "istat": "no" },
+        { "label": "Similar photo detection", "burrow": "yes", "cmm": "yes", "pear": "no", "daisy": "no", "istat": "no" },
+        { "label": "Leftover installer sweep", "burrow": "yes", "cmm": "yes", "pear": "no", "daisy": "no", "istat": "no" },
+        { "label": "Treemap disk map", "burrow": "yes", "cmm": "partial", "pear": "no", "daisy": "yes", "istat": "no",
+          "note": "DaisyDisk's sunburst is still the nicest map in the category" }
+      ]
+    },
+    {
+      "title": "Apps and maintenance",
+      "rows": [
+        { "label": "App uninstall with leftovers", "burrow": "yes", "cmm": "yes", "pear": "yes", "daisy": "no", "istat": "no",
+          "note": "Pearcleaner is the sharpest single-purpose uninstaller here" },
+        { "label": "Orphaned file detection", "burrow": "yes", "cmm": "partial", "pear": "yes", "daisy": "no", "istat": "no" },
+        { "label": "Homebrew updates and services", "burrow": "yes", "cmm": "no", "pear": "no", "daisy": "no", "istat": "no" },
+        { "label": "Login items and launch agents", "burrow": "yes", "cmm": "yes", "pear": "yes", "daisy": "no", "istat": "no" },
+        { "label": "Maintenance scripts", "burrow": "yes", "cmm": "yes", "pear": "no", "daisy": "no", "istat": "no" }
+      ]
+    },
+    {
+      "title": "Watching the machine",
+      "rows": [
+        { "label": "Live CPU, memory, GPU, disk", "burrow": "yes", "cmm": "partial", "pear": "no", "daisy": "no", "istat": "yes" },
+        { "label": "Menu-bar HUD", "burrow": "yes", "cmm": "yes", "pear": "no", "daisy": "no", "istat": "yes",
+          "note": "iStat Menus has far more sensors and far more configurability" },
+        { "label": "Long-range history", "burrow": "yes", "cmm": "no", "pear": "no", "daisy": "no", "istat": "partial",
+          "note": "ninety days in local SQLite, with peak-per-process tables" },
+        { "label": "Listening ports with owning process", "burrow": "yes", "cmm": "no", "pear": "no", "daisy": "no", "istat": "no" },
+        { "label": "Per-process network throughput", "burrow": "yes", "cmm": "no", "pear": "no", "daisy": "no", "istat": "yes" },
+        { "label": "Connectivity troubleshooting", "burrow": "yes", "cmm": "no", "pear": "no", "daisy": "no", "istat": "no" }
+      ]
+    },
+    {
+      "title": "Trust and access",
+      "rows": [
+        { "label": "Source you can read", "burrow": "yes", "cmm": "no", "pear": "yes", "daisy": "no", "istat": "no" },
+        { "label": "Shows files before deleting", "burrow": "yes", "cmm": "partial", "pear": "yes", "daisy": "yes", "istat": "no" },
+        { "label": "No background root helper", "burrow": "yes", "cmm": "no", "pear": "yes", "daisy": "yes", "istat": "partial" },
+        { "label": "MCP server for agents", "burrow": "yes", "cmm": "no", "pear": "no", "daisy": "no", "istat": "no",
+          "note": "26 tools, read-only by default" },
+        { "label": "Windows build", "burrow": "partial", "cmm": "no", "pear": "no", "daisy": "no", "istat": "no",
+          "note": "WinUI 3 port in beta" },
+        { "label": "Price", "burrow": "Free", "cmm": "$40/yr", "pear": "Free", "daisy": "$10", "istat": "$14", "text": true }
+      ]
+    }
+  ],
+  "closing": "If you only ever want one of these jobs done, the specialist is usually the better buy, and several of them are cheap or free. Burrow is for people who want the whole set in one place, want to read the source, or want an agent to be able to ask the machine questions."
+}

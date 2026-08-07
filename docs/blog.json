@@ -1,0 +1,278 @@
+{
+  "intro": "Practical guides to finding disk space, diagnosing slowdowns, and understanding what macOS is actually doing with your machine.",
+  "categories": {
+    "disk": "Disk space",
+    "perf": "Performance",
+    "dev": "Developer",
+    "tools": "Choosing tools",
+    "agents": "Agents"
+  },
+  "posts": [
+    {
+      "slug": "mac-says-disk-is-full-but-it-isnt",
+      "title": "Why Your Mac Says the Disk Is Full When It Isn't",
+      "description": "Purgeable space, local snapshots, and the gap between what Finder reports and what the filesystem can actually hand back.",
+      "category": "disk",
+      "date": "2026-08-07",
+      "read": "7 min",
+      "body": [
+        { "p": "You delete twenty gigabytes, empty the Trash, and the free-space number barely moves. Or Finder claims you have 40 GB free while an installer insists there is not enough room. Both situations come from the same place: on APFS, \"free space\" is a negotiated number, not a measurement." },
+        { "h2": "Purgeable space is not free space" },
+        { "p": "APFS reports a figure that includes purgeable content: local Time Machine snapshots, cached iCloud files that exist on the server, and caches macOS believes it can regenerate. The system counts these as space it could reclaim under pressure, so Finder folds them into the number it shows you. They are not available to a process asking for a contiguous write right now, which is why an installer can fail on a disk that looks half empty." },
+        { "p": "You can see the split from the terminal:" },
+        { "code": "diskutil info / | grep -E 'Free Space|Container'" },
+        { "p": "Compare that against what df reports, which ignores the optimistic accounting:" },
+        { "code": "df -h /System/Volumes/Data" },
+        { "p": "A large gap between the two is normal on a machine with snapshots. A gap of tens of gigabytes usually means snapshots are the story." },
+        { "h2": "Local snapshots are the usual culprit" },
+        { "p": "Time Machine keeps local snapshots on the internal disk between backups, and keeps them even when no external backup drive has been connected for months. Each one pins the state of every file it references, so deleting a 30 GB video frees nothing until every snapshot referencing it expires." },
+        { "code": "tmutil listlocalsnapshots /" },
+        { "p": "macOS thins these automatically when the disk gets tight, which is why the space often reappears on its own an hour later. If you need it now, thinning is a documented operation, but deleting snapshots removes your ability to roll back to those points in time." },
+        { "h2": "The other three places space hides" },
+        { "ul": [
+          "iCloud Drive placeholders. Files marked \"optimized\" show their full size in some views while occupying almost nothing locally, and the reverse happens after a large sync pulls everything down.",
+          "Application caches that never get pruned. Browsers, Xcode, Docker, and design tools all keep multi-gigabyte caches with no upper bound and no cleanup schedule.",
+          "Log and diagnostic data. A crashing daemon can write tens of gigabytes into /private/var/log over a weekend without any visible symptom besides the disk filling."
+        ] },
+        { "h2": "How to get a real answer" },
+        { "p": "The reliable move is to measure actual on-disk usage per directory rather than trusting a summary. A treemap makes this obvious in a way a list never does, because a single 40 GB directory is a single large rectangle instead of one row you have to scroll to." },
+        { "p": "Burrow's Analyze tool walks the filesystem and renders a squarified treemap of what it finds, so the thing consuming your disk is the biggest shape on screen. Drill into a branch to see the same breakdown one level down, then reveal the offender in Finder or send it to the Trash from the context menu. Because it measures real allocated bytes, the numbers it shows are the ones you actually get back." },
+        { "note": "Burrow is free and open source, on macOS and in beta on Windows. Analyze, Clean, Duplicates, and thirteen other tools live in one window." }
+      ]
+    },
+    {
+      "slug": "what-macos-system-data-actually-contains",
+      "title": "What macOS System Data Actually Contains",
+      "description": "The System Data bucket in Storage Settings is a leftovers category, not a system folder. Here is what lands in it and what is safe to clear.",
+      "category": "disk",
+      "date": "2026-08-05",
+      "read": "6 min",
+      "body": [
+        { "p": "Open Storage in System Settings and you will find a grey band labelled System Data, frequently the largest item on the disk and never explained. It is not a folder and it is not one thing. It is the bucket macOS drops anything into that does not match a category it recognises." },
+        { "h2": "What actually lands in the bucket" },
+        { "ul": [
+          "Application caches under ~/Library/Caches and /Library/Caches, which are unbounded by design.",
+          "Application Support data for apps that store databases and media outside the categories Storage understands, including messaging apps and design tools.",
+          "Local Time Machine snapshots, which frequently account for more than half the bucket on their own.",
+          "Container data for sandboxed apps under ~/Library/Containers.",
+          "Developer artifacts: Xcode DerivedData and device support, Docker images, package manager caches, virtual machine disks.",
+          "System and diagnostic logs, plus crash reports that accumulate with no expiry."
+        ] },
+        { "h2": "Why the number keeps moving" },
+        { "p": "System Data is calculated by subtraction. macOS totals the categories it can identify, then attributes the remainder to System Data. Any change in how a category is measured shifts the bucket, which is why the figure can jump by gigabytes with no corresponding change on disk. Chasing the number is a mistake; measuring directories is not." },
+        { "h2": "What is safe to remove" },
+        { "p": "The safe tier is anything an application regenerates on its own with no network access and no loss of state. Browser caches, thumbnail caches, Quick Look caches, and font caches all qualify. Clearing them costs you a slightly slower next launch and nothing else." },
+        { "p": "The next tier down needs thought. Package manager caches for npm, pnpm, CocoaPods, Gradle, and Maven regenerate, but only by downloading again, which is expensive on a slow connection and impossible offline. Build output such as DerivedData, target, dist, and .next regenerates locally but costs you a full rebuild." },
+        { "p": "The tier you should not touch blind is anything under Application Support that is not explicitly a cache. That directory holds real user state: message history, local databases, licence files, and app configuration. A cleaner that sweeps Application Support wholesale will eventually delete something you needed." },
+        { "h2": "Doing it without guessing" },
+        { "p": "Burrow's Clean tool sorts everything it finds by exactly this hierarchy, showing regenerable caches first and user-visible state last, with the file list and byte count in front of you before anything moves. Items with real rebuild cost stay unchecked until you tick them yourself. Purge covers the developer tier separately, so a build directory is never mixed in with a browser cache." }
+      ]
+    },
+    {
+      "slug": "safely-clear-xcode-deriveddata-and-caches",
+      "title": "How to Safely Clear Xcode DerivedData and Caches",
+      "description": "Which Xcode directories are safe to delete, which cost you a long rebuild, and which will break code signing if you touch them.",
+      "category": "dev",
+      "date": "2026-08-01",
+      "read": "6 min",
+      "body": [
+        { "p": "Xcode is usually the single largest consumer of disk space on a Mac used for development, and most of what it keeps is disposable. The trick is knowing which parts regenerate for free, which cost you a long rebuild, and which are not caches at all." },
+        { "h2": "Safe to delete, regenerates for free" },
+        { "ul": [
+          "~/Library/Developer/Xcode/DerivedData. Build intermediates, indexes, and module caches. Deleting it costs a full rebuild and a reindex, nothing more. This is almost always the biggest item.",
+          "~/Library/Caches/com.apple.dt.Xcode. Xcode's own cache directory, regenerated on next launch.",
+          "~/Library/Developer/Xcode/Archives, if you have already shipped or exported everything you need. Archives are how you re-symbolicate old crash reports, so keep the ones matching builds still in the wild.",
+          "~/Library/Developer/CoreSimulator/Caches. Simulator caches, regenerated on demand."
+        ] },
+        { "h2": "Costly but recoverable" },
+        { "p": "iOS DeviceSupport under ~/Library/Developer/Xcode/iOS DeviceSupport holds symbol files for every OS version of every device you have ever plugged in. It can reach tens of gigabytes. Deleting it is safe, but Xcode re-copies the symbols the next time you attach a device running that version, which takes several minutes per device." },
+        { "p": "Unused simulator runtimes are similar. Each runtime is several gigabytes and can be removed and redownloaded:" },
+        { "code": "xcrun simctl delete unavailable\nxcrun simctl list runtimes" },
+        { "h2": "Do not delete" },
+        { "p": "Keychain entries for signing identities, provisioning profiles under ~/Library/MobileDevice/Provisioning Profiles, and anything under ~/Library/Developer/Xcode/UserData are not caches. UserData holds your breakpoints, snippets, and window layouts. Provisioning profiles can be redownloaded but only from an account with the right access, which is a bad surprise mid-release." },
+        { "h2": "A note on the manual approach" },
+        { "p": "The common advice is a blanket rm -rf on DerivedData. That works, but it also deletes the index for every project at once, and gives you no idea how much you actually reclaimed or which project was responsible. If one project is holding 40 GB of build output, it is worth knowing which." },
+        { "p": "Burrow's Purge tool separates developer artifacts from ordinary caches and shows the rebuild cost of each category, so you can drop a 30 GB DerivedData directory while leaving a package cache that would take twenty minutes to refetch. Everything is listed with real byte counts before it is removed." }
+      ]
+    },
+    {
+      "slug": "node-modules-eating-your-disk",
+      "title": "node_modules Is Eating Your Disk. How to Reclaim It Safely",
+      "description": "Why dependency directories grow without bound across projects, and how to reclaim the space without breaking a project you still work on.",
+      "category": "dev",
+      "date": "2026-07-28",
+      "read": "5 min",
+      "body": [
+        { "p": "A single node_modules directory is usually a few hundred megabytes. The problem is that you have forty of them, one per project, most belonging to work you finished a year ago, and every one holds a full copy of largely the same dependency tree." },
+        { "h2": "Why it grows the way it does" },
+        { "p": "npm installs a full dependency tree per project by default. Two projects depending on the same version of the same library each get their own copy on disk. pnpm and Yarn's newer resolvers fix this with a content-addressed store plus hardlinks, but that only helps projects installed under those tools, and it introduces its own trap: naive disk measurement double-counts hardlinked files, so tools that are not hardlink aware will tell you that you have far more to reclaim than you do." },
+        { "h2": "What is actually safe to delete" },
+        { "p": "A dependency directory is reproducible from the lockfile, so deleting it is safe in the narrow sense. Two caveats matter in practice. Rebuilding needs network access, so a project you might work on offline is a bad candidate. And a reinstall resolves against the registry as it exists today, which for a project with a loose lockfile or an unpinned transitive dependency may not reproduce the exact tree you had." },
+        { "p": "The rule that holds up: delete dependency directories for projects you are not actively working on, and leave the ones you are. Build output is different, because it rebuilds locally with no network:" },
+        { "ul": [
+          "Safe and local: dist, build, target, .next, .build, __pycache__, coverage, DerivedData.",
+          "Safe but needs network: node_modules, Pods, venv, .venv, vendor/bundle.",
+          "Regenerates but slowly: ~/.npm, ~/.cache/yarn, ~/Library/Caches/CocoaPods, ~/.gradle/caches, ~/.m2/repository."
+        ] },
+        { "h2": "Finding them all" },
+        { "p": "The manual version is a find across your code directories, which works but gives you a list of paths and no sizes:" },
+        { "code": "find ~/code -name node_modules -type d -prune -maxdepth 4" },
+        { "p": "Burrow's Purge tool does this across the whole machine, groups the results by kind, shows the size of each, and marks which ones need network access to rebuild. Sizing is hardlink aware, so a pnpm store shared across a dozen projects is counted once rather than a dozen times, and the number it quotes is the number you get back." }
+      ]
+    },
+    {
+      "slug": "find-duplicate-files-on-a-mac",
+      "title": "How to Find Duplicate Files on a Mac",
+      "description": "Name matching finds almost nothing. Content hashing finds the real duplicates, and hardlink awareness stops you deleting the same bytes twice.",
+      "category": "disk",
+      "date": "2026-07-24",
+      "read": "5 min",
+      "body": [
+        { "p": "Duplicate files accumulate quietly: the same photo library imported twice, a Downloads folder with three copies of the same installer under three different names, project assets copied between folders. Finding them properly is harder than it sounds, and most of the difficulty is in avoiding false positives." },
+        { "h2": "Why filename matching fails" },
+        { "p": "The obvious approach compares names, which catches \"report.pdf\" and \"report copy.pdf\" and misses everything else. The genuinely wasteful duplicates usually have unrelated names, because they arrived from different sources. Meanwhile name matching produces false positives constantly: every project has an index.js and every camera produces IMG_0001.JPG." },
+        { "h2": "Content hashing, done in stages" },
+        { "p": "The correct approach compares content. Doing it naively means hashing every file on the disk, which is slow. The standard optimisation is to filter in stages: group by size first, since files of different sizes cannot be identical, then hash a prefix of each candidate, then hash in full only the ones that still match. On a typical disk this eliminates well over 99 percent of files before any expensive work happens." },
+        { "h2": "The hardlink trap" },
+        { "p": "Two paths can point at the same bytes. Time Machine local snapshots use this heavily, as do pnpm and uv package stores, and macOS itself uses clonefile for copies within APFS. A duplicate finder that is not aware of inodes will report these as duplicates and tell you that deleting one frees space. It does not: the bytes stay until every reference is gone. Worse, it inflates the total it promises you, so the number never matches what you get." },
+        { "p": "Any tool worth using checks device and inode before calling two paths distinct copies. Burrow's Duplicates tool does the staged content hash and treats hardlinked and cloned files as one, so the reclaimable figure it shows is the figure you actually recover." },
+        { "h2": "Near-duplicates are a separate problem" },
+        { "p": "Photos are the exception where exact matching is not enough. Burst shots and re-exports differ by a few bytes while being visually identical, so content hashing sees them as distinct. That needs perceptual comparison instead, which is what Burrow's Similar Photos tool does, grouping visually near-identical images so you can keep the best frame and drop the rest." }
+      ]
+    },
+    {
+      "slug": "leftover-files-after-uninstalling-mac-apps",
+      "title": "Leftover Files After Uninstalling Mac Apps",
+      "description": "Dragging an app to the Trash leaves preferences, caches, containers, and launch agents behind. Here is where they live and how to find the orphans.",
+      "category": "disk",
+      "date": "2026-07-20",
+      "read": "6 min",
+      "body": [
+        { "p": "macOS has no uninstaller. Dragging an app to the Trash removes the bundle and nothing else, and a typical app scatters files across six or seven locations outside it. Individually these are small. Across years of installs they add up, and some of them keep running." },
+        { "h2": "Where the leftovers live" },
+        { "ul": [
+          "~/Library/Preferences: property lists keyed by bundle identifier.",
+          "~/Library/Application Support: the app's real data, often the largest leftover.",
+          "~/Library/Caches: disposable, but frequently the biggest by size.",
+          "~/Library/Containers and ~/Library/Group Containers: everything a sandboxed app wrote.",
+          "~/Library/Saved Application State: restored window layouts.",
+          "~/Library/LaunchAgents and /Library/LaunchDaemons: background jobs that keep launching after the app is gone.",
+          "/Library/PrivilegedHelperTools: helper binaries installed with admin rights."
+        ] },
+        { "h2": "Launch agents are the ones that matter" },
+        { "p": "The rest is wasted space. A launch agent for a deleted app is an active problem: launchd keeps trying to start a binary that no longer exists, which produces log noise on every boot and occasionally a visible error dialog. Updaters are the common case, since most third-party updater agents outlive the app that installed them." },
+        { "code": "ls ~/Library/LaunchAgents /Library/LaunchAgents\nlaunchctl list | grep -v com.apple" },
+        { "h2": "Finding orphans after the fact" },
+        { "p": "Uninstalling cleanly is easy if you do it at the time. The hard problem is the machine you have now, with leftovers from apps removed years ago and no record of what they were." },
+        { "p": "The approach that works is to enumerate support files by bundle identifier and check each against the set of installed applications. Anything referencing an identifier with no corresponding app is an orphan. This needs care around a few real exceptions: some identifiers belong to helper components of apps that are still installed, and some belong to Apple subsystems that ship no app bundle at all." },
+        { "p": "Burrow's Leftovers tool does this matching and shows you which vanished app each file belonged to, so you are approving a named app's remains rather than a list of paths. Its Apps tool handles the other direction, sweeping preferences, support files, containers, and launch agents at uninstall time so nothing is orphaned in the first place." }
+      ]
+    },
+    {
+      "slug": "what-is-using-port-3000-on-your-mac",
+      "title": "What Is Using Port 3000 on Your Mac",
+      "description": "Address already in use, and the process holding it is not the one you think. How to find the owner and what to check before killing it.",
+      "category": "dev",
+      "date": "2026-07-16",
+      "read": "4 min",
+      "body": [
+        { "p": "You start a dev server and get EADDRINUSE. The usual response is to kill whatever is on the port and move on, which works right up until the process you killed was something you needed." },
+        { "h2": "Finding the owner" },
+        { "p": "The standard tool is lsof, which lists open files including sockets:" },
+        { "code": "lsof -nP -iTCP:3000 -sTCP:LISTEN" },
+        { "p": "The -n and -P flags skip DNS and service-name lookups, which is the difference between an instant answer and a multi-second hang when a nameserver is slow. On newer macOS versions lsof can also be slow across all processes, so scoping it to the port matters." },
+        { "p": "For a broader view, netstat still works:" },
+        { "code": "netstat -anv -p tcp | grep LISTEN" },
+        { "h2": "Check before you kill" },
+        { "p": "The PID alone does not tell you enough. Three things are worth knowing first: the full binary path, since a process named node could be any of a dozen projects; the parent process, since killing a child that a supervisor restarts accomplishes nothing; and whether it is a launchd job, in which case launchd will bring it straight back and you need to unload it instead." },
+        { "code": "ps -o pid,ppid,user,command -p <PID>" },
+        { "p": "The common surprises on a developer Mac: a Docker container publishing the port, a previous dev server orphaned when a terminal closed, macOS AirPlay Receiver holding 5000 and 7000, and a stale watch process from a crashed test runner." },
+        { "h2": "Seeing it without the terminal" },
+        { "p": "Burrow's Ports tool lists every listening port with the process behind it, the binary path, and the owning user, refreshed live. You can see that port 3000 belongs to a node process from a project you closed last week, confirm the path, and stop it from the same window. Its Network tool covers the related question of which process is actually moving traffic, per interface and per process." }
+      ]
+    },
+    {
+      "slug": "which-process-is-using-your-network-on-macos",
+      "title": "How to See Which Process Is Using Your Network on macOS",
+      "description": "Activity Monitor shows totals since launch, not current rate. Here is how to find what is saturating the connection right now.",
+      "category": "perf",
+      "date": "2026-07-12",
+      "read": "5 min",
+      "body": [
+        { "p": "Something is using all your bandwidth. Activity Monitor has a Network tab, you open it, and it shows cumulative bytes since each process started, which tells you what has used the most traffic this week rather than what is using it this second." },
+        { "h2": "Why the built-in view misleads" },
+        { "p": "Cumulative counters are the wrong instrument for a live problem. A backup agent that moved 40 GB last Tuesday will sit at the top of the list forever, while the process actually saturating your uplink right now shows a small number because it started ten minutes ago. Sorting by total sent is close to useless during an active slowdown." },
+        { "p": "The built-in tool that does give you a rate is nettop:" },
+        { "code": "nettop -P -L 1" },
+        { "p": "The -P flag aggregates per process rather than per connection, and -L 1 prints one sample and exits. Without -L it runs interactively and refreshes in place." },
+        { "h2": "The usual suspects" },
+        { "ul": [
+          "nsurlsessiond, which is iCloud sync. Large uploads after a photo import can run for hours.",
+          "softwareupdated and mobileassetd, downloading macOS updates in the background before you have agreed to install anything.",
+          "backupd, if a network Time Machine destination is mounted.",
+          "Browser helper processes, which appear under generic names and need the parent tab to be identified.",
+          "Container runtimes pulling images, which show up under the runtime rather than the thing that requested the pull."
+        ] },
+        { "h2": "Correlating rate with everything else" },
+        { "p": "A network spike on its own is rarely the whole story. The useful question is what else was happening at the same moment: whether CPU spiked with it, whether the disk was being written, whether it started when you plugged in a drive." },
+        { "p": "Burrow's Network tool shows live throughput per interface and per process, so the process saturating the link is the one at the top right now rather than the one with the largest lifetime total. Because Status samples land in a local history, you can also go back and see what a spike from last night coincided with, which is the part no live view can give you." }
+      ]
+    },
+    {
+      "slug": "choosing-a-mac-cleanup-tool",
+      "title": "Choosing a Mac Cleanup Tool Beyond CleanMyMac",
+      "description": "What to actually evaluate in a cleaner: what it can reach, whether it shows you the files first, and what happens to your data.",
+      "category": "tools",
+      "date": "2026-07-08",
+      "read": "8 min",
+      "body": [
+        { "p": "Mac cleanup tools are a crowded category with a bad reputation, most of it earned by a previous generation of software that inflated numbers and bundled things nobody asked for. The current field is better, and the useful comparison is not about which one frees the most gigabytes." },
+        { "h2": "The questions that actually separate them" },
+        { "ul": [
+          "Does it show you the file list and byte count before it deletes, or does it show a progress bar and a total afterwards? This is the single biggest difference between tools you can trust and tools you cannot.",
+          "Is the deletion permanent or routed through the Trash? Both are defensible, but you should know which you are getting, because a tool that reports freed bytes while moving files to the Trash is reporting a number you have not received yet.",
+          "Is it hardlink aware? If not, its totals are inflated on any machine with local snapshots or a pnpm store.",
+          "Does it install a background helper running as root? A privileged daemon that persists after the app quits is a much larger surface than a tool that asks for authorisation per operation and exits.",
+          "Can you read the source? For software with filesystem write access, this is the difference between trusting a claim and checking it."
+        ] },
+        { "h2": "What the categories are good at" },
+        { "p": "Commercial all-in-ones like CleanMyMac cover the most ground and have the most polished onboarding, at a recurring subscription cost, with a closed codebase and a background agent. If you want one thing installed and never want to think about it, this is a reasonable trade." },
+        { "p": "Single-purpose free tools are usually better at their one job. Pearcleaner is a sharper uninstaller than most suites include. DaisyDisk's sunburst map remains the nicest disk visualisation on the platform and costs ten dollars once. iStat Menus has far more sensors and configurability than any cleaner's monitoring tab. If your problem is precisely one of these, buy the specialist." },
+        { "p": "The gap is when you have four of these problems at once and do not want four apps, four update mechanisms, and four licences." },
+        { "h2": "Where Burrow sits" },
+        { "p": "Burrow covers cleanup, developer artifacts, duplicates, similar photos, leftover installers, app uninstall, orphaned files, disk mapping, live status, ports, network, and connectivity in one window, free and MIT licensed. Every action shows the files and the bytes first, sizing is hardlink aware, and there is no background root helper: when a task needs admin rights, macOS's own dialog asks you and the process exits afterwards." },
+        { "p": "It also does something none of the others do, which is expose the whole surface to coding agents over MCP, so Claude Code can ask your machine what has been happening rather than guessing." },
+        { "p": "It is not better at disk visualisation than DaisyDisk or at sensor coverage than iStat Menus. It is one window, one licence, and source you can read." },
+        { "link": { "href": "compare.html", "text": "See the full feature comparison" } }
+      ]
+    },
+    {
+      "slug": "give-claude-code-access-to-your-macs-system-state",
+      "title": "Giving Claude Code Access to Your Mac's System State",
+      "description": "Coding agents cannot see the machine they run on. An MCP server that exposes disk, process, and history data closes that gap.",
+      "category": "agents",
+      "date": "2026-08-06",
+      "read": "6 min",
+      "body": [
+        { "p": "Ask Claude Code why your build is slow and it will read your build config, because that is what it can see. It cannot see that the disk is at 96 percent, that a runaway process has been pinning four cores since yesterday, or that memory pressure has been red for an hour. The information that would answer the question is on the machine, and the agent has no way to reach it." },
+        { "h2": "What MCP changes" },
+        { "p": "The Model Context Protocol gives an agent a typed set of tools it can call. A server running locally can expose real system state as structured data rather than asking the model to parse shell output, which matters because parsing ps and df output is exactly where agents produce confident nonsense." },
+        { "p": "Burrow ships an MCP server with twenty-six tools. Fourteen are read-only and available immediately: snapshots of current system state, long-range history, top processes by CPU or memory, disk analysis, duplicate detection, listening ports, network throughput, and a health check. The tools that change the machine, cleaning and uninstalling among them, need their own explicit opt-in before an agent can call them at all." },
+        { "h2": "Wiring it up" },
+        { "p": "Point Claude Code at the app's MCP entry point:" },
+        { "code": "{\n  \"mcpServers\": {\n    \"burrow\": {\n      \"command\": \"/Applications/Burrow.app/Contents/MacOS/Burrow\",\n      \"args\": [\"--mcp\"]\n    }\n  }\n}" },
+        { "p": "There is also a loopback HTTP API on 127.0.0.1:9277 for tools that speak HTTP rather than MCP. Both are local only, and the HTTP surface can be turned off in Settings." },
+        { "h2": "What it is actually good for" },
+        { "ul": [
+          "Diagnosing a slowdown while it is happening, with the agent correlating CPU, memory pressure, disk, and network in one pass instead of asking you to run four commands.",
+          "Answering questions about the past. History keeps ninety days of samples, so \"what was hammering this machine at 2am\" has an answer.",
+          "Finding disk space before a large build or model download, with the agent able to see which directories are actually large.",
+          "Pre-flighting an environment: checking whether a port is free, whether the disk has headroom, whether a previous run left processes behind."
+        ] },
+        { "h2": "The part that matters" },
+        { "p": "The interesting property is not that an agent can run a cleanup. It is that the agent stops guessing about the machine. Most bad agent advice about performance comes from having no data and pattern-matching on the code instead, and a typed feed of real measurements removes the need to guess." },
+        { "p": "The full tool list, including which are gated, is in the agent documentation in the repository." }
+      ]
+    }
+  ]
+}

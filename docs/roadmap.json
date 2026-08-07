@@ -1,5 +1,5 @@
 {
-  "_comment": "Source of truth for the site roadmap (docs/roadmap.html) and the README '## Roadmap' block. Edit this, then run `python3 scripts/site-release.py`. Columns render top to bottom; empty columns are skipped. Item fields: title (req), type (feat|fix|infra), issue (GitHub #, links to vote), note, version (for shipped — links to the changelog). Voting happens on GitHub issues (upvote) — keep this curated and honest; it's a guide, not a promise.",
+  "_comment": "Source of truth for the site roadmap (docs/roadmap.html) and the README '## Roadmap' block. Edit this, then run `python3 scripts/site-release.py`. Columns render top to bottom; empty columns are skipped. Item fields: title (req), type (feat|fix|infra), issue (GitHub #, links to vote), note, version (for shipped, links to the changelog). Voting happens on GitHub issues (upvote), keep this curated and honest; it's a guide, not a promise.",
   "updated": "2026-08-01",
   "columns": [
     {
@@ -11,7 +11,7 @@
     {
       "key": "planned",
       "title": "Planned",
-      "blurb": "Decided — not started yet.",
+      "blurb": "Decided, not started yet.",
       "items": [
         {
           "title": "Windows preview → first stable",
@@ -24,7 +24,7 @@
     {
       "key": "considering",
       "title": "Considering",
-      "blurb": "Weighing it — upvote to push it up.",
+      "blurb": "Weighing it, upvote to push it up.",
       "items": [
         {
           "title": "Persistent one-tap “run all” Tune-Up",
@@ -42,7 +42,7 @@
         { "title": "Developer ID signed & Apple-notarized macOS releases", "version": "0.11.0" },
         { "title": "Signed Sparkle feed + updater foundation", "version": "0.11.0" },
         { "title": "Stable Full Disk Access identity across updates", "version": "0.11.0" },
-        { "title": "Bundled MIT engine — no separate `mo` install", "version": "0.9.0" },
+        { "title": "Bundled MIT engine, no separate `mo` install", "version": "0.9.0" },
         { "title": "Process inspector + CPU watchdog", "version": "0.9.0" },
         { "title": "Get Online connectivity companion", "version": "0.9.0" },
         { "title": "Security-aware Doctor", "version": "0.9.0" },
