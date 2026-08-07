@@ -39,5 +39,18 @@
 
 	<key>ProcessType</key>
 	<string>Interactive</string>
+
+	<!--
+	  Diagnostic trail. The unified log produced nothing for this daemon, so
+	  stderr is redirected here as a source of truth that needs no log-store
+	  query to read. /var/log is root-owned, unlike /tmp, so an unprivileged
+	  process cannot pre-create a symlink and redirect root's writes.
+
+	  The daemon logs decisions only — operation names from a closed enum,
+	  authorization outcomes, status codes — never paths, output, or
+	  authentication material.
+	-->
+	<key>StandardErrorPath</key>
+	<string>/var/log/burrow-helper.log</string>
 </dict>
 </plist>

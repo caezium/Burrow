@@ -24,18 +24,24 @@ enum HelperMain {
     static let idleTimeout: TimeInterval = 120
 
     static func start() -> Never {
+        // Traced stage by stage. When this daemon last misbehaved there was no
+        // way to tell "it never started" from "it started and the
+        // authorization failed", which cost more time than the bug did.
+        helperTrace("startup: entered main")
+
         // The team that signed US. Learned at runtime, so no team ID,
         // certificate, or developer name is ever hardcoded in the repository,
         // and the check survives certificate renewal.
         let teamID = HelperCodeRequirement.selfTeamIdentifier()
         let requirement = HelperCodeRequirement.string(bundleID: HelperNames.clientBundleID,
                                                        teamID: teamID)
+        helperTrace("startup: signing team \(teamID == nil ? "absent (ad-hoc)" : "present")")
 
         if teamID == nil {
             // Ad-hoc: local development only. Say so loudly — a release build
             // always has a team, and the release gate refuses to ship without
             // one, so seeing this in the wild means something is wrong.
-            helperLog.notice("running ad-hoc signed: caller pinning is identifier-only (development build)")
+            helperTrace("running ad-hoc signed: caller pinning is identifier-only (development build)")
         }
 
         // Publish the right's definition. Rewritten every launch on purpose:
@@ -43,8 +49,9 @@ enum HelperMain {
         // tampered policy entry from an earlier install cannot weaken a newer
         // helper. Failure is not fatal — the right still evaluates, just with
         // the system's default wording.
+        helperTrace("startup: publishing authorization right")
         if !HelperAuthorization.installRightDefinition() {
-            helperLog.error("could not publish the authorization right definition")
+            helperTrace("startup: could NOT publish the authorization right definition")
         }
 
         let service = HelperService(teamID: teamID)
@@ -60,7 +67,7 @@ enum HelperMain {
         listener.delegate = delegate
         listener.resume()
 
-        helperLog.notice("helper \(HelperService.build, privacy: .public) listening")
+        helperTrace("helper \(HelperService.build) listening on \(HelperNames.machService)")
 
         // Idle exit. Checked on a timer rather than tied to connection
         // teardown so a client that opens a connection and then goes silent
@@ -71,7 +78,7 @@ enum HelperMain {
         timer.setEventHandler {
             if service.isIdle {
                 if Date().timeIntervalSince(idleSince) >= idleTimeout {
-                    helperLog.notice("idle timeout reached; exiting")
+                    helperTrace("idle timeout reached; exiting")
                     exit(0)
                 }
             } else {

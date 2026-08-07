@@ -165,14 +165,40 @@ enum HelperAuthorization {
         return withUnsafeBytes(of: &form) { Data($0) }
     }
 
-    /// Daemon side. Rebuild the client's reference and REQUIRE `rightName`,
-    /// raising the system prompt. The returned outcome is the gate: only
-    /// `.granted` may be followed by privileged work.
+    /// Which step produced the result. Kept because "authorization failed" was
+    /// indistinguishable across three very different causes — a malformed
+    /// payload, a reference the Security framework wouldn't rebuild, and an
+    /// actual refusal by the user — and only the last of those is normal.
+    enum Stage: String, Sendable {
+        case malformedExternalForm
+        case createFromExternalForm
+        case copyRights
+    }
+
+    struct Decision: Sendable {
+        let outcome: Outcome
+        let stage: Stage
+        /// The raw `OSStatus`, preserved even when the outcome collapses
+        /// several codes into `.denied`.
+        let status: OSStatus
+
+        var permitsExecution: Bool { outcome.permitsExecution }
+
+        /// Safe to log: a stage name from a closed enum plus a numeric status.
+        /// No paths, no credentials, no free-form error text.
+        var diagnostic: String { "\(stage.rawValue) status=\(status) outcome=\(outcome)" }
+    }
+
+    /// Daemon side. Rebuild the client's reference and REQUIRE `rightName`.
+    /// The returned decision is the gate: only `.granted` may be followed by
+    /// privileged work.
     ///
     /// The rights array is always non-empty — passing NULL here is the
     /// documented way to accidentally authorize everybody.
-    static func authorize(externalForm data: Data) -> Outcome {
-        guard isPlausibleExternalForm(data) else { return .denied }
+    static func authorize(externalForm data: Data) -> Decision {
+        guard isPlausibleExternalForm(data) else {
+            return Decision(outcome: .denied, stage: .malformedExternalForm, status: errAuthorizationInvalidRef)
+        }
 
         var form = AuthorizationExternalForm()
         let copied: Bool = withUnsafeMutableBytes(of: &form) { raw -> Bool in
@@ -180,19 +206,23 @@ enum HelperAuthorization {
             _ = data.copyBytes(to: raw.bindMemory(to: UInt8.self))
             return true
         }
-        guard copied else { return .denied }
+        guard copied else {
+            return Decision(outcome: .denied, stage: .malformedExternalForm, status: errAuthorizationInvalidRef)
+        }
 
         var ref: AuthorizationRef?
         let restored = AuthorizationCreateFromExternalForm(&form, &ref)
-        guard restored == errAuthorizationSuccess, let ref else { return .denied }
+        guard restored == errAuthorizationSuccess, let ref else {
+            return Decision(outcome: .denied, stage: .createFromExternalForm, status: restored)
+        }
         defer { AuthorizationFree(ref, []) }
 
-        return rightName.withCString { name -> Outcome in
+        return rightName.withCString { name -> Decision in
             var item = AuthorizationItem(name: name, valueLength: 0, value: nil, flags: 0)
-            return withUnsafeMutablePointer(to: &item) { itemPointer -> Outcome in
+            return withUnsafeMutablePointer(to: &item) { itemPointer -> Decision in
                 var rights = AuthorizationRights(count: 1, items: itemPointer)
                 let status = AuthorizationCopyRights(ref, &rights, nil, daemonFlags, nil)
-                return outcome(from: status)
+                return Decision(outcome: outcome(from: status), stage: .copyRights, status: status)
             }
         }
     }

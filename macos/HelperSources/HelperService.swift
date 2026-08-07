@@ -9,9 +9,10 @@
 //  ── The gauntlet a request runs ─────────────────────────────────────────
 //  Five gates, in this order, each of which fails CLOSED:
 //
-//    1. Connection    the peer's AUDIT TOKEN must satisfy the code
-//                     requirement (Burrow, signed by our team). PIDs are
-//                     never used — they can be recycled and raced.
+//    1. Connection    the peer must satisfy the code requirement (Burrow,
+//                     signed by our team), enforced by the SYSTEM via
+//                     NSXPCListener.setConnectionCodeSigningRequirement
+//                     before this process sees the connection at all.
 //    2. Shape         the payload must decode as a `HelperRequest`. The
 //                     operation is an enum, so an unknown verb dies here.
 //    3. Freshness     the operation ID must be a UUID this daemon has never
@@ -41,6 +42,24 @@ import os
 // drawn from a closed enum.
 
 let helperLog = Logger(subsystem: "dev.caezium.Burrow.helper", category: "privileged")
+
+/// Diagnostic trail that cannot silently disappear.
+///
+/// The unified log produced NOTHING for this daemon across several runs — not
+/// even the unconditional startup line — while the process was demonstrably
+/// alive and serving Mach requests. A root daemon whose logging you can't
+/// trust is a root daemon you can't debug, so every `helperLog` call is
+/// mirrored to stderr, which launchd redirects to a file via
+/// `StandardErrorPath` in the plist.
+///
+/// stderr is the belt to os_log's braces: it needs no log-store query, no
+/// predicate, and no subsystem registration, so "the daemon wrote nothing"
+/// becomes distinguishable from "the daemon never got that far".
+func helperTrace(_ message: String) {
+    helperLog.notice("\(message, privacy: .public)")
+    let stamp = ISO8601DateFormatter().string(from: Date())
+    FileHandle.standardError.write(Data("[\(stamp)] \(message)\n".utf8))
+}
 
 // MARK: - Engine resolution
 
@@ -87,7 +106,7 @@ enum HelperEngine {
     /// one, and the release gate refuses to ship a helper without it.
     static func verify(path: String, teamID: String?) -> Bool {
         guard let teamID else {
-            helperLog.notice("engine signature check skipped: helper is ad-hoc signed (development build)")
+            helperTrace("engine signature check skipped: helper is ad-hoc signed (development build)")
             return true
         }
         guard let requirement = HelperCodeRequirement.sameTeam(teamID: teamID) else { return false }
@@ -146,7 +165,7 @@ final class HelperOperationRunner: @unchecked Sendable {
         do {
             try process.run()
         } catch {
-            helperLog.error("engine spawn failed for operation \(operationID, privacy: .public)")
+            helperTrace("engine spawn failed for operation \(operationID)")
             return 127
         }
 
@@ -259,46 +278,43 @@ final class HelperService: NSObject, BurrowHelperProtocol {
 
         // Gate 2 — shape. An unknown operation cannot survive decoding.
         guard let request = try? JSONDecoder().decode(HelperRequest.self, from: requestData) else {
-            helperLog.error("request refused: malformed payload")
+            helperTrace("request refused: malformed payload")
             return respond(.rejected(.malformedPayload))
         }
 
         if let rejection = request.validate(expectedBuild: Self.build) {
-            helperLog.error("request refused: \(rejection.rawValue, privacy: .public)")
+            helperTrace("request refused: \(rejection.rawValue)")
             return respond(.rejected(rejection))
         }
 
         // Gate 3 — freshness. One authorization buys exactly one operation, so
         // a captured payload cannot be replayed for a second root run.
         guard replayGuard.admit(request.operationID) else {
-            helperLog.error("request refused: replayed operation ID")
+            helperTrace("request refused: replayed operation ID")
             return respond(.rejected(.replayedOperationID))
         }
 
         // Gate 4 — authorization. This is what raises the prompt, and it
         // happens HERE, in the privileged process, on every single operation.
+        helperTrace("authorizing \(request.operation.rawValue): calling AuthorizationCopyRights")
         let decision = HelperAuthorization.authorize(externalForm: authorization)
         guard decision.permitsExecution else {
-            helperLog.notice("""
-                operation \(request.operation.rawValue, privacy: .public) not authorized
-                """)
-            switch decision {
+            helperTrace("NOT authorized: \(decision.diagnostic)")
+            switch decision.outcome {
             case .cancelled: return respond(.authorizationCancelled)
             default: return respond(.authorizationDenied)
             }
         }
+        helperTrace("authorized: \(decision.diagnostic)")
 
         // Gate 5 — execution. Our own signed engine, fixed argv.
         guard let enginePath = HelperEngine.bundledEnginePath(),
               HelperEngine.verify(path: enginePath, teamID: teamID) else {
-            helperLog.error("engine unavailable or failed signature verification")
+            helperTrace("engine unavailable or failed signature verification")
             return respond(.engineUnavailable)
         }
 
-        helperLog.notice("""
-            authorized \(request.operation.rawValue, privacy: .public) \
-            (mutating: \(request.operation.mutatesDisk, privacy: .public))
-            """)
+        helperTrace("running \(request.operation.rawValue) (mutating: \(request.operation.mutatesDisk))")
 
         let client = currentConnection?.remoteObjectProxy as? BurrowHelperClientProtocol
         let operationID = request.operationID
@@ -307,7 +323,7 @@ final class HelperService: NSObject, BurrowHelperProtocol {
                               enginePath: enginePath) { line in
             client?.helperDidEmit(line: line, operationID: operationID)
         }
-        helperLog.notice("operation finished with status \(code, privacy: .public)")
+        helperTrace("operation finished with status \(code)")
         respond(.exited(code))
     }
 }
@@ -333,7 +349,7 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate {
         connection.remoteObjectInterface = HelperInterface.client()
         service.currentConnection = connection
         connection.resume()
-        helperLog.notice("connection accepted from a verified Burrow client")
+        helperTrace("connection accepted from a verified Burrow client")
         return true
     }
 }

@@ -31,6 +31,15 @@
 import Foundation
 import Security
 import ServiceManagement
+import os
+
+/// Client-side trail, matching the daemon's.
+///
+/// Without this, "the Clean didn't use the helper" and "the helper refused the
+/// Clean" look identical from the outside — the daemon simply logs nothing in
+/// the first case, which is exactly the ambiguity that made the last round of
+/// debugging guesswork.
+let helperClientLog = Logger(subsystem: "dev.caezium.Burrow", category: "privileged-helper")
 
 // MARK: - Bridging the two elevation routes onto one taxonomy
 
@@ -187,7 +196,12 @@ final class PrivilegedHelperClient: @unchecked Sendable {
         if let cachedSkew { lock.unlock(); return cachedSkew }
         lock.unlock()
 
-        let skew = HelperVersionSkew.evaluate(appBuild: Self.appBuild, helperBuild: helperBuild())
+        let reported = helperBuild()
+        helperClientLog.notice("""
+            helper reported build \(reported.isEmpty ? "<unreachable>" : reported, privacy: .public), \
+            app is \(Self.appBuild, privacy: .public)
+            """)
+        let skew = HelperVersionSkew.evaluate(appBuild: Self.appBuild, helperBuild: reported)
         lock.lock(); cachedSkew = skew; lock.unlock()
         return skew
     }
@@ -199,9 +213,16 @@ final class PrivilegedHelperClient: @unchecked Sendable {
         // Don't pay for an XPC round trip to learn the version when the daemon
         // isn't usable anyway.
         guard status == .enabled else {
+            helperClientLog.notice("route: osascript (registration \(String(describing: status), privacy: .public))")
             return PrivilegeRoute.decide(arguments: arguments, registration: status, skew: .mismatched)
         }
-        return PrivilegeRoute.decide(arguments: arguments, registration: status, skew: versionSkew())
+        let skew = versionSkew()
+        let route = PrivilegeRoute.decide(arguments: arguments, registration: status, skew: skew)
+        helperClientLog.notice("""
+            route: \(String(describing: route), privacy: .public) \
+            (app build \(Self.appBuild, privacy: .public), skew \(String(describing: skew), privacy: .public))
+            """)
+        return route
     }
 
     // MARK: Execution
