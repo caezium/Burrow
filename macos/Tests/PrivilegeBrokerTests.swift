@@ -2,46 +2,33 @@
 //  PrivilegeBrokerTests.swift
 //  BurrowTests
 //
-//  Boundary tests for the one-shot elevated path (issue #48) — the code that
-//  runs `mo` as ROOT, and that no test could previously reach because it
+//  Boundary tests for the elevated path (issue #48) — the code that runs
+//  commands as ROOT, and that no test could previously reach because it
 //  spawned a real osascript auth dialog inline.
 //
-//  Two seams are exercised in memory, with NO osascript, NO sudo, NO GUI:
-//    * `AuthCancel` — the pure rule that decides a dismissed auth prompt vs a
+//  Two pure pieces are exercised in memory, with NO osascript, NO sudo, NO GUI:
+//    * `AuthCancel` — the rule that decides a dismissed auth prompt vs a
 //      command that ran and failed. Shared by the streaming runner
-//      (SystemProcessPort.finalEvent) and this one-shot broker, so it's
+//      (SystemProcessPort.finalEvent) and the one-shot broker, so it's
 //      table-tested exhaustively here.
-//    * `PrivilegeBroker` — the spawn port. A scripted fake stands in for
-//      osascript, so `MoleCLI.runElevated`/`runElevatedClassified` can be
-//      driven through every outcome (cancel, fail, success, launch-failure)
-//      and the osascript spec quoting verified — the previously-untestable
-//      ROOT path is now fully covered.
+//    * `MoleCLI.elevatedScript` — the two-pass quoter whose output runs as
+//      root inside `do shell script`. The injection cases at the bottom are
+//      the quoting that, if it broke, would delete the wrong files.
+//
+//  The scripted-fake broker tests that used to live here went with
+//  `MoleCLI.runElevated`/`runElevatedClassified`, deleted once the
+//  `mo touchid` setting (their only caller) was removed. `PrivilegeBroker`
+//  itself is still live — Connectivity's flush-DNS / renew-DHCP fixes use
+//  `SystemPrivilegeBroker.openElevated` — but it is constructed directly at
+//  that call site, so there is no injection seam left to drive a fake through.
 //
 
 import XCTest
 @testable import Burrow
 
-// MARK: - Scripted fake broker
-
-/// In-memory stand-in for osascript. Records the (executable, args) it was
-/// asked to elevate so quoting/injection can be asserted, and replays a
-/// canned outcome — no real process, no auth dialog.
-final class FakePrivilegeBroker: PrivilegeBroker, @unchecked Sendable {
-    private(set) var calls: [(executable: String, args: [String])] = []
-    var outcome: ElevatedOutcome
-
-    init(outcome: ElevatedOutcome) { self.outcome = outcome }
-
-    func openElevated(executable: String, args: [String]) -> ElevatedOutcome {
-        calls.append((executable, args))
-        return outcome
-    }
-}
-
 final class PrivilegeBrokerTests: XCTestCase {
 
     override func tearDown() {
-        MoleCLI.privilegeBroker = SystemPrivilegeBroker()
         MoleCLI.discoveryCandidates = nil
         MoleCLI.resetDiscoveryCache()
         super.tearDown()
@@ -104,7 +91,7 @@ final class PrivilegeBrokerTests: XCTestCase {
 
     // MARK: - ElevatedOutcome back-compat (the preserved Int32 contract)
     //
-    // `runElevated` still returns Int32 for existing callers; both failure
+    // The Int32 shim still backs `Connectivity.run`; both failure
     // shapes must collapse to a nonzero code, exactly as the old inline
     // spawn did (catch → 1, no trusted mo → 127).
 
@@ -113,74 +100,6 @@ final class PrivilegeBrokerTests: XCTestCase {
         XCTAssertEqual(ElevatedOutcome.exited(3).exitCode, 3)
         XCTAssertNotEqual(ElevatedOutcome.authCancelled.exitCode, 0, "a dismissed prompt is a failure to callers")
         XCTAssertEqual(ElevatedOutcome.launchFailed.exitCode, 127, "matches the old 'no trusted mo' sentinel")
-    }
-
-    // MARK: - Broker routing through MoleCLI (in-memory, no osascript)
-    //
-    // `runElevated` resolves the binary through `trustedExecutable()` ONLY —
-    // never `discoveryCandidates`/PATH, because a user-writable path entry
-    // would hand root to a shadowed binary. So these tests can't inject a
-    // fake `mo` path the way the capture-runner tests do; they assert the
-    // invariant against whatever the trusted lookup actually resolves, and
-    // skip the spawn-shape assertions when no trusted mo is installed (a
-    // valid CI state — nil is the launch-failure path, covered separately).
-
-    func testRunElevated_routesTrustedExecutableAndArgsToBroker() throws {
-        guard let trusted = MoleCLI.trustedExecutable() else {
-            throw XCTSkip("no trusted mo installed; spawn-routing shape needs one")
-        }
-        let fake = FakePrivilegeBroker(outcome: .exited(0))
-        MoleCLI.privilegeBroker = fake
-
-        let code = MoleCLI.runElevated(args: ["clean", "--dry-run"])
-
-        XCTAssertEqual(code, 0)
-        XCTAssertEqual(fake.calls.count, 1)
-        XCTAssertEqual(fake.calls.first?.executable, trusted,
-                       "elevated runs resolve through the trusted list, never PATH")
-        XCTAssertEqual(fake.calls.first?.args, ["clean", "--dry-run"])
-    }
-
-    func testRunElevated_authCancelSurfacesAsNonzeroButClassified() throws {
-        guard MoleCLI.trustedExecutable() != nil else {
-            throw XCTSkip("no trusted mo installed; the broker is never reached")
-        }
-        MoleCLI.privilegeBroker = FakePrivilegeBroker(outcome: .authCancelled)
-
-        // Legacy Int32 caller: a dismissed prompt is still "didn't work".
-        XCTAssertNotEqual(MoleCLI.runElevated(args: ["clean", "--dry-run"]), 0)
-        // New caller: the cancel is NAMED, distinct from a command failure.
-        XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["clean", "--dry-run"]), .authCancelled)
-    }
-
-    func testRunElevated_commandFailureIsDistinctFromCancel() throws {
-        guard MoleCLI.trustedExecutable() != nil else {
-            throw XCTSkip("no trusted mo installed; the broker is never reached")
-        }
-        MoleCLI.privilegeBroker = FakePrivilegeBroker(outcome: .exited(2))
-
-        XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["optimize"]), .exited(2))
-        XCTAssertEqual(MoleCLI.runElevated(args: ["optimize"]), 2)
-    }
-
-    /// No trusted `mo` → the broker is never asked to elevate; the result is
-    /// the launch-failure sentinel (127), matching the old `guard … else
-    /// return 127`. Only assertable when the trusted lookup genuinely misses;
-    /// where a real mo is installed the guard can't be forced (resolution is
-    /// deliberately not injectable), so we assert the inverse there: the
-    /// broker IS reached.
-    func testRunElevated_noTrustedExecutableTakesLaunchFailurePath() {
-        let fake = FakePrivilegeBroker(outcome: .exited(0))
-        MoleCLI.privilegeBroker = fake
-
-        if MoleCLI.trustedExecutable() == nil {
-            XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["clean", "--dry-run"]), .launchFailed)
-            XCTAssertEqual(MoleCLI.runElevated(args: ["clean", "--dry-run"]), 127)
-            XCTAssertTrue(fake.calls.isEmpty, "a missing trusted mo must never reach the elevation spawn")
-        } else {
-            _ = MoleCLI.runElevatedClassified(args: ["clean", "--dry-run"])
-            XCTAssertFalse(fake.calls.isEmpty, "with a trusted mo, the broker is reached")
-        }
     }
 
     // MARK: - osascript spec quoting through the broker (injection cases)

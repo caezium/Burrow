@@ -18,9 +18,10 @@
 //  tailed from a temp log); this seam covers one-shot commands where the only
 //  signal is the exit status.
 //
-//  NOTE: the one-shot path has no production caller today — its only user was
-//  the `mo touchid enable/disable` setting, since removed. `AuthCancel` below
-//  is still shared with the streaming runner and must stay.
+//  Live caller: `Connectivity.run` (flush DNS / renew DHCP), which constructs
+//  `SystemPrivilegeBroker` directly. The `MoleCLI.runElevated` wrapper that
+//  used to sit in front of this was deleted along with the `mo touchid`
+//  setting, its only user.
 //
 
 import Foundation

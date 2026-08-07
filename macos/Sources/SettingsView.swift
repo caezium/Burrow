@@ -769,9 +769,24 @@ struct SettingsView: View {
                     try PrivilegedHelperClient.shared.unregister()
                 }
             } catch {
-                failure = install
-                    ? "Couldn't install the helper. Burrow keeps using the password prompt."
-                    : "Couldn't remove the helper. You can also turn it off in System Settings ▸ General ▸ Login Items & Extensions."
+                // Show the real reason, not a shrug. The interesting failures
+                // here are all indistinguishable from each other in a generic
+                // message — a stale registration left by a previous build of
+                // the app, a signature the system won't accept, or the user
+                // declining — and the underlying code is what tells them
+                // apart. `kSMErrorAlreadyRegistered` in particular is
+                // actionable: the launchd job survives, bound to the old app
+                // identity, and has to be removed before a new install works.
+                let ns = error as NSError
+                let detail = "\(ns.domain) \(ns.code): \(ns.localizedDescription)"
+                if install {
+                    let stale = ns.domain == "SMAppServiceErrorDomain" && ns.code == 134
+                    failure = stale
+                        ? "A helper from an earlier build of Burrow is still registered. Remove Burrow under System Settings ▸ General ▸ Login Items & Extensions, then install again. (\(detail))"
+                        : "Couldn't install the helper — Burrow keeps using the password prompt. (\(detail))"
+                } else {
+                    failure = "Couldn't remove the helper. You can also turn it off in System Settings ▸ General ▸ Login Items & Extensions. (\(detail))"
+                }
             }
             let status = PrivilegedHelperClient.shared.registrationStatus
             DispatchQueue.main.async {

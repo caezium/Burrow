@@ -15,8 +15,8 @@
 //  holds the `any ProcessPort` to drive its own reduce/notify/auth-cancel loop,
 //  so the facade hands it the production port rather than the stream. The
 //  one-shot ELEVATED path is NOT on the facade — it stays in
-//  `MoleCLI.runElevatedClassified` (trusted-location resolution + the shared
-//  `PrivilegeBroker`), the path production has always used.
+//  `SystemPrivilegeBroker.openElevated` (see `Connectivity.run`), the path
+//  production has always used.
 //
 //  Behavior is preserved exactly: a `capture(_:)` call produces the same argv,
 //  stdin, environment, timeout, and result fields that `MoleCLI.run` did, and
