@@ -642,8 +642,8 @@ def fetch_download_total():
 
 def render_downloads(total):
     return (f'{DL_BEGIN}\n'
-            f'    <p class="dl-line reveal d4">Already downloaded '
-            f'<b>{total:,}</b> times</p>\n'
+            f'    <p class="dl-line reveal d4">Already downloaded by '
+            f'<b>{total:,}</b> people</p>\n'
             f'    {DL_END}')
 
 
