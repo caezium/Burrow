@@ -458,6 +458,9 @@
 "Burrow detected that creating its menu bar item could freeze this macOS build. The menu bar item and automatic update checks are paused on this build, and Burrow will stay available in the Dock. Manual update checks remain available. Updating macOS will automatically retry the normal mode." = "Burrow 偵測到在此 macOS 版本上建立選單列項目可能導致系統卡住。此版本上的選單列項目與自動更新檢查已暫停，Burrow 將繼續顯示在 Dock 中。你仍可手動檢查更新。更新 macOS 後將自動重試正常模式。";
 "Burrow paused automatic update checks" = "Burrow 已暫停自動更新檢查";
 "Burrow detected that its automatic updater did not reach a stable state on the previous launch. Automatic checks are paused for this app and macOS build so the same startup problem cannot repeat. You can still check manually; updating Burrow or macOS will retry automatic checks." = "Burrow 偵測到自動更新程式在上次啟動時未能達到穩定狀態。為避免相同的啟動問題再次發生，目前 App 與 macOS 版本的自動檢查已暫停。你仍可手動檢查；更新 Burrow 或 macOS 後將重試自動檢查。";
+"Menu bar item paused on this macOS build" = "此 macOS 組建版本已暫停選單列項目";
+"Creating it could freeze system input on this build, so Burrow runs from the Dock instead. It returns automatically once you update macOS." = "在此組建版本上建立選單列項目可能導致系統輸入卡住，因此 Burrow 改從 Dock 執行。更新 macOS 後會自動恢復。";
+"Paused on this macOS build. The setting is kept and applies again as soon as Burrow can create the menu bar item safely." = "在此 macOS 組建版本上已暫停。該設定會被保留，一旦 Burrow 能夠安全建立選單列項目就會重新生效。";
 "Copy Diagnostics" = "複製診斷資訊";
 "Helps prioritize fixes: app/OS version, coarse bucketed feature counts, and crash traces. Never files, paths, file contents, or your metrics — the exact list is in TELEMETRY.md. You can change this anytime in Settings → Anonymous usage." = "協助確定修復優先順序：應用程式/系統版本、按區間歸檔的功能使用次數與當機記錄。絕不包含檔案、路徑、檔案內容或你的指標資料 — 完整列表見 TELEMETRY.md。可隨時在「設定 → 匿名使用情況」中變更。";
 "Share" = "分享";

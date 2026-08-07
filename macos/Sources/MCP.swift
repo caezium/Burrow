@@ -795,8 +795,10 @@ struct ToolCatalog {
             total = Int64(d.total)
             free = Int64(d.total > d.used ? d.total - d.used : 0)
         }
+        let fdaDiagnosis = Privacy.diagnoseFullDiskAccess()
         let input = Doctor.Input(
-            fullDiskAccess: Privacy.hasFullDiskAccess(),
+            fullDiskAccess: fdaDiagnosis.hasAccess,
+            fullDiskAccessConclusive: fdaDiagnosis.conclusive,
             moInstalled: moInstalled,
             pressure: Self.mapPressure(latest?.memory.pressure),
             diskFreeBytes: free, diskTotalBytes: total,

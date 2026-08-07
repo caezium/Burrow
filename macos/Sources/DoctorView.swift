@@ -124,7 +124,8 @@ struct DoctorView: View {
         let p = (latest?.memory.pressure ?? "").lowercased()
         let pressure: Doctor.MemoryPressure = p.contains("critical") ? .critical
             : (p.contains("warn") ? .warning : .normal)
-        let fullDiskAccess = Privacy.hasFullDiskAccess()
+        let fdaDiagnosis = Privacy.diagnoseFullDiskAccess()
+        let fullDiskAccess = fdaDiagnosis.hasAccess
         let recentErrorCount = MetricsStore.driftCounters.decodeSkippedTotal
         // `tmutil latestbackup` and `system_profiler SPNVMeDataType` each spawn a
         // subprocess and block on waitUntilExit() — system_profiler routinely
@@ -156,6 +157,7 @@ struct DoctorView: View {
         }
         checks = Doctor.report(.init(
             fullDiskAccess: fullDiskAccess,
+            fullDiskAccessConclusive: fdaDiagnosis.conclusive,
             moInstalled: moInstalled, pressure: pressure,
             diskFreeBytes: free, diskTotalBytes: total,
             recentErrorCount: recentErrorCount,

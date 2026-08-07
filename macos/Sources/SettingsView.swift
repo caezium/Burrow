@@ -83,6 +83,9 @@ struct SettingsView: View {
     // Menu bar
     @State private var showMenuBarIcon: Bool = Store.showMenuBarIcon
     @State private var displayMode: MenuBarDisplayMode = Store.menuBarDisplayMode
+    /// The compatibility guard suppresses the menu-bar item on some macOS
+    /// builds. Without this the toggle read as on while doing nothing (#319).
+    @State private var menuBarSuppressed: Bool = false
     @State private var menuBarItems: [MenuBarItem] = Store.menuBarItems
     /// Which widget's options panel is expanded in the editor (one at a time).
     @State private var expandedMenuBarItem: UUID?
@@ -163,6 +166,7 @@ struct SettingsView: View {
         .onAppear {
             refreshStatusLabels(); loadMoleVersion(); loadTouchIDStatus(); loadLaunchAtLogin()
             whitelistPatterns = MoleWhitelist.live.patterns()
+            menuBarSuppressed = AppDelegate.shared?.menuBarSuppressedByCompatibilityGuard ?? false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             fdaGranted = Privacy.hasFullDiskAccess()
@@ -449,14 +453,43 @@ struct SettingsView: View {
 
     // MARK: - Menu bar
 
+    /// Shown in place of a toggle that cannot act. The recovery alert fires
+    /// once per macOS build, so without this the only lasting explanation for
+    /// a missing menu-bar icon was a checked switch that did nothing (#319).
+    private var menuBarCompatibilityNotice: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Brand.amber)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(NSLocalizedString("Menu bar item paused on this macOS build", comment: ""))
+                    .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.textPrimary)
+                Text(NSLocalizedString("Creating it could freeze system input on this build, so Burrow runs from the Dock instead. It returns automatically once you update macOS.", comment: ""))
+                    .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Brand.amber.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.amber.opacity(0.25), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+    }
+
     private var menuBarTab: some View {
         Group {
             section("Menu bar", "menubar.rectangle") {
+                if menuBarSuppressed { menuBarCompatibilityNotice }
                 toggleRow("Show menu bar icon", isOn: $showMenuBarIcon) { on in
                     Store.showMenuBarIcon = on
                     AppDelegate.shared?.applyMenuBarVisibility(on)
                 }
-                footnote("Applies immediately. When off, Burrow shows a Dock icon instead so it stays reachable — a Dock click reopens the window.")
+                .disabled(menuBarSuppressed)
+                .opacity(menuBarSuppressed ? 0.5 : 1)
+                footnote(menuBarSuppressed
+                    ? "Paused on this macOS build. The setting is kept and applies again as soon as Burrow can create the menu bar item safely."
+                    : "Applies immediately. When off, Burrow shows a Dock icon instead so it stays reachable — a Dock click reopens the window.")
                 HStack {
                     Text(NSLocalizedString("Display", comment: "")).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary)
                     Spacer()
@@ -471,6 +504,8 @@ struct SettingsView: View {
                         AppDelegate.shared?.applyMenuBarVisibility(Store.showMenuBarIcon)
                     }
                 }
+                .disabled(menuBarSuppressed)
+                .opacity(menuBarSuppressed ? 0.5 : 1)
                 footnote("Choose which metrics appear in the menu bar and how each is shown — refreshed with the sampler. Each metric has its own text size in its options (⚙︎).")
                 if displayMode == .metrics { menuBarMetricsEditor }
                 toggleRow("Show camera & mic in-use indicator", isOn: $cameraMicIndicator) {

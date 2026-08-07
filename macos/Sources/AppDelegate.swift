@@ -53,6 +53,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var recoveryReason: LaunchRecoveryReason?
     private var updaterRecoveryReason: LaunchRecoveryReason?
     private var safeModeActive = false
+    /// True while the compatibility guard is suppressing the menu-bar item on
+    /// this macOS build. Settings reads it so the "Show menu bar icon" toggle
+    /// can say what is actually happening rather than flipping on and quietly
+    /// doing nothing (#319).
+    var menuBarSuppressedByCompatibilityGuard: Bool { recoveryReason != nil }
     private var recoveryNoticePresented = false
     private var launchCompleted = false
     private var initialStatusItemCreationTask: Task<Void, Never>?
