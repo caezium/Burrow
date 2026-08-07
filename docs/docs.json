@@ -16,7 +16,7 @@
       "body": [
         { "p": "Homebrew is the shortest path on macOS. It installs the Developer ID signed, Apple-notarized build with its engine bundled, and preserves quarantine so Gatekeeper can validate the ticket." },
         { "code": "brew install --cask caezium/tap/burrow" },
-        { "p": "Direct downloads and the Windows preview are on the [install page](install.html). Updates arrive in-app over a signed Sparkle feed; Homebrew installs update with `brew upgrade`." },
+        { "p": "Direct downloads and the Windows preview are on the [install page](install). Updates arrive in-app over a signed Sparkle feed; Homebrew installs update with `brew upgrade`." },
         { "h3": "Full Disk Access" },
         { "p": "Burrow runs a safe scan without it. Granting Full Disk Access lets it reach deeper Application Support and container caches that macOS otherwise hides. You can grant or revoke it at any time in System Settings under Privacy & Security." }
       ]
@@ -67,7 +67,7 @@
         { "h3": "Analyze" },
         { "p": "A squarified treemap of the whole volume, sized by real allocated bytes. Drill into any branch to see the same breakdown one level down, then reveal in Finder or move to the Trash from the context menu." },
         { "p": "A treemap answers \"what is using my disk\" better than a sorted list because the largest consumer is the largest shape rather than the first row you have to scroll to find." },
-        { "note": "If free space does not increase after you delete something large, local Time Machine snapshots are usually pinning it. See [why your Mac says the disk is full when it isn't](blog/mac-says-disk-is-full-but-it-isnt.html)." }
+        { "note": "If free space does not increase after you delete something large, local Time Machine snapshots are usually pinning it. See [why your Mac says the disk is full when it isn't](blog/mac-says-disk-is-full-but-it-isnt)." }
       ]
     },
     {
