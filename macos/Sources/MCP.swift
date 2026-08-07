@@ -433,7 +433,11 @@ struct ToolCatalog {
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "dir": ["type": "string", "description": "Absolute path to a rules directory (one YAML file per app)."],
+                        // JSON, not YAML. The loader filters on `extension == "json"` and parses with
+                        // serde_json, so a `.yaml` file is not rejected — it is never seen. An agent
+                        // that believed the old wording would write YAML, get `{"items":[]}` with
+                        // ok:true, and read "no rules matched" from what is really "no rules loaded".
+                        "dir": ["type": "string", "description": "Absolute path to a rules directory (one JSON file per app)."],
                         "app": ["type": "string", "description": "Optional bundle id to filter to a single app's rules."],
                     ],
                     "required": ["dir"],
