@@ -1,0 +1,145 @@
+{
+  "intro": "Everything Burrow does, what each tool touches, and the rules it follows before it removes anything.",
+  "sections": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "body": [
+        { "p": "Burrow is a native desktop app for macOS, with a WinUI 3 build for Windows in beta. It covers the jobs people usually split across a cleaner, an uninstaller, a duplicate finder, a disk mapper, and a menu-bar monitor, and it exposes all of it to coding agents over MCP." },
+        { "p": "Fourteen tools share one window. Each re-themes the interface in its own colour, because the colour is how a tool tells you what it is about to touch. Two surfaces have no command-line equivalent at all: the long-range history, and the MCP server." },
+        { "p": "Everything runs locally. Scans, metrics, and history stay on the machine, and the MCP server binds to loopback only." }
+      ]
+    },
+    {
+      "id": "install",
+      "title": "Installing",
+      "body": [
+        { "p": "Homebrew is the shortest path on macOS. It installs the Developer ID signed, Apple-notarized build with its engine bundled, and preserves quarantine so Gatekeeper can validate the ticket." },
+        { "code": "brew install --cask caezium/tap/burrow" },
+        { "p": "Direct downloads and the Windows preview are on the [install page](install.html). Updates arrive in-app over a signed Sparkle feed; Homebrew installs update with `brew upgrade`." },
+        { "h3": "Full Disk Access" },
+        { "p": "Burrow runs a safe scan without it. Granting Full Disk Access lets it reach deeper Application Support and container caches that macOS otherwise hides. You can grant or revoke it at any time in System Settings under Privacy & Security." }
+      ]
+    },
+    {
+      "id": "cleanup",
+      "title": "Reclaiming space",
+      "body": [
+        { "h3": "Clean" },
+        { "p": "Scans more than ten categories: application caches, system caches, logs, developer tool caches, AI tool caches, browser data, cloud storage clients, design tools, communication apps, and miscellaneous temporary files." },
+        { "p": "The review list is sorted by how safe each item is to remove. Regenerable caches come first, user-visible state last. Sizing is hardlink aware, so files shared between tools are counted once rather than once per path." },
+        { "h3": "Purge" },
+        { "p": "The diggings development work leaves behind, kept separate from ordinary caches because the trade-offs differ. Build output such as `dist`, `build`, `target`, `.next`, `.build`, `DerivedData`, `__pycache__`, and `coverage` rebuilds locally with no network. Dependency directories such as `node_modules`, `Pods`, and `venv` need to be refetched, so they are shown with that cost attached and stay unchecked until you confirm them." },
+        { "h3": "Installers" },
+        { "p": "Finds `.dmg` and `.pkg` files still sitting in Downloads long after the application was installed. Small individually, frequently tens of gigabytes in aggregate on a machine that has been running for a few years." },
+        { "h3": "Duplicates" },
+        { "p": "A staged content hash: group by size, hash a prefix of the candidates, then hash in full only what still matches. Hardlinked and cloned files are treated as one object, so the reclaimable figure is the figure you actually recover." },
+        { "h3": "Similar Photos" },
+        { "p": "Perceptual matching for images that are visually near-identical but differ byte for byte, such as burst frames and re-exports. Content hashing cannot see these; this can." }
+      ]
+    },
+    {
+      "id": "apps",
+      "title": "Applications",
+      "body": [
+        { "h3": "Apps" },
+        { "p": "Every installed application, sortable by size, name, recency, or source. Multi-select uninstall removes the bundle along with its preferences, Application Support data, containers, saved state, and launch agents." },
+        { "p": "A Homebrew tab checks which casks and formulae are outdated and can update them in place. Burrow resolves the cask token rather than the display name, because a dozen popular apps use tokens that differ from what the app calls itself." },
+        { "h3": "Leftovers" },
+        { "p": "The other direction: support files, preferences, and launch agents belonging to applications that are already gone. Burrow matches each orphan back to the application that left it, so you are approving a named app's remains rather than a list of paths." },
+        { "p": "Launch agents for deleted apps are the ones worth clearing first. `launchd` keeps trying to start a binary that no longer exists, which produces log noise on every boot." }
+      ]
+    },
+    {
+      "id": "maintenance",
+      "title": "Maintenance",
+      "body": [
+        { "h3": "Optimize" },
+        { "p": "The routine chores, batched behind one prompt: rebuild Quick Look, repair caches and metadata, flush DNS, and audit login items." },
+        { "h3": "Tune-Up" },
+        { "p": "Smart-Care in a single pass. Burrow picks the maintenance that actually applies to this machine right now and runs it end to end, rather than offering a fixed checklist that mostly does not apply." }
+      ]
+    },
+    {
+      "id": "disk",
+      "title": "Understanding the disk",
+      "body": [
+        { "h3": "Analyze" },
+        { "p": "A squarified treemap of the whole volume, sized by real allocated bytes. Drill into any branch to see the same breakdown one level down, then reveal in Finder or move to the Trash from the context menu." },
+        { "p": "A treemap answers \"what is using my disk\" better than a sorted list because the largest consumer is the largest shape rather than the first row you have to scroll to find." },
+        { "note": "If free space does not increase after you delete something large, local Time Machine snapshots are usually pinning it. See [why your Mac says the disk is full when it isn't](blog/mac-says-disk-is-full-but-it-isnt.html)." }
+      ]
+    },
+    {
+      "id": "machine",
+      "title": "Watching the machine",
+      "body": [
+        { "h3": "Status" },
+        { "p": "CPU, memory, GPU, disk, network, and battery on one page, each with a sparkline. The process table sorts by any column and pins the rows you want to keep in view. On Apple Silicon, fan speed and die temperatures are read natively from the SMC." },
+        { "h3": "History" },
+        { "p": "Every sample Status takes lands in a local SQLite file. Scrub from five minutes out to ninety days, with peak-per-process tables for the moments the fans actually spun up. Nothing is uploaded." },
+        { "h3": "Ports" },
+        { "p": "Every listening port with the process behind it, its binary path, and its owning user, refreshed live. Answers \"what is holding 3000\" without reaching for `lsof`." },
+        { "h3": "Network" },
+        { "p": "Live throughput per interface and per process. Unlike Activity Monitor's cumulative totals, this is a rate, so the process saturating your connection right now is the one at the top." },
+        { "h3": "Get Online" },
+        { "p": "A guided path back to the surface when the connection drops: interface state, DNS resolution, gateway reachability, and captive portal detection, checked in order." },
+        { "h3": "Menu-bar HUD" },
+        { "p": "The whole picture drops down from the menu bar without opening the app: live metrics, top processes, and a jump into whichever tool you need." }
+      ]
+    },
+    {
+      "id": "agents",
+      "title": "Agents and MCP",
+      "body": [
+        { "p": "Burrow doubles as an MCP server, so a coding agent can ask the machine questions rather than guessing from your source code. Twenty-six tools are exposed. Fourteen are read-only and available immediately; the ones that change your machine require their own explicit opt-in in Settings before an agent can call them at all." },
+        { "p": "Point Claude Code at the app:" },
+        { "code": "{\n  \"mcpServers\": {\n    \"burrow\": {\n      \"command\": \"/Applications/Burrow.app/Contents/MacOS/Burrow\",\n      \"args\": [\"--mcp\"]\n    }\n  }\n}" },
+        { "h3": "Read-only tools" },
+        { "p": "`burrow_snapshot`, `burrow_history`, `burrow_top_processes`, `burrow_process_usage`, `burrow_info`, `burrow_analyze`, `burrow_dupes`, `burrow_orphans`, `burrow_photos`, `burrow_ports`, `burrow_net`, `burrow_doctor`, `burrow_disk_forecast`, and `burrow_list_apps`." },
+        { "h3": "Gated tools" },
+        { "p": "`burrow_clean`, `burrow_purge`, `burrow_uninstall`, `burrow_optimize`, and `burrow_installer` change the machine and stay unavailable until you turn them on." },
+        { "h3": "HTTP API" },
+        { "p": "A loopback HTTP API on `127.0.0.1:9277` serves the same read-only data for tools that speak HTTP rather than MCP. It is on by default and can be turned off in Settings. It binds to loopback only and is never reachable from another machine." }
+      ]
+    },
+    {
+      "id": "safety",
+      "title": "Safety model",
+      "body": [
+        { "p": "Burrow is built so that a mistake costs you a rebuild rather than your data. Four rules hold everywhere in the app." },
+        { "ul": [
+          "**Show before you remove.** Every action lists the files and the byte count before anything moves. You confirm; Burrow acts.",
+          "**Sorted by consequence.** Categories are ordered by how safe they are to remove, and anything with real rebuild cost stays unchecked until you tick it yourself.",
+          "**No background root helper.** When a task needs administrator rights, macOS's own authorization dialog asks you, Burrow runs that one command, and the process exits. There is no privileged daemon left running.",
+          "**A protection list you can read.** Paths that are never eligible for removal are enforced in code rather than by convention, and the source is public."
+        ] },
+        { "h3": "Signing and notarization" },
+        { "p": "Version 0.11.0 and every later macOS release is Developer ID signed and Apple-notarized, and a tag cannot publish unless signing, notarization, ticket stapling, and Gatekeeper assessment all succeed. Archived 0.10.5-and-earlier builds predate that guarantee: right-click and choose Open if Gatekeeper blocks one." }
+      ]
+    },
+    {
+      "id": "privacy",
+      "title": "Privacy and telemetry",
+      "body": [
+        { "p": "No files, paths, URLs, or metrics leave the machine. Scans, history, and the MCP server are entirely local." },
+        { "p": "Burrow does send anonymous, opt-out usage and diagnostics: crash and hang reports, launch and update outcomes, and sampled fixed-name performance spans. It never records the screen and never sends user files or their contents. One switch in Settings stops both services, and builds made from source ship with telemetry inert." },
+        { "p": "Every field is listed in [TELEMETRY.md](https://github.com/caezium/Burrow/blob/main/TELEMETRY.md). This website separately uses cookieless analytics that create no person profile, store no browser identifier, strip URL queries and fragments, and honour Do Not Track." }
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "body": [
+        { "h3": "Gatekeeper blocks the app" },
+        { "p": "For 0.11.0 and later this should not happen; if it does, the download was likely modified in transit, so fetch it again from GitHub. For archived builds, right-click the app and choose Open." },
+        { "h3": "Full Disk Access looks granted but scans stay shallow" },
+        { "p": "macOS ties the grant to the app's code signature. Replacing the app with a differently signed build invalidates it. Remove Burrow from the Full Disk Access list, then add it again." },
+        { "h3": "Free space did not increase" },
+        { "p": "Deleting a file does not release blocks that a local Time Machine snapshot still references. macOS thins snapshots automatically under pressure. `tmutil listlocalsnapshots /` shows what exists." },
+        { "h3": "An agent cannot see the gated tools" },
+        { "p": "Cleaning, uninstalling, and the other actuating tools stay hidden until you enable agent actions in Settings. This is deliberate: an agent should not be able to delete anything you have not separately authorised." }
+      ]
+    }
+  ]
+}
