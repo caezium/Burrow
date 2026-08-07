@@ -2,7 +2,10 @@
   'use strict';
 
   var projectKey = '__POSTHOG_PROJECT_KEY__';
-  if (window.location.hostname !== 'burrow.henryzh.dev' || !/^phc_[A-Za-z0-9]+$/.test(projectKey)) {
+  // Both hosts during the move to burrow.computer; the old one 301s but a
+  // cached page can still execute here for a while.
+  var SITE_HOSTS = ['burrow.computer', 'burrow.henryzh.dev'];
+  if (SITE_HOSTS.indexOf(window.location.hostname) === -1 || !/^phc_[A-Za-z0-9]+$/.test(projectKey)) {
     return;
   }
 

@@ -1,4 +1,14 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://burrow.henryzh.dev/sitemap.xml
+# Answer engines and AI crawlers are welcome; the content is the point.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://burrow.computer/sitemap.xml
