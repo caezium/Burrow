@@ -12,7 +12,12 @@
     // closed instead of publishing docs/ with an inert analytics placeholder.
     "directory": "./.site-deploy",
     // The redirect handler needs to fall through to the assets itself.
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    // Without this, Cloudflare serves a matching asset and never invokes the
+    // script, so the legacy-host redirect in worker/index.js never runs for
+    // any real page. With it, every request enters the worker, which either
+    // 301s the old hostname or falls through to env.ASSETS.
+    "run_worker_first": true
   },
   "routes": [
     { "pattern": "burrow.computer", "custom_domain": true },
