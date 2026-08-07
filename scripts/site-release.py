@@ -133,15 +133,15 @@ def render_nav(active, base="", stars=None):
   <div class="page in">
     <a class="brand" href="{base}./" aria-label="Burrow">{logo_img(base)}<span>Burrow</span></a>
     <nav class="nav">{link("./#tools", "Tools", "tools")}\
-{link("docs.html", "Docs", "docs")}\
-{link("compare.html", "Compare", "compare")}\
+{link("docs", "Docs", "docs")}\
+{link("compare", "Compare", "compare")}\
 {link("blog/", "Blog", "blog")}\
-{link("install.html", "Install", "install")}\
-{link("releases.html", "Changelog", "changelog")}\
-{link("roadmap.html", "Roadmap", "roadmap")}</nav>
+{link("install", "Install", "install")}\
+{link("releases", "Changelog", "changelog")}\
+{link("roadmap", "Roadmap", "roadmap")}</nav>
     <div class="nav-right">
       <a class="nav-github" href="{REPO}" target="_blank" rel="noopener" aria-label="View Burrow on GitHub">{GITHUB_SVG}{count}</a>
-      <a class="btn" href="{base}install.html" data-burrow-analytics="download.{active}"><span class="btn-inner">{APPLE_SVG}<span class="nav-label--full">Download for Mac</span><span class="nav-label--short">Download</span></span></a>
+      <a class="btn" href="{base}install" data-burrow-analytics="download.{active}"><span class="btn-inner">{APPLE_SVG}<span class="nav-label--full">Download for Mac</span><span class="nav-label--short">Download</span></span></a>
     </div>
   </div>
 </div>"""
@@ -389,9 +389,9 @@ def page_html(*, title, desc, og_url, hero_h1, hero_p, hero_extra, main_html,
       <div class="footer-links">
         <a href="{REPO}" target="_blank" rel="noopener">GitHub</a>
         <a href="{base}blog/">Blog</a>
-        <a href="{base}compare.html">Compare</a>
-        <a href="{base}releases.html">Changelog</a>
-        <a href="{base}roadmap.html">Roadmap</a>
+        <a href="{base}compare">Compare</a>
+        <a href="{base}releases">Changelog</a>
+        <a href="{base}roadmap">Roadmap</a>
         <a href="{REPO}/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
         <a href="{REPO}/blob/main/TELEMETRY.md" target="_blank" rel="noopener">Telemetry</a>
         <a href="{REPO}/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
@@ -460,7 +460,7 @@ def render_whatsnew(rel):
         <span class="sec-num">What's new · {month_year(rel["date"])}</span>
         <h2 class="sec-title">New in {esc(rel["version"])}</h2>
       </div>
-      <a class="btn btn-out btn-sm" href="releases.html">All releases</a>
+      <a class="btn btn-out btn-sm" href="releases">All releases</a>
     </div>
 
     <div class="grid3 wn-grid">
@@ -555,7 +555,7 @@ def render_history(releases, stars=None):
     return page_html(
         title="Burrow · Changelog",
         desc="Every Burrow release at a glance, what each version added, fixed, and tightened.",
-        og_url=f"{SITE}/releases.html",
+        og_url=f"{SITE}/releases",
         hero_h1="Changelog",
         hero_p="Every version at a glance, what it added, changed, and fixed. Full notes for each live on GitHub.",
         hero_extra=count,
@@ -642,7 +642,7 @@ def render_roadmap(data, stars=None):
     return page_html(
         title="Burrow · Roadmap",
         desc="What's shipped, building, and being weighed for Burrow, and how to vote.",
-        og_url=f"{SITE}/roadmap.html",
+        og_url=f"{SITE}/roadmap",
         hero_h1="Roadmap",
         hero_p="What's shipped, what's being built, and what we're weighing next.",
         hero_extra=cta,
@@ -656,7 +656,7 @@ def render_readme_roadmap(data):
     """The README "## Roadmap" block, GitHub markdown, raw (not HTML)."""
     out = [RM_BEGIN,
            f"The full board, with status and voting, lives at "
-           f"**[{SITE_HOST}/roadmap]({SITE}/roadmap.html)**. Vote by upvoting an "
+           f"**[{SITE_HOST}/roadmap]({SITE}/roadmap)**. Vote by upvoting an "
            f"issue, or [open a request]({REPO}/issues/new/choose).", ""]
     for col in data["columns"]:
         items = col.get("items", [])
@@ -871,7 +871,7 @@ def render_install(version, downloads, stars=None):
     return page_html(
         title="Download Burrow",
         desc="Download Burrow for macOS or Windows, or install it with Homebrew. Free, MIT licensed, no account and no subscription.",
-        og_url=f"{SITE}/install.html", hero_h1="Download Burrow",
+        og_url=f"{SITE}/install", hero_h1="Download Burrow",
         hero_p="Get the app for your machine. Free, native, and open source, on as many machines as you like.",
         hero_extra="", main_html=body, extra_css=INSTALL_CSS, active="install", stars=stars,
         head_extra=f'\n<script type="application/ld+json">{SOFTWARE_LD}</script>')
@@ -936,7 +936,7 @@ def render_compare(data, stars=None):
     return page_html(
         title="Burrow compared to CleanMyMac, Pearcleaner, DaisyDisk, and iStat Menus",
         desc="A feature-by-feature comparison of Burrow against the Mac cleanup, uninstall, disk analysis, and monitoring tools it overlaps with.",
-        og_url=f"{SITE}/compare.html", hero_h1="How Burrow compares",
+        og_url=f"{SITE}/compare", hero_h1="How Burrow compares",
         hero_p="One window against four specialists. Where each one wins, and where Burrow does not.",
         hero_extra="", main_html=body, extra_css=COMPARE_CSS, active="compare", stars=stars,
         head_extra=f'\n<script type="application/ld+json">{SOFTWARE_LD}</script>')
@@ -999,18 +999,18 @@ def blog_block(b):
     if "note" in b:
         return f'      <div class="cta">{md_links(b["note"])}</div>'
     if "link" in b:
-        return f'      <p><a href="../{esc(b["link"]["href"])}">{esc(b["link"]["text"])}</a></p>'
+        return f'      <p><a href="../{esc(b["link"]["href"]).replace(".html","")}">{esc(b["link"]["text"])}</a></p>'
     return ""
 
 
 def post_url(post):
-    return f'{SITE}/blog/{post["slug"]}.html'
+    return f'{SITE}/blog/{post["slug"]}'
 
 
 def render_blog_post(post, cats, others, stars=None):
     body = "\n".join(blog_block(b) for b in post["body"])
     rel = [p for p in others if p["slug"] != post["slug"]][:4]
-    more = "\n".join(f'    <a href="{p["slug"]}.html">{esc(p["title"])}</a>' for p in rel)
+    more = "\n".join(f'    <a href="{p["slug"]}">{esc(p["title"])}</a>' for p in rel)
     ld = json.dumps({
         "@context": "https://schema.org", "@type": "Article",
         "headline": post["title"], "description": post["description"],
@@ -1036,7 +1036,7 @@ def render_blog_index(data, stars=None):
     rows = []
     for p in posts:
         rows.append(
-            f'      <a class="post-row" href="{p["slug"]}.html">\n'
+            f'      <a class="post-row" href="{p["slug"]}">\n'
             f'        <h2>{esc(p["title"])}</h2>\n'
             f'        <p>{esc(p["description"])}</p>\n'
             f'        <div class="post-meta"><span class="cat">{esc(cats[p["category"]])}</span>'
@@ -1108,7 +1108,7 @@ SOFTWARE_LD = json.dumps({
                     "leftover files, maps disk usage, and watches live system status, with an "
                     "MCP server so coding agents can read the machine."),
     "url": SITE,
-    "downloadUrl": f"{SITE}/install.html",
+    "downloadUrl": f"{SITE}/install",
     "license": "https://github.com/caezium/Burrow/blob/main/LICENSE",
     "isAccessibleForFree": True,
     "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
@@ -1127,7 +1127,7 @@ def render_docs(data, stars=None):
     return page_html(
         title="Burrow Documentation",
         desc="What every Burrow tool does, what it touches, the safety rules it follows, and how to connect it to a coding agent over MCP.",
-        og_url=f"{SITE}/docs.html", hero_h1="Documentation",
+        og_url=f"{SITE}/docs", hero_h1="Documentation",
         hero_p=data["intro"], hero_extra="",
         main_html=(f'  <div class="dwrap">\n    <nav class="dtoc">\n      <h2>Contents</h2>\n'
                    f'{nav}\n    </nav>\n    <div class="dbody">\n{body}\n    </div>\n  </div>'),
@@ -1165,10 +1165,10 @@ def breadcrumb_ld(trail):
 
 def render_sitemap(posts):
     today = max(p["date"] for p in posts)
-    urls = [(f"{SITE}/", "1.0", today), (f"{SITE}/install.html", "0.9", today),
-            (f"{SITE}/docs.html", "0.9", today),
-            (f"{SITE}/compare.html", "0.8", today), (f"{SITE}/blog/", "0.8", today),
-            (f"{SITE}/releases.html", "0.6", today), (f"{SITE}/roadmap.html", "0.6", today)]
+    urls = [(f"{SITE}/", "1.0", today), (f"{SITE}/install", "0.9", today),
+            (f"{SITE}/docs", "0.9", today),
+            (f"{SITE}/compare", "0.8", today), (f"{SITE}/blog/", "0.8", today),
+            (f"{SITE}/releases", "0.6", today), (f"{SITE}/roadmap", "0.6", today)]
     urls += [(post_url(p), "0.7", p["date"]) for p in posts]
     body = "\n".join(f'  <url><loc>{u}</loc><lastmod>{d}</lastmod>'
                       f'<priority>{pr}</priority></url>' for u, pr, d in urls)
