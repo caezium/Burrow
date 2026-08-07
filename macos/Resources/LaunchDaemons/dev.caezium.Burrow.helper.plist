@@ -41,16 +41,17 @@
 	<string>Interactive</string>
 
 	<!--
-	  Diagnostic trail. The unified log produced nothing for this daemon, so
-	  stderr is redirected here as a source of truth that needs no log-store
-	  query to read. /var/log is root-owned, unlike /tmp, so an unprivileged
-	  process cannot pre-create a symlink and redirect root's writes.
+	  NO StandardOutPath / StandardErrorPath here, deliberately.
 
-	  The daemon logs decisions only — operation names from a closed enum,
-	  authorization outcomes, status codes — never paths, output, or
-	  authentication material.
+	  Redirecting stderr to /var/log/burrow-helper.log made launchd refuse to
+	  exec the daemon at all: every spawn failed with EX_CONFIG (78) and the
+	  process never ran, which looked exactly like a code-signing or
+	  bundle-location rejection and cost a long detour to attribute. The daemon
+	  had been starting cleanly immediately before that key was added.
+
+	  The daemon opens its own log instead (see `helperTrace`), so a path it
+	  cannot write degrades to "no diagnostics" rather than "no daemon".
 	-->
-	<key>StandardErrorPath</key>
-	<string>/var/log/burrow-helper.log</string>
+
 </dict>
 </plist>

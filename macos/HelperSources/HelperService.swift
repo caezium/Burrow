@@ -48,17 +48,40 @@ let helperLog = Logger(subsystem: "dev.caezium.Burrow.helper", category: "privil
 /// The unified log produced NOTHING for this daemon across several runs — not
 /// even the unconditional startup line — while the process was demonstrably
 /// alive and serving Mach requests. A root daemon whose logging you can't
-/// trust is a root daemon you can't debug, so every `helperLog` call is
-/// mirrored to stderr, which launchd redirects to a file via
-/// `StandardErrorPath` in the plist.
+/// trust is a root daemon you can't debug, so every message is also written to
+/// a file.
 ///
-/// stderr is the belt to os_log's braces: it needs no log-store query, no
-/// predicate, and no subsystem registration, so "the daemon wrote nothing"
-/// becomes distinguishable from "the daemon never got that far".
+/// That file is opened HERE rather than via `StandardErrorPath` in the launchd
+/// plist. The plist route was tried first and was actively harmful: launchd
+/// refused to exec the daemon at all, failing every spawn with EX_CONFIG, so
+/// the attempt to gain observability destroyed the thing being observed — and
+/// the symptom (a daemon that never runs and a 0-byte log) is indistinguishable
+/// from a code-signing rejection.
+///
+/// Opening it in-process inverts that failure mode: a path the daemon cannot
+/// write costs diagnostics, never the daemon.
+private let helperTraceHandle: FileHandle? = {
+    let path = "/Library/Logs/burrow-helper.log"
+    let fm = FileManager.default
+    if !fm.fileExists(atPath: path) {
+        // 0644 root-owned: readable for support, writable only by root, and in
+        // a directory unprivileged users cannot pre-seed with a symlink.
+        fm.createFile(atPath: path, contents: nil,
+                      attributes: [.posixPermissions: 0o644])
+    }
+    guard let handle = FileHandle(forWritingAtPath: path) else { return nil }
+    handle.seekToEndOfFile()
+    return handle
+}()
+
+private let helperTraceLock = NSLock()
+
 func helperTrace(_ message: String) {
     helperLog.notice("\(message, privacy: .public)")
+    guard let helperTraceHandle else { return }
     let stamp = ISO8601DateFormatter().string(from: Date())
-    FileHandle.standardError.write(Data("[\(stamp)] \(message)\n".utf8))
+    helperTraceLock.lock(); defer { helperTraceLock.unlock() }
+    try? helperTraceHandle.write(contentsOf: Data("[\(stamp)] \(message)\n".utf8))
 }
 
 // MARK: - Engine resolution
