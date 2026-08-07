@@ -15,6 +15,12 @@
 //      `mo history`); a subset → Burrow trashes exactly the reviewed,
 //      ticked paths (Trash semantics, logged in Burrow's Activity
 //      instead — the trade-off the review header states).
+//      SCOPE, on both paths against the bundled engine: the per-app
+//      support files under ~/Library. The `.app` bundle is NOT deleted
+//      and no `brew uninstall --cask` runs, so the app stays installed
+//      — `confirmCopy` is where that is said to the user, and
+//      `UninstallGuard.unavailableReason` is why the whole-app path is
+//      still refused rather than run.
 //
 //    Updates — unified list with per-source badges (UpdatesView).
 //
@@ -204,8 +210,9 @@ struct SoftwareView: View {
                 // failure copy below as a blanket guess. Say the true one plainly instead of
                 // rendering a silent blank list either way.
                 if model.inventoryUnavailable {
-                    // In practice this is the ONLY case that happens today: the bundled engine
-                    // has no `--list` at all (post-repoint), so every real call fails.
+                    // This used to be the ONLY case that happened, because the bundled engine had
+                    // no `--list` at all. It implements one now (135 rows on the machine this was
+                    // verified on), so reaching this state means a real failure worth showing.
                     VStack(spacing: 8) {
                         Spacer()
                         Image(systemName: "questionmark.app.dashed")
@@ -411,7 +418,12 @@ struct AppRow: View {
             .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.black.opacity(0.22)))
             .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
         } else if preview != nil {
-            Text("Couldn't enumerate this app's files — Remove uses the engine's full uninstall.")
+            // Deliberately says nothing about what Remove will then do. It used to promise "Remove
+            // uses the engine's full uninstall", which is wrong twice over: the engine's uninstall
+            // isn't full (it leaves the .app bundle and any Homebrew cask in place), and a row
+            // Burrow can't name to the engine at all is skipped rather than run. The confirm sheet
+            // states both, per app, at the moment it matters — before consent.
+            Text("Couldn't enumerate this app's files — there's nothing to review here.")
                 .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
                 .padding(10)
         }
@@ -561,10 +573,10 @@ final class SoftwareModel: ObservableObject {
     @Published var apps: [InstalledApp] = [] { didSet { rebuildLoweredNames() } }
     @Published var loading = false
     @Published var error: String?
-    /// True when the last `load()` came back empty BECAUSE `mo uninstall --list` failed (the
-    /// bundled engine has no such command post-repoint), as opposed to a genuinely empty result.
-    /// `apps.isEmpty` alone can't tell those apart — see `MoleClient.ListAppsResult` and the
-    /// empty-state branch in `content` above, which is the only reader.
+    /// True when the last `load()` came back empty BECAUSE `mo uninstall --list` failed, as
+    /// opposed to a genuinely empty result. `apps.isEmpty` alone can't tell those apart — see
+    /// `MoleClient.ListAppsResult` and the empty-state branch in `content` above, which is the
+    /// only reader.
     @Published var inventoryUnavailable = false
     @Published var query = ""
     @Published var sort: AppSort = .size
@@ -691,25 +703,101 @@ final class SoftwareModel: ObservableObject {
         }
     }
 
-    /// Which argv the dry-run enumeration below should send, given whether `.mo` is about to
-    /// resolve to the bundled engine. Pure and separated from the actual spawn (`fetchPreview`)
-    /// so the one dangerous decision here — when it's safe to send a bundle id vs. when to
-    /// refuse outright — is unit-tested without a real process.
-    enum PreviewSource: Equatable {
+    /// Which identifier Burrow puts on argv for ONE app, given whether `.mo` is about to resolve
+    /// to the bundled engine. Pure and separated from the actual spawn so the one dangerous
+    /// decision here — when it's safe to send a bundle id vs. when to refuse outright — is
+    /// unit-tested without a real process.
+    ///
+    /// ONE function for BOTH the dry-run enumeration (`fetchPreview`) and the real removal
+    /// (`engineUninstall`), because the two used to decide separately and disagree: the preview
+    /// sent `app.bundleId` while the removal sent `app.uninstallName`. Where two installed apps
+    /// share a display name those are DIFFERENT inventory rows, verified against the real binary
+    /// on a 135-app machine:
+    ///
+    ///     uninstall com.valvesoftware.steam → Steam,  /Applications/Steam.app
+    ///     uninstall Steam                   → Steam,  ~/Applications/CrossOver/Steam/Steam.app
+    ///                                                 (com.codeweavers.CrossOverHelper.4DB4…)
+    ///
+    /// Three `Restarter`, two `Updater` and two `Steam` on that machine alone — so the user would
+    /// review one app's leftovers and the apply would act on another's. The engine's exact pass
+    /// takes the first name hit and stops (a faithful port of bash's `break`), so the ambiguity
+    /// is inherited and cannot be fixed by argument choice; sending the same UNAMBIGUOUS
+    /// identifier from both call sites is what makes preview and apply name the same row.
+    enum UninstallTarget: Equatable {
         /// Ask the bundled engine for this exact bundle id.
         case engine(bundleId: String)
         /// Ask a real legacy `mo`/MIT-fork binary for this display name — unchanged pre-repoint
-        /// behavior.
+        /// behavior, and the only namespace that binary's matcher understands.
         case legacy(name: String)
-        /// Don't ask anything. See `fetchPreview`'s doc comment for why an empty bundle id must
-        /// refuse rather than guess.
+        /// Don't ask anything. See `isSendableBundleID` for the values that land here.
         case unavailable
     }
 
-    nonisolated static func previewSource(for app: InstalledApp, resolvedIsBundledEngine: Bool) -> PreviewSource {
+    /// Whether a `--list` row's `bundle_id` is a real identifier that may go on the engine's argv,
+    /// or one of the values that resolve to the WRONG app — or to every app. All three verified
+    /// against the real `burrow-engine` binary, not inferred from its source:
+    ///
+    ///  - **`""`** — an empty positional survives the engine's `positionals` scan and reaches
+    ///    `match_apps_by_name`, whose substring pass asks `name.contains("")`. That is true of
+    ///    every row: `uninstall --dry-run ""` resolved all 135 installed apps and enumerated 224
+    ///    leftover paths as one app's. (The older failure this check was written for was
+    ///    different but no less bad — a straight `leftover_paths(home, "")`, i.e. `~/Library/
+    ///    Caches` itself reported as one app's leftovers. Multi-app resolution changed the shape
+    ///    of the damage, not the need to refuse.)
+    ///  - **`"unknown"`** — the literal string `uninstall --list` records for a bundle with no
+    ///    `CFBundleIdentifier`; five rows on the same machine (Synergy, Stardew Valley, Oxygen
+    ///    Not Included, Sid Meier's Civilization VII, Slay the Spire 2). It is not empty, so an
+    ///    `isEmpty` check does not catch it, and it resolves through the engine's bundle-id pass
+    ///    to whichever unknown-id row comes first — Synergy, verified. The engine then
+    ///    short-circuits `bundle_id == "unknown"` to zero leftovers, so today it is a
+    ///    MIS-ATTRIBUTED EMPTY report rather than a misdirected deletion; that is a property of
+    ///    the engine's current internals, not a guarantee this side may lean on, and "no leftovers
+    ///    found" presented for the wrong app is a claim Burrow has no business making.
+    ///  - **a leading `-`** — `positionals` skips any token starting with `-`, so such an id would
+    ///    vanish from argv and the run would silently act on fewer apps than it reported. No real
+    ///    bundle id looks like this; refusing costs nothing and closes the shape.
+    ///
+    /// A row that fails this is never silently dropped from a removal — see `uninstallBatch`.
+    nonisolated static func isSendableBundleID(_ bundleId: String) -> Bool {
+        !bundleId.isEmpty && bundleId != "unknown" && !bundleId.hasPrefix("-")
+    }
+
+    nonisolated static func uninstallTarget(for app: InstalledApp,
+                                            resolvedIsBundledEngine: Bool) -> UninstallTarget {
         guard resolvedIsBundledEngine else { return .legacy(name: app.uninstallName) }
-        guard !app.bundleId.isEmpty else { return .unavailable }
+        guard isSendableBundleID(app.bundleId) else { return .unavailable }
         return .engine(bundleId: app.bundleId)
+    }
+
+    /// A confirmed multi-app selection split by whether Burrow can name each app to the resolved
+    /// binary at all. Pure, so the rule that matters is unit-tested: an app Burrow cannot name is
+    /// SURFACED and skipped, never quietly folded into a run that then reports success for it.
+    struct UninstallBatch: Equatable {
+        /// argv positionals, one per addressable app, in selection order.
+        let arguments: [String]
+        /// The apps those arguments name, positionally aligned with `arguments`.
+        let addressable: [InstalledApp]
+        /// Apps with no identifier the resolved binary can be trusted with (`isSendableBundleID`).
+        let unaddressable: [InstalledApp]
+    }
+
+    nonisolated static func uninstallBatch(for apps: [InstalledApp],
+                                           resolvedIsBundledEngine: Bool) -> UninstallBatch {
+        var arguments: [String] = []
+        var addressable: [InstalledApp] = []
+        var unaddressable: [InstalledApp] = []
+        for app in apps {
+            switch uninstallTarget(for: app, resolvedIsBundledEngine: resolvedIsBundledEngine) {
+            case .engine(let bundleId):
+                arguments.append(bundleId); addressable.append(app)
+            case .legacy(let name):
+                arguments.append(name); addressable.append(app)
+            case .unavailable:
+                unaddressable.append(app)
+            }
+        }
+        return UninstallBatch(arguments: arguments, addressable: addressable,
+                              unaddressable: unaddressable)
     }
 
     /// The dry-run enumeration behind the expanded leftover review. Two incompatible output
@@ -718,16 +806,10 @@ final class SoftwareModel: ObservableObject {
     ///  - The BUNDLED ENGINE wants a bundle id positionally and answers JSON, never the ANSI
     ///    text this used to always send/parse. `app.uninstallName` is a DISPLAY NAME (sourced
     ///    from the old digger-era `--list`, i.e. mo's own matcher convention, not the engine's),
-    ///    so sending it to the engine only coincidentally resolves — for the apps whose support
-    ///    directory happens to be named after the display name — and silently misses everything
-    ///    else; it must never reach the engine. `app.bundleId` is what the engine wants, but
-    ///    ONLY when non-empty: an empty string still satisfies the engine's own
-    ///    `args.iter().find(|a| !a.starts_with("--"))` positional-arg scan (confirmed against the
-    ///    real binary), which turns into `leftover_paths(home, "")` — literally
-    ///    `~/Library/Caches/`, `~/Library/Containers/`, etc, whole PARENT directories reported as
-    ///    if they were this one app's leftovers. `previewSource` refuses in that case rather than
-    ///    guess; a preview that confidently shows the wrong app's leftovers is worse than one
-    ///    that shows nothing.
+    ///    and a display name is not unique — see `UninstallTarget` for the live Steam collision
+    ///    that made the preview and the apply enumerate two different applications. `app.bundleId`
+    ///    is what the engine wants, but only when `isSendableBundleID` accepts it; that predicate
+    ///    owns the three values that must never reach argv and the evidence for each.
     ///  - A real legacy `mo`/MIT fork resolved instead — unchanged from before this fix: its
     ///    `--dry-run <name>` prompts, EOF-on-stdin prints the ANSI enumeration
     ///    `UninstallPreview.parse` already understands, and it wants the display name, not a
@@ -737,16 +819,15 @@ final class SoftwareModel: ObservableObject {
     /// already use to decide when engine-specific argv translation applies — not a new pattern
     /// introduced here.
     ///
-    /// UNREACHED in a shipped build today: `MoleClient.listAppsResult()` returns `.unavailable`
-    /// whenever the bundled engine resolves (it has no `--list` at all), so no `InstalledApp` row
-    /// exists to expand in the first place — this whole function only ever takes the `.legacy`
-    /// branch in practice right now. Written correctly anyway (and verified against the real
-    /// engine binary's actual JSON), so the day the engine gains app listing this doesn't become
-    /// the next undiscovered gap in the same call graph.
+    /// No longer unreachable: this used to note that `MoleClient.listAppsResult()` always came
+    /// back `.unavailable` against the bundled engine because it had no `--list`, so no row
+    /// existed to expand. The engine implements `uninstall --list` now — it answered with 135
+    /// rows on the machine this was verified on — so the `.engine` branch below is the live one
+    /// in a shipped build, not a written-ahead placeholder.
     nonisolated private static func fetchPreview(for app: InstalledApp) -> UninstallPreview {
         let resolved = MoleCLI.findExecutable()
-        let source = previewSource(for: app,
-                                   resolvedIsBundledEngine: resolved != nil && resolved == MoleCLI.bundledExecutable())
+        let source = uninstallTarget(for: app,
+                                     resolvedIsBundledEngine: resolved != nil && resolved == MoleCLI.bundledExecutable())
         switch source {
         case .unavailable:
             return UninstallPreview(appName: nil, totalText: nil, entries: [])
@@ -842,32 +923,111 @@ final class SoftwareModel: ObservableObject {
         return ticked.count < preview.entries.count
     }
 
+    /// One app's line in the confirm sheet, plus how many of its enumerated paths the user kept
+    /// ticked when the removal is a reviewed subset. Named rather than a tuple so `confirmCopy`
+    /// stays readable from its tests.
+    struct ConfirmLine: Equatable {
+        let name: String
+        /// nil = the whole enumerated set (or never reviewed); a count = a reviewed subset.
+        let reviewedCount: Int?
+    }
+
+    /// The confirm sheet's exact words. Pure and split out from `NSAlert` because the claim it
+    /// makes is the thing that was wrong, and a claim about recoverability deserves a test.
+    ///
+    /// It used to say "Remove 2 apps?" over "These move to the Trash (recoverable):" and a list of
+    /// app names. Against the bundled engine none of that is true of the APPS: `uninstall --apply`
+    /// removes the per-app support files under `~/Library` (containers, Application Support,
+    /// caches, preferences, logs, saved state, HTTP storage, WebKit data, cookies) and nothing
+    /// else. It never deletes the `.app` bundle and never runs `brew uninstall --cask`, both of
+    /// which the bash oracle's `batch_uninstall_applications` does — the engine says so in its own
+    /// `cli.rs` and its dry-run enumeration contains no `.app` path to tick. So the apps stay
+    /// installed and the sheet has to say so before anyone consents.
+    ///
+    /// `removesAppBundle` is that difference, not a style flag: a real legacy `mo`/MIT-fork binary
+    /// DOES enumerate and remove `/Applications/Foo.app`, so on that path the original wording is
+    /// accurate and is kept verbatim — including its existing zh translations.
+    nonisolated static func confirmCopy(lines: [ConfirmLine], skipped: [String],
+                                        hasReviewedSubset: Bool,
+                                        removesAppBundle: Bool) -> (title: String, body: String, confirmButton: String) {
+        let listed = lines.map { line -> String in
+            guard let count = line.reviewedCount else { return "• \(line.name)" }
+            return "• \(line.name) — \(String(format: NSLocalizedString("%d reviewed files", comment: ""), count))"
+        }.joined(separator: "\n")
+
+        let title: String
+        var body: String
+        let confirmButton: String
+        if removesAppBundle {
+            title = String(format: NSLocalizedString(lines.count == 1 ? "Remove %d app?" : "Remove %d apps?", comment: ""), lines.count)
+            body = String(format: NSLocalizedString("These move to the Trash (recoverable):\n\n%@", comment: ""), listed)
+            confirmButton = NSLocalizedString("Move to Trash", comment: "")
+        } else {
+            title = String(format: NSLocalizedString(lines.count == 1 ? "Remove leftover files for %d app?" : "Remove leftover files for %d apps?", comment: ""), lines.count)
+            body = String(format: NSLocalizedString("The apps themselves stay installed. Burrow removes the support files they keep in your Library — containers, caches, preferences, saved state — and those move to the Trash (recoverable):\n\n%@", comment: ""), listed)
+            confirmButton = NSLocalizedString("Move Files to Trash", comment: "")
+        }
+        if hasReviewedSubset {
+            body += "\n\n" + NSLocalizedString("Reviewed subsets are trashed by Burrow directly and appear in Burrow's Activity log, not `mo history`.", comment: "")
+        }
+        if !skipped.isEmpty {
+            body += "\n\n" + String(format: NSLocalizedString("Skipped — these have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@", comment: ""),
+                                    skipped.map { "• \($0)" }.joined(separator: "\n"))
+        }
+        return (title, body, confirmButton)
+    }
+
     func confirmAndUninstall() {
         let targets = selectedApps
         guard !targets.isEmpty else { return }
-        let engineApps = targets.filter { !isSubsetRemoval($0) }
-        let subsetApps = targets.filter { isSubsetRemoval($0) }
+        // Resolve the binary ONCE, here, and hand the answer to both the sheet and the run. The
+        // sheet describes what a specific binary is about to do, so a second resolution later
+        // could describe one binary and run another. In a shipped build this is a `Bundle.main`
+        // lookup plus an `isExecutableFile` stat with no subprocess (`trustedExecutable` hits the
+        // bundled engine first) — `AppDelegate` already gates its destructive actions on the same
+        // call from the main thread.
+        let resolved = MoleCLI.findExecutable()
+        let isEngine = resolved != nil && resolved == MoleCLI.bundledExecutable()
 
-        var bodyLines = engineApps.map { "• \($0.name)" }
-        bodyLines += subsetApps.map {
-            let count = pathSelections[$0.id]?.count ?? 0
-            return "• \($0.name) — \(String(format: NSLocalizedString("%d reviewed files", comment: ""), count))"
+        let wholeApps = targets.filter { !isSubsetRemoval($0) }
+        let subsetApps = targets.filter { isSubsetRemoval($0) }
+        // Whole-app removals are the only ones that reach the engine's argv; a reviewed subset is
+        // trashed by Burrow from paths the engine already enumerated, so it needs no identifier.
+        let batch = Self.uninstallBatch(for: wholeApps, resolvedIsBundledEngine: isEngine)
+
+        var lines = batch.addressable.map { Self.ConfirmLine(name: $0.name, reviewedCount: nil) }
+        lines += subsetApps.map {
+            Self.ConfirmLine(name: $0.name, reviewedCount: pathSelections[$0.id]?.count ?? 0)
         }
+        // Nothing addressable and nothing reviewed: there is no destructive action to consent to,
+        // so don't offer one. Saying which apps and why beats a sheet whose OK button does nothing.
+        guard !lines.isEmpty else {
+            let alert = NSAlert()
+            alert.messageText = NSLocalizedString("Nothing Burrow can remove", comment: "")
+            alert.informativeText = String(format: NSLocalizedString("These have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@", comment: ""),
+                                           batch.unaddressable.map { "• \($0.name)" }.joined(separator: "\n"))
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+            alert.runModalQuiet()
+            return
+        }
+
+        let copy = Self.confirmCopy(lines: lines,
+                                    skipped: batch.unaddressable.map(\.name),
+                                    hasReviewedSubset: !subsetApps.isEmpty,
+                                    removesAppBundle: !isEngine)
         let alert = NSAlert()
-        alert.messageText = String(format: NSLocalizedString(targets.count == 1 ? "Remove %d app?" : "Remove %d apps?", comment: ""), targets.count)
-        var info = String(format: NSLocalizedString("These move to the Trash (recoverable):\n\n%@", comment: ""),
-                          bodyLines.joined(separator: "\n"))
-        if !subsetApps.isEmpty {
-            info += "\n\n" + NSLocalizedString("Reviewed subsets are trashed by Burrow directly and appear in Burrow's Activity log, not `mo history`.", comment: "")
-        }
-        alert.informativeText = info
+        alert.messageText = copy.title
+        alert.informativeText = copy.body
         alert.alertStyle = .warning
-        alert.addButton(withTitle: NSLocalizedString("Move to Trash", comment: ""))
+        alert.addButton(withTitle: copy.confirmButton)
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         guard alert.runModalQuiet() == .alertFirstButtonReturn else { return }
 
         if !subsetApps.isEmpty { trashSubsets(subsetApps) }
-        if !engineApps.isEmpty { engineUninstall(engineApps) }
+        if !batch.addressable.isEmpty {
+            engineUninstall(batch.addressable, arguments: batch.arguments, removesAppBundle: !isEngine)
+        }
     }
 
     /// Burrow trashes exactly the reviewed, ticked paths. Every path is
@@ -910,23 +1070,40 @@ final class SoftwareModel: ObservableObject {
         }
     }
 
-    /// The engine path — `mo uninstall <names>`, Trash-based, with the
-    /// matcher pre-flight (audit H4) before any y is answered.
-    private func engineUninstall(_ targets: [InstalledApp]) {
-        let names = targets.map { $0.uninstallName }
+    /// The engine path — `mo uninstall <ids>`, Trash-based, with the matcher pre-flight (audit H4)
+    /// before any y is answered.
+    ///
+    /// `arguments` arrives already resolved by `uninstallBatch` rather than being derived here.
+    /// That is the fix for the defect this method WAS: it built its own argv from
+    /// `$0.uninstallName` while `fetchPreview` sent `$0.bundleId`, so for any two installed apps
+    /// sharing a display name the sheet reviewed one app's leftovers and this ran against
+    /// another's. One resolution per user action, shared by the preview, the sheet and the run.
+    ///
+    /// `arguments` is also what goes to `UninstallGuard.mismatchDescription` as `confirmed`, which
+    /// keeps that comparison inside a single namespace: a matched set only ever comes back
+    /// non-nil from the LEGACY text format, and on that path `arguments` are display names, the
+    /// same thing mo prints. Should a matched set ever appear on the engine path, bundle ids vs.
+    /// display names would read as a mismatch and abort — fail-closed in both directions.
+    private func engineUninstall(_ targets: [InstalledApp], arguments: [String],
+                                 removesAppBundle: Bool) {
         // The dialog above is the consent; the ticket (argv / stdin /
         // timeout / preflight) is minted by the shared gate — the same
         // truth table and catalog the MCP server uses. (One deliberate
         // change rides along: the catalog's unified 600 s uninstall
         // timeout replaces this view's old 300 s.)
         guard case .run(let ticket) = MoActions.decide(
-            .uninstall(apps: names, permanent: false), .real,
+            .uninstall(apps: arguments, permanent: false), .real,
             .gui(hasFullDiskAccess: true, userConfirmed: true)) else { return }
         loading = true
-        // Surface the run in the menu-bar HUD's Activity section too.
+        // Surface the run in the menu-bar HUD's Activity section too. The label says what the
+        // resolved binary actually does: the engine takes the apps' `~/Library` support files and
+        // leaves the `.app` bundles installed, so "Uninstalling N apps" would be the same false
+        // claim the confirm sheet used to make.
         let opId = UUID()
-        OperationCenter.shared.begin(opId, label: "Uninstalling \(targets.count) app\(targets.count == 1 ? "" : "s")",
-                                     notifiesOnEnd: true)
+        let hudLabel = removesAppBundle
+            ? "Uninstalling \(targets.count) app\(targets.count == 1 ? "" : "s")"
+            : "Removing leftover files for \(targets.count) app\(targets.count == 1 ? "" : "s")"
+        OperationCenter.shared.begin(opId, label: hudLabel, notifiesOnEnd: true)
         DispatchQueue.global(qos: .userInitiated).async {
             // Pre-flight (audit H4): mo does its own name matching, so before
             // answering any prompt, verify what it MATCHED equals what the
@@ -939,13 +1116,14 @@ final class SoftwareModel: ObservableObject {
             let matched = UninstallGuard.matchedApps(inDryRunOutput: dryText)
             let problem: String?
             if let matched {
-                problem = UninstallGuard.mismatchDescription(confirmed: names, matched: matched)
+                problem = UninstallGuard.mismatchDescription(confirmed: arguments, matched: matched)
             } else {
                 // The bundled engine answers in JSON, not the legacy "Matched N app(s):" text
                 // this guard parses, so `matched` is nil on (almost) every real call — see
-                // UninstallGuard.unavailableReason for why that's a build limitation to state
-                // plainly, not a "couldn't verify" non-answer, and not something to fix by
-                // teaching this guard to read JSON.
+                // UninstallGuard.unavailableReason for the ONE reason that still keeps this
+                // closed now that multi-app resolution, `--permanent`/Trash routing and the
+                // bundle-id argument have all landed. Teaching this guard to read the engine's
+                // JSON is the small half of opening it; read that doc comment first.
                 problem = UninstallGuard.unavailableReason
             }
             if let problem {
@@ -1019,7 +1197,9 @@ final class SoftwareModel: ObservableObject {
                 self.recentLoaded = false
                 if self.sort == .recent { self.ensureRecentDates() }
                 OperationCenter.shared.end(opId, success: true,
-                                           detail: "\(targets.count) moved to Trash")
+                                           detail: removesAppBundle
+                                               ? "\(targets.count) moved to Trash"
+                                               : "leftovers trashed for \(targets.count) app\(targets.count == 1 ? "" : "s")")
             }
         }
     }

@@ -16,8 +16,10 @@
 //
 //  Post-repoint, "unparseable" is the NORMAL case against the bundled engine: it answers every
 //  command in its JSON envelope, never the legacy "Matched N app(s):" text below, so
-//  `matchedApps` returns nil on (almost) every real call and callers abort. See
-//  `unavailableReason` for why that must stay true for now rather than be "fixed".
+//  `matchedApps` returns nil on (almost) every real call and callers abort. Teaching it to read
+//  that JSON is easy and is NOT the thing standing in the way — read `unavailableReason`'s doc
+//  comment before touching it: it records what has since been fixed, the one blocker that is
+//  left, and the order the two remaining steps have to happen in.
 //
 
 import Foundation
@@ -32,33 +34,51 @@ enum UninstallGuard {
     /// non-localized MCP wire text, matching how `SettingsView` already states this build's other
     /// engine-capability gaps (e.g. `touchIDEngineSupported`'s footnote) in plain, unlocalized text.
     ///
-    /// Do NOT respond to this by teaching `matchedApps` to decode the engine's JSON — that would
-    /// ENABLE uninstall, and uninstall is not safe to enable yet, for three separate engine-side
-    /// reasons that have nothing to do with parsing:
+    /// # What has been fixed, and what still keeps this closed
     ///
-    ///  1. `burrow-engine uninstall` resolves exactly ONE bundle id per invocation
-    ///     (`args.iter().find(|a| !a.starts_with("--"))` feeding `find_leftovers(home,
-    ///     bundle_id)`) — every app after the first in a multi-app request is silently dropped.
-    ///  2. Burrow passes DISPLAY NAMES (`InstalledApp.uninstallName`, sourced from the old
-    ///     digger-era `--list`) where the engine wants an exact bundle id — `leftover_paths`
-    ///     interpolates the argument directly into paths like `Library/Containers/{bundle_id}`.
-    ///     A display name coincidentally matches for the handful of apps whose support files
-    ///     happen to be named that way and finds nothing for everyone else, so a "fixed" guard
-    ///     would produce PARTIAL, ARBITRARY deletions — not the uniform no-op this produces today.
-    ///  3. As of this writing, `--permanent` is unparsed by the engine (removal runs through
-    ///     `execute_clean`'s `fs::remove_dir_all`/`remove_file` unconditionally) and there is no
-    ///     Trash path, so every real uninstall would be a hard delete despite the confirm
-    ///     sheet's "moves to the Trash (recoverable)" promise. `caezium/burrow-engine` is a
-    ///     separate, actively-developed repo — confirm this specific point against its current
-    ///     source before relying on it; #1 and #2 above don't depend on it and are each
-    ///     independently sufficient to keep this guard closed even if #3 already landed.
+    /// This used to list THREE engine-side reasons. Two of them are now gone, and leaving a stale
+    /// reason list here is precisely how someone opens the guard on the strength of half a fix, so
+    /// the current state, verified against the real `burrow-engine` binary (not inferred from its
+    /// source), is:
     ///
-    /// All three need fixing on the engine side (and the app needs to start sending bundle ids)
-    /// before this guard's fail-closed behavior should be relaxed.
+    ///  1. ~~One bundle id per invocation.~~ FIXED. `uninstall` collects every positional and runs
+    ///     `uninstall::resolve::match_apps_by_name` over the same inventory `--list` prints, so a
+    ///     three-app request resolves three apps and reports the ones that matched nothing in an
+    ///     `unmatched` array instead of dropping them.
+    ///  2. ~~Burrow sends display names.~~ FIXED on this side. `SoftwareModel.uninstallBatch` is
+    ///     now the single resolver for BOTH the dry-run preview and the real run, and it sends
+    ///     `bundleId` — refusing outright for the rows where that value is `""`, `"unknown"`, or
+    ///     flag-shaped (see `SoftwareModel.isSendableBundleID` for what each of those resolves to).
+    ///  3. ~~`--permanent` unparsed, no Trash path.~~ FIXED. The engine parses `--permanent` and
+    ///     routes every surviving candidate through `crate::trash::move_to_trash` by default
+    ///     (`/usr/bin/trash`, falling back to Finder via AppleScript), reporting a failed Trash
+    ///     move as an ordinary per-item error rather than falling back to a hard delete.
+    ///
+    /// **The remaining blocker is not a parsing problem, and it is not on this side.** The
+    /// engine's `uninstall` removes an app's per-app support files under `~/Library` — containers,
+    /// Application Support, caches, preferences, logs, saved state, HTTP storage, WebKit data,
+    /// cookies — and nothing else. It never deletes the `.app` bundle and never runs
+    /// `brew uninstall --cask`, both of which the bash oracle's `batch_uninstall_applications`
+    /// does; the engine states this in `src/cli.rs`'s own docs, and its dry-run enumeration
+    /// contains no `.app` path at all. So the action behind Burrow's "Remove" button — take these
+    /// applications off this machine — is one the engine cannot currently carry out, and a guard
+    /// opened today would run something narrower than the row, the button and the tab all mean.
+    ///
+    /// # What opening it would take
+    ///
+    /// Two things, in this order. FIRST, the engine has to remove the `.app` bundle (and handle
+    /// brew-managed casks) so the action matches its name — or Burrow's Software tab has to be
+    /// deliberately redesigned around "clear this app's data", which is a product decision, not a
+    /// build one. SECOND, and only then, `matchedApps` needs to decode the engine's dry-run
+    /// envelope: `data.apps[]` carries `{query, name, bundle_id, path}` per resolved app plus a
+    /// top-level `unmatched[]`, so comparing `query` values against what `uninstallBatch` sent is
+    /// an EXACT preflight in a single namespace — strictly better than the text parser below,
+    /// which compares display names. Do the second without the first and the button quietly means
+    /// something else than it says.
     static let unavailableReason = "Uninstall isn't available in this build: the bundled engine "
-        + "can only resolve one app per request and expects an exact bundle id where Burrow "
-        + "currently sends display names, so there's no reliable way to confirm what it would "
-        + "actually remove before anything is deleted."
+        + "removes an app's leftover support files but never the app itself — no .app deletion "
+        + "and no `brew uninstall --cask` — so it can't carry out the removal this button offers, "
+        + "and its JSON dry-run isn't a format this pre-flight can confirm a matched set from."
 
     /// App names mo reports it matched, parsed from (ANSI-decorated)
     /// `mo uninstall --dry-run` output:

@@ -99,4 +99,19 @@ final class UninstallGuardTests: XCTestCase {
         XCTAssertFalse(reason.localizedCaseInsensitiveContains("couldn't verify"),
                        "must not regress to the old ambiguous non-answer: \(reason)")
     }
+
+    /// The reason has to name the blocker that is actually left. It used to cite three engine-side
+    /// gaps; two have since been fixed (multi-app resolution, `--permanent` + real Trash routing)
+    /// and the third — Burrow sending display names — is closed by `SoftwareModel.uninstallBatch`.
+    /// What remains is that the engine removes an app's leftovers and never the app, so a reason
+    /// still built on the old three would read as satisfied and invite someone to open the guard.
+    func testUnavailableReason_namesTheBlockerThatIsActuallyLeft() {
+        let reason = UninstallGuard.unavailableReason
+        XCTAssertTrue(reason.contains(".app"),
+                      "must say the .app bundle survives, which is why 'uninstall' is the wrong word: \(reason)")
+        XCTAssertFalse(reason.contains("one app per request"),
+                       "multi-app resolution landed — a stale reason is how this gets opened by mistake: \(reason)")
+        XCTAssertFalse(reason.contains("display names"),
+                       "Burrow sends bundle ids now: \(reason)")
+    }
 }

@@ -374,7 +374,7 @@ struct ToolCatalog {
             ],
             [
                 "name": "burrow_list_apps",
-                "description": "Installed applications and the exact names `burrow_uninstall` accepts (from `mo uninstall --list`). Read-only. Call this first to get the canonical app name before uninstalling.",
+                "description": "Installed applications and the identifiers `burrow_uninstall` accepts (from `mo uninstall --list`): each row carries `name`, `bundle_id`, `uninstall_name` (the Homebrew cask token for brew-managed apps, else the display name), `path` and `size`. Read-only. Call this first and pass `bundle_id` to burrow_uninstall — `name` is not unique across installed apps, so it can resolve to a different application than the one you meant. A row whose `bundle_id` is `\"unknown\"` has no bundle identifier at all and cannot be targeted safely.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [String: Any](),
@@ -491,11 +491,11 @@ struct ToolCatalog {
             ],
             [
                 "name": "burrow_uninstall",
-                "description": "Uninstall one or more apps and their leftover files via `mo uninstall <app>…`. Get exact names from burrow_list_apps. SAFE BY DEFAULT: without confirm:true it runs `--dry-run` (preview only). A real uninstall needs confirm:true AND BOTH Settings opt-ins (cleanups + the dedicated uninstall/permanent switch), else it's reported as blocked; it also aborts unless mo's matcher resolves exactly the requested apps. Removed files go to the Trash (recoverable) unless `permanent` is true.",
+                "description": "Remove an app's LEFTOVER SUPPORT FILES via `mo uninstall <app>…` — the per-app data under ~/Library (containers, Application Support, caches, preferences, logs, saved state, HTTP storage, WebKit data, cookies). IT DOES NOT UNINSTALL THE APPLICATION: the .app bundle is left in place and no `brew uninstall --cask` is run, so the app stays installed and will still appear in burrow_list_apps afterwards. Report it that way to the user — do not tell them an app was removed. Identify apps by `bundle_id` from burrow_list_apps: display names are not unique (a machine can hold several apps called `Steam` or `Updater`) and the engine resolves an ambiguous name to whichever one it sees first. SAFE BY DEFAULT: without confirm:true it runs `--dry-run` (preview only). A real run needs confirm:true AND BOTH Settings opt-ins (cleanups + the dedicated uninstall/permanent switch), else it's reported as blocked; it also aborts unless the matcher resolves exactly the requested apps. Removed files go to the Trash (recoverable) unless `permanent` is true.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "apps": ["type": "array", "items": ["type": "string"], "description": "App names exactly as burrow_list_apps reports them."],
+                        "apps": ["type": "array", "items": ["type": "string"], "description": "One `bundle_id` per app, exactly as burrow_list_apps reports it. A display name or Homebrew cask token also resolves, but only a bundle id is unambiguous."],
                         "confirm": ["type": "boolean", "description": "true = actually uninstall (requires the Settings opt-in). Omit/false = dry-run preview only."],
                         "permanent": ["type": "boolean", "description": "true = bypass the Trash and delete immediately. Default false (recoverable)."],
                     ],
@@ -1175,18 +1175,20 @@ struct ToolCatalog {
     /// same "may be absent on a CI runner" reasoning).
     static func listAppsToolResult(exitCode: Int32, stdout: String, stderr: String) -> String {
         guard exitCode == 0 else {
-            // The bundled engine (post-repoint) has no app-listing command at all — `uninstall`
-            // takes exactly one bundle id and answers "--list" with "needs an app bundle id",
-            // written to STDOUT (the engine's error envelope), not stderr — so `stderr` alone is
-            // always empty here and told an agent nothing. Surface both so the actual reason is
-            // visible. Deliberately NO `"apps": []` alongside the error: this tool's own
-            // description tells an agent to call it before `burrow_uninstall` for exact names,
-            // and an agent that reads `.apps` without checking `.error` first must not find an
-            // empty array sitting right next to it — that reads as "zero apps installed" and is
-            // exactly the wrong-shape trap this fix closes (an agent can act on a false "no
-            // apps" with more confidence than a human glancing at a blank list would).
+            // When the engine fails a command it writes its error envelope to STDOUT, not stderr,
+            // so `stderr` alone is always empty here and told an agent nothing. Surface both so
+            // the actual reason is visible. Deliberately NO `"apps": []` alongside the error:
+            // this tool's own description tells an agent to call it before `burrow_uninstall` for
+            // an exact bundle id, and an agent that reads `.apps` without checking `.error` first
+            // must not find an empty array sitting right next to it — that reads as "zero apps
+            // installed" and is exactly the wrong-shape trap this fix closes (an agent can act on
+            // a false "no apps" with more confidence than a human glancing at a blank list would).
+            //
+            // The hint no longer claims the engine has no app-listing command: it implements
+            // `uninstall --list` and answered with 135 rows on the machine this was verified on,
+            // so a failure here is a real failure, not the expected steady state it once was.
             return Self.jsonString(["error": "mo uninstall --list failed",
-                                    "hint": "the bundled engine has no app-listing command yet, so burrow_uninstall cannot be preflighted with an exact name from this build",
+                                    "hint": "burrow_uninstall can't be given an exact bundle id without this listing — read stdout for the engine's own error envelope",
                                     "exit_code": Int(exitCode),
                                     "stdout": Self.stripANSI(stdout),
                                     "stderr": Self.stripANSI(stderr)])

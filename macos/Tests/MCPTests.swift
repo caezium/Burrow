@@ -93,6 +93,38 @@ final class MCPTests: XCTestCase {
         XCTAssertEqual(obj["blocked"] as? Bool, true)
     }
 
+    /// A tool description is the only thing an agent has to go on, so it has to describe what the
+    /// tool DOES. `burrow_uninstall` runs the engine's `uninstall`, which removes an app's
+    /// `~/Library` support files and never the `.app` bundle or its Homebrew cask — an agent told
+    /// "uninstall one or more apps" would report a removal that did not happen. It also has to
+    /// steer at bundle ids: display names are not unique on a real machine (three `Restarter`s,
+    /// two `Steam`s in a 135-app inventory) and the engine resolves an ambiguous one to whichever
+    /// it sees first.
+    func testUninstallDescriptor_saysTheAppItselfIsNotRemovedAndAsksForABundleId() throws {
+        let tool = try XCTUnwrap(catalog.descriptors().first { $0["name"] as? String == "burrow_uninstall" })
+        let description = try XCTUnwrap(tool["description"] as? String)
+        XCTAssertTrue(description.contains("DOES NOT UNINSTALL THE APPLICATION"), description)
+        XCTAssertTrue(description.contains(".app bundle is left in place"), description)
+        XCTAssertTrue(description.contains("brew uninstall --cask"), description)
+        XCTAssertTrue(description.contains("bundle_id"),
+                      "an agent must be told which identifier to send: \(description)")
+
+        let schema = try XCTUnwrap(tool["inputSchema"] as? [String: Any])
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let apps = try XCTUnwrap(properties["apps"] as? [String: Any])
+        XCTAssertTrue(try XCTUnwrap(apps["description"] as? String).contains("bundle_id"))
+    }
+
+    /// `burrow_list_apps` is where an agent is told to get that identifier, so it has to name the
+    /// fields it returns and warn about the `"unknown"` rows that cannot be targeted at all.
+    func testListAppsDescriptor_pointsAtBundleIdAndFlagsTheUnknownRows() throws {
+        let tool = try XCTUnwrap(catalog.descriptors().first { $0["name"] as? String == "burrow_list_apps" })
+        let description = try XCTUnwrap(tool["description"] as? String)
+        XCTAssertTrue(description.contains("bundle_id"), description)
+        XCTAssertTrue(description.contains("not unique"), description)
+        XCTAssertTrue(description.contains("unknown"), description)
+    }
+
     func testDescriptors_listsAllToolsWithSchema() {
         let d = catalog.descriptors()
         let names = d.compactMap { $0["name"] as? String }

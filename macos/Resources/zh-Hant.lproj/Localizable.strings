@@ -592,7 +592,7 @@
 "Needs review" = "需要確認";
 "Not selected by default. Review these before removing." = "預設未選取。移除前請先確認。";
 "Toggle %@ group" = "切換「%@」群組";
-"Couldn't enumerate this app's files — Remove uses the engine's full uninstall." = "無法列舉此 App 的檔案 ——「移除」將使用引擎的完整解除安裝。";
+"Couldn't enumerate this app's files — there's nothing to review here." = "無法列舉此 App 的檔案 —— 這裡沒有可確認的內容。";
 "Application" = "應用程式";
 "App Support" = "App Support";
 "Preferences" = "偏好設定";
@@ -607,6 +607,13 @@
 "Remove %d" = "移除 %d 項";
 "Remove %d app?" = "移除 %d 個 App？";
 "Remove %d apps?" = "移除 %d 個 App？";
+"Remove leftover files for %d app?" = "移除 %d 個 App 的殘留檔案？";
+"Remove leftover files for %d apps?" = "移除 %d 個 App 的殘留檔案？";
+"The apps themselves stay installed. Burrow removes the support files they keep in your Library — containers, caches, preferences, saved state — and those move to the Trash (recoverable):\n\n%@" = "App 本身仍會保留。Burrow 只移除它們存放在「資源庫」中的支援檔案 —— 容器、快取、偏好設定、已儲存狀態 —— 這些檔案會移到垃圾桶（可復原）：\n\n%@";
+"Move Files to Trash" = "將檔案移到垃圾桶";
+"Skipped — these have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@" = "已略過 —— 這些 App 沒有 Bundle ID，Burrow 無法向引擎指明是哪一個：\n\n%@";
+"Nothing Burrow can remove" = "沒有 Burrow 可以移除的項目";
+"These have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@" = "這些 App 沒有 Bundle ID，Burrow 無法向引擎指明是哪一個：\n\n%@";
 "%d reviewed files" = "%d 個已確認的檔案";
 "Reviewed subsets are trashed by Burrow directly and appear in Burrow's Activity log, not `mo history`." = "經確認的部分檔案由 Burrow 直接移到垃圾桶，記錄在 Burrow 的活動記錄中，而非 `mo history`。";
 "Removing reviewed files" = "正在移除已確認的檔案";
