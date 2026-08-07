@@ -11,7 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const analyticsPath = path.join(root, 'docs', 'analytics.js')
 const placeholder = '__POSTHOG_PROJECT_KEY__'
 
-function runAnalytics({ hostname = 'burrow.henryzh.dev' } = {}) {
+function runAnalytics({ hostname = 'burrow.computer' } = {}) {
     const listeners = new Map()
     let injectedScript = null
     const firstScript = {
@@ -95,17 +95,17 @@ test('production analytics is cookieless and limited to the approved features', 
         event: '$pageview',
         properties: {
             $raw_user_agent: 'PrivateBrowser/1.0 exact-build-details',
-            $current_url: 'https://burrow.henryzh.dev/?secret=value#private',
-            $initial_current_url: 'https://burrow.henryzh.dev/releases.html?from=email#v0.11.1',
+            $current_url: 'https://burrow.computer/?secret=value#private',
+            $initial_current_url: 'https://burrow.computer/releases.html?from=email#v0.11.1',
             $referrer: 'https://search.example/results?q=private#answer',
             $initial_referrer: 'https://news.example/story?user=private#comments',
             $web_vitals_LCP_event: {
-                $current_url: 'https://burrow.henryzh.dev/roadmap.html?private=yes#planned',
+                $current_url: 'https://burrow.computer/roadmap.html?private=yes#planned',
                 delta: 20,
                 entries: [
                     {
                         element: '<img alt="private">',
-                        url: 'https://burrow.henryzh.dev/private.png?token=secret',
+                        url: 'https://burrow.computer/private.png?token=secret',
                     },
                 ],
                 id: 'metric-identifier',
@@ -119,12 +119,12 @@ test('production analytics is cookieless and limited to the approved features', 
     })
 
     assert.equal(event.properties.$raw_user_agent, 'PrivateBrowser/1.0 exact-build-details')
-    assert.equal(event.properties.$current_url, 'https://burrow.henryzh.dev/')
-    assert.equal(event.properties.$initial_current_url, 'https://burrow.henryzh.dev/releases.html')
+    assert.equal(event.properties.$current_url, 'https://burrow.computer/')
+    assert.equal(event.properties.$initial_current_url, 'https://burrow.computer/releases.html')
     assert.equal(event.properties.$referrer, 'https://search.example/results')
     assert.equal(event.properties.$initial_referrer, 'https://news.example/story')
     assert.deepEqual(JSON.parse(JSON.stringify(event.properties.$web_vitals_LCP_event)), {
-        $current_url: 'https://burrow.henryzh.dev/roadmap.html',
+        $current_url: 'https://burrow.computer/roadmap.html',
         delta: 20,
         name: 'LCP',
         navigationType: 'navigate',
@@ -148,14 +148,15 @@ test('only fixed download and Homebrew-copy interactions are captured', () => {
 
     context.window.posthog.length = 0
     click({ target: clickTarget('homebrew.hero') })
-    click({ target: clickTarget('download.pricing') })
-    click({ target: clickTarget('download.navigation') })
+    click({ target: clickTarget('download.hero') })
+    click({ target: clickTarget('download.landing_mac') })
     click({ target: clickTarget('unknown.future-event') })
 
     assert.deepEqual(JSON.parse(JSON.stringify(context.window.posthog)), [
         ['capture', 'website_homebrew_copy_clicked', { command: 'install', placement: 'hero' }],
-        ['capture', 'website_download_clicked', { destination: 'github_release', placement: 'pricing' }],
-        ['capture', 'website_download_clicked', { destination: 'github_release', placement: 'navigation' }],
+        ['capture', 'website_download_clicked', { destination: 'install_page', placement: 'hero' }],
+        ['capture', 'website_download_clicked',
+            { destination: 'github_asset', platform: 'macos', placement: 'landing_picker' }],
     ])
 })
 
@@ -168,11 +169,11 @@ test('every public HTML page loads analytics and generated pages remain reproduc
     const index = fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8')
     for (const marker of [
         'data-burrow-analytics="download.hero"',
-        'data-burrow-analytics="download.navigation"',
-        'data-burrow-analytics="download.pricing"',
-        'data-burrow-analytics="download.windows"',
+        'data-burrow-analytics="download.home"',
+        'data-burrow-analytics="download.landing_mac"',
+        'data-burrow-analytics="download.landing_windows"',
         'data-burrow-analytics="homebrew.hero"',
-        'data-burrow-analytics="homebrew.install_card"',
+        'data-burrow-analytics="homebrew.landing"',
     ]) {
         assert.match(index, new RegExp(marker))
     }
