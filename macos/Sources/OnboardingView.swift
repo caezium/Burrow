@@ -28,7 +28,11 @@ struct OnboardingView: View {
     @State private var engine: EngineStatus?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private struct EngineStatus { let installed: Bool; let version: String? }
+    /// `descriptor` is the engine's own "<product> <version>" string, NOT a bare number —
+    /// the two engines that can sit behind this row number themselves on unrelated scales
+    /// (a 0.x Rust `burrow-engine`, a 1.4x mo), so a lone "v0.1.0" chip would say nothing
+    /// the user could act on. nil = the engine answered but gave no usable version.
+    private struct EngineStatus { let installed: Bool; let descriptor: String? }
 
     var body: some View {
         ZStack {
@@ -127,7 +131,7 @@ struct OnboardingView: View {
             }
             Spacer(minLength: 12)
             if let engine, engine.installed {
-                Chip(text: engine.version.map { "v\($0)" } ?? NSLocalizedString("Installed", comment: ""),
+                Chip(text: engine.descriptor ?? NSLocalizedString("Installed", comment: ""),
                      color: Brand.green)
             } else if engine != nil {
                 Button(NSLocalizedString("Install", comment: "")) {
@@ -151,11 +155,16 @@ struct OnboardingView: View {
             : NSLocalizedString("Not found. Install it to enable cleaning.", comment: "")
     }
 
-    /// Probe off the main actor — version() may spawn `mo --version`.
+    /// Probe off the main actor — `versionReport()` spawns `--version`.
+    ///
+    /// `installed` stays keyed to `findExecutable()` alone: a binary that is present but
+    /// answers `--version` with an error is still installed, and this row's job is to
+    /// reassure the user that the one dependency is there. It just shows the "Installed"
+    /// chip with no number rather than claiming a version it could not read.
     private func probeEngine() async {
         let status: EngineStatus = await Task.detached(priority: .userInitiated) {
-            guard MoleCLI.findExecutable() != nil else { return EngineStatus(installed: false, version: nil) }
-            return EngineStatus(installed: true, version: MoleCLI.version())
+            guard MoleCLI.findExecutable() != nil else { return EngineStatus(installed: false, descriptor: nil) }
+            return EngineStatus(installed: true, descriptor: MoleCLI.versionReport()?.display)
         }.value
         engine = status
     }

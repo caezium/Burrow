@@ -97,8 +97,18 @@ enum DiskScanner {
         let result = try MoEngine.shared.capture(
             MoCommand(target: .mo, args: ["analyze", "--json", path], timeout: timeout))
         guard result.exitCode == 0 else {
+            // `moTooOld` is a mo-family diagnosis and stays reachable only from a mo-family
+            // binary, so the 0.x engine cannot spuriously trip this 1.29.0 gate. The reason
+            // is `indicatesMissingJSONSupport`: it matches two strings that only Go's flag
+            // package and mole's TUI produce, and it reads STDERR. The Rust engine reports
+            // every failure it classifies — bad path, unknown flag, unknown command — as an
+            // `ok:false` envelope on STDOUT and writes nothing to stderr (verified against
+            // burrow-engine @ 909caa6). `found:` carries the product name anyway, so if a
+            // future engine ever did reach this line the message reads "needs Mole 1.29.0
+            // (you have burrow-engine 0.1.0)" — legible as a scale mismatch — rather than
+            // looking like an ancient mo.
             if indicatesMissingJSONSupport(stderr: result.stderr) {
-                throw DiskScanError.moTooOld(found: MoleCLI.version())
+                throw DiskScanError.moTooOld(found: MoleCLI.versionReport()?.display)
             }
             throw DiskScanError.moFailed(exitCode: result.exitCode, stderr: result.stderr)
         }

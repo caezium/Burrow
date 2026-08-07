@@ -2,15 +2,164 @@
 //  MoleCLITests.swift
 //  BurrowTests
 //
-//  parseVersion is the only pure piece of the Mole-engine lifecycle
-//  (install/version/update); the rest spawns `mo`. It must pull a semver
-//  out of whatever `mo --version` decorates it with.
+//  The version/capability surface is the pure piece of the engine lifecycle
+//  (install/version/update); the rest spawns a subprocess. Two unrelated programs can sit
+//  behind `findExecutable()` — the Rust `burrow-engine` (0.x, JSON envelope) and a
+//  mo-family binary (1.4x, text banner) — so these tests run against output captured
+//  VERBATIM from both, not against a remembered shape.
 //
 
 import XCTest
 @testable import Burrow
 
 final class MoleCLITests: XCTestCase {
+
+    // MARK: - Version fixtures
+    //
+    // Captured 2026-08-07 by running each binary and byte-dumping stdout.
+
+    /// `burrow-engine --version` (Rust engine, burrow-engine-new @ 909caa6). Exit 0.
+    /// `version`, `--version` and `-V` all produce this identical line.
+    static let engineVersionStdout =
+        #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"version","data":{"version":"0.1.0","engine":"burrow-engine","arch":"arm64"}}"# + "\n"
+
+    /// An `ok:false` envelope from the SAME binary, exit 2. This is the shape `--version`
+    /// itself returned before the engine grew a `version` command — the envelope the old
+    /// `version()` scraped a number out of. Captured by asking the current binary for an
+    /// unknown top-level command (`--verzion`), which is the historical `--version`
+    /// response with a different token echoed back into `command`; the pre-`version` build
+    /// no longer exists to capture from.
+    ///
+    /// Note the `"burrow_cli":"0.1.0"` — that field, describing the ENVELOPE FORMAT and not
+    /// the engine, is what the old first-semver-anywhere scan returned and what five call
+    /// sites believed.
+    static let engineErrorEnvelopeStdout =
+        #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"--verzion","error":{"kind":"error","message":"unknown command: --verzion","platform":"macos"}}"# + "\n"
+
+    /// `mo --version` from the Go digger fork (burrow-engine @ 32cf540, the 1.42.0 MIT fork
+    /// of mole). Exit 0. Leading blank line and trailing blank line are real.
+    static let moBannerStdout = """
+
+    burrow-engine version 1.42.0 (fork of mole @ 9daf936, last MIT)
+    macOS: 26.5.2
+    Architecture: arm64
+    Kernel: 25.5.0
+    SIP: Enabled
+    Disk Free: 10.84GB
+    Install: Manual
+    Shell: /bin/zsh
+
+    """
+
+    // MARK: - Version report
+
+    func testVersionReport_readsTheDeclaredFieldFromTheEngineEnvelope() {
+        let report = MoleCLI.parseVersionReport(
+            stdout: Self.engineVersionStdout, stderr: "", exitCode: 0)
+        XCTAssertEqual(report?.version, "0.1.0")
+        XCTAssertEqual(report?.name, "burrow-engine")
+        XCTAssertEqual(report?.kind, .envelope)
+        XCTAssertEqual(report?.display, "burrow-engine 0.1.0")
+    }
+
+    func testVersionReport_refusesAFailedRun() {
+        // THE original bug: this fixture contains "0.1.0", and the old code returned it
+        // from a command that had exited 2. A run that failed has no version to report.
+        XCTAssertNil(MoleCLI.parseVersionReport(
+            stdout: Self.engineErrorEnvelopeStdout, stderr: "", exitCode: 2))
+        // A good payload behind a nonzero exit is still a failed run.
+        XCTAssertNil(MoleCLI.parseVersionReport(
+            stdout: Self.engineVersionStdout, stderr: "", exitCode: 1))
+    }
+
+    func testVersionReport_refusesAnErrorEnvelopeEvenOnAZeroExit() {
+        // Belt and braces: `ok:false` is a refusal whatever the exit code says.
+        XCTAssertNil(MoleCLI.parseVersionReport(
+            stdout: Self.engineErrorEnvelopeStdout, stderr: "", exitCode: 0))
+    }
+
+    func testVersionReport_readsTheProductLineOfAMoBanner() {
+        let report = MoleCLI.parseVersionReport(stdout: Self.moBannerStdout, stderr: "", exitCode: 0)
+        XCTAssertEqual(report?.version, "1.42.0")
+        XCTAssertEqual(report?.name, "burrow-engine")
+        XCTAssertEqual(report?.kind, .moBanner,
+                       "a text banner is a mo-family binary, whatever it calls itself")
+        XCTAssertEqual(report?.display, "burrow-engine 1.42.0")
+    }
+
+    func testVersionReport_ignoresTheDecoyNumbersInAMoBanner() {
+        // Every trailing line of the real banner is dotted-numeric — macOS 26.5.2, Kernel
+        // 25.5.0, Disk Free 10.84GB — and each of them clears every minimum in MoleCLI.
+        // A first-semver-anywhere scan gets 1.42.0 only because the product line prints
+        // first, so re-run the REAL fixture with its lines reversed: anchoring on the line
+        // that says "version" must still land on the product.
+        let reordered = Self.moBannerStdout
+            .split(whereSeparator: \.isNewline)
+            .reversed()
+            .joined(separator: "\n")
+        XCTAssertEqual(MoleCLI.parseVersion(reordered), "10.84",
+                       "the unanchored scan takes the first number it sees — that is why it is not the gate")
+        let report = MoleCLI.parseVersionReport(stdout: reordered, stderr: "", exitCode: 0)
+        XCTAssertEqual(report?.version, "1.42.0")
+        XCTAssertEqual(report?.name, "burrow-engine")
+    }
+
+    func testVersionReport_nilWhenTheOutputCarriesNoVersion() {
+        XCTAssertNil(MoleCLI.parseVersionReport(stdout: "", stderr: "", exitCode: 0))
+        XCTAssertNil(MoleCLI.parseVersionReport(stdout: "no version here\n", stderr: "", exitCode: 0))
+    }
+
+    func testVersionReport_fallsBackToStderrForABannerOnTheErrorStream() {
+        let report = MoleCLI.parseVersionReport(stdout: "", stderr: "mole version 1.41.0\n", exitCode: 0)
+        XCTAssertEqual(report?.version, "1.41.0")
+        XCTAssertEqual(report?.name, "mole")
+    }
+
+    // MARK: - Streaming capability
+    //
+    // The gate that decides whether SnapshotProducer asks for an NDJSON status stream.
+    // It must key off WHICH program answered, because the two number themselves on scales
+    // that have nothing to do with each other.
+
+    func testSupportsWatch_theRustEngineNeverStreamsHoweverItNumbersItself() throws {
+        let today = try XCTUnwrap(MoleCLI.parseVersionReport(
+            stdout: Self.engineVersionStdout, stderr: "", exitCode: 0))
+        XCTAssertFalse(MoleCLI.supportsWatch(today))
+
+        // The regression this replaces: the old gate was `version >= 1.44.0`, which said no
+        // only because the engine is a 0.x line. Ship 1.0 and it silently flipped to yes —
+        // and `status --watch` is a hard error on this engine
+        // (`{"ok":false,…,"unknown status option: --watch"}`, exit 2).
+        for shipped in ["1.0.0", "1.44.0", "2.7.3"] {
+            let future = MoleCLI.EngineVersion(version: shipped, name: "burrow-engine", kind: .envelope)
+            XCTAssertFalse(MoleCLI.supportsWatch(future),
+                           "the engine at \(shipped) still has no status streamer")
+        }
+    }
+
+    func testSupportsWatch_admitsTheDiggerForkTheOldGateExcluded() throws {
+        // The fork back-ported `--watch` onto its 1.42.0 base (cmd/status/main.go:31 declares
+        // it: "stream metrics as newline-delimited JSON (NDJSON) until interrupted"), so the
+        // upstream 1.44.0 gate was excluding a binary that streams.
+        let fork = try XCTUnwrap(MoleCLI.parseVersionReport(
+            stdout: Self.moBannerStdout, stderr: "", exitCode: 0))
+        XCTAssertTrue(MoleCLI.supportsWatch(fork))
+    }
+
+    func testSupportsWatch_stillHoldsUpstreamMoToItsOwnMinimum() {
+        // The fork's back-port does not make upstream 1.42/1.43 capable — only the fork's
+        // own name lowers the bar.
+        func upstream(_ v: String) -> MoleCLI.EngineVersion {
+            MoleCLI.EngineVersion(version: v, name: "Mole", kind: .moBanner)
+        }
+        XCTAssertFalse(MoleCLI.supportsWatch(upstream("1.42.0")))
+        XCTAssertFalse(MoleCLI.supportsWatch(upstream("1.43.9")))
+        XCTAssertTrue(MoleCLI.supportsWatch(upstream("1.44.0")))
+        XCTAssertTrue(MoleCLI.supportsWatch(upstream("1.45.2")))
+    }
+
+    // MARK: - parseVersion (single-line scrape)
+
     func testParseVersion_extractsSemverFromDecoratedOutput() {
         XCTAssertEqual(MoleCLI.parseVersion("mole 1.41.0"), "1.41.0")
         XCTAssertEqual(MoleCLI.parseVersion("v1.41.0\n"), "1.41.0")
@@ -25,6 +174,16 @@ final class MoleCLITests: XCTestCase {
     func testParseVersion_ignoresLoneNumbers() {
         // A bare integer isn't a version; needs at least major.minor.
         XCTAssertNil(MoleCLI.parseVersion("built for macOS 14"))
+    }
+
+    /// The undecorated banners `parseVersion` was written for still resolve, product and
+    /// all, now that the report goes through the line-anchored path.
+    func testParseMoBanner_namesTheProductForUndecoratedBanners() {
+        XCTAssertEqual(MoleCLI.parseMoBanner("mole 1.41.0")?.name, "mole")
+        XCTAssertEqual(MoleCLI.parseMoBanner("mole v1.41.0")?.name, "mole")
+        XCTAssertEqual(MoleCLI.parseMoBanner("v1.41.0\n")?.name, "mo")
+        XCTAssertEqual(MoleCLI.parseMoBanner("mole version 2.0.10 (build 7)")?.version, "2.0.10")
+        XCTAssertEqual(MoleCLI.parseMoBanner("mole version 2.0.10 (build 7)")?.name, "mole")
     }
 
     // MARK: - Capture runner (MoleCLI.run)

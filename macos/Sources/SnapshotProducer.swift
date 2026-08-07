@@ -158,10 +158,10 @@ final class SnapshotProducer {
         /// Background executor for the blocking mo fetch. Production hops to
         /// a serial utility queue; tests pass `{ $0() }` for synchrony.
         var work: (@escaping () -> Void) -> Void
-        /// NDJSON status stream (`mo status --watch`, V1.44+) — the default when
-        /// the installed mo supports it. Returns nil for older mo / unresolved
-        /// mo → the producer polls (also the fallback if a live stream drops).
-        /// Tests omit it, so the poll path is exercised directly.
+        /// NDJSON status stream (`status --watch`) — used when the resolved engine can
+        /// actually serve one. Returns nil when it can't (the bundled Rust engine has no
+        /// streamer; an old mo predates the flag) or when nothing resolves, and the
+        /// producer polls instead. Tests omit it, so the poll path is exercised directly.
         var statusWatch: (() -> AsyncStream<ProcessEvent>?)? = nil
 
         static func live(db: DB) -> Deps {
@@ -173,11 +173,16 @@ final class SnapshotProducer {
                         snapshotInterval: { TimeInterval(Store.sampleIntervalSeconds) },
                         work: { queue.async(execute: $0) },
                         statusWatch: {
-                            // Streaming is the default — used whenever the installed
-                            // mo supports `status --watch` (V1.44+); older mo or a
-                            // dropped stream fall back to polling. supportsWatch()
-                            // spawns `mo --version`, so this runs off-main (the
-                            // producer calls the factory inside `work`).
+                            // Stream when the engine we're about to spawn can stream.
+                            // `supportsWatch()` decides on WHAT answered `--version`, not
+                            // on how big its number is: the bundled Rust engine rejects
+                            // `status --watch` outright and always will until it grows a
+                            // streamer, so a version compare here would flip to "yes" the
+                            // day it ships 1.0 and start asking a hard-erroring command for
+                            // a stream. Both `supportsWatch()` and `statusWatch()` resolve
+                            // through the same `MoleCLI.findExecutable()`, so the binary
+                            // asked is the binary spawned. Spawns a subprocess, so this
+                            // runs off-main (the producer calls the factory inside `work`).
                             MoleCLI.supportsWatch() ? MoEngine.shared.statusWatch() : nil
                         })
         }

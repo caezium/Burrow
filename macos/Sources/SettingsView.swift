@@ -616,7 +616,7 @@ struct SettingsView: View {
                     : "The bundled engine doesn't have a `touchid` command yet, so Burrow can't check or change this for you. Configure it directly with `sudo mo touchid enable` in a terminal if you have Mole installed separately.")
             }
 
-            section("Mole engine", "shippingbox") {
+            section("Engine", "shippingbox") {
                 infoRow("Version", moleVersion)
                 HStack {
                     Spacer()
@@ -627,12 +627,17 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Mole engine
+    // MARK: - Engine
 
+    /// Show the engine's version WITH its product name ("burrow-engine 0.1.0"), not a bare
+    /// "v0.1.0". Two reasons: the bundled engine numbers itself on its own 0.x line, so a
+    /// lone 0.1.0 sitting a few rows under Burrow's own 0.11.x reads like the app is
+    /// misreporting itself; and this row can just as easily be showing a separately
+    /// installed mo on the 1.4x line, which the number alone gives no way to tell apart.
     private func loadMoleVersion() {
         DispatchQueue.global(qos: .userInitiated).async {
-            let v = MoleCLI.version()
-            DispatchQueue.main.async { moleVersion = v.map { "v\($0)" } ?? "not found" }
+            let engine = MoleCLI.versionReport()
+            DispatchQueue.main.async { moleVersion = engine?.display ?? "not found" }
         }
     }
 

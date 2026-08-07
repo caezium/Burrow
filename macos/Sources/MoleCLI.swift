@@ -154,15 +154,133 @@ enum MoleCLI {
     /// release before upstream relicensed to GPL-3.0).
     static let repoURL = URL(string: "https://github.com/caezium/burrow-digger")!
 
-    /// Current `mo` version, or nil if not installed / unparsable.
-    static func version() -> String? {
-        guard let res = try? run(args: ["--version"], timeout: 5) else { return nil }
-        let text = res.stdout.isEmpty ? res.stderr : res.stdout
-        return parseVersion(text)
+    /// What the resolved engine binary answered when asked for its version.
+    ///
+    /// Two unrelated programs can end up behind `findExecutable()`, and they number
+    /// themselves on scales that have nothing to do with each other:
+    ///
+    ///   * the Rust `burrow-engine` this app bundles — a 0.x line, answers in the JSON
+    ///     envelope (`{"ok":true,…,"data":{"version":"0.1.0","engine":"burrow-engine"}}`);
+    ///   * a mo-family binary — upstream `mo`, or the Go digger fork — a 1.4x line that
+    ///     answers with a plain-text banner.
+    ///
+    /// So a bare version string is not a fact anything can be decided on: 0.1.0 and 1.42.0
+    /// are not comparable. `kind` records WHICH program answered, and every decision hangs
+    /// off that rather than off the number alone.
+    struct EngineVersion: Equatable {
+        enum Kind: Equatable {
+            /// Answered with a Burrow JSON envelope — the Rust `burrow-engine`.
+            case envelope
+            /// Answered with mo's plain-text banner — upstream `mo`, or the Go digger fork.
+            case moBanner
+        }
+
+        /// The dotted version the binary reports for ITSELF. On its own scale.
+        let version: String
+        /// What the binary calls itself ("burrow-engine", "Mole"). NOTE: the Go digger fork
+        /// also calls itself "burrow-engine", so this does NOT identify the Rust engine —
+        /// only `kind` does.
+        let name: String
+        let kind: Kind
+
+        /// What a human should be shown. Always names the product, because the bare number
+        /// sits next to Burrow's own version in Settings and the About panel, and "0.1.0"
+        /// beside an app on 0.11.x reads like the app is broken rather than like a different
+        /// component reporting itself.
+        var display: String { "\(name) \(version)" }
     }
 
-    /// Pull a semver out of `mo --version` output, whatever decoration it
+    /// Ask the resolved engine what it is. nil when nothing is installed, the command
+    /// failed, or the answer carried no version.
+    ///
+    /// Spawns a subprocess — call OFF the main thread.
+    static func versionReport() -> EngineVersion? {
+        guard let res = try? run(args: ["--version"], timeout: 5) else { return nil }
+        return parseVersionReport(stdout: res.stdout, stderr: res.stderr, exitCode: res.exitCode)
+    }
+
+    /// Turn one `--version` run into an `EngineVersion`. Pure → unit-tested against real
+    /// captured output from both engines.
+    ///
+    /// The exit-code guard is the whole reason the ORIGINAL bug stayed invisible for so
+    /// long: before the engine had a `version` command at all, `--version` returned an
+    /// ERROR envelope with a nonzero exit, and the old code scraped the first semver out of
+    /// it anyway — landing on the envelope's own `"burrow_cli":"0.1.0"` field and handing
+    /// five call sites a number that described the envelope format, not the engine. A run
+    /// that failed has no version to report; say nil.
+    static func parseVersionReport(stdout: String, stderr: String, exitCode: Int32) -> EngineVersion? {
+        guard exitCode == 0 else { return nil }
+
+        // The engine declares its version in a named field. Read the field. Do NOT scrape:
+        // the envelope also carries `burrow_cli` (the format version) and, on other
+        // commands, whatever dotted numbers the payload happens to contain.
+        if let envelope = try? BurrowEnvelope.parse(stdout) {
+            guard envelope.ok,
+                  let payload = envelope.data,
+                  let obj = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any],
+                  let version = obj["version"] as? String, !version.isEmpty
+            else { return nil }
+            let name = (obj["engine"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "burrow-engine"
+            return EngineVersion(version: version, name: name, kind: .envelope)
+        }
+
+        // Not JSON → the mo-family text banner. mo writes it to stdout; keep the stderr
+        // fallback for anything that banners on the error stream.
+        return parseMoBanner(stdout.isEmpty ? stderr : stdout)
+    }
+
+    /// Pull the product + version out of a mo-family `--version` banner.
+    ///
+    /// LOAD-BEARING, and the reason this is anchored instead of scraped. The real banner
+    /// (captured from the Go digger fork) is:
+    ///
+    ///     burrow-engine version 1.42.0 (fork of mole @ 9daf936, last MIT)
+    ///     macOS: 26.5.2
+    ///     Kernel: 25.5.0
+    ///     Disk Free: 10.84GB
+    ///
+    /// Every one of those trailing lines is dotted-numeric, and `parseVersion` takes the
+    /// first semver-shaped token ANYWHERE in the blob — so it returns 1.42.0 only because
+    /// the product line happens to be printed first. One field reorder upstream and it
+    /// returns 26.5.2, which clears every `minimum*Version` in this file and would arm the
+    /// streaming gate on a binary that cannot stream. So: find the line that SAYS it is the
+    /// version and read only that line. The first-semver-anywhere scan survives solely as a
+    /// last-ditch fallback for a banner with no "version" word in it.
+    static func parseMoBanner(_ output: String) -> EngineVersion? {
+        let lines = output.split(whereSeparator: \.isNewline).map(String.init)
+        for line in lines where line.range(of: "version", options: .caseInsensitive) != nil {
+            if let found = parseBannerLine(line) { return found }
+        }
+        for line in lines {
+            if let found = parseBannerLine(line) { return found }
+        }
+        return nil
+    }
+
+    /// One banner line → product + version. The product is the words before the number,
+    /// minus a trailing connector ("mole version 1.41.0" and "mole v1.41.0" both name
+    /// "mole"); an unnamed banner ("v1.41.0") falls back to "mo". Word-wise rather than
+    /// substring-wise so a product whose name merely CONTAINS the connector survives intact.
+    private static func parseBannerLine(_ line: String) -> EngineVersion? {
+        guard let version = parseVersion(line),
+              let span = line.range(of: version) else { return nil }
+        var words = line[line.startIndex..<span.lowerBound]
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+        if let last = words.last,
+           last.caseInsensitiveCompare("version") == .orderedSame || last.caseInsensitiveCompare("v") == .orderedSame {
+            words.removeLast()
+        }
+        let name = words.joined(separator: " ")
+        return EngineVersion(version: version, name: name.isEmpty ? "mo" : name, kind: .moBanner)
+    }
+
+    /// Pull a semver out of one line of `mo --version` output, whatever decoration it
     /// wraps it in ("mole 1.41.0", "v1.41.0", …). Pure → unit-tested.
+    ///
+    /// Positional: it returns the FIRST semver-shaped token it sees, so it must only ever
+    /// be handed a single line already known to be the version line — see `parseMoBanner`
+    /// for what happens when it is handed a whole banner instead.
     static func parseVersion(_ output: String) -> String? {
         for token in output.split(whereSeparator: { !($0.isNumber || $0 == ".") }) {
             let parts = token.split(separator: ".")
@@ -177,17 +295,57 @@ enum MoleCLI {
     /// explicitly "for non-TTY environments"). Older versions launch the
     /// TUI instead, which opens /dev/tty and dies when the parent is a
     /// GUI app with no controlling terminal (#35).
+    ///
+    /// mo's scale — it gates `DiskScanError.moTooOld`, which is only ever reached from a
+    /// mo-family binary (see `DiskScanner.scan`).
     static let minimumAnalyzeJSONVersion = "1.29.0"
 
-    /// Oldest Mole whose `status --watch` streams NDJSON (V1.44.0, "Signal").
-    /// Below this Burrow polls `mo status --json` instead.
+    /// Oldest UPSTREAM `mo` whose `status --watch` streams NDJSON (V1.44.0, "Signal").
     static let minimumWatchVersion = "1.44.0"
 
-    /// Whether the installed `mo` supports `status --watch`. Spawns
-    /// `mo --version` — call OFF the main thread.
+    /// The Go digger fork's own name, as printed in its banner
+    /// (`burrow-engine version 1.42.0 (fork of mole @ 9daf936, last MIT)`).
+    static let diggerForkName = "burrow-engine"
+
+    /// The fork back-ported `--watch` onto its 1.42.0 base (a clean-room reimplementation of
+    /// upstream's V1.44 NDJSON contract, digger commit d7fe549), so gating it at upstream's
+    /// 1.44.0 excluded a binary that streams perfectly well. Keyed to the fork's NAME so a
+    /// genuine upstream mo 1.42/1.43 — which has no `--watch` — is still excluded.
+    static let minimumDiggerForkWatchVersion = "1.42.0"
+
+    /// Whether `engine` can serve `status --watch` as an NDJSON stream. Pure → unit-tested.
+    ///
+    /// Keyed to what answered, not to how big its number is:
+    ///
+    ///   * `.envelope` — the Rust `burrow-engine` has no status streamer at all. It rejects
+    ///     the flag outright (`{"ok":false,…,"unknown status option: --watch"}`, exit 2), so
+    ///     there is nothing to stream no matter what it numbers itself. This used to be a
+    ///     `>= 1.44.0` comparison, which returned the right answer for the wrong reason: the
+    ///     engine is a 0.x line, so the compare said no. The day it ships 1.0 that compare
+    ///     silently flips to yes and the app starts asking a hard-erroring command for a
+    ///     stream. When the engine DOES grow a streamer it has to announce it — a capability
+    ///     field in the `version` payload, read here — never re-derived from the number.
+    ///   * `.moBanner` — mo-family, so mo's scale applies and the version compare is
+    ///     meaningful. Note the fork shares the Rust engine's product name; only `kind`
+    ///     tells them apart, which is why this switches on `kind` first.
+    static func supportsWatch(_ engine: EngineVersion) -> Bool {
+        switch engine.kind {
+        case .envelope:
+            return false
+        case .moBanner:
+            let minimum = engine.name.caseInsensitiveCompare(diggerForkName) == .orderedSame
+                ? minimumDiggerForkWatchVersion
+                : minimumWatchVersion
+            return versionAtLeast(engine.version, minimum)
+        }
+    }
+
+    /// Whether the resolved engine supports `status --watch`. Spawns `--version` — call OFF
+    /// the main thread. Resolves through the same `findExecutable()` that
+    /// `MoEngine.statusWatch()` spawns, so the binary asked is the binary streamed.
     static func supportsWatch() -> Bool {
-        guard let v = version() else { return false }
-        return versionAtLeast(v, minimumWatchVersion)
+        guard let engine = versionReport() else { return false }
+        return supportsWatch(engine)
     }
 
     /// True if `version` ≥ `minimum`, compared numerically component-by-

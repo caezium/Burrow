@@ -519,10 +519,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Standard About panel, with the engine version and the links that
     /// matter (repo, releases, telemetry disclosure) in the credits.
     func showAboutPanel() {
-        // `mo --version` spawns a subprocess — fetch it off-main, then build
+        // `--version` spawns a subprocess — fetch it off-main, then build
         // and present the panel on main (was a main-thread subprocess block).
+        //
+        // The descriptor names the product ("burrow-engine 0.1.0"), because this line sits
+        // directly under the app's own version in the About panel and a bare "v0.1.0" next
+        // to Burrow 0.11.x reads as a bug rather than as a separate component.
         DispatchQueue.global(qos: .userInitiated).async {
-            let version = MoleCLI.version().map { "v\($0)" } ?? NSLocalizedString("not found", comment: "")
+            let version = MoleCLI.versionReport()?.display ?? NSLocalizedString("not found", comment: "")
             DispatchQueue.main.async { self.presentAboutPanel(moleVersion: version) }
         }
     }
@@ -539,7 +543,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                   .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: para]
             credits.append(NSAttributedString(string: text + "\n", attributes: attrs))
         }
-        line(String(format: NSLocalizedString("Mole engine %@", comment: ""), moleVersion))
+        line(String(format: NSLocalizedString("Engine: %@", comment: ""), moleVersion))
         line(NSLocalizedString("Source on GitHub", comment: ""), link: "https://github.com/caezium/Burrow")
         line(NSLocalizedString("Releases", comment: ""), link: "https://github.com/caezium/Burrow/releases")
         line(NSLocalizedString("What telemetry is collected", comment: ""),

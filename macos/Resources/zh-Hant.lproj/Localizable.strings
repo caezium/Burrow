@@ -350,7 +350,7 @@
 "Couldn't move to Trash" = "無法移到垃圾桶";
 
 /* Settings sections */
-"Mole engine" = "Mole 引擎";
+"Engine" = "引擎";
 "Menu bar" = "選單列";
 "Show menu bar icon" = "顯示選單列圖示";
 
@@ -718,7 +718,7 @@
 "You're up to date" = "已是最新版本";
 "Burrow %@ is the latest release." = "Burrow %@ 即為最新發佈版本。";
 "Open Release Page" = "開啟發佈頁面";
-"Mole engine %@" = "Mole 引擎 %@";
+"Engine: %@" = "引擎：%@";
 "not found" = "找不到";
 "Releases" = "發佈版本";
 "What telemetry is collected" = "收集哪些遙測資料";

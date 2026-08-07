@@ -193,14 +193,19 @@ final class MoEngine {
         makePTY()
     }
 
-    // MARK: Status stream (mo status --watch, V1.44+)
+    // MARK: Status stream (status --watch)
 
-    /// Stream `mo status --watch` as process events — each `.line` is one
+    /// Stream `status --watch` as process events — each `.line` is one
     /// NDJSON status snapshot; `.exited` ends the stream (the caller falls back
     /// to polling). Runs indefinitely (no timeout); cancelling the consuming
     /// task terminates the child via the stream's onTermination. Returns nil if
-    /// `mo` can't be resolved. Reuses the streaming port that drives
+    /// the engine can't be resolved. Reuses the streaming port that drives
     /// clean/optimize, so there's no new spawn plumbing.
+    ///
+    /// Does NOT check that the resolved binary supports the flag — `MoleCLI.supportsWatch()`
+    /// is that gate, and it resolves through the same locator so the two agree. Spawning
+    /// this against an engine that rejects `--watch` is survivable but wasteful: the child
+    /// prints one error envelope, exits, and `SnapshotProducer` falls back to polling.
     func statusWatch() -> AsyncStream<ProcessEvent>? {
         guard let path = locator.locate() else { return nil }
         let spec = ProcessSpec(executable: path, arguments: ["status", "--watch"],
