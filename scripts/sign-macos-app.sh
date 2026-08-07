@@ -254,7 +254,13 @@ if [ "$MODE" = "developer-id" ]; then
     || { echo "error: helper team is '${HELPER_TEAM:-missing}', expected '$EXPECTED_TEAM'" >&2; exit 1; }
 
   # Hardened runtime on a root daemon is not optional.
-  codesign -d --verbose=2 "$HELPER" 2>&1 | grep -q "flags=.*runtime" \
+  #
+  # Read once into a variable rather than piping codesign straight into grep:
+  # `set -o pipefail` is in force, so a non-zero exit from codesign fails the
+  # pipeline even when the grep matched, which reads as "no hardened runtime"
+  # on a binary that has it. Separating the two keeps the check about the flag.
+  HELPER_SIG="$(codesign -d --verbose=2 "$HELPER" 2>&1 || true)"
+  grep -q "flags=.*runtime" <<< "$HELPER_SIG" \
     || { echo "error: privileged helper is not built with the hardened runtime" >&2; exit 1; }
 fi
 
