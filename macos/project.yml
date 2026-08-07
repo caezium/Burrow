@@ -53,7 +53,7 @@ targets:
         CFBundleDisplayName: Burrow
         CFBundleShortVersionString: "0.11.2"
         CFBundleVersion: "23"
-        NSHumanReadableCopyright: "MIT License. Mole CLI © tw93. Independent, not affiliated with mole.fit."
+        NSHumanReadableCopyright: "MIT License. © 2026 Henry Zhang."
         # Burrow uses only exempt encryption supplied by macOS (for example,
         # URLSession HTTPS); it contains no proprietary or non-exempt crypto.
         ITSAppUsesNonExemptEncryption: false
