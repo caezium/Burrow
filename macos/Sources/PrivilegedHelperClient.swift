@@ -230,17 +230,16 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     /// Run one typed operation as root, streaming output lines to `onLine`.
     ///
     /// Blocking — call off the main thread. It blocks for as long as the user
-    /// takes to authenticate plus as long as the operation runs, because the
-    /// authentication prompt is raised by the DAEMON during this call.
+    /// takes at the authentication prompt plus as long as the operation runs.
     func run(operation: HelperOperation,
              onLine: @escaping (String) -> Void) -> ElevatedOutcome {
         // Ask the user to authenticate. This is the prompt — raised here, in a
         // real session, so SecurityAgent can offer Touch ID. The daemon then
         // verifies the resulting reference without prompting.
-        let authorization: Data
+        let granted: HelperAuthorization.ClientAuthorization
         switch HelperAuthorization.authenticate() {
-        case .success(let granted):
-            authorization = granted.externalForm
+        case .success(let authorization):
+            granted = authorization
         case .failure(let refusal):
             helperClientLog.notice("authentication refused: \(String(describing: refusal), privacy: .public)")
             // Every refusal reads as "you weren't authenticated, nothing ran",
@@ -249,6 +248,24 @@ final class PrivilegedHelperClient: @unchecked Sendable {
             return .authCancelled
         }
 
+        // `granted` owns the AuthorizationRef, and the authorization instance
+        // only lives in the Security Server while that ref is held. Releasing
+        // it before the daemon internalizes the external form makes the
+        // daemon's side fail with errAuthorizationDenied — indistinguishable
+        // from the user being refused. `withExtendedLifetime` is what
+        // guarantees the optimizer can't drop it early; ordinary scoping is
+        // not a guarantee.
+        return withExtendedLifetime(granted) {
+            send(payload: granted.externalForm, operation: operation, onLine: onLine)
+        }
+    }
+
+    /// The XPC round trip. Split out so the authorization's lifetime is a
+    /// visible, enforced property of the caller rather than an accident of
+    /// where the local happens to go out of scope.
+    private func send(payload authorization: Data,
+                      operation: HelperOperation,
+                      onLine: @escaping (String) -> Void) -> ElevatedOutcome {
         let request = HelperRequest(operation: operation,
                                     operationID: UUID().uuidString,
                                     clientBuild: Self.appBuild)

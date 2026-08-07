@@ -190,9 +190,35 @@ enum HelperAuthorization {
     // Thin wrappers over the Security framework: the decisions above are pure
     // and tested, these just perform the calls.
 
-    /// What the GUI's authentication attempt produced.
-    struct ClientAuthorization {
+    /// What the GUI's authentication attempt produced, and — critically — the
+    /// owner of the underlying `AuthorizationRef`.
+    ///
+    /// The externalized form is NOT a self-contained token. It is a handle to
+    /// an authorization instance living in the Security Server, and that
+    /// instance only exists while the creating process holds its
+    /// `AuthorizationRef`. Free the ref and the daemon's
+    /// `AuthorizationCreateFromExternalForm` fails with `errAuthorizationDenied`
+    /// — which reads exactly like the user being refused, and sent this
+    /// implementation chasing the wrong layer entirely.
+    ///
+    /// So this is a class, not a struct: it owns the ref and releases it in
+    /// `deinit`. Callers must keep it alive across the whole round trip, which
+    /// `PrivilegedHelperClient.run` does with `withExtendedLifetime`.
+    final class ClientAuthorization {
         let externalForm: Data
+        private let ref: AuthorizationRef
+
+        init(ref: AuthorizationRef, externalForm: Data) {
+            self.ref = ref
+            self.externalForm = externalForm
+        }
+
+        deinit {
+            // No `kAuthorizationFlagDestroyRights`: the credential's lifetime
+            // is the right's `timeout`, not ours to cut short — and cutting it
+            // short here is precisely the bug this type exists to prevent.
+            AuthorizationFree(ref, [])
+        }
     }
 
     /// GUI side. Ask the user to authenticate, then externalize the resulting
@@ -206,11 +232,19 @@ enum HelperAuthorization {
     /// unauthenticated request, which the daemon would reject anyway but which
     /// would blur the distinction between "declined" and "broken".
     static func authenticate() -> Result<ClientAuthorization, Outcome> {
-        var ref: AuthorizationRef?
-        guard AuthorizationCreate(nil, nil, [], &ref) == errAuthorizationSuccess, let ref else {
+        var reference: AuthorizationRef?
+        guard AuthorizationCreate(nil, nil, [], &reference) == errAuthorizationSuccess,
+              let ref = reference else {
             return .failure(.failed(errAuthorizationInternal))
         }
-        defer { AuthorizationFree(ref, []) }
+
+        // Freed on every failure path, and ONLY on failure. On success the ref
+        // is handed to ClientAuthorization, which must outlive the daemon's
+        // internalization of the external form — see that type.
+        func fail(_ outcome: Outcome) -> Result<ClientAuthorization, Outcome> {
+            AuthorizationFree(ref, [])
+            return .failure(outcome)
+        }
 
         // Non-empty rights array. Passing NULL here is the documented way to
         // accidentally authorize everybody.
@@ -222,13 +256,14 @@ enum HelperAuthorization {
             }
         }
         let result = outcome(from: status)
-        guard result.permitsExecution else { return .failure(result) }
+        guard result.permitsExecution else { return fail(result) }
 
         var form = AuthorizationExternalForm()
         guard AuthorizationMakeExternalForm(ref, &form) == errAuthorizationSuccess else {
-            return .failure(.failed(errAuthorizationInternal))
+            return fail(.failed(errAuthorizationInternal))
         }
-        return .success(ClientAuthorization(externalForm: withUnsafeBytes(of: &form) { Data($0) }))
+        return .success(ClientAuthorization(ref: ref,
+                                            externalForm: withUnsafeBytes(of: &form) { Data($0) }))
     }
 
     /// Which step produced the result. Kept because "authorization failed" was
