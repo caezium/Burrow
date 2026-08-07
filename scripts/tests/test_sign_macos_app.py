@@ -41,13 +41,13 @@ class SignMacOSAppTests(unittest.TestCase):
         if helper_plist:
             plist_path = (
                 app / "Contents" / "Library" / "LaunchDaemons"
-                / "dev.caezium.Burrow.helper.plist"
+                / "dev.caezium.Burrow.privileged-helper.plist"
             )
             plist_path.parent.mkdir(parents=True, exist_ok=True)
             contents: dict[str, object] = {
-                "Label": "dev.caezium.Burrow.helper",
+                "Label": "dev.caezium.Burrow.privileged-helper",
                 "BundleProgram": "Contents/MacOS/BurrowHelper",
-                "MachServices": {"dev.caezium.Burrow.helper": True},
+                "MachServices": {"dev.caezium.Burrow.privileged-helper": True},
             }
             contents.update(helper_plist_overrides or {})
             with plist_path.open("wb") as handle:
@@ -230,7 +230,7 @@ class PrivilegedHelperGateTests(SignMacOSAppTests):
             result = self.run_signer(app, entitlements)
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("does not vend the dev.caezium.Burrow.helper Mach service", result.stderr)
+            self.assertIn("does not vend the dev.caezium.Burrow.privileged-helper Mach service", result.stderr)
 
     def test_bundle_program_pointing_elsewhere_blocks_release(self) -> None:
         """The sharpest one.

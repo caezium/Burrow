@@ -19,14 +19,14 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>dev.caezium.Burrow.helper</string>
+	<string>dev.caezium.Burrow.privileged-helper</string>
 
 	<key>BundleProgram</key>
 	<string>Contents/MacOS/BurrowHelper</string>
 
 	<key>MachServices</key>
 	<dict>
-		<key>dev.caezium.Burrow.helper</key>
+		<key>dev.caezium.Burrow.privileged-helper</key>
 		<true/>
 	</dict>
 

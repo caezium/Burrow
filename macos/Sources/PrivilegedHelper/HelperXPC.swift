@@ -19,12 +19,12 @@ import Foundation
 enum HelperNames {
     /// The Mach service the daemon vends and the client connects to. Must
     /// match `MachServices` in the launchd property list.
-    static let machService = "dev.caezium.Burrow.helper"
+    static let machService = "dev.caezium.Burrow.privileged-helper"
 
     /// The launchd label, and the property list file name inside the app at
     /// `Contents/Library/LaunchDaemons/`. `SMAppService.daemon(plistName:)`
     /// resolves the daemon from exactly that location.
-    static let daemonPlist = "dev.caezium.Burrow.helper.plist"
+    static let daemonPlist = "dev.caezium.Burrow.privileged-helper.plist"
 
     /// The bundle identifier the daemon requires of any caller.
     static let clientBundleID = "dev.caezium.Burrow"

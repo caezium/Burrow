@@ -51,7 +51,7 @@ targets:
         excludes: ["Info.plist", "Burrow.entitlements", "LaunchDaemons"]
       # SMAppService.daemon(plistName:) resolves the daemon from exactly this
       # path and nowhere else.
-      - path: Resources/LaunchDaemons/dev.caezium.Burrow.helper.plist
+      - path: Resources/LaunchDaemons/dev.caezium.Burrow.privileged-helper.plist
         buildPhase:
           copyFiles:
             destination: wrapper
@@ -192,7 +192,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: BurrowHelper
-        PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.Burrow.helper
+        PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.Burrow.privileged-helper
         # The helper reports its OWN build over XPC, and the client refuses a
         # helper whose build doesn't match the app's. Baking the plist into the
         # binary means it reports what it IS, rather than reading whatever

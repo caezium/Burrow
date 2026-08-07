@@ -41,7 +41,7 @@ import os
 // are UUIDs the daemon itself validated, and every other value logged here is
 // drawn from a closed enum.
 
-let helperLog = Logger(subsystem: "dev.caezium.Burrow.helper", category: "privileged")
+let helperLog = Logger(subsystem: "dev.caezium.Burrow.privileged-helper", category: "privileged")
 
 /// Diagnostic trail that cannot silently disappear.
 ///

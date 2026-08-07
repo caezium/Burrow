@@ -210,7 +210,7 @@ fi
 # below is fail-closed, and the whole block is mandatory — the helper is not an
 # optional component, so "absent" is an error, not a skip.
 HELPER="$APP/Contents/MacOS/BurrowHelper"
-HELPER_PLIST="$APP/Contents/Library/LaunchDaemons/dev.caezium.Burrow.helper.plist"
+HELPER_PLIST="$APP/Contents/Library/LaunchDaemons/dev.caezium.Burrow.privileged-helper.plist"
 
 echo "==> verifying the privileged helper"
 [ -f "$HELPER" ] || { echo "error: privileged helper missing: $HELPER" >&2; exit 1; }
@@ -226,11 +226,11 @@ helper_plist_value() {
 # The label and the Mach service name are what SMAppService and the client
 # connect through. A typo in either is a silent "helper never starts".
 HELPER_LABEL="$(helper_plist_value Label string || true)"
-[ "$HELPER_LABEL" = "dev.caezium.Burrow.helper" ] \
-  || { echo "error: launchd Label is '${HELPER_LABEL:-missing}', expected dev.caezium.Burrow.helper" >&2; exit 1; }
+[ "$HELPER_LABEL" = "dev.caezium.Burrow.privileged-helper" ] \
+  || { echo "error: launchd Label is '${HELPER_LABEL:-missing}', expected dev.caezium.Burrow.privileged-helper" >&2; exit 1; }
 
-helper_plist_value 'MachServices.dev\.caezium\.Burrow\.helper' bool >/dev/null \
-  || { echo "error: launchd plist does not vend the dev.caezium.Burrow.helper Mach service" >&2; exit 1; }
+helper_plist_value 'MachServices.dev\.caezium\.Burrow\.privileged-helper' bool >/dev/null \
+  || { echo "error: launchd plist does not vend the dev.caezium.Burrow.privileged-helper Mach service" >&2; exit 1; }
 
 # BundleProgram is resolved relative to the app bundle. If it points anywhere
 # other than the executable we just signed, the daemon that actually runs as
