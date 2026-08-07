@@ -29,7 +29,7 @@
     --serif:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
     --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
     --heading:"Cal Sans","Geist",-apple-system,system-ui,sans-serif;
-    --r-card:28px; --page:880px; --pad:40px;
+    --r-card:28px; --page:1080px; --pad:24px;
   }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
@@ -81,6 +81,8 @@
   .card { background:var(--surface); border:1px solid var(--hair-2); border-radius:var(--r-card); box-shadow:0 1px 0 rgba(255,255,255,0.05) inset; }
   code { font-family:var(--mono); font-size:0.85em; padding:1px 6px; border-radius:7px; background:var(--surface-2); border:1px solid var(--hair-2); color:var(--ink); white-space:nowrap; }
   main { padding-top: 8px; padding-bottom: 24px; }
+  .hero p { max-width:680px; }
+  main .entry, main > .rcol { max-width:940px; }
   /* Minimal footer, same shape as the landing page. */
   footer { padding:34px 0 48px; border-top:1px solid var(--hair-2); margin-top:8px; }
   .footer-top { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
@@ -88,7 +90,7 @@
   .footer-links { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
   .footer-links a { transition:color .18s; }
   .footer-links a:hover { color:var(--ink); }
-  @media (max-width: 720px) { :root { --pad: 24px; } .topbar { padding-left:8px; padding-right:8px; } .nav { display:none; } }
+  @media (max-width: 720px) { :root { --pad: 20px; } .topbar { padding-left:8px; padding-right:8px; } .nav { display:none; } }
   @media (max-width: 560px) { .nav-label--full { display:none; } }
   @media (min-width: 561px) { .nav-label--short { display:none; } }
   .inst-grid { margin-top:36px; display:grid; grid-template-columns:repeat(2,1fr); border-top:1px solid var(--hair-2); }
@@ -108,6 +110,8 @@
   .inst-go { display:inline-flex; align-items:center; gap:8px; margin-top:16px; font-size:13.5px; font-weight:600;
     color:var(--accent); transition:color .18s; }
   .inst-go:hover { color:#E7C49A; }
+  .inst-cell p.sub { margin-top:10px; font-size:12px; color:var(--ink-3); }
+  .inst-cell p.sub a { color:var(--ink-2); text-decoration:underline; text-underline-offset:2px; }
   .inst-go svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2.2; }
   .req { margin-top:40px; padding-top:26px; border-top:1px solid var(--hair-2); display:grid;
     grid-template-columns:repeat(3,1fr); gap:22px; font-size:13.5px; color:var(--ink-2); line-height:1.6; }
@@ -122,7 +126,7 @@
     <a class="brand" href="./" aria-label="Burrow"><svg class="mk" viewBox="0 0 100 100" aria-hidden="true"><rect x="2" y="2" width="96" height="96" rx="26" fill="#241B12"/><path d="M27 63 a23 23 0 0 1 46 0 Z" fill="#F3ECDD"/><rect x="40" y="63" width="20" height="6" rx="3" fill="#241B12"/></svg><span>Burrow</span></a>
     <nav class="nav"><a href="./#tools">Tools</a><a href="compare.html">Compare</a><a href="blog/">Blog</a><a href="install.html" class="on">Install</a><a href="releases.html">Changelog</a><a href="roadmap.html">Roadmap</a></nav>
     <div class="nav-right">
-      <a class="nav-github" href="https://github.com/caezium/Burrow" target="_blank" rel="noopener" aria-label="View Burrow on GitHub"><svg class="icon icon--github" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.3-1.8-1.3-1.8-1.1-.7 0-.7 0-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0C17.3 5 18.3 5.3 18.3 5.3c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .5z"/></svg></a>
+      <a class="nav-github" href="https://github.com/caezium/Burrow" target="_blank" rel="noopener" aria-label="View Burrow on GitHub"><svg class="icon icon--github" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.3-1.8-1.3-1.8-1.1-.7 0-.7 0-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0C17.3 5 18.3 5.3 18.3 5.3c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .5z"/></svg><span class="nav-stars">1.2k</span></a>
       <a class="btn" href="install.html" data-burrow-analytics="download.install"><span class="btn-inner"><svg class="icon icon--apple" viewBox="0 0 814 1000" aria-hidden="true"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.2 0 129.8 2.6 196.3 99.2zm-234-181.1c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.2 32.4-54.4 84.4-54.4 136.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.8-71.3z"/></svg><span class="nav-label--full">Download for Mac</span><span class="nav-label--short">Download</span></span></a>
     </div>
   </div>
@@ -144,12 +148,14 @@ brew install --cask caezium/tap/burrow</div>
       <div class="inst-cell">
         <h2>Direct download</h2>
         <p>The notarized zip from GitHub releases. Unzip into <code>/Applications</code> and keep quarantine intact so Gatekeeper can verify the ticket.</p>
-        <a class="inst-go" href="https://github.com/caezium/Burrow/releases/latest" target="_blank" rel="noopener" data-burrow-analytics="download.install_page">Download for macOS <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+        <a class="inst-go" href="https://github.com/caezium/Burrow/releases/download/v0.11.2/Burrow-0.11.2.zip" data-burrow-analytics="download.install_page">Download Burrow 0.11.2 for macOS <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+        <p class="sub">Universal, 22 MB zip. <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">All releases</a></p>
       </div>
       <div class="inst-cell">
         <h2>Windows (beta)</h2>
         <p>A native WinUI 3 and .NET 8 build, reaching parity tool by tool. It ships as a zip with the conductor and engine bundled; an installer is coming.</p>
-        <a class="inst-go" href="https://github.com/caezium/Burrow/releases/latest" target="_blank" rel="noopener" data-burrow-analytics="download.windows">Download the Windows preview <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+        <a class="inst-go" href="https://github.com/caezium/Burrow/releases/download/v0.10.0/BurrowWin-0.10.0-win-x64.zip" data-burrow-analytics="download.windows">Download BurrowWin 0.10.0 for x64 <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+        <p class="sub">The Windows build trails the Mac release; 0.10.0 is the latest preview.</p>
       </div>
       <div class="inst-cell">
         <h2>Build from source</h2>
