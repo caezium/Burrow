@@ -432,7 +432,7 @@
         "Bounded Analyze memory, faster live sparklines",
         "Network-usage views share one sample instead of each running a 1-second scan",
         "Fewer spurious “App Hang” reports",
-        "Homebrew cask no longer depends on a system `mo` — the engine is bundled"
+        "Homebrew cask no longer depends on a system engine — the engine is bundled"
       ],
       "sections": [
         {
@@ -459,7 +459,7 @@
           "label": "Under the hood",
           "items": [
             "Dead-code prune",
-            "Homebrew cask no longer depends on a system `mo` (engine bundled since 0.9.0)"
+            "Homebrew cask no longer depends on a system engine (engine bundled since 0.9.0)"
           ]
         }
       ]
@@ -474,7 +474,7 @@
           "icon": "package",
           "color": "teal",
           "title": "Bundled engine",
-          "line": "Burrow now ships its own MIT engine inside the app — a fork of Mole `mo` — so a fresh install needs no separate `brew install mole`. It runs the bundled engine first, falling back to a system `mo` for existing setups."
+          "line": "Burrow now ships its own MIT engine inside the app — an engine fork — so a fresh install needs no separate engine install. It runs the bundled engine first, falling back to a system engine for existing setups."
         },
         {
           "icon": "fingerprint",
@@ -513,7 +513,7 @@
         {
           "label": "engine",
           "items": [
-            "**Burrow bundles its own engine now.** The app ships an MIT-licensed `burrow-engine` (a fork of Mole `mo` at its last MIT release) inside `Burrow.app` and runs it directly — so a fresh install needs **no separate `brew install mole`**. Burrow prefers the bundled engine, then an installed `burrow-engine`, then a legacy system `mo` for existing setups."
+            "**Burrow bundles its own engine now.** The app ships an MIT-licensed `burrow-engine` (forked at its last MIT release) inside `Burrow.app` and runs it directly — so a fresh install needs **no separate engine install**. Burrow prefers the bundled engine, then an installed `burrow-engine`, then a legacy system engine for existing setups."
           ]
         },
         {
@@ -707,7 +707,7 @@
           "icon": "pulse",
           "color": "azure",
           "title": "Streaming live status",
-          "line": "With Mole 1.44+, status streams over `mo status --watch` (NDJSON) by default instead of polling — lower latency, less churn. Falls back to polling automatically."
+          "line": "With engine 1.44+, status streams over the engine's streaming status command (NDJSON) by default instead of polling — lower latency, less churn. Falls back to polling automatically."
         },
         {
           "icon": "package",
@@ -739,7 +739,7 @@
         {
           "label": "changed",
           "items": [
-            "**Live status streams by default** — with Mole 1.44+, Burrow streams `mo status --watch` (NDJSON) instead of polling `mo status --json`: lower latency and less subprocess churn. Falls back to polling on older `mo` or a dropped stream."
+            "**Live status streams by default** — with engine 1.44+, Burrow streams the engine's streaming status command (NDJSON) instead of polling the engine's one-shot status command: lower latency and less subprocess churn. Falls back to polling on an older engine or a dropped stream."
           ]
         },
         {
@@ -798,7 +798,7 @@
         "Doctor: new SMART-health and backup-awareness checks, with reminders",
         "Drag-select a History chart to see the top processes for that spike",
         "Killed several main-thread app-hangs (sort, ICU, process table, app icons)",
-        "Onboarding now auto-detects the mo engine",
+        "Onboarding now auto-detects the engine",
         "Monorepo (macos/ + windows/) with inside-out framework signing for notarization"
       ],
       "sections": [
@@ -827,7 +827,7 @@
           "label": "performance",
           "items": [
             "Killed several main-thread app-hangs — the process table, sort, ICU on the render path, app icons, clean reports, and the software list.",
-            "Onboarding now auto-detects the `mo` engine."
+            "Onboarding now auto-detects the engine."
           ]
         },
         {
@@ -839,7 +839,7 @@
         {
           "label": "under the hood",
           "items": [
-            "The repo is now a monorepo (`macos/` + `windows/`), with inside-out framework signing for notarization and an automated upstream `mo` release watcher."
+            "The repo is now a monorepo (`macos/` + `windows/`), with inside-out framework signing for notarization and an automated upstream engine release watcher."
           ]
         }
       ]
@@ -943,7 +943,7 @@
       ],
       "chips": [
         "History view no longer freezes on wide time ranges",
-        "Faster launch — mo discovery moved off the main thread",
+        "Faster launch — engine discovery moved off the main thread",
         "Fixed a crash opening the menu-bar popover charts",
         "Smooth typing during Uninstall & Purge",
         "Process-row Quit/Force-Kill menu no longer rebuilt every refresh",
@@ -963,7 +963,7 @@
         {
           "label": "performance",
           "items": [
-            "Faster launch — `mo` discovery moved off the main thread.",
+            "Faster launch — engine discovery moved off the main thread.",
             "The HUD, Status, and Activity panels share one refresh pump now.",
             "The process-row Quit / Force-Kill menu is no longer rebuilt on every refresh."
           ]
@@ -998,7 +998,7 @@
           "label": "fixed",
           "items": [
             "One-click relaunch the moment Full Disk Access is granted.",
-            "First-run onboarding checks the `mo` engine and version.",
+            "First-run onboarding checks the engine and version.",
             "Truthful Touch ID copy.",
             "The dashboard survives a bad metrics sample (skipped and counted) instead of stalling."
           ]
@@ -1007,7 +1007,7 @@
           "label": "performance",
           "items": [
             "History auto-refresh is demand-driven — no idle timer.",
-            "A deepened, test-covered `mo` runner / metrics / actions core."
+            "A deepened, test-covered engine runner / metrics / actions core."
           ]
         }
       ],
@@ -1052,14 +1052,14 @@
       ],
       "chips": [
         "One-click relaunch when Full Disk Access is granted",
-        "First-run onboarding checks the mo engine + version",
+        "First-run onboarding checks the engine + version",
         "Compact, scrollable process table",
         "Keep Screen On · Clean Screen · global shortcuts",
         "~230 strings localized in 简体中文 / 繁體中文",
         "Truthful Touch ID copy",
         "Dashboard survives a bad metrics sample (skipped + counted)",
         "History auto-refresh is demand-driven — no idle timer",
-        "Deepened, test-covered mo runner / metrics / actions core"
+        "Deepened, test-covered engine runner / metrics / actions core"
       ]
     },
     {
@@ -1072,7 +1072,7 @@
           "items": [
             "**One Home dashboard** — Status, History, and Activity fold into a single live view: vitals, charts, and recent jobs in one place.",
             "**繁體中文** — Traditional Chinese joins English and 简体, with an in-app switch, so you're not tied to the system language.",
-            "**Real fans & temps** — fan RPM and CPU/GPU die temperatures, read straight from the SMC — the gaps `mo` leaves on Apple Silicon, filled.",
+            "**Real fans & temps** — fan RPM and CPU/GPU die temperatures, read straight from the SMC — the gaps the engine leaves on Apple Silicon, filled.",
             "**1-second live charts** — net and disk sampled every second, so bursts show up instead of being averaged away.",
             "**Trash from the treemap** — spot a forgotten folder in Analyze and send it to the Trash right there, no detour to Finder.",
             "**Sharper AI Explain** — it briefs the whole picture now: the current snapshot, the recent trend, and your recent cleanups, in your language."
@@ -1113,7 +1113,7 @@
           "icon": "thermo",
           "color": "coral",
           "title": "Real fans & temps",
-          "line": "Fan RPM and CPU/GPU die temperatures, read straight from the SMC — the gaps Mole leaves on Apple Silicon, filled."
+          "line": "Fan RPM and CPU/GPU die temperatures, read straight from the SMC — the gaps the engine leaves on Apple Silicon, filled."
         },
         {
           "icon": "pulse",
@@ -1151,7 +1151,7 @@
         {
           "label": "fixed",
           "items": [
-            "Installers and Purge no longer freeze when `mo` finds nothing, or on a second scan — the “Scanning…” hang is gone."
+            "Installers and Purge no longer freeze when the engine finds nothing, or on a second scan — the “Scanning…” hang is gone."
           ]
         },
         {
@@ -1169,12 +1169,12 @@
           "icon": "wrench",
           "color": "teal",
           "title": "No more \"Scanning…\" hang",
-          "line": "Installers and Purge no longer freeze when Mole finds nothing, or on a second scan."
+          "line": "Installers and Purge no longer freeze when the engine finds nothing, or on a second scan."
         },
         {
           "icon": "flask",
           "color": "violet",
-          "title": "Tested mo integration",
+          "title": "Tested engine integration",
           "line": "The \"remove exactly what you picked — or nothing\" flow is now a pure state machine, verified in CI."
         }
       ],
@@ -1198,7 +1198,7 @@
         {
           "label": "added",
           "items": [
-            "**Native disk I/O & GPU** — read natively where `mo` reports zero on Apple Silicon, so charts show real numbers.",
+            "**Native disk I/O & GPU** — read natively where the engine reports zero on Apple Silicon, so charts show real numbers.",
             "**Purge → Show all** — pull in the complete find list and pick from everything, not just the ~50 biggest.",
             "**More history charts** — Battery, GPU, and Fans join the lineup; Top Processes ranks by CPU or RAM.",
             "The thermal chart plots a real temperature."
@@ -1223,7 +1223,7 @@
           "icon": "gauge",
           "color": "azure",
           "title": "Native disk I/O & GPU",
-          "line": "Read natively where Mole reports zero on Apple Silicon, so charts show real numbers."
+          "line": "Read natively where the engine reports zero on Apple Silicon, so charts show real numbers."
         },
         {
           "icon": "list",
@@ -1351,7 +1351,7 @@
         {
           "label": "added",
           "items": [
-            "**Touch ID for sudo** — cleanups that need admin rights authenticate with a fingerprint, via `mo touchid`.",
+            "**Touch ID for sudo** — cleanups that need admin rights authenticate with a fingerprint, via the engine's Touch ID support.",
             "**Menu-bar HUD** — live job status from the menu bar, or run without the icon entirely in Dock mode.",
             "**MCP server** — ask Claude Code about your Mac through a read-only stdio server, including `burrow_process_usage`.",
             "**简体中文** — Simplified Chinese localization.",
@@ -1364,7 +1364,7 @@
           "label": "changed",
           "items": [
             "A Full Disk Access gate stops the per-folder permission flood.",
-            "Guided `mo` setup on first run."
+            "Guided engine setup on first run."
           ]
         }
       ],
@@ -1374,7 +1374,7 @@
           "icon": "fingerprint",
           "color": "gold",
           "title": "Touch ID for sudo",
-          "line": "Cleanups that need admin rights authenticate with a fingerprint, via mo touchid."
+          "line": "Cleanups that need admin rights authenticate with a fingerprint, via the engine's Touch ID support."
         },
         {
           "icon": "monitor",
@@ -1410,7 +1410,7 @@
       "chips": [
         "Activity pane: cleanup history in-app",
         "Full Disk Access gate stops the per-folder permission flood",
-        "guided Mole setup on first run"
+        "guided engine setup on first run"
       ]
     },
     {
@@ -1421,7 +1421,7 @@
         {
           "label": "added",
           "items": [
-            "**Five tools, one window** — Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited `mo` engine.",
+            "**Five tools, one window** — Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited engine.",
             "**Status + History** — a live dashboard with per-metric sparklines, and long-range charts on a local store.",
             "**MCP server, day one** — HTTP + stdio endpoints so Claude Code can ask what's happening on this Mac."
           ]
@@ -1429,17 +1429,17 @@
         {
           "label": "notes",
           "items": [
-            "macOS 14+; requires `brew install mole`; unsigned, pre-1.0."
+            "macOS 14+; requires a separate engine install; unsigned, pre-1.0."
           ]
         }
       ],
-      "tagline": "First public release — five tools, one native window, built on the Mole CLI.",
+      "tagline": "First public release — five tools, one native window, built on a bundled CLI engine.",
       "highlights": [
         {
           "icon": "layout",
           "color": "teal",
           "title": "Five tools, one window",
-          "line": "Status, Analyze, Software, Clean and Optimize — a native macOS GUI for the audited mo engine."
+          "line": "Status, Analyze, Software, Clean and Optimize — a native macOS GUI for the audited engine."
         },
         {
           "icon": "chart",
@@ -1456,7 +1456,7 @@
       ],
       "chips": [
         "macOS 14+",
-        "requires brew install mole",
+        "requires a separate engine install",
         "unsigned, pre-1.0"
       ]
     }

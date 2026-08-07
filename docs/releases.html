@@ -87,9 +87,6 @@
   .footer-links { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
   .footer-links a { transition:color .18s; }
   .footer-links a:hover { color:var(--ink); }
-  .footer-fine { margin-top:22px; font-size:11.5px; line-height:1.6; color:var(--ink-3); }
-  .footer-fine a { color:var(--ink-2); text-decoration:underline; text-underline-offset:2px; }
-  .footer-fine a:hover { color:var(--accent); }
   @media (max-width: 720px) { :root { --pad: 24px; } .topbar { padding-left:8px; padding-right:8px; } .nav { display:none; } }
   @media (max-width: 560px) { .nav-label--full { display:none; } }
   @media (min-width: 561px) { .nav-label--short { display:none; } }
@@ -415,7 +412,7 @@
           <div class="slabel mono">Under the hood</div>
           <ul class="slist">
             <li>Dead-code prune</li>
-            <li>Homebrew cask no longer depends on a system <code>mo</code> (engine bundled since 0.9.0)</li>
+            <li>Homebrew cask no longer depends on a system engine (engine bundled since 0.9.0)</li>
           </ul>
         </div>
       </div>
@@ -432,7 +429,7 @@
         <div class="sblock">
           <div class="slabel mono">engine</div>
           <ul class="slist">
-            <li><b>Burrow bundles its own engine now.</b> The app ships an MIT-licensed <code>burrow-engine</code> (a fork of Mole <code>mo</code> at its last MIT release) inside <code>Burrow.app</code> and runs it directly — so a fresh install needs <b>no separate <code>brew install mole</code></b>. Burrow prefers the bundled engine, then an installed <code>burrow-engine</code>, then a legacy system <code>mo</code> for existing setups.</li>
+            <li><b>Burrow bundles its own engine now.</b> The app ships an MIT-licensed <code>burrow-engine</code> (forked at its last MIT release) inside <code>Burrow.app</code> and runs it directly — so a fresh install needs <b>no separate engine install</b>. Burrow prefers the bundled engine, then an installed <code>burrow-engine</code>, then a legacy system engine for existing setups.</li>
           </ul>
         </div>
         <div class="sblock">
@@ -579,7 +576,7 @@
         <div class="sblock">
           <div class="slabel mono">changed</div>
           <ul class="slist">
-            <li><b>Live status streams by default</b> — with Mole 1.44+, Burrow streams <code>mo status --watch</code> (NDJSON) instead of polling <code>mo status --json</code>: lower latency and less subprocess churn. Falls back to polling on older <code>mo</code> or a dropped stream.</li>
+            <li><b>Live status streams by default</b> — with engine 1.44+, Burrow streams the engine's streaming status command (NDJSON) instead of polling the engine's one-shot status command: lower latency and less subprocess churn. Falls back to polling on an older engine or a dropped stream.</li>
           </ul>
         </div>
         <div class="sblock">
@@ -630,7 +627,7 @@
           <div class="slabel mono">performance</div>
           <ul class="slist">
             <li>Killed several main-thread app-hangs — the process table, sort, ICU on the render path, app icons, clean reports, and the software list.</li>
-            <li>Onboarding now auto-detects the <code>mo</code> engine.</li>
+            <li>Onboarding now auto-detects the engine.</li>
           </ul>
         </div>
         <div class="sblock">
@@ -642,7 +639,7 @@
         <div class="sblock">
           <div class="slabel mono">under the hood</div>
           <ul class="slist">
-            <li>The repo is now a monorepo (<code>macos/</code> + <code>windows/</code>), with inside-out framework signing for notarization and an automated upstream <code>mo</code> release watcher.</li>
+            <li>The repo is now a monorepo (<code>macos/</code> + <code>windows/</code>), with inside-out framework signing for notarization and an automated upstream engine release watcher.</li>
           </ul>
         </div>
       </div>
@@ -704,7 +701,7 @@
         <div class="sblock">
           <div class="slabel mono">performance</div>
           <ul class="slist">
-            <li>Faster launch — <code>mo</code> discovery moved off the main thread.</li>
+            <li>Faster launch — engine discovery moved off the main thread.</li>
             <li>The HUD, Status, and Activity panels share one refresh pump now.</li>
             <li>The process-row Quit / Force-Kill menu is no longer rebuilt on every refresh.</li>
           </ul>
@@ -743,7 +740,7 @@
           <div class="slabel mono">fixed</div>
           <ul class="slist">
             <li>One-click relaunch the moment Full Disk Access is granted.</li>
-            <li>First-run onboarding checks the <code>mo</code> engine and version.</li>
+            <li>First-run onboarding checks the engine and version.</li>
             <li>Truthful Touch ID copy.</li>
             <li>The dashboard survives a bad metrics sample (skipped and counted) instead of stalling.</li>
           </ul>
@@ -752,7 +749,7 @@
           <div class="slabel mono">performance</div>
           <ul class="slist">
             <li>History auto-refresh is demand-driven — no idle timer.</li>
-            <li>A deepened, test-covered <code>mo</code> runner / metrics / actions core.</li>
+            <li>A deepened, test-covered engine runner / metrics / actions core.</li>
           </ul>
         </div>
       </div>
@@ -771,7 +768,7 @@
           <ul class="slist">
             <li><b>One Home dashboard</b> — Status, History, and Activity fold into a single live view: vitals, charts, and recent jobs in one place.</li>
             <li><b>繁體中文</b> — Traditional Chinese joins English and 简体, with an in-app switch, so you're not tied to the system language.</li>
-            <li><b>Real fans &amp; temps</b> — fan RPM and CPU/GPU die temperatures, read straight from the SMC — the gaps <code>mo</code> leaves on Apple Silicon, filled.</li>
+            <li><b>Real fans &amp; temps</b> — fan RPM and CPU/GPU die temperatures, read straight from the SMC — the gaps the engine leaves on Apple Silicon, filled.</li>
             <li><b>1-second live charts</b> — net and disk sampled every second, so bursts show up instead of being averaged away.</li>
             <li><b>Trash from the treemap</b> — spot a forgotten folder in Analyze and send it to the Trash right there, no detour to Finder.</li>
             <li><b>Sharper AI Explain</b> — it briefs the whole picture now: the current snapshot, the recent trend, and your recent cleanups, in your language.</li>
@@ -807,7 +804,7 @@
         <div class="sblock">
           <div class="slabel mono">fixed</div>
           <ul class="slist">
-            <li>Installers and Purge no longer freeze when <code>mo</code> finds nothing, or on a second scan — the “Scanning…” hang is gone.</li>
+            <li>Installers and Purge no longer freeze when the engine finds nothing, or on a second scan — the “Scanning…” hang is gone.</li>
           </ul>
         </div>
         <div class="sblock">
@@ -839,7 +836,7 @@
         <div class="sblock">
           <div class="slabel mono">added</div>
           <ul class="slist">
-            <li><b>Native disk I/O &amp; GPU</b> — read natively where <code>mo</code> reports zero on Apple Silicon, so charts show real numbers.</li>
+            <li><b>Native disk I/O &amp; GPU</b> — read natively where the engine reports zero on Apple Silicon, so charts show real numbers.</li>
             <li><b>Purge → Show all</b> — pull in the complete find list and pick from everything, not just the ~50 biggest.</li>
             <li><b>More history charts</b> — Battery, GPU, and Fans join the lineup; Top Processes ranks by CPU or RAM.</li>
             <li>The thermal chart plots a real temperature.</li>
@@ -922,7 +919,7 @@
         <div class="sblock">
           <div class="slabel mono">added</div>
           <ul class="slist">
-            <li><b>Touch ID for sudo</b> — cleanups that need admin rights authenticate with a fingerprint, via <code>mo touchid</code>.</li>
+            <li><b>Touch ID for sudo</b> — cleanups that need admin rights authenticate with a fingerprint, via the engine's Touch ID support.</li>
             <li><b>Menu-bar HUD</b> — live job status from the menu bar, or run without the icon entirely in Dock mode.</li>
             <li><b>MCP server</b> — ask Claude Code about your Mac through a read-only stdio server, including <code>burrow_process_usage</code>.</li>
             <li><b>简体中文</b> — Simplified Chinese localization.</li>
@@ -935,7 +932,7 @@
           <div class="slabel mono">changed</div>
           <ul class="slist">
             <li>A Full Disk Access gate stops the per-folder permission flood.</li>
-            <li>Guided <code>mo</code> setup on first run.</li>
+            <li>Guided engine setup on first run.</li>
           </ul>
         </div>
       </div>
@@ -948,11 +945,11 @@
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.4.0" target="_blank" rel="noopener">full notes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">First public release — five tools, one native window, built on the Mole CLI.</p>
+        <p class="lead">First public release — five tools, one native window, built on a bundled CLI engine.</p>
         <div class="sblock">
           <div class="slabel mono">added</div>
           <ul class="slist">
-            <li><b>Five tools, one window</b> — Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited <code>mo</code> engine.</li>
+            <li><b>Five tools, one window</b> — Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited engine.</li>
             <li><b>Status + History</b> — a live dashboard with per-metric sparklines, and long-range charts on a local store.</li>
             <li><b>MCP server, day one</b> — HTTP + stdio endpoints so Claude Code can ask what's happening on this Mac.</li>
           </ul>
@@ -960,7 +957,7 @@
         <div class="sblock">
           <div class="slabel mono">notes</div>
           <ul class="slist">
-            <li>macOS 14+; requires <code>brew install mole</code>; unsigned, pre-1.0.</li>
+            <li>macOS 14+; requires a separate engine install; unsigned, pre-1.0.</li>
           </ul>
         </div>
       </div>
