@@ -16,30 +16,50 @@
 //    shared: false  the credential is never visible to another process or
 //                   satisfiable by a different right
 //
-//  ── Where the prompt is raised, and why it matters ──────────────────────
-//  The obvious design — prompt with LAContext in the GUI, then send the XPC
-//  request — is not an authorization at all. The daemon would be trusting an
-//  unauthenticated message from a process it cannot vouch for; a caller that
-//  skipped the prompt entirely would be indistinguishable from one that
-//  passed it. Whatever the GUI shows is cosmetic unless the ROOT side is what
-//  demands the right.
+//  ── Where the prompt is raised, and why it moved ────────────────────────
+//  This originally had the ROOT DAEMON raise the prompt, on the reasoning that
+//  a GUI-side prompt is cosmetic: the daemon would be trusting an
+//  unauthenticated message, and a caller that skipped the prompt would be
+//  indistinguishable from one that passed it.
 //
-//  So the flow is the documented Authorization Services one, with the
-//  authenticating call deliberately on the privileged side:
+//  That reasoning is right about what must be VERIFIED, and wrong about where
+//  the prompt can be RAISED. Measured behaviour: the daemon reached
+//  AuthorizationCopyRights and every operation came back not-authorized. A
+//  launchd system daemon has no session to draw an authentication UI in, so
+//  asking it to raise one fails no matter how the right is defined.
 //
-//    1. GUI  — AuthorizationCreate (empty environment, NO flags). This makes
-//              an empty reference bound to the user's session. It does not
-//              authenticate and shows no UI.
-//    2. GUI  — AuthorizationMakeExternalForm, and the bytes ride with the
-//              request over XPC.
-//    3. Root — AuthorizationCreateFromExternalForm, then AuthorizationCopyRights
-//              for `rightName` with interaction allowed. THIS raises the
-//              system prompt, and its result is what gates execution.
+//  So the flow is now Apple's documented split, which puts the prompt where a
+//  session exists and the CHECK where the privilege is:
 //
-//  Because the reference carries the client's session, the prompt appears in
-//  that session and is attributed to Burrow rather than to a faceless root
-//  process. Because the right is defined with timeout 0 / shared false, step 3
-//  authenticates every single time.
+//    1. GUI  — AuthorizationCreate, then AuthorizationCopyRights for
+//              `rightName` with interaction allowed. THIS raises the system
+//              prompt, in the user's own session, where SecurityAgent can
+//              offer Touch ID and fall back to the password.
+//    2. GUI  — AuthorizationMakeExternalForm; the bytes ride with the request.
+//    3. Root — AuthorizationCreateFromExternalForm, then
+//              AuthorizationCopyRights WITHOUT interaction. This does not
+//              prompt; it asks the Security framework whether this reference
+//              genuinely holds the right.
+//
+//  Step 3 is what makes step 1 more than decoration. The daemon never trusts
+//  the client's word: the credential lives in the security session, not in the
+//  message, so a caller that skipped the prompt produces a reference that
+//  fails step 3. Forging it means forging a Security-framework credential, not
+//  editing an XPC payload.
+//
+//  ── The cost, stated plainly ────────────────────────────────────────────
+//  The credential must survive the hop from step 1 to step 3, so `timeout`
+//  cannot be 0. It is set to the smallest value that leaves room for the XPC
+//  round trip. Within that window a SECOND operation could be authorized by
+//  the first authentication.
+//
+//  What that does NOT open: `HelperReplayGuard` still serves each operation ID
+//  once, so a captured payload cannot be resent, and `shared: false` keeps the
+//  credential out of other processes. What it DOES open: an app that has
+//  already authenticated could start another operation within the window
+//  without a second prompt. That is a real relaxation of "a fresh
+//  authentication for every root operation", and it is the price of the
+//  prompt working at all.
 //
 //  The authentication UI is the system's, so it offers Touch ID where the
 //  hardware has it and falls back to the Mac login password otherwise. Burrow
@@ -73,13 +93,24 @@ enum HelperAuthorization {
     /// to get wrong. The daemon evaluating this right IS root; if root callers
     /// were allowed to satisfy it implicitly, the daemon would authorize
     /// itself and the prompt would quietly stop appearing.
+    /// The window, in seconds, in which the credential from the GUI's
+    /// authentication is still valid when the daemon checks it.
+    ///
+    /// This exists only to cover one XPC round trip. It is NOT a convenience
+    /// grace period, and it is deliberately far too short to span a user
+    /// deciding to run a second operation by hand — but see the header: within
+    /// it, a programmatic second operation would not re-prompt.
+    static let credentialWindowSeconds = 10
+
     static let rightDefinition: [String: Any] = [
         "class": "user",
         "group": "admin",
         "authenticate-user": true,
-        // No credential survives the call, and none is shared with anything
-        // else. Together these are "a fresh authentication every time".
-        "timeout": 0,
+        // Just long enough for the authenticated reference to reach the daemon
+        // and be checked. `timeout: 0` is the ideal and was tried first: it
+        // kills the credential before it crosses XPC, so the daemon's check
+        // always fails.
+        "timeout": credentialWindowSeconds,
         "shared": false,
         // Root is not a shortcut past the prompt.
         "allow-root": false,
@@ -93,22 +124,31 @@ enum HelperAuthorization {
 
     /// The daemon's `AuthorizationCopyRights` flags.
     ///
-    /// `extendRights` is what actually grants the right — without it the call
-    /// reports whether the right COULD be granted and grants nothing, which a
-    /// careless caller reads as success. `interactionAllowed` lets the system
-    /// raise the prompt, which is the entire point of doing this on the
-    /// privileged side.
-    static let daemonFlags: AuthorizationFlags = [.extendRights, .interactionAllowed]
+    /// `extendRights` is mandatory — without it the call reports whether the
+    /// right COULD be granted and grants nothing, which a careless caller
+    /// reads as success.
+    ///
+    /// `interactionAllowed` is deliberately ABSENT. The daemon must never
+    /// prompt: it has no session to draw in (which is what broke the previous
+    /// design), and more importantly a daemon that can prompt is a daemon that
+    /// can be made to prompt by anything that reaches it. Without the flag
+    /// this call is a pure question — does this reference hold the right —
+    /// and an unauthenticated reference simply fails.
+    static let daemonFlags: AuthorizationFlags = [.extendRights]
 
-    /// The client's flags: none. The GUI externalizes an empty reference and
-    /// leaves authentication to root. If the client ever starts
-    /// pre-authorizing, the prompt migrates out of the privileged process and
-    /// the daemon's own check degrades into decoration.
-    static let clientFlags: AuthorizationFlags = []
+    /// The client's flags. This is where the human is asked.
+    ///
+    /// `interactionAllowed` raises the system prompt in the user's own
+    /// session, so SecurityAgent can offer Touch ID and fall back to the
+    /// password. `preAuthorize` is what makes the credential available to the
+    /// daemon's later check rather than only to this process.
+    static let clientFlags: AuthorizationFlags = [.extendRights, .interactionAllowed, .preAuthorize]
 
     // MARK: - Outcome
 
-    enum Outcome: Equatable, Sendable {
+    /// Conforms to `Error` so the client can carry a refusal through a
+    /// `Result` without inventing a parallel error type that would drift.
+    enum Outcome: Equatable, Sendable, Error {
         case granted
         case denied
         case cancelled
@@ -150,19 +190,45 @@ enum HelperAuthorization {
     // Thin wrappers over the Security framework: the decisions above are pure
     // and tested, these just perform the calls.
 
-    /// GUI side. Create an empty authorization reference and externalize it.
-    /// Shows no UI and authenticates nothing — the daemon does that.
-    /// Returns `nil` if a reference can't be made, in which case the caller
-    /// must abandon the operation rather than proceed unauthorized.
-    static func makeExternalForm() -> Data? {
+    /// What the GUI's authentication attempt produced.
+    struct ClientAuthorization {
+        let externalForm: Data
+    }
+
+    /// GUI side. Ask the user to authenticate, then externalize the resulting
+    /// reference so the daemon can verify it.
+    ///
+    /// THIS is the call that shows the prompt. It blocks until the user
+    /// authenticates or dismisses, so it must not run on the main thread.
+    ///
+    /// Returns `nil` on cancellation or failure, and the caller must then
+    /// abandon the operation — never fall through to sending an
+    /// unauthenticated request, which the daemon would reject anyway but which
+    /// would blur the distinction between "declined" and "broken".
+    static func authenticate() -> Result<ClientAuthorization, Outcome> {
         var ref: AuthorizationRef?
-        let created = AuthorizationCreate(nil, nil, clientFlags, &ref)
-        guard created == errAuthorizationSuccess, let ref else { return nil }
+        guard AuthorizationCreate(nil, nil, [], &ref) == errAuthorizationSuccess, let ref else {
+            return .failure(.failed(errAuthorizationInternal))
+        }
         defer { AuthorizationFree(ref, []) }
 
+        // Non-empty rights array. Passing NULL here is the documented way to
+        // accidentally authorize everybody.
+        let status: OSStatus = rightName.withCString { name -> OSStatus in
+            var item = AuthorizationItem(name: name, valueLength: 0, value: nil, flags: 0)
+            return withUnsafeMutablePointer(to: &item) { itemPointer -> OSStatus in
+                var rights = AuthorizationRights(count: 1, items: itemPointer)
+                return AuthorizationCopyRights(ref, &rights, nil, clientFlags, nil)
+            }
+        }
+        let result = outcome(from: status)
+        guard result.permitsExecution else { return .failure(result) }
+
         var form = AuthorizationExternalForm()
-        guard AuthorizationMakeExternalForm(ref, &form) == errAuthorizationSuccess else { return nil }
-        return withUnsafeBytes(of: &form) { Data($0) }
+        guard AuthorizationMakeExternalForm(ref, &form) == errAuthorizationSuccess else {
+            return .failure(.failed(errAuthorizationInternal))
+        }
+        return .success(ClientAuthorization(externalForm: withUnsafeBytes(of: &form) { Data($0) }))
     }
 
     /// Which step produced the result. Kept because "authorization failed" was
@@ -189,9 +255,10 @@ enum HelperAuthorization {
         var diagnostic: String { "\(stage.rawValue) status=\(status) outcome=\(outcome)" }
     }
 
-    /// Daemon side. Rebuild the client's reference and REQUIRE `rightName`.
-    /// The returned decision is the gate: only `.granted` may be followed by
-    /// privileged work.
+    /// Daemon side. Rebuild the client's reference and check that it genuinely
+    /// holds `rightName`. Does NOT prompt — see `daemonFlags`. The returned
+    /// decision is the gate: only `.granted` may be followed by privileged
+    /// work.
     ///
     /// The rights array is always non-empty — passing NULL here is the
     /// documented way to accidentally authorize everybody.

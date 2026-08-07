@@ -61,11 +61,18 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
   strictly opt-in and takes its own one-time macOS approval. If you install
   it:
   - **It grants no standing privilege.** Installing the helper authorizes
-    nothing. Every operation that runs as root requires a fresh
-    authentication — no grace period, no cached credential, no
-    "authenticate once for this launch". This is enforced by the
-    authorization right's own definition (`timeout: 0`, `shared: false`,
-    `allow-root: false`), not merely by convention.
+    nothing, and there is no "authenticate once for this launch". You are
+    asked to authenticate for each privileged operation you start.
+  - **The one caveat, stated honestly:** the credential from that
+    authentication stays valid for a 10-second window, because it has to
+    survive the hop from the app to the helper. A second operation begun
+    inside that window would not prompt again. The window covers an
+    inter-process message, not a user changing their mind, and it is the
+    shortest value that lets the check work at all. The rest is enforced by
+    the right's own definition (`shared: false` keeps the credential out of
+    other processes, `allow-root: false` stops the root helper satisfying it
+    by itself), and each operation ID is served at most once so a captured
+    request cannot be replayed.
   - **It cannot be asked to run anything else.** The helper accepts three
     typed operations — scan, clean, optimize — and derives the command line
     itself. There is no field in its API for a path, an argument, a shell

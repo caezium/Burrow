@@ -645,7 +645,7 @@ struct SettingsView: View {
                 if let helperError {
                     footnote(helperError)
                 }
-                footnote("Runs Burrow's admin operations — scan, clean, optimize — through a small signed helper instead of a password-only prompt, so macOS can offer Touch ID. Installing it needs your approval once. It grants no standing access: every operation that runs as administrator still asks you to authenticate, every time, and the helper can only perform those three operations — it cannot be asked to run anything else.")
+                footnote("Runs Burrow's admin operations — scan, clean, optimize — through a small signed helper instead of a password-only prompt, so macOS can offer Touch ID. Installing it needs your approval once and grants no standing access: you're asked to authenticate for each operation you start. The helper can only perform those three operations — it cannot be asked to run anything else.")
             }
 
             section("Mole engine", "shippingbox") {

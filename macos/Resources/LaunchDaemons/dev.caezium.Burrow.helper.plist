@@ -37,8 +37,13 @@
 		<string>dev.caezium.Burrow</string>
 	</array>
 
-	<key>ProcessType</key>
-	<string>Interactive</string>
+	<!--
+	  No ProcessType. It was set to Interactive for no reason beyond "the
+	  daemon shows a prompt", it only ever influenced resource-limit tuning,
+	  and it is one of the few keys here that isn't strictly required — which
+	  makes it the wrong thing to carry while spawns are failing with
+	  EX_CONFIG. Keep this plist to the minimum SMAppService documents.
+	-->
 
 	<!--
 	  NO StandardOutPath / StandardErrorPath here, deliberately.

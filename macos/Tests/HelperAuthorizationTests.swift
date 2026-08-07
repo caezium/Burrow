@@ -40,10 +40,21 @@ final class HelperAuthorizationTests: XCTestCase {
 
     // MARK: - No caching, ever (the decision, as policy keys)
 
-    func testRightDefinition_expiresImmediatelySoEveryRunReauthenticates() {
+    /// The credential must survive exactly one XPC hop and no more.
+    ///
+    /// `timeout: 0` was the original design and is the ideal, but it kills the
+    /// credential before it reaches the daemon, so the daemon's check always
+    /// failed. The window is the smallest thing that works, and keeping it
+    /// small is the whole mitigation — so it is pinned rather than left to
+    /// drift upward the next time something feels slow.
+    func testRightDefinition_credentialWindowIsSmallAndBounded() {
         let definition = HelperAuthorization.rightDefinition
-        XCTAssertEqual(definition["timeout"] as? Int, 0,
-                       "timeout 0 = the credential is dead on arrival; the next root op prompts again")
+        let timeout = definition["timeout"] as? Int
+        XCTAssertNotNil(timeout)
+        XCTAssertGreaterThan(timeout ?? 0, 0, "0 kills the credential before the daemon can check it")
+        XCTAssertLessThanOrEqual(timeout ?? .max, 30,
+                                 "this covers an IPC round trip, not a user convenience grace period")
+        XCTAssertEqual(timeout, HelperAuthorization.credentialWindowSeconds)
     }
 
     func testRightDefinition_isNotSharedWithOtherProcessesOrRights() {
@@ -86,24 +97,38 @@ final class HelperAuthorizationTests: XCTestCase {
     //   * passing kAuthorizationFlagPreAuthorize in the DAEMON — that only
     //     asks "could this be authorized later", which is not an authorization.
 
-    func testDaemonFlags_extendRightsAndAllowInteraction() {
-        let flags = HelperAuthorization.daemonFlags
-        XCTAssertTrue(flags.contains(.extendRights), "without this no right is actually granted")
-        XCTAssertTrue(flags.contains(.interactionAllowed), "the daemon raises the prompt itself")
+    func testDaemonFlags_extendRights() {
+        XCTAssertTrue(HelperAuthorization.daemonFlags.contains(.extendRights),
+                      "without this no right is actually granted")
     }
 
-    func testDaemonFlags_neverPreAuthorizeOnly() {
-        XCTAssertFalse(HelperAuthorization.daemonFlags.contains(.preAuthorize),
-                       "pre-authorization asks whether auth is POSSIBLE; the daemon must require it")
+    /// The daemon must never be able to prompt.
+    ///
+    /// Practically it cannot — a launchd system daemon has no session to draw
+    /// in, which is precisely what broke the first design. But the stronger
+    /// reason is that a daemon which CAN prompt is a daemon anything reaching
+    /// it can make prompt. Without the flag its check is a pure question, and
+    /// an unauthenticated reference simply fails.
+    func testDaemonFlags_neverAllowInteraction() {
+        XCTAssertFalse(HelperAuthorization.daemonFlags.contains(.interactionAllowed),
+                       "the root daemon verifies; it never asks")
     }
 
-    /// The client does not authenticate — it only externalizes an empty
-    /// authorization reference for the daemon to evaluate. If the client ever
-    /// starts pre-authorizing, the prompt moves out of the privileged process
-    /// and the daemon's own check becomes decorative.
-    func testClientFlags_areInert() {
-        XCTAssertEqual(HelperAuthorization.clientFlags, [],
-                       "the GUI creates the reference; the root daemon is what demands the right")
+    /// The client is where the human is asked, so it needs interaction — and
+    /// `preAuthorize`, which is what makes the credential available to the
+    /// daemon's later check rather than only to this process.
+    func testClientFlags_promptAndPreAuthorize() {
+        let flags = HelperAuthorization.clientFlags
+        XCTAssertTrue(flags.contains(.interactionAllowed), "this is the call that shows the prompt")
+        XCTAssertTrue(flags.contains(.preAuthorize), "the daemon must be able to verify it afterwards")
+        XCTAssertTrue(flags.contains(.extendRights))
+    }
+
+    /// The two sides must not both prompt, and must not both merely verify.
+    /// Exactly one raises UI, and it is the one with a session.
+    func testFlags_exactlyOneSideCanPrompt() {
+        XCTAssertNotEqual(HelperAuthorization.clientFlags.contains(.interactionAllowed),
+                          HelperAuthorization.daemonFlags.contains(.interactionAllowed))
     }
 
     // MARK: - OSStatus → outcome (pure, exhaustive)

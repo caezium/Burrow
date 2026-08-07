@@ -234,11 +234,19 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     /// authentication prompt is raised by the DAEMON during this call.
     func run(operation: HelperOperation,
              onLine: @escaping (String) -> Void) -> ElevatedOutcome {
-        // A fresh, unauthenticated reference per operation. Creating it shows
-        // no UI; the daemon is what demands the right, and that is what makes
-        // the prompt appear.
-        guard let authorization = HelperAuthorization.makeExternalForm() else {
-            return .launchFailed
+        // Ask the user to authenticate. This is the prompt — raised here, in a
+        // real session, so SecurityAgent can offer Touch ID. The daemon then
+        // verifies the resulting reference without prompting.
+        let authorization: Data
+        switch HelperAuthorization.authenticate() {
+        case .success(let granted):
+            authorization = granted.externalForm
+        case .failure(let refusal):
+            helperClientLog.notice("authentication refused: \(String(describing: refusal), privacy: .public)")
+            // Every refusal reads as "you weren't authenticated, nothing ran",
+            // which is exactly `.authCancelled` in the taxonomy the GUI
+            // already renders for the osascript path.
+            return .authCancelled
         }
 
         let request = HelperRequest(operation: operation,
