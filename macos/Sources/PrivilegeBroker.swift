@@ -15,8 +15,12 @@
 //  and the auth-cancel classification IN MEMORY — no auth dialog, no sudo.
 //
 //  Streamed elevated runs stay in OperationFlow's SystemProcessPort (output
-//  tailed from a temp log); this seam covers the one-shot config commands
-//  (`mo touchid enable/disable`) where the only signal is the exit status.
+//  tailed from a temp log); this seam covers one-shot commands where the only
+//  signal is the exit status.
+//
+//  NOTE: the one-shot path has no production caller today — its only user was
+//  the `mo touchid enable/disable` setting, since removed. `AuthCancel` below
+//  is still shared with the streaming runner and must stay.
 //
 
 import Foundation

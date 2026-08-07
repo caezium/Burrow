@@ -132,13 +132,13 @@ final class PrivilegeBrokerTests: XCTestCase {
         let fake = FakePrivilegeBroker(outcome: .exited(0))
         MoleCLI.privilegeBroker = fake
 
-        let code = MoleCLI.runElevated(args: ["touchid", "enable"])
+        let code = MoleCLI.runElevated(args: ["clean", "--dry-run"])
 
         XCTAssertEqual(code, 0)
         XCTAssertEqual(fake.calls.count, 1)
         XCTAssertEqual(fake.calls.first?.executable, trusted,
                        "elevated runs resolve through the trusted list, never PATH")
-        XCTAssertEqual(fake.calls.first?.args, ["touchid", "enable"])
+        XCTAssertEqual(fake.calls.first?.args, ["clean", "--dry-run"])
     }
 
     func testRunElevated_authCancelSurfacesAsNonzeroButClassified() throws {
@@ -148,9 +148,9 @@ final class PrivilegeBrokerTests: XCTestCase {
         MoleCLI.privilegeBroker = FakePrivilegeBroker(outcome: .authCancelled)
 
         // Legacy Int32 caller: a dismissed prompt is still "didn't work".
-        XCTAssertNotEqual(MoleCLI.runElevated(args: ["touchid", "enable"]), 0)
+        XCTAssertNotEqual(MoleCLI.runElevated(args: ["clean", "--dry-run"]), 0)
         // New caller: the cancel is NAMED, distinct from a command failure.
-        XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["touchid", "enable"]), .authCancelled)
+        XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["clean", "--dry-run"]), .authCancelled)
     }
 
     func testRunElevated_commandFailureIsDistinctFromCancel() throws {
@@ -159,8 +159,8 @@ final class PrivilegeBrokerTests: XCTestCase {
         }
         MoleCLI.privilegeBroker = FakePrivilegeBroker(outcome: .exited(2))
 
-        XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["touchid", "disable"]), .exited(2))
-        XCTAssertEqual(MoleCLI.runElevated(args: ["touchid", "disable"]), 2)
+        XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["optimize"]), .exited(2))
+        XCTAssertEqual(MoleCLI.runElevated(args: ["optimize"]), 2)
     }
 
     /// No trusted `mo` → the broker is never asked to elevate; the result is
@@ -174,11 +174,11 @@ final class PrivilegeBrokerTests: XCTestCase {
         MoleCLI.privilegeBroker = fake
 
         if MoleCLI.trustedExecutable() == nil {
-            XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["touchid", "enable"]), .launchFailed)
-            XCTAssertEqual(MoleCLI.runElevated(args: ["touchid", "enable"]), 127)
+            XCTAssertEqual(MoleCLI.runElevatedClassified(args: ["clean", "--dry-run"]), .launchFailed)
+            XCTAssertEqual(MoleCLI.runElevated(args: ["clean", "--dry-run"]), 127)
             XCTAssertTrue(fake.calls.isEmpty, "a missing trusted mo must never reach the elevation spawn")
         } else {
-            _ = MoleCLI.runElevatedClassified(args: ["touchid", "enable"])
+            _ = MoleCLI.runElevatedClassified(args: ["clean", "--dry-run"])
             XCTAssertFalse(fake.calls.isEmpty, "with a trusted mo, the broker is reached")
         }
     }

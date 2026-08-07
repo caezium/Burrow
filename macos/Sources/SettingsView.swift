@@ -16,7 +16,6 @@
 
 import SwiftUI
 import AppKit
-import LocalAuthentication
 import ServiceManagement
 import UniformTypeIdentifiers
 
@@ -111,10 +110,6 @@ struct SettingsView: View {
     @State private var moleUpdating = false
     @State private var engineUpdatePolicy: MoleCLI.EngineUpdatePolicy = .unavailable
     @State private var copiedConfig = false
-    @State private var touchIDStatus = "—"
-    @State private var touchIDEnabled = false
-    @State private var touchIDBusy = false
-    @State private var touchIDAvailable = false
     @State private var helperStatus: HelperRegistrationStatus = .notRegistered
     @State private var helperBusy = false
     @State private var helperError: String?
@@ -167,7 +162,7 @@ struct SettingsView: View {
             .frame(width: 460, height: 440)
         }
         .onAppear {
-            refreshStatusLabels(); loadMoleVersion(); loadTouchIDStatus(); loadLaunchAtLogin()
+            refreshStatusLabels(); loadMoleVersion(); loadLaunchAtLogin()
             loadHelperStatus()
             whitelistPatterns = MoleWhitelist.live.patterns()
             menuBarSuppressed = AppDelegate.shared?.menuBarSuppressedByCompatibilityGuard ?? false
@@ -175,6 +170,10 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             fdaGranted = Privacy.hasFullDiskAccess()
             axTrusted = CleanScreen.inputLockPermitted()
+            // Approving the helper happens in System Settings, outside this
+            // app, so the row would otherwise still read "waiting for your
+            // approval" after the user came back having already granted it.
+            loadHelperStatus()
         }
     }
 
@@ -649,18 +648,6 @@ struct SettingsView: View {
                 footnote("Runs Burrow's admin operations — scan, clean, optimize — through a small signed helper instead of a password-only prompt, so macOS can offer Touch ID. Installing it needs your approval once. It grants no standing access: every operation that runs as administrator still asks you to authenticate, every time, and the helper can only perform those three operations — it cannot be asked to run anything else.")
             }
 
-            section("Touch ID for sudo", "touchid") {
-                infoRow("Status", touchIDStatus)
-                if touchIDAvailable {
-                    HStack {
-                        Spacer()
-                        if touchIDBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }
-                        PillButton(title: touchIDEnabled ? "Disable" : "Enable", filled: false) { toggleTouchID() }
-                    }
-                }
-                footnote("Lets `sudo` in a terminal accept your fingerprint instead of a password — including `mo` commands you run yourself. Separate from Burrow's own admin prompts, which are covered by the privileged helper above. Configured via `mo touchid` (pam_tid); turning it on or off needs your password once.")
-            }
-
             section("Mole engine", "shippingbox") {
                 infoRow("Version", moleVersion)
                 if engineUpdatePolicy == .external {
@@ -743,6 +730,28 @@ struct SettingsView: View {
         DispatchQueue.main.async { helperStatus = status }
     }
 
+    /// Watch for the approval landing.
+    ///
+    /// `register()` returns as soon as the request is filed, but the daemon
+    /// stays in `.requiresApproval` until the user allows it in System
+    /// Settings ▸ General ▸ Login Items & Extensions. That approval is
+    /// asynchronous and happens in another process, with no notification back
+    /// to us, so a one-shot read right after `register()` almost always
+    /// reports the pre-approval state and then never corrects itself.
+    ///
+    /// Polling for a bounded window is the whole fix. It stops as soon as the
+    /// status settles, and gives up rather than running forever if the user
+    /// walks away or dismisses the prompt.
+    private func pollHelperApproval(deadline: Date = Date().addingTimeInterval(90)) {
+        guard Date() < deadline else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            let status = PrivilegedHelperClient.shared.registrationStatus
+            helperStatus = status
+            guard status == .requiresApproval else { return }
+            pollHelperApproval(deadline: deadline)
+        }
+    }
+
     /// Install or remove the daemon. Both directions can throw — macOS refuses
     /// registration if the user declines, and we surface that rather than
     /// leaving the row silently unchanged.
@@ -769,55 +778,8 @@ struct SettingsView: View {
                 helperBusy = false
                 helperError = failure
                 helperStatus = status
-            }
-        }
-    }
-
-    // MARK: - Touch ID for sudo
-
-    /// Whether this Mac actually has a Touch ID sensor. `mo touchid status`
-    /// only reports configured-vs-not (never hardware presence), so we ask
-    /// LocalAuthentication directly — biometryType is .touchID only on Macs
-    /// with the sensor (set after a canEvaluatePolicy probe, even if no
-    /// finger is enrolled yet).
-    private func touchIDHardwarePresent() -> Bool {
-        let ctx = LAContext()
-        var err: NSError?
-        _ = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
-        return ctx.biometryType == .touchID
-    }
-
-    private func loadTouchIDStatus() {
-        let available = touchIDHardwarePresent()
-        DispatchQueue.global(qos: .userInitiated).async {
-            let res = try? MoleCLI.run(args: ["touchid", "status"], timeout: 15)
-            // Strip ANSI colour codes Mole wraps the status line in before matching.
-            let out = Ansi.strip(res?.stdout ?? "").lowercased()
-            let enabled = out.contains("is enabled")
-            DispatchQueue.main.async {
-                touchIDAvailable = available
-                touchIDEnabled = enabled
-                touchIDStatus = !available ? "Not available on this Mac"
-                    : (out.isEmpty ? "Unknown" : (enabled ? "Enabled" : "Disabled"))
-            }
-        }
-    }
-
-    private func toggleTouchID() {
-        guard !touchIDBusy else { return }
-        touchIDBusy = true
-        let cmd = touchIDEnabled ? "disable" : "enable"
-        DispatchQueue.global(qos: .userInitiated).async {
-            let code = MoleCLI.runElevated(args: ["touchid", cmd])
-            DispatchQueue.main.async {
-                touchIDBusy = false
-                loadTouchIDStatus()
-                if code != 0 {
-                    let alert = NSAlert()
-                    alert.messageText = NSLocalizedString("Couldn't update Touch ID for sudo", comment: "")
-                    alert.informativeText = String(format: NSLocalizedString("`mo touchid %@` didn't complete (the password prompt may have been cancelled). You can also run it in a terminal.", comment: ""), cmd)
-                    alert.runModalQuiet()
-                }
+                // Installing files the request; the user approves it elsewhere.
+                if install, status == .requiresApproval { pollHelperApproval() }
             }
         }
     }

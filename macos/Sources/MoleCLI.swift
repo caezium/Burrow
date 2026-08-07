@@ -289,10 +289,14 @@ enum MoleCLI {
     /// Run `mo <args>` ONCE with administrator rights via the macOS auth
     /// dialog. That dialog is PASSWORD-ONLY: the `system.privilege.admin`
     /// right authenticates through SecurityAgent's classic mechanism, which
-    /// never offers Touch ID — pam_tid (`mo touchid`) covers terminal
-    /// `sudo`, not this path. Blocking — call off the main thread. For
-    /// one-shot privileged config like `touchid enable/disable`, not for
-    /// streamed jobs (OperationFlow does those).
+    /// never offers Touch ID. Blocking — call off the main thread. For
+    /// one-shot privileged commands, not for streamed jobs (OperationFlow
+    /// does those).
+    ///
+    /// NOTE: currently has no production caller. Its only user was the
+    /// `mo touchid enable/disable` setting, which was removed. Kept for now
+    /// because it is the tested one-shot counterpart to the streaming path,
+    /// but it is a candidate for deletion.
     ///
     /// The spawn now goes through `PrivilegeBroker` so the osascript quoting
     /// and auth-cancel classification are testable in memory (issue #48); the
