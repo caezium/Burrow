@@ -1,14 +1,15 @@
-name: Deploy site to burrow.henryzh.dev
+name: Deploy site to burrow.computer
 
-# Publishes the static site in docs/ to Cloudflare Workers (static assets,
-# config in wrangler.jsonc) on every push to main.
+# Publishes the static site in docs/ to Cloudflare Workers on every push to
+# main. Config in wrangler.jsonc; worker/index.js only exists to 301 the
+# previous hostname, everything else is served straight from assets.
 # One-time setup: create an API token with the "Edit Cloudflare Workers"
 # template and add it as the CLOUDFLARE_API_TOKEN repo secret.
 
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'scripts/deploy-site.sh', 'scripts/inject-site-analytics.sh', 'scripts/prepare-site-assets.sh', 'wrangler.jsonc', '.github/workflows/deploy-site.yml']
+    paths: ['docs/**', 'worker/**', 'scripts/deploy-site.sh', 'scripts/inject-site-analytics.sh', 'scripts/prepare-site-assets.sh', 'wrangler.jsonc', '.github/workflows/deploy-site.yml']
   workflow_dispatch:
 
 permissions:
