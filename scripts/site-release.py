@@ -681,91 +681,124 @@ def patch_readme(text, data):
 
 # --- install page ---------------------------------------------------------
 
-INSTALL_CSS = """  .inst-grid { margin-top:36px; display:grid; grid-template-columns:repeat(2,1fr); border-top:1px solid var(--hair-2); }
-  .inst-cell { padding:28px 26px; border-bottom:1px solid var(--hair-2); }
-  .inst-cell:nth-child(odd) { border-right:1px solid var(--hair-2); }
-  .inst-cell h2 { font-family:var(--heading); font-weight:600; font-size:19px; letter-spacing:-0.02em; margin:0; }
-  .inst-cell p { margin:10px 0 0; font-size:14px; line-height:1.6; color:var(--ink-2); }
-  .inst-code { position:relative; margin-top:16px; padding:13px 15px; border-radius:12px; background:rgba(0,0,0,0.32);
-    border:1px solid var(--hair-2); font-family:var(--mono); font-size:12.5px; line-height:1.7; color:var(--ink);
-    white-space:pre; overflow-x:auto; }
-  .inst-code .c { color:var(--ink-3); }
-  .inst-copy { position:absolute; top:9px; right:9px; padding:4px 9px; border-radius:7px; cursor:pointer;
-    font-family:var(--mono); font-size:10.5px; color:var(--ink-3); background:var(--surface-2);
-    border:1px solid var(--hair-2); transition:color .18s; }
-  .inst-copy:hover { color:var(--ink); }
-  .inst-copy.done { color:var(--green); }
-  .inst-go { display:inline-flex; align-items:center; gap:8px; margin-top:16px; font-size:13.5px; font-weight:600;
-    color:var(--accent); transition:color .18s; }
-  .inst-go:hover { color:#E7C49A; }
-  .inst-cell p.sub { margin-top:10px; font-size:12px; color:var(--ink-3); }
-  .inst-cell p.sub a { color:var(--ink-2); text-decoration:underline; text-underline-offset:2px; }
-  .inst-go svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2.2; }
-  .req { margin-top:40px; padding-top:26px; border-top:1px solid var(--hair-2); display:grid;
-    grid-template-columns:repeat(3,1fr); gap:22px; font-size:13.5px; color:var(--ink-2); line-height:1.6; }
-  .req b { display:block; color:var(--ink); font-size:14px; margin-bottom:6px; }
-  @media (max-width:760px) { .inst-grid,.req { grid-template-columns:1fr; } .inst-cell:nth-child(odd) { border-right:0; } }
+INSTALL_CSS = """  /* Centered platform picker. */
+  .hero { text-align:center; padding-top:72px; padding-bottom:0; }
+  .hero h1 { margin:0 auto; }
+  .hero p { margin-left:auto; margin-right:auto; max-width:34rem; }
+  main { max-width:none; }
+  .pick { margin-top:52px; }
+  .pick > .lede { font-size:12.5px; color:var(--ink-3); margin:0 0 22px; text-align:center; }
+  .plats { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; max-width:860px; margin:0 auto; }
+  .plat { display:flex; flex-direction:column; align-items:center; text-align:center; padding:26px 22px 22px;
+    border-radius:20px; border:1px solid var(--hair); background:var(--surface); }
+  .plat .gl { display:flex; height:28px; align-items:center; justify-content:center; color:var(--ink); }
+  .plat .gl svg { width:24px; height:24px; }
+  .plat h2 { font-family:var(--heading); font-weight:600; font-size:15px; letter-spacing:-0.02em;
+    margin:12px 0 0; }
+  .plat .kind { margin:4px 0 0; font-size:12px; color:var(--ink-3); }
+  .plat .tag { display:inline-block; margin-top:8px; padding:2px 8px; border-radius:999px;
+    font-family:var(--mono); font-size:10px; letter-spacing:.04em; color:var(--accent);
+    background:rgba(217,160,102,0.14); border:1px solid rgba(217,160,102,0.26); }
+  .plat .foot { margin-top:auto; width:100%; padding-top:22px; }
+  .dlbtn { display:flex; width:100%; align-items:center; justify-content:center; gap:8px; padding:10px 16px;
+    border-radius:999px; background:var(--accent); color:var(--on-accent); border:1px solid var(--accent);
+    font-size:13.5px; font-weight:600; transition:background .18s, border-color .18s; }
+  .dlbtn:hover { background:#E7C49A; border-color:#E7C49A; }
+  .dlbtn svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:2.2; }
+  .cmdbtn { display:flex; width:100%; align-items:center; justify-content:space-between; gap:10px;
+    padding:9px 10px 9px 14px; border-radius:999px; border:1px solid var(--hair); background:rgba(0,0,0,0.28);
+    cursor:pointer; font-family:var(--mono); font-size:11.5px; color:var(--ink); transition:border-color .18s; }
+  .cmdbtn:hover { border-color:var(--ink-3); }
+  .cmdbtn .lab { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cmdbtn .st { flex:none; font-size:10px; color:var(--ink-3); }
+  .cmdbtn.done .st { color:var(--green); }
+  .dlcount { margin-top:34px; text-align:center; font-size:12.5px; color:var(--ink-3); }
+  .dlcount b { font-weight:600; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+  .rel { margin-top:9px; text-align:center; font-size:12.5px; line-height:1.6; color:var(--ink-3); }
+  .rel a { color:var(--accent); text-decoration:underline; text-underline-offset:2px; }
+  @media (max-width:760px) { .plats { grid-template-columns:1fr; max-width:380px; } }
 """
 
 MAC_SIZE = "22 MB"
 WIN_VERSION = "0.10.0"
 
 ARROW = ('<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" '
-         'aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>')
+         'aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5M5 21h14"/></svg>')
+
+GLYPHS = {
+    "mac": ('<svg viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true"><path d="M788.1 340.9c-5.8 4.5-108.2 '
+            '62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 '
+            '123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 '
+            '126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.2 0 129.8 2.6 196.3 '
+            '99.2zm-234-181.1c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.2 '
+            '32.4-54.4 84.4-54.4 136.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.8-71.3z"/></svg>'),
+    "win": ('<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7.5-1v7.2H3zM11.8 4.3'
+            'L21 3v8.7h-9.2zM3 12.9h7.5v7.2L3 18.8zM11.8 12.9H21V21l-9.2-1.3z"/></svg>'),
+    "brew": ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" '
+             'stroke-linejoin="round" aria-hidden="true"><path d="M5 8h11v7a5 5 0 01-5 5H10a5 5 0 01-5-5z"/>'
+             '<path d="M16 10h1.5a2.5 2.5 0 010 5H16"/><path d="M7 4.5c0-.8.6-1.2.6-2M11 4.5c0-.8.6-1.2.6-2"/></svg>'),
+}
 
 INSTALL_JS = """
 <script>
-  document.querySelectorAll('.inst-code').forEach(function (block) {
-    var btn = block.querySelector('.inst-copy'); if (!btn) return;
+  document.querySelectorAll('.cmdbtn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      if (navigator.clipboard) navigator.clipboard.writeText(block.getAttribute('data-copy') || '').catch(function () {});
-      btn.textContent = 'copied'; btn.classList.add('done');
-      setTimeout(function () { btn.textContent = 'copy'; btn.classList.remove('done'); }, 1500);
+      if (navigator.clipboard) navigator.clipboard.writeText(btn.getAttribute('data-copy') || '').catch(function () {});
+      var st = btn.querySelector('.st'); btn.classList.add('done'); st.textContent = 'copied';
+      setTimeout(function () { btn.classList.remove('done'); st.textContent = 'copy'; }, 1500);
     });
   });
 </script>"""
 
 
-def render_install(version, stars=None):
-    body = f"""    <div class="inst-grid">
-      <div class="inst-cell">
-        <h2>Homebrew</h2>
-        <p>Installs the Developer ID signed, Apple-notarized app with its engine bundled. Quarantine is preserved so Gatekeeper can validate the ticket.</p>
-        <div class="inst-code" data-copy="brew install --cask caezium/tap/burrow"><button class="inst-copy" data-burrow-analytics="homebrew.install_page">copy</button><span class="c"># app + bundled engine</span>
-brew install --cask caezium/tap/burrow</div>
-      </div>
-      <div class="inst-cell">
-        <h2>Direct download</h2>
-        <p>The notarized zip from GitHub releases. Unzip into <code>/Applications</code> and keep quarantine intact so Gatekeeper can verify the ticket.</p>
-        <a class="inst-go" href="{REPO}/releases/download/v{version}/Burrow-{version}.zip" data-burrow-analytics="download.install_page">Download Burrow {version} for macOS {ARROW}</a>
-        <p class="sub">Universal, {MAC_SIZE} zip. <a href="{REPO}/releases" target="_blank" rel="noopener">All releases</a></p>
-      </div>
-      <div class="inst-cell">
-        <h2>Windows (beta)</h2>
-        <p>A native WinUI 3 and .NET 8 build, reaching parity tool by tool. It ships as a zip with the conductor and engine bundled; an installer is coming.</p>
-        <a class="inst-go" href="{REPO}/releases/download/v{WIN_VERSION}/BurrowWin-{WIN_VERSION}-win-x64.zip" data-burrow-analytics="download.windows">Download BurrowWin {WIN_VERSION} for x64 {ARROW}</a>
-        <p class="sub">The Windows build trails the Mac release; {WIN_VERSION} is the latest preview.</p>
-      </div>
-      <div class="inst-cell">
-        <h2>Build from source</h2>
-        <p>Needs <code>xcodegen</code>. Produces a locally ad-hoc signed build with checksum-pinned frameworks.</p>
-        <div class="inst-code" data-copy="git clone https://github.com/caezium/Burrow.git&#10;cd Burrow&#10;bash scripts/release.sh"><button class="inst-copy">copy</button>git clone https://github.com/caezium/Burrow.git
-cd Burrow
-bash scripts/release.sh</div>
-      </div>
-    </div>
+def render_install(version, downloads, stars=None):
+    brew = "brew install --cask caezium/tap/burrow"
+    body = f"""    <div class="pick">
+      <p class="lede">Pick your platform to download the latest build.</p>
+      <div class="plats">
 
-    <div class="req">
-      <div><b>Requirements</b>macOS 14 or later, on Apple Silicon and Intel. Windows 10 and 11 for the preview build.</div>
-      <div><b>Updates</b>In-app updates are signed and delivered over Sparkle. Homebrew installs update with <code>brew upgrade</code>.</div>
-      <div><b>Uninstalling</b>Drag Burrow to the Trash, or <code>brew uninstall --cask burrow</code>. No background agents are left behind.</div>
+        <div class="plat">
+          <span class="gl">{GLYPHS["mac"]}</span>
+          <h2>macOS</h2>
+          <p class="kind">.zip · Apple Silicon &amp; Intel</p>
+          <div class="foot">
+            <a class="dlbtn" href="{REPO}/releases/download/v{version}/Burrow-{version}.zip" data-burrow-analytics="download.install_mac">Download {ARROW}</a>
+          </div>
+        </div>
+
+        <div class="plat">
+          <span class="gl">{GLYPHS["win"]}</span>
+          <h2>Windows</h2>
+          <p class="kind">.zip · 64-bit</p>
+          <span class="tag">beta · {WIN_VERSION}</span>
+          <div class="foot">
+            <a class="dlbtn" href="{REPO}/releases/download/v{WIN_VERSION}/BurrowWin-{WIN_VERSION}-win-x64.zip" data-burrow-analytics="download.install_windows">Download {ARROW}</a>
+          </div>
+        </div>
+
+        <div class="plat">
+          <span class="gl">{GLYPHS["brew"]}</span>
+          <h2>Homebrew</h2>
+          <p class="kind">cask · app + engine</p>
+          <div class="foot">
+            <button type="button" class="cmdbtn" data-copy="{brew}" data-burrow-analytics="homebrew.install_page" aria-label="copy the Homebrew install command"><span class="lab">{brew}</span><span class="st">copy</span></button>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="dlcount">Already downloaded by <b>{downloads:,}</b> people</p>
+      <p class="rel">Latest release v{version}, a {MAC_SIZE} universal build.
+        Looking for an older version, the Windows preview notes, or the checksums?
+        <a href="{REPO}/releases" target="_blank" rel="noopener">Browse all releases</a>.<br>
+        Prefer to compile it yourself? The <a href="{REPO}#readme" target="_blank" rel="noopener">README</a> has the build steps.</p>
     </div>
 {INSTALL_JS}"""
     return page_html(
-        title="Install Burrow",
-        desc="Install Burrow on macOS with Homebrew or a notarized direct download, try the Windows preview, or build it from source.",
-        og_url=f"{SITE}/install.html", hero_h1="Install Burrow",
-        hero_p="Free and MIT licensed, on as many machines as you like. No account, no trial, no subscription.",
+        title="Download Burrow",
+        desc="Download Burrow for macOS or Windows, or install it with Homebrew. Free, MIT licensed, no account and no subscription.",
+        og_url=f"{SITE}/install.html", hero_h1="Download Burrow",
+        hero_p="Get the app for your machine. Free, native, and open source, on as many machines as you like.",
         hero_extra="", main_html=body, extra_css=INSTALL_CSS, active="install", stars=stars)
 
 
@@ -997,7 +1030,7 @@ def main():
 
     targets = {
         INDEX: patch_index(INDEX.read_text(encoding="utf-8"), releases[0], stats),
-        INSTALL_HTML: render_install(releases[0]["version"], stars),
+        INSTALL_HTML: render_install(releases[0]["version"], stats["downloads"], stars),
         COMPARE_HTML: render_compare(compare, stars),
         BLOG_INDEX: render_blog_index(blog, stars),
         SITEMAP: render_sitemap(blog_posts),
