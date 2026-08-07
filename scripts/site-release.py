@@ -85,6 +85,21 @@ LOGO_SVG = ('<svg class="mk" viewBox="0 0 100 100" aria-hidden="true">'
             '<path d="M27 63 a23 23 0 0 1 46 0 Z" fill="#F3ECDD"/>'
             '<rect x="40" y="63" width="20" height="6" rx="3" fill="#241B12"/></svg>')
 
+GITHUB_SVG = ('<svg class="icon icon--github" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+              '<path d="M12 .5a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.3-1.8-1.3-1.8'
+              '-1.1-.7 0-.7 0-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3'
+              '-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0C17.3 5 18.3 '
+              '5.3 18.3 5.3c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 '
+              '.3.2.7.8.6A12 12 0 0012 .5z"/></svg>')
+
+APPLE_SVG = ('<svg class="icon icon--apple" viewBox="0 0 814 1000" aria-hidden="true">'
+             '<path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 '
+             '71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 '
+             '40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 '
+             '43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.2 0 129.8 2.6 196.3 99.2zm-234-181.1c31.1-36.9 '
+             '53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.2 32.4-54.4 '
+             '84.4-54.4 136.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.8-71.3z"/></svg>')
+
 
 def esc(s):
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
@@ -142,21 +157,38 @@ SHARED_CSS = """  @font-face { font-family: "Geist"; src: url("assets/fonts/Geis
   ::selection { background: rgba(217,160,102,0.26); }
   .page { max-width: var(--page); margin: 0 auto; padding: 0 var(--pad); }
   .mono { font-family: var(--mono); }
-  .topbar { position:sticky; top:0; z-index:50; padding:14px 0; background:rgba(18,18,23,0.72);
-    backdrop-filter:saturate(150%) blur(14px); -webkit-backdrop-filter:saturate(150%) blur(14px); border-bottom:1px solid var(--hair-2); }
-  .topbar .in { display:flex; align-items:center; gap:16px; }
-  .brand { display:flex; align-items:center; gap:10px; }
-  .brand .mk { width:26px; height:26px; border-radius:8px; }
-  .brand .nm { font-family:var(--mono); font-size:15px; }
-  .nav { margin-left:auto; display:flex; gap:2px; }
-  .nav a { font-family:var(--mono); font-size:12.5px; color:var(--ink-2); padding:9px 14px; border-radius:12px; transition:.15s; }
-  .nav a:hover { color:var(--ink); background:var(--surface-2); }
+  /* Floating pill nav — same shell as the landing page (docs/index.html). */
+  .topbar { position:sticky; top:0; z-index:50; padding-top:16px; margin-bottom:-8px; }
+  .topbar .in { height:60px; display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:0 10px 0 16px; border-radius:999px; border:1px solid var(--hair); background:rgba(18,18,23,0.72);
+    backdrop-filter:saturate(150%) blur(14px); -webkit-backdrop-filter:saturate(150%) blur(14px);
+    box-shadow:0 1px 2px rgba(0,0,0,0.28); }
+  .brand { display:flex; align-items:center; gap:10px; font-size:1.05rem; font-weight:600;
+    letter-spacing:-0.02em; transition:transform .18s; }
+  .brand:hover { transform:scale(1.03); }
+  .brand .mk { width:28px; height:28px; border-radius:8px; flex:none; }
+  .nav { flex:1; min-width:0; display:flex; align-items:center; justify-content:center; gap:22px; }
+  .nav a { font-size:0.9rem; color:var(--ink-2); transition:color .18s; }
+  .nav a:hover { color:var(--ink); }
   .nav a.on { color:var(--accent); }
-  .btn { font-weight:600; font-size:13.5px; display:inline-flex; align-items:center; padding:9px 18px;
-    border-radius:999px; border:1.5px solid var(--accent); background:var(--accent); color:var(--on-accent); white-space:nowrap; }
-  .btn:hover { background:#E3AD77; border-color:#E3AD77; }
-  .hero { padding-top: 56px; padding-bottom: 8px; }
-  .hero h1 { font-family:var(--heading); font-weight:600; font-size:clamp(40px,7vw,64px); line-height:1.04; margin:0; }
+  .nav-right { display:flex; align-items:center; gap:12px; flex:none; }
+  .nav-github { display:inline-flex; align-items:center; color:var(--ink-2); transition:color .18s, transform .18s; }
+  .nav-github:hover { color:var(--ink); transform:scale(1.04); }
+  .icon { fill:currentColor; flex:none; display:block; }
+  .icon--github { width:19px; height:19px; }
+  .icon--apple { width:14px; height:17px; }
+  .btn { font-weight:600; font-size:0.875rem; display:inline-flex; align-items:center; justify-content:center;
+    padding:8px 15px; border-radius:999px; border:1px solid var(--accent); background:var(--accent);
+    color:var(--on-accent); white-space:nowrap; transition:background .18s, border-color .18s; }
+  .btn:hover { background:#E7C49A; border-color:#E7C49A; }
+  .btn-inner { display:inline-flex; align-items:center; gap:8px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .btn-inner { transition:transform .18s; }
+    .btn:hover .btn-inner { transform:scale(.95); }
+  }
+  .hero { padding-top: 72px; padding-bottom: 8px; }
+  .hero h1 { font-family:var(--heading); font-weight:600; font-size:clamp(40px,7vw,64px); line-height:1.04;
+    letter-spacing:-0.025em; margin:0; }
   .hero p { color:var(--ink-2); margin:14px 0 0; max-width:620px; }
   .hero .count { font-family:var(--mono); font-size:12.5px; color:var(--ink-3); margin-top:12px; }
   .hero .count a { color:var(--ink-2); text-decoration:underline; text-underline-offset:2px; }
@@ -164,12 +196,19 @@ SHARED_CSS = """  @font-face { font-family: "Geist"; src: url("assets/fonts/Geis
   .card { background:var(--surface); border:1px solid var(--hair-2); border-radius:var(--r-card); box-shadow:0 1px 0 rgba(255,255,255,0.05) inset; }
   code { font-family:var(--mono); font-size:0.85em; padding:1px 6px; border-radius:7px; background:var(--surface-2); border:1px solid var(--hair-2); color:var(--ink); white-space:nowrap; }
   main { padding-top: 8px; padding-bottom: 24px; }
-  footer { padding:36px 0 56px; border-top:1px solid var(--hair-2); margin-top:8px; }
-  footer .page { font-size:13px; color:var(--ink-3); display:flex; gap:14px; flex-wrap:wrap; }
-  footer a { color:var(--ink-2); text-decoration:underline; text-underline-offset:2px; }
-  footer a:hover { color:var(--accent); }
-  @media (max-width: 720px) { :root { --pad: 22px; } }
-  @media (max-width: 560px) { .brand .nm { display:none; } .topbar .btn { display:none; } }
+  /* Minimal footer — same shape as the landing page. */
+  footer { padding:34px 0 48px; border-top:1px solid var(--hair-2); margin-top:8px; }
+  .footer-top { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
+    font-size:12.5px; color:var(--ink-3); }
+  .footer-links { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  .footer-links a { transition:color .18s; }
+  .footer-links a:hover { color:var(--ink); }
+  .footer-fine { margin-top:22px; font-size:11.5px; line-height:1.6; color:var(--ink-3); }
+  .footer-fine a { color:var(--ink-2); text-decoration:underline; text-underline-offset:2px; }
+  .footer-fine a:hover { color:var(--accent); }
+  @media (max-width: 720px) { :root { --pad: 24px; } .topbar { padding-left:8px; padding-right:8px; } .nav { display:none; } }
+  @media (max-width: 560px) { .nav-label--full { display:none; } }
+  @media (min-width: 561px) { .nav-label--short { display:none; } }
 """
 
 
@@ -178,7 +217,9 @@ def page_html(*, title, desc, og_url, hero_h1, hero_p, hero_extra, main_html, ex
     def navlink(href, label, key):
         on = ' class="on"' if active == key else ""
         return f'<a href="{href}"{on}>{label}</a>'
-    nav = (f'<nav class="nav">{navlink("releases.html", "Changelog", "changelog")}'
+    nav = (f'<nav class="nav">{navlink("./#tools", "Tools", "tools")}'
+           f'{navlink("./#install", "Install", "install")}'
+           f'{navlink("releases.html", "Changelog", "changelog")}'
            f'{navlink("roadmap.html", "Roadmap", "roadmap")}</nav>')
     extra = f'\n  <p class="count">{hero_extra}</p>' if hero_extra else ""
     return f"""<!DOCTYPE html>
@@ -204,9 +245,12 @@ def page_html(*, title, desc, og_url, hero_h1, hero_p, hero_extra, main_html, ex
 
 <div class="topbar">
   <div class="page in">
-    <a class="brand" href="./" aria-label="Burrow">{LOGO_SVG}<span class="nm">burrow</span></a>
+    <a class="brand" href="./" aria-label="Burrow">{LOGO_SVG}<span>Burrow</span></a>
     {nav}
-    <a class="btn" href="{REPO}/releases/latest" target="_blank" rel="noopener" data-burrow-analytics="download.{active}">Download</a>
+    <div class="nav-right">
+      <a class="nav-github" href="{REPO}" target="_blank" rel="noopener" aria-label="View Burrow on GitHub">{GITHUB_SVG}</a>
+      <a class="btn" href="{REPO}/releases/latest" target="_blank" rel="noopener" data-burrow-analytics="download.{active}"><span class="btn-inner">{APPLE_SVG}<span class="nav-label--full">Download for Mac</span><span class="nav-label--short">Download</span></span></a>
+    </div>
   </div>
 </div>
 
@@ -221,11 +265,17 @@ def page_html(*, title, desc, og_url, hero_h1, hero_p, hero_extra, main_html, ex
 
 <footer>
   <div class="page">
-    <span>Burrow — free, open-source, MIT.</span>
-    <a href="./">Home</a>
-    <a href="releases.html">Changelog</a>
-    <a href="roadmap.html">Roadmap</a>
-    <a href="{REPO}" target="_blank" rel="noopener">GitHub</a>
+    <div class="footer-top">
+      <a class="brand" href="./" aria-label="Burrow">{LOGO_SVG}<span>Burrow</span></a>
+      <div class="footer-links">
+        <a href="{REPO}" target="_blank" rel="noopener">GitHub</a>
+        <a href="releases.html">Changelog</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="{REPO}/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+        <a href="{REPO}/blob/main/TELEMETRY.md" target="_blank" rel="noopener">Telemetry</a>
+        <a href="{REPO}/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+      </div>
+    </div>
   </div>
 </footer>
 </body>
