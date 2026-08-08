@@ -12,6 +12,22 @@
 import Foundation
 import Darwin
 
+/// Exit statuses the elevated *wrapper* produces, as opposed to anything the
+/// elevated command itself can return.  Spelled once here because the shell
+/// that emits them and the UI that has to explain them live in different
+/// files, and a drifting number turns a precise refusal into a bare code.
+enum ElevatedExitCode {
+    /// A pinned identity, or the plan's expiry, failed its check at the
+    /// execution boundary.  Nothing ran.
+    static let boundaryCheckFailed: Int32 = 124
+    /// The root-owned log sink could not be created.  Nothing ran.
+    static let logSinkUnavailable: Int32 = 125
+    /// The executable failed validation before launch.  Nothing ran.
+    static let executableRefused: Int32 = 126
+    /// The elevated process could not be spawned at all.
+    static let launchFailed: Int32 = 127
+}
+
 struct InvokingUserIdentity: Sendable, Equatable {
     struct Account: Sendable, Equatable {
         let uid: uid_t
@@ -156,10 +172,50 @@ struct PinnedFileIdentity: Sendable, Equatable, Codable {
 }
 
 struct ValidatedElevatedCommand: Sendable, Equatable {
+    /// What "this executable cannot be swapped under us" is allowed to mean.
+    ///
+    /// These are two genuinely different situations and one rule cannot serve
+    /// both.  A system tool lives in a tree Apple owns, so demanding root
+    /// ownership all the way up costs nothing.  The bundled engine lives
+    /// inside Burrow.app, and on every ordinary install — drag-to-Applications
+    /// or a Homebrew cask — the bundle is owned by the account that installed
+    /// it, beneath `/Applications`, which macOS itself ships as `root:admin`
+    /// mode 0775.  Requiring root ownership there is not a stricter policy, it
+    /// is an unsatisfiable one: it refuses every real installation.
+    enum OwnershipPolicy: Equatable, Sendable {
+        /// Root owns the executable and every ancestor, and nothing along the
+        /// path is group- or world-writable.
+        case systemOwned
+        /// Inside the current signed app bundle.  Ownership is whatever the
+        /// installer left behind, so authority comes from the resource seal —
+        /// `codesign --verify --strict`, re-run AS ROOT at the execution
+        /// boundary — plus the pinned inode of the executable and every
+        /// ancestor.  A world-writable component is still refused: that would
+        /// let an unrelated account do the swapping, which no install layout
+        /// legitimately requires.
+        case signedBundle
+
+        /// Owners this policy accepts, in addition to root.
+        func acceptsOwner(_ owner: UInt32, invokingUser: uid_t) -> Bool {
+            switch self {
+            case .systemOwned: return owner == 0
+            case .signedBundle: return owner == 0 || owner == UInt32(invokingUser)
+            }
+        }
+
+        /// Write bits that disqualify a component.
+        var forbiddenWriteBits: mode_t {
+            switch self {
+            case .systemOwned: return 0o022   // group and other
+            case .signedBundle: return 0o002  // other only
+            }
+        }
+    }
+
     enum ValidationError: LocalizedError {
         case nonCanonicalExecutable
         case executableNotRegular
-        case executableNotRootOwned
+        case executableNotRootOwned(String)
         case executableMutable(String)
         case unsignedBundle
 
@@ -167,7 +223,8 @@ struct ValidatedElevatedCommand: Sendable, Equatable {
             switch self {
             case .nonCanonicalExecutable: return "The privileged executable path is not canonical."
             case .executableNotRegular: return "The privileged executable is not a regular file."
-            case .executableNotRootOwned: return "The privileged executable is not owned by root."
+            case .executableNotRootOwned(let p):
+                return "The privileged executable is not owned by root or by you at \(p)."
             case .executableMutable(let p): return "The privileged executable can be replaced at \(p)."
             case .unsignedBundle: return "The bundled cleanup engine could not be verified."
             }
@@ -182,16 +239,31 @@ struct ValidatedElevatedCommand: Sendable, Equatable {
     let invokingUser: InvokingUserIdentity
     let signedBundlePath: String?
 
+    /// `requireCurrentBundle` selects the policy rather than adding a second
+    /// knob: an executable inside our own signed bundle is exactly the case
+    /// that cannot be root-owned, and it is also the only case that carries a
+    /// seal to verify instead.  Keeping them one decision means a call site
+    /// cannot ask for the seal and the impossible ownership rule at once.
     static func prepare(executable rawPath: String,
                         invokingUser: InvokingUserIdentity,
                         requireCurrentBundle: Bool,
-                        requiredOwner: uid_t = 0) throws -> Self {
+                        bundlePath: @autoclosure () -> String? = Bundle.main.bundleURL.path) throws -> Self {
         guard let canonical = InvokingUserIdentity.canonicalPath(rawPath), canonical == rawPath else {
             throw ValidationError.nonCanonicalExecutable
         }
         let executable = try PinnedFileIdentity.capture(canonical)
         guard executable.isRegular else { throw ValidationError.executableNotRegular }
-        guard executable.owner == requiredOwner else { throw ValidationError.executableNotRootOwned }
+
+        var signedBundle: String?
+        if requireCurrentBundle {
+            guard let raw = bundlePath(),
+                  let bundle = InvokingUserIdentity.canonicalPath(raw),
+                  canonical.hasPrefix(bundle + "/") else {
+                throw ValidationError.unsignedBundle
+            }
+            signedBundle = bundle
+        }
+        let policy: OwnershipPolicy = signedBundle == nil ? .systemOwned : .signedBundle
 
         let url = URL(fileURLWithPath: canonical)
         var componentPaths = ["/"]
@@ -200,26 +272,26 @@ struct ValidatedElevatedCommand: Sendable, Equatable {
             cursor += "/" + component
             componentPaths.append(cursor)
         }
+        // Every ancestor is pinned regardless of policy. Ownership decides
+        // whether a swap is PLAUSIBLE; the pin is what detects one, and it is
+        // re-checked as root immediately before exec.
         var components: [PinnedFileIdentity] = []
         for path in componentPaths {
             let identity = try PinnedFileIdentity.capture(path)
-            guard identity.isDirectory, identity.owner == requiredOwner,
-                  (mode_t(identity.mode) & 0o022) == 0 else {
+            guard identity.isDirectory else { throw ValidationError.executableMutable(path) }
+            guard policy.acceptsOwner(identity.owner, invokingUser: invokingUser.uid) else {
+                throw ValidationError.executableNotRootOwned(path)
+            }
+            guard (mode_t(identity.mode) & policy.forbiddenWriteBits) == 0 else {
                 throw ValidationError.executableMutable(path)
             }
             components.append(identity)
         }
-        guard (mode_t(executable.mode) & 0o022) == 0 else {
-            throw ValidationError.executableMutable(canonical)
+        guard policy.acceptsOwner(executable.owner, invokingUser: invokingUser.uid) else {
+            throw ValidationError.executableNotRootOwned(canonical)
         }
-
-        var signedBundle: String?
-        if requireCurrentBundle {
-            guard let bundle = InvokingUserIdentity.canonicalPath(Bundle.main.bundleURL.path),
-                  canonical.hasPrefix(bundle + "/") else {
-                throw ValidationError.unsignedBundle
-            }
-            signedBundle = bundle
+        guard (mode_t(executable.mode) & policy.forbiddenWriteBits) == 0 else {
+            throw ValidationError.executableMutable(canonical)
         }
         return Self(executable: executable, components: components,
                     invokingUser: invokingUser, signedBundlePath: signedBundle)
@@ -271,7 +343,7 @@ struct PrivilegedLogSink: Sendable, Equatable {
     var exclusiveCreationShell: String {
         let dir = MoleCLI.shellQuote(directoryPath)
         let file = MoleCLI.shellQuote(filePath)
-        return "umask 022; /bin/mkdir -m 0755 -- \(dir) || exit 125; " +
-            "( set -C; : > \(file) ) || exit 125"
+        return "umask 022; /bin/mkdir -m 0755 -- \(dir) || exit \(ElevatedExitCode.logSinkUnavailable); " +
+            "( set -C; : > \(file) ) || exit \(ElevatedExitCode.logSinkUnavailable)"
     }
 }
