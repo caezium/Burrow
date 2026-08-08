@@ -262,6 +262,26 @@ final class PrivilegedHelperClient: @unchecked Sendable {
         }
     }
 
+    /// Run an operation and collect its whole output, for callers that need a
+    /// transcript rather than a live stream (reading the Login Items dump).
+    ///
+    /// Blocking — call off the main thread.
+    func capture(operation: HelperOperation, interface: String? = nil) -> (outcome: ElevatedOutcome, output: String) {
+        var lines: [String] = []
+        let lock = NSLock()
+        let outcome = run(operation: operation, interface: interface) { line in
+            lock.lock(); lines.append(line); lock.unlock()
+        }
+        lock.lock(); let joined = lines.joined(separator: "\n"); lock.unlock()
+        return (outcome, joined)
+    }
+
+    /// Whether the helper is installed, approved, and build-matched — i.e.
+    /// whether a caller should prefer it over its existing elevation.
+    var isUsable: Bool {
+        registrationStatus == .enabled && versionSkew() == .matched
+    }
+
     /// The XPC round trip. Split out so the authorization's lifetime is a
     /// visible, enforced property of the caller rather than an accident of
     /// where the local happens to go out of scope.

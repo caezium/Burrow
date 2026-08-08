@@ -34,13 +34,13 @@ final class HelperContractTests: XCTestCase {
 
     func testOperationSet_isPinned() {
         XCTAssertEqual(Set(HelperOperation.allCases.map(\.rawValue)),
-                       ["scan", "clean", "optimize", "optimizeScan", "flushDNS", "renewDHCP"],
+                       ["scan", "clean", "optimize", "optimizeScan", "flushDNS", "renewDHCP", "readLoginItems"],
                        "the helper's operation set is closed; widening it is a security decision")
     }
 
     // MARK: - The closed executable set
     //
-    // Most operations drive the bundled engine. Two drive system tools, and
+    // Most operations drive the bundled engine. The rest drive system tools, and
     // those are the only non-engine binaries the daemon may ever run.
 
     func testSystemTools_areAbsolutePathsInSystemDirectories() {
@@ -51,9 +51,10 @@ final class HelperContractTests: XCTestCase {
         }
     }
 
-    func testSystemTools_setIsExactlyTheThreeNeeded() {
+    func testSystemTools_setIsExactlyWhatTheOperationsNeed() {
         XCTAssertEqual(HelperSystemTool.all,
-                       ["/usr/bin/dscacheutil", "/usr/bin/killall", "/usr/sbin/ipconfig"])
+                       ["/usr/bin/dscacheutil", "/usr/bin/killall",
+                        "/usr/sbin/ipconfig", "/usr/bin/sfltool"])
     }
 
     /// No step may ever name a shell. The path this replaces elevated
@@ -141,7 +142,8 @@ final class HelperContractTests: XCTestCase {
     /// An interface on an operation that takes none means the caller and the
     /// contract disagree. Refused, not ignored.
     func testValidate_rejectsAnInterfaceOnOperationsThatTakeNone() {
-        for operation in [HelperOperation.clean, .optimize, .scan, .optimizeScan, .flushDNS] {
+        for operation in [HelperOperation.clean, .optimize, .scan, .optimizeScan,
+                          .flushDNS, .readLoginItems] {
             let request = HelperRequest(operation: operation, operationID: UUID().uuidString,
                                         clientBuild: "23", networkInterface: "en0")
             XCTAssertEqual(request.validate(expectedBuild: "23", liveInterfaces: ["en0"]),

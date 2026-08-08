@@ -46,6 +46,14 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
     case flushDNS
     /// Renew the DHCP lease on one network interface.
     case renewDHCP
+    /// Dump the Background Task Management database — the modern Login and
+    /// background items list.
+    ///
+    /// Read-only, but it needs root twice over: `sfltool dumpbtm` raises its
+    /// OWN authentication dialog when run as a normal user, and returns only
+    /// a partial list even then. Through the helper it is one authentication
+    /// the user already understands, and the complete list.
+    case readLoginItems
 
     /// The engine argv for the operations that drive the bundled engine, or
     /// nil for the ones that don't.
@@ -59,7 +67,7 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
         case .clean: return ["clean"]
         case .optimize: return ["optimize"]
         case .optimizeScan: return ["optimize", "--dry-run"]
-        case .flushDNS, .renewDHCP: return nil
+        case .flushDNS, .renewDHCP, .readLoginItems: return nil
         }
     }
 
@@ -91,6 +99,9 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
             guard let interface else { return [] }
             return [HelperStep(executable: .system(HelperSystemTool.ipconfig),
                                arguments: ["set", interface, "DHCP"])]
+        case .readLoginItems:
+            return [HelperStep(executable: .system(HelperSystemTool.sfltool),
+                               arguments: ["dumpbtm"])]
         }
     }
 
@@ -101,9 +112,10 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
         switch self {
         case .scan, .optimizeScan: return false
         case .clean, .optimize: return true
-        // Neither touches the filesystem, but both change system state and
-        // both run as root, so both still authenticate.
+        // These change system state or read privileged data rather than
+        // touching the filesystem, but all run as root, so all authenticate.
         case .flushDNS, .renewDHCP: return false
+        case .readLoginItems: return false
         }
     }
 
@@ -135,11 +147,12 @@ enum HelperSystemTool {
     static let dscacheutil = "/usr/bin/dscacheutil"
     static let killall = "/usr/bin/killall"
     static let ipconfig = "/usr/sbin/ipconfig"
+    static let sfltool = "/usr/bin/sfltool"
 
     /// Every permitted absolute path. Used by the daemon to re-check an
     /// executable immediately before spawning it, so a step constructed by
     /// some future code path still cannot introduce a new binary.
-    static let all: Set<String> = [dscacheutil, killall, ipconfig]
+    static let all: Set<String> = [dscacheutil, killall, ipconfig, sfltool]
 }
 
 /// What a step runs.

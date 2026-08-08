@@ -215,8 +215,27 @@ enum StartupInventory {
     /// returns the plist inventory (graceful) rather than failing.
     static func scanLiveIncludingLoginItems() -> [StartupItem] {
         let base = scanLive()
-        let dump = (try? MoEngine.shared.capture(
+        return merge(plistItems: base, login: LoginItemsReader.parse(loginItemsDump()))
+    }
+
+    /// The raw `sfltool dumpbtm` output.
+    ///
+    /// Prefer the privileged helper. Run as a normal user, `sfltool` raises
+    /// its OWN authentication dialog — an unexplained "sfltool wants to make
+    /// changes" prompt the user never asked for — and still returns only a
+    /// partial list. Through the helper it is one authentication attributable
+    /// to Burrow, and the complete BTM database.
+    ///
+    /// Without the helper this keeps the previous behaviour exactly, including
+    /// that prompt, rather than losing the Login Items list altogether.
+    private static func loginItemsDump() -> String {
+        let client = PrivilegedHelperClient.shared
+        if client.isUsable {
+            let result = client.capture(operation: .readLoginItems)
+            if case .exited(0) = result.outcome { return result.output }
+            return ""   // declined or failed: fall back to the plist-only inventory
+        }
+        return (try? MoEngine.shared.capture(
             MoCommand(target: .executable("/usr/bin/sfltool"), args: ["dumpbtm"], timeout: 10)).stdout) ?? ""
-        return merge(plistItems: base, login: LoginItemsReader.parse(dump))
     }
 }
