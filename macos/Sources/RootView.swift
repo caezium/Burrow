@@ -133,12 +133,13 @@ struct RootView: View {
                 // in place of a top tab bar. Padded clear of the traffic lights
                 // and drawn over the content.
                 FloatingRail(selected: $pane)
-                    .padding(.leading, 14)
-                    .padding(.top, 10)
-                    .padding(.bottom, 14)
+                    .padding(.leading, WindowMetrics.railLeading)
+                    .padding(.top, WindowMetrics.railTop)
+                    .padding(.bottom, WindowMetrics.railBottom)
             }
         }
-        .frame(minWidth: 940, minHeight: 640)
+        .frame(minWidth: WindowMetrics.minimumSize.width,
+               minHeight: WindowMetrics.minimumSize.height)
         .animation(.easeInOut(duration: 0.22), value: pane)
         // Sample fast only while a live metrics pane is on screen.
         .onAppear {

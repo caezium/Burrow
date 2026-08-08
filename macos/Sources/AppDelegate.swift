@@ -449,7 +449,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.center()
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 940, height: 640)
+        // Derived from the rail's own height — see WindowMetrics. The window
+        // uses fullSizeContentView, so the frame minimum IS the content
+        // minimum; there is no title bar to subtract.
+        window.minSize = NSSize(width: WindowMetrics.minimumSize.width,
+                                height: WindowMetrics.minimumSize.height)
         window.delegate = self
 
         // Show a Dock icon (and Cmd-Tab presence) while the dashboard is
