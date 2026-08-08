@@ -209,7 +209,7 @@ final class OperationFlowTests: XCTestCase {
             approvedRootURLs: [parent])
         let plan = try snapshot.plan(selectedPaths: [item.path])
 
-        let port = FakeProcessPort(script: [.exited(124)])
+        let port = FakeProcessPort(script: [.exited(ElevatedExitCode.boundaryCheckFailed)])
         let center = OperationCenter()
         let flow = makeFlow(port, center: center)
         var operation = Self.cleanOp(elevated: true)
@@ -220,8 +220,46 @@ final class OperationFlowTests: XCTestCase {
         guard case .finished(.failed(let message)) = flow.state else {
             return XCTFail("a fail-closed cleanup exit must not become done")
         }
-        XCTAssertTrue(message.contains("124"))
+        // A refused boundary check means NOTHING was deleted, so the message
+        // must say so rather than implying a partial run.
+        XCTAssertTrue(message.contains("Nothing was cleaned"), message)
+        XCTAssertTrue(message.contains("Rescan"), message)
+        XCTAssertNil(flow.report, "a refused cleanup must not render the preview's summary")
         XCTAssertEqual(center.ops.first?.phase, .failed)
+    }
+
+    /// A cleanup that ran and could not remove everything is a DIFFERENT
+    /// outcome from one that was refused before it started, and the two must
+    /// not share wording — one leaves the caches in place, the other doesn't.
+    func testPartialCleanupFailureReadsAsPartialNotRefused() async throws {
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("burrow-flow-partial-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let canonicalParent = URL(fileURLWithPath: try XCTUnwrap(
+            InvokingUserIdentity.canonicalPath(parent.path)))
+        let item = canonicalParent.appendingPathComponent("reviewed-cache")
+        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
+        let snapshot = try CleanupSnapshot.capture(
+            list: CleanList(categories: [
+                .init(name: "Test", items: [
+                    .init(path: item.path, sizeBytes: 1, sizeText: "1B", itemCount: nil),
+                ]),
+            ], summaryTotalText: "1B", summaryItemCount: 1),
+            approvedRootURLs: [canonicalParent])
+        let plan = try snapshot.plan(selectedPaths: [item.path])
+
+        let flow = makeFlow(FakeProcessPort(script: [.exited(1)]))
+        var operation = Self.cleanOp(elevated: true)
+        operation.cleanupPlan = plan
+        flow.start(operation)
+        await settle(flow)
+
+        guard case .finished(.failed(let message)) = flow.state else {
+            return XCTFail("a nonzero cleanup exit must not become done")
+        }
+        XCTAssertTrue(message.contains("could not be removed"), message)
+        XCTAssertFalse(message.contains("Nothing was cleaned"), message)
     }
 
     func testMissingExecutableFailsBeforeSpawn() {

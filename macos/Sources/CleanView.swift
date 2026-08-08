@@ -286,7 +286,7 @@ struct CleanView: View {
         screen = .hero
         realFlow.start(ToolOperation(
             label: NSLocalizedString("Cleaning reviewed caches", comment: ""),
-            executable: .path("/bin/sh"), arguments: [], elevated: true,
+            executable: .path("/usr/bin/find"), arguments: [], elevated: true,
             cleanupPlan: plan, reduce: { parseTaskReport($0) }, notifyOnEnd: true))
     }
 

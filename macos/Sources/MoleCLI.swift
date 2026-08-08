@@ -133,17 +133,16 @@ enum MoleCLI {
     /// identity explicitly instead of inheriting root's HOME/USER.
     static func elevatedScript(command: ValidatedElevatedCommand, args: [String],
                                logSink: PrivilegedLogSink? = nil,
-                               cleanupPlan: CleanupExecutionPlan? = nil,
-                               cleanupExecution: CleanupIrreversibleExecution? = nil) -> String {
+                               cleanupPlan: CleanupExecutionPlan? = nil) -> String {
         func identityCheck(_ identity: PinnedFileIdentity) -> String {
             let stat = "/usr/bin/stat -f '%d:%i:%u:%p' -- \(shellQuote(identity.path)) 2>/dev/null"
-            return "[ \"$(\(stat))\" = \(shellQuote(identity.shellStatToken)) ] || exit 126"
+            return "[ \"$(\(stat))\" = \(shellQuote(identity.shellStatToken)) ] || exit \(ElevatedExitCode.executableRefused)"
         }
 
         var statements = command.components.map(identityCheck)
         statements.append(identityCheck(command.executable))
         if let bundle = command.signedBundlePath {
-            statements.append("/usr/bin/codesign --verify --strict -- \(shellQuote(bundle)) >/dev/null 2>&1 || exit 126")
+            statements.append("/usr/bin/codesign --verify --strict -- \(shellQuote(bundle)) >/dev/null 2>&1 || exit \(ElevatedExitCode.executableRefused)")
         }
 
         let user = command.invokingUser
@@ -159,12 +158,11 @@ enum MoleCLI {
         let isolatedEnvironment = ["/usr/bin/env", "-i"] + environment
         let run: String
         if let cleanupPlan {
-            statements.append(contentsOf: cleanupPlan.executionBoundaryChecks().map { $0 + " || exit 124" })
-            let cleanupShell = cleanupExecution?.snapshotID == cleanupPlan.snapshotID
-                ? cleanupExecution?.shell ?? "exit 124"
-                : "exit 124"
-            run = (isolatedEnvironment + ["/bin/sh", "-c", cleanupShell])
-                .map(shellQuote).joined(separator: " ")
+            // Boundary checks and deletes both come from the plan, so the
+            // authorization and what it authorizes cannot drift apart. Running
+            // them inside the redirect means a refused check explains itself in
+            // the run log rather than vanishing into osascript's stderr.
+            run = cleanupPlan.irreversibleCleanupShell()
         } else {
             // `do shell script … with administrator privileges` inherits the
             // caller's PATH on current macOS releases. Start from an empty
@@ -177,10 +175,10 @@ enum MoleCLI {
         if let sink = logSink {
             let dir = shellQuote(sink.directoryPath), file = shellQuote(sink.filePath)
             statements.append("umask 022")
-            statements.append("/bin/mkdir -m 0755 -- \(dir) || exit 125")
+            statements.append("/bin/mkdir -m 0755 -- \(dir) || exit \(ElevatedExitCode.logSinkUnavailable)")
             statements.append("cleanup_burrow_log() { /bin/rm -f -- \(file); /bin/rmdir -- \(dir); }")
             statements.append("trap cleanup_burrow_log EXIT HUP INT TERM")
-            statements.append("( set -C; : > \(file) ) || exit 125")
+            statements.append("( set -C; : > \(file) ) || exit \(ElevatedExitCode.logSinkUnavailable)")
             statements.append("( \(run) ) > \(file) 2>&1")
             statements.append("burrow_status=$?")
             // Let the app obtain a no-follow descriptor. The root shell then

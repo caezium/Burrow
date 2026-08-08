@@ -195,160 +195,119 @@ final class CleanupAuthorizationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fakeTrash.path))
     }
 
-    func testIrreversibleCleanupCapturesAndVerifiesBeforeDeleting() throws {
+    func testIrreversibleCleanupDeletesTheReviewedTreeAndReportsSuccess() throws {
         let item = root.appendingPathComponent("permanent cache")
-        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
+        let nested = item.appendingPathComponent("nested")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try Data("cache".utf8).write(to: nested.appendingPathComponent("blob"))
         let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
                                                    approvedRootURLs: [root])
         let plan = try snapshot.plan(selectedPaths: [item.path])
 
-        let execution = try plan.prepareIrreversibleCleanupForTesting()
-        let shell = execution.shell
-        XCTAssertTrue(shell.contains("/bin/mv -- \"$burrow_original\" \"$burrow_capture\""))
-        XCTAssertTrue(shell.contains("/usr/bin/stat -f '%d:%i:%u:%p'"))
-        XCTAssertTrue(shell.contains("/bin/rmdir -- \"$burrow_capture\""))
-        XCTAssertFalse(shell.contains("/usr/bin/find"),
-                       "no live recursive traversal may reach irreversible delete")
-
-        let executable = PinnedFileIdentity(path: "/usr/bin/true", device: 1, inode: 2,
-                                            owner: 0, mode: UInt16(S_IFREG | 0o755))
-        let user = InvokingUserIdentity(uid: 501, username: "review user",
-                                        canonicalHome: "/Users/review user")
-        let command = ValidatedElevatedCommand(executable: executable, components: [],
-                                               invokingUser: user, signedBundlePath: nil)
-        let elevated = MoleCLI.elevatedScript(command: command, args: [], cleanupPlan: plan,
-                                              cleanupExecution: execution)
-        XCTAssertTrue(elevated.contains("'/usr/bin/env' '-i'"))
-        XCTAssertTrue(elevated.contains("'PATH=/usr/bin:/bin:/usr/sbin:/sbin'"))
-        XCTAssertTrue(elevated.contains("'HOME=/Users/review user'"))
-        XCTAssertTrue(elevated.contains("'/bin/sh' '-c'"))
+        let shell = plan.irreversibleCleanupShell()
+        XCTAssertTrue(shell.contains("/usr/bin/find -x"))
+        XCTAssertTrue(shell.contains("-depth -delete"))
+        XCTAssertTrue(shell.contains("/usr/bin/stat -f '%d:%i:%u:%p'"),
+                      "the reviewed identity must still be re-checked at the boundary")
 
         XCTAssertEqual(try runCleanupShell(shell), 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: item.path),
-                       "an unchanged exact reviewed tree is removed successfully")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: execution.quarantineRootPath))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: item.path))
     }
 
-    func testIrreversibleCleanupPreservesAReplacementCapturedByTheRace() throws {
-        let item = root.appendingPathComponent("permanent-race")
-        let original = root.appendingPathComponent("original-permanent-race")
+    func testIrreversibleCleanupRefusesWhenTheReviewedInodeWasSwapped() throws {
+        let item = root.appendingPathComponent("swapped")
+        let moved = root.appendingPathComponent("moved-away")
         try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
         try Data("reviewed".utf8).write(to: item.appendingPathComponent("marker"))
         let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
                                                    approvedRootURLs: [root])
         let plan = try snapshot.plan(selectedPaths: [item.path])
-        let execution = try plan.prepareIrreversibleCleanupForTesting(preCaptureDelaySeconds: 1)
-        let quarantine = execution.quarantineRootPath
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", execution.shell]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-
-        let deadline = Date().addingTimeInterval(2)
-        while !FileManager.default.fileExists(atPath: quarantine), Date() < deadline {
-            usleep(10_000)
-        }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: quarantine),
-                      "the command must reach its protected capture boundary")
-
-        try FileManager.default.moveItem(at: item, to: original)
+        // Substitute a different directory at the reviewed NAME after review.
+        try FileManager.default.moveItem(at: item, to: moved)
         try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
         try Data("unreviewed".utf8).write(to: item.appendingPathComponent("marker"))
 
-        process.waitUntilExit()
-        XCTAssertEqual(process.terminationStatus, 124)
+        XCTAssertEqual(try runCleanupShell(plan.irreversibleCleanupShell()),
+                       ElevatedExitCode.boundaryCheckFailed)
         XCTAssertEqual(try String(contentsOf: item.appendingPathComponent("marker")),
-                       "unreviewed", "the substituted inode must be restored intact")
-        XCTAssertEqual(try String(contentsOf: original.appendingPathComponent("marker")),
-                       "reviewed", "the reviewed inode must survive at its raced location")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: quarantine))
+                       "unreviewed", "the substituted inode must not be deleted")
+        XCTAssertEqual(try String(contentsOf: moved.appendingPathComponent("marker")),
+                       "reviewed", "the reviewed inode survives at its new name")
     }
 
-    func testIrreversibleCleanupPreservesDescendantAddedAfterReview() throws {
-        let item = root.appendingPathComponent("added-descendant")
-        let reviewed = item.appendingPathComponent("reviewed")
-        let added = item.appendingPathComponent("added-later")
-        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
-        try Data("reviewed".utf8).write(to: reviewed)
-        let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
-                                                   approvedRootURLs: [root])
-        let plan = try snapshot.plan(selectedPaths: [item.path])
-        let execution = try plan.prepareIrreversibleCleanupForTesting()
-
-        try Data("unreviewed".utf8).write(to: added)
-        let status = try runCleanupShell(execution.shell)
-
-        XCTAssertEqual(status, 124)
-        XCTAssertEqual(try String(contentsOf: added), "unreviewed",
-                       "a descendant added after preview must never be deleted")
-    }
-
-    func testIrreversibleCleanupPreservesMovedDescendantAndItsReplacement() throws {
-        let item = root.appendingPathComponent("moved-descendant")
-        let reviewed = item.appendingPathComponent("reviewed")
-        let moved = root.appendingPathComponent("reviewed-moved-away")
-        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
-        try Data("reviewed".utf8).write(to: reviewed)
-        let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
-                                                   approvedRootURLs: [root])
-        let plan = try snapshot.plan(selectedPaths: [item.path])
-        let execution = try plan.prepareIrreversibleCleanupForTesting()
-
-        try FileManager.default.moveItem(at: reviewed, to: moved)
-        try Data("unreviewed".utf8).write(to: reviewed)
-        let status = try runCleanupShell(execution.shell)
-
-        XCTAssertEqual(status, 124)
-        XCTAssertEqual(try String(contentsOf: reviewed), "unreviewed")
-        XCTAssertEqual(try String(contentsOf: moved), "reviewed")
-    }
-
-    func testIrreversibleCleanupOpenDirectoryFDMutationFailsClosed() throws {
-        let item = root.appendingPathComponent("open-fd-descendant")
+    /// The deliberate trade behind deleting the tree rooted at the reviewed
+    /// inode rather than an enumerated set of descendants pinned at review
+    /// time.  The preview presents a cache ENTRY with a size, not a file list,
+    /// so "everything under this exact directory" is what the user approved —
+    /// and pinning the full set instead made a clean abort whenever the owning
+    /// app wrote to its own cache between the preview and the confirmation.
+    func testIrreversibleCleanupRemovesContentAddedUnderTheReviewedEntryAfterReview() throws {
+        let item = root.appendingPathComponent("live cache")
         try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
         let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
                                                    approvedRootURLs: [root])
         let plan = try snapshot.plan(selectedPaths: [item.path])
-        let execution = try plan.prepareIrreversibleCleanupForTesting(
-            postCaptureDelaySeconds: 1)
 
-        let directoryFD = Darwin.open(item.path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
-        XCTAssertGreaterThanOrEqual(directoryFD, 0)
-        defer { if directoryFD >= 0 { Darwin.close(directoryFD) } }
+        try Data("written after review".utf8)
+            .write(to: item.appendingPathComponent("added-later"))
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", execution.shell]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try process.run()
+        XCTAssertEqual(try runCleanupShell(plan.irreversibleCleanupShell()), 0,
+                       "a cache written to between preview and confirmation still cleans")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: item.path))
+    }
 
-        let captured = execution.quarantineRootPath + "/node-0/captured"
-        let deadline = Date().addingTimeInterval(2)
-        while !FileManager.default.fileExists(atPath: captured), Date() < deadline {
-            usleep(10_000)
-        }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: captured))
+    func testIrreversibleCleanupDeletesTheLinkNotItsTargetOutsideTheTree() throws {
+        let item = root.appendingPathComponent("with-symlink")
+        let outside = root.appendingPathComponent("outside-the-reviewed-tree")
+        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: false)
+        try Data("precious".utf8).write(to: outside.appendingPathComponent("keep"))
+        try FileManager.default.createSymbolicLink(
+            at: item.appendingPathComponent("escape"), withDestinationURL: outside)
 
-        let lateFD = Darwin.openat(directoryFD, "added-through-open-fd",
-                                   O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
-        XCTAssertGreaterThanOrEqual(lateFD, 0)
-        if lateFD >= 0 {
-            _ = "unreviewed".withCString { bytes in
-                Darwin.write(lateFD, bytes, strlen(bytes))
-            }
-            Darwin.close(lateFD)
+        let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
+                                                   approvedRootURLs: [root])
+        let plan = try snapshot.plan(selectedPaths: [item.path])
+
+        XCTAssertEqual(try runCleanupShell(plan.irreversibleCleanupShell()), 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: item.path))
+        XCTAssertEqual(try String(contentsOf: outside.appendingPathComponent("keep")),
+                       "precious", "-delete must never follow a symlink out of the tree")
+    }
+
+    func testIrreversibleCleanupContinuesPastOneFailingEntryAndReportsFailure() throws {
+        let good = root.appendingPathComponent("removable")
+        let blocked = root.appendingPathComponent("blocked")
+        let locked = blocked.appendingPathComponent("locked")
+        let child = locked.appendingPathComponent("undeletable")
+        try FileManager.default.createDirectory(at: good, withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)
+        try Data("stuck".utf8).write(to: child)
+        // Clear the write bit on the NESTED directory so its entry cannot be
+        // unlinked. This happens before capture: mutating a reviewed entry's
+        // own mode afterwards would change its pinned identity and the
+        // boundary check would refuse the whole run — a different outcome.
+        try FileManager.default.setAttributes([.posixPermissions: 0o500],
+                                              ofItemAtPath: locked.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700],
+                                                   ofItemAtPath: locked.path)
         }
 
-        process.waitUntilExit()
-        XCTAssertEqual(process.terminationStatus, 124)
-        let added = item.appendingPathComponent("added-through-open-fd")
-        XCTAssertEqual(try String(contentsOf: added), "unreviewed",
-                       "an entry added through a pre-opened directory must survive")
+        let snapshot = try CleanupSnapshot.capture(list: list([good.path, blocked.path]),
+                                                   approvedRootURLs: [root])
+        let plan = try snapshot.plan(selectedPaths: [good.path, blocked.path])
+
+        let status = try runCleanupShell(plan.irreversibleCleanupShell())
+        XCTAssertNotEqual(status, 0, "an entry that could not be removed must report failure")
+        XCTAssertNotEqual(status, ElevatedExitCode.boundaryCheckFailed,
+                          "a partial removal is not the same refusal as a changed review")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: good.path),
+                       "one failing entry must not abandon the others")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: child.path))
     }
+
 
     private func runCleanupShell(_ shell: String) throws -> Int32 {
         let process = Process()

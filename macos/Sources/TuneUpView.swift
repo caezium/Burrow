@@ -425,7 +425,7 @@ struct TuneUpView: View {
         case .clean(let plan):
             flow.start(ToolOperation(
                 label: NSLocalizedString("Tune-Up: cleaning reviewed caches", comment: ""),
-                executable: .path("/bin/sh"), arguments: [], elevated: true,
+                executable: .path("/usr/bin/find"), arguments: [], elevated: true,
                 cleanupPlan: plan, reduce: { parseTaskReport($0) }, notifyOnEnd: true))
         case .optimize:
             flow.start(.moleStream(["optimize"], elevated: true,

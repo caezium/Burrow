@@ -333,16 +333,34 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         return command
     }
 
+    /// Turn an exit status into something a person can act on. The wrapper's
+    /// own refusals (124–127) all mean NOTHING ran, which is the opposite of a
+    /// partial delete, so they must never share wording with a command that
+    /// ran and failed partway.
     private static func failureMessage(exitCode: Int32, isCleanup: Bool) -> String {
-        if isCleanup {
-            return String(
-                format: NSLocalizedString(
-                    "Cleanup stopped because the reviewed files changed or could not be secured (exit %d). Rescan before trying again.",
-                    comment: ""),
-                exitCode)
+        switch exitCode {
+        case ElevatedExitCode.boundaryCheckFailed:
+            return isCleanup
+                ? NSLocalizedString(
+                    "Nothing was cleaned: the reviewed items changed before the run started. Rescan before trying again.",
+                    comment: "")
+                : NSLocalizedString(
+                    "Nothing ran: the files Burrow verified changed before the operation started.",
+                    comment: "")
+        case ElevatedExitCode.logSinkUnavailable,
+             ElevatedExitCode.executableRefused,
+             ElevatedExitCode.launchFailed:
+            return NSLocalizedString(
+                "Nothing ran: Burrow could not verify the program it was about to run as an administrator.",
+                comment: "")
+        default:
+            return isCleanup
+                ? String(format: NSLocalizedString(
+                    "Some reviewed items could not be removed (exit %d). The run log lists each one.",
+                    comment: ""), exitCode)
+                : String(format: NSLocalizedString("Operation failed with exit status %d.", comment: ""),
+                         exitCode)
         }
-        return String(format: NSLocalizedString("Operation failed with exit status %d.", comment: ""),
-                      exitCode)
     }
 
     private func captureTelemetryCompletion(result: String) {
@@ -381,6 +399,23 @@ extension ToolOperation where Report == TaskRunReport {
 
 // MARK: - Production adapter
 
+/// Why an elevated run never reached the authentication prompt. Distinct from
+/// `ValidatedElevatedCommand.ValidationError` because these two are decided by
+/// the caller's own state rather than by the filesystem.
+enum ElevatedSetupError: LocalizedError, Equatable {
+    case noInvokingUser
+    case staleCleanupPlan
+
+    var errorDescription: String? {
+        switch self {
+        case .noInvokingUser:
+            return "Burrow could not confirm which signed-in account started this operation."
+        case .staleCleanupPlan:
+            return "The reviewed items changed before the run started, so nothing was cleaned."
+        }
+    }
+}
+
 /// The streaming-op spawn mechanics: plain runs stream
 /// stdout+stderr through pipes; elevated runs go through ONE osascript auth
 /// prompt with output tailed from a temp log (`do shell script` doesn't
@@ -414,12 +449,6 @@ struct SystemProcessPort: ProcessPort {
             }
 
             let outPipe = Pipe(), errPipe = Pipe()
-            let cleanupExecution: CleanupIrreversibleExecution?
-            if spec.elevated, let plan = spec.cleanupPlan {
-                cleanupExecution = try? plan.prepareIrreversibleCleanup()
-            } else {
-                cleanupExecution = nil
-            }
 
             if spec.elevated {
                 // The osascript `do shell script` wrapper has no stdin channel,
@@ -428,22 +457,42 @@ struct SystemProcessPort: ProcessPort {
                 // assert so the unsupported combo fails loudly rather than
                 // silently dropping the input if someone wires it up later.
                 assert(spec.stdin == nil, "elevated runs don't support stdin")
-                guard let invokingUser = spec.invokingUser,
-                      let command = try? ValidatedElevatedCommand.prepare(
+                // A refusal here is the single most confusing failure Burrow
+                // can produce — nothing runs, no prompt appears, and the exit
+                // status alone ("126") tells the user nothing about which
+                // check said no. Carry the reason into the transcript.
+                let command: ValidatedElevatedCommand
+                let logSink: PrivilegedLogSink
+                do {
+                    guard let invokingUser = spec.invokingUser else {
+                        throw ElevatedSetupError.noInvokingUser
+                    }
+                    command = try ValidatedElevatedCommand.prepare(
                         executable: spec.executable, invokingUser: invokingUser,
-                        requireCurrentBundle: spec.requiresCurrentBundle),
-                      let logSink = try? PrivilegedLogSink.make(),
-                      spec.cleanupPlan?.validateForLaunch() != false,
-                      spec.cleanupPlan == nil || cleanupExecution != nil else {
-                    cleanupExecution?.remove()
-                    streamQ.async { finish(126) }
+                        requireCurrentBundle: spec.requiresCurrentBundle)
+                    guard spec.cleanupPlan?.validateForLaunch() != false else {
+                        throw ElevatedSetupError.staleCleanupPlan
+                    }
+                    logSink = try PrivilegedLogSink.make()
+                } catch {
+                    let reason = (error as? LocalizedError)?.errorDescription
+                        ?? error.localizedDescription
+                    // A stale plan is a changed review, not a program we
+                    // couldn't verify; reporting it as the latter would send
+                    // the user looking for a signing problem they don't have.
+                    let code = (error as? ElevatedSetupError) == .staleCleanupPlan
+                        ? ElevatedExitCode.boundaryCheckFailed
+                        : ElevatedExitCode.executableRefused
+                    streamQ.async {
+                        emit(reason + "\n")
+                        finish(code)
+                    }
                     return
                 }
                 let script = MoleCLI.elevatedScript(command: command,
                                                     args: spec.arguments,
                                                     logSink: logSink,
-                                                    cleanupPlan: spec.cleanupPlan,
-                                                    cleanupExecution: cleanupExecution)
+                                                    cleanupPlan: spec.cleanupPlan)
                 t.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
                 t.arguments = ["-e", script]
                 t.standardOutput = outPipe
@@ -461,8 +510,6 @@ struct SystemProcessPort: ProcessPort {
 
                 t.terminationHandler = { proc in
                     killTimer?.cancel()
-                    cleanupExecution?.remove()
-                    DispatchQueue.main.async { tailTimer?.invalidate() }
                     streamQ.async {
                         if let h = logHandle {                  // last tail of the log
                             let data = h.readDataToEndOfFile()
@@ -538,7 +585,6 @@ struct SystemProcessPort: ProcessPort {
                     }
                 }
             } catch {
-                cleanupExecution?.remove()
                 streamQ.async { finish(127) }
             }
         }
