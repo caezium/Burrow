@@ -131,4 +131,42 @@ final class PrivilegeRouteTests: XCTestCase {
         XCTAssertFalse(HelperRegistrationStatus.notRegistered.needsUserAction,
                        "never registered is the default state, not a pending decision")
     }
+
+    // MARK: - The reviewed clean
+    //
+    // This is the regression that quietly removed Touch ID from the single
+    // most consequential operation Burrow has. The permanent clean stopped
+    // being described by engine argv and became a reviewed PLAN, and because
+    // routing only ever recognised argv, it fell through to osascript — which
+    // is password-only by construction — while every other elevated operation
+    // kept authenticating through the helper.
+
+    func testReviewedCleanupRoutesToTheHelperDespiteHavingNoEngineArguments() {
+        XCTAssertEqual(PrivilegeRoute.decide(arguments: [],
+                                             registration: .enabled,
+                                             skew: .matched,
+                                             hasReviewedCleanup: true),
+                       .helper(.cleanReviewed))
+    }
+
+    func testReviewedCleanupStillFallsBackWhenTheHelperIsUnusable() {
+        for (registration, skew) in [(HelperRegistrationStatus.notRegistered, HelperVersionSkew.Skew.matched),
+                                     (.requiresApproval, .matched),
+                                     (.enabled, .mismatched)] {
+            XCTAssertEqual(PrivilegeRoute.decide(arguments: [],
+                                                 registration: registration,
+                                                 skew: skew,
+                                                 hasReviewedCleanup: true),
+                           .osascript)
+        }
+    }
+
+    /// Without a plan there is nothing to delete, so an empty argv must stay
+    /// unroutable rather than reaching the daemon as a cleanup of nothing.
+    func testEmptyArgumentsWithoutAPlanDoNotReachTheHelper() {
+        XCTAssertEqual(PrivilegeRoute.decide(arguments: [],
+                                             registration: .enabled,
+                                             skew: .matched),
+                       .osascript)
+    }
 }
