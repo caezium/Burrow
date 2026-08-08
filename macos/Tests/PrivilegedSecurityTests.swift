@@ -73,6 +73,72 @@ final class PrivilegedIdentityTests: XCTestCase {
         XCTAssertFalse(script.contains("HOME=/var/root"))
     }
 
+    /// The layout every shipped copy of Burrow actually has.
+    ///
+    /// `/Applications` is `root:admin` mode 0775 on stock macOS and an app
+    /// dragged there (or installed by a Homebrew cask) is owned by the account
+    /// that installed it. A rule demanding root ownership of the engine and
+    /// every ancestor is therefore unsatisfiable in production, and the only
+    /// place it shows up is at runtime, as a refusal with no prompt.
+    private func makeApplicationsLayout() throws -> (bundle: String, engine: String) {
+        let applications = temp.appendingPathComponent("Applications", isDirectory: true)
+        let bundle = applications.appendingPathComponent("Burrow.app", isDirectory: true)
+        let engineDirectory = bundle.appendingPathComponent("Contents/Resources/engine",
+                                                            isDirectory: true)
+        try FileManager.default.createDirectory(at: engineDirectory,
+                                                withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o775],
+                                              ofItemAtPath: applications.path)
+        let engine = engineDirectory.appendingPathComponent("mole")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: engine)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: engine.path)
+        return (bundle.path, engine.path)
+    }
+
+    private var currentUser: InvokingUserIdentity {
+        InvokingUserIdentity(uid: getuid(), username: NSUserName(),
+                             canonicalHome: NSHomeDirectory())
+    }
+
+    func testBundledEngineIsAcceptedUnderAGroupWritableApplicationsDirectory() throws {
+        let layout = try makeApplicationsLayout()
+        let command = try ValidatedElevatedCommand.prepare(
+            executable: layout.engine, invokingUser: currentUser,
+            requireCurrentBundle: true, bundlePath: layout.bundle)
+
+        XCTAssertEqual(command.signedBundlePath, layout.bundle)
+        // Ownership stopped being the guarantee, so the resource seal has to
+        // be checked at the boundary — without it nothing is verifying this.
+        let script = MoleCLI.elevatedScript(command: command, args: ["optimize"])
+        XCTAssertTrue(script.contains("/usr/bin/codesign --verify --strict"),
+                      "the signed-bundle policy is only safe with the seal check")
+        XCTAssertTrue(script.contains("/usr/bin/stat -f '%d:%i:%u:%p'"),
+                      "every ancestor stays pinned regardless of who owns it")
+    }
+
+    func testBundledEngineIsRefusedWhenAnAncestorIsWorldWritable() throws {
+        let layout = try makeApplicationsLayout()
+        // Group-writable is normal; world-writable would let an unrelated
+        // account do the swapping, and no install layout needs that.
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o777],
+            ofItemAtPath: temp.appendingPathComponent("Applications").path)
+
+        XCTAssertThrowsError(try ValidatedElevatedCommand.prepare(
+            executable: layout.engine, invokingUser: currentUser,
+            requireCurrentBundle: true, bundlePath: layout.bundle))
+    }
+
+    func testBundledEnginePolicyDoesNotLeakToExecutablesOutsideTheBundle() throws {
+        let layout = try makeApplicationsLayout()
+        // The same user-owned file, asked for WITHOUT the bundle seal, must
+        // still be refused: relaxing ownership is only paid for by the seal.
+        XCTAssertThrowsError(try ValidatedElevatedCommand.prepare(
+            executable: layout.engine, invokingUser: currentUser,
+            requireCurrentBundle: false, bundlePath: layout.bundle))
+    }
+
     func testUserMutableExecutableIsRejectedAndReplacementBreaksPinnedIdentity() throws {
         let executable = temp.appendingPathComponent("mo")
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: executable)
