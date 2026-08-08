@@ -243,30 +243,41 @@ Check that Homebrew’s live `Casks/burrow.rb` no longer contains `postflight`,
 `https://github.com/caezium/Burrow/releases/latest/download/appcast.xml`
 resolves to that feed.
 
-### 0.11.2 current release and symbol baseline
+### 0.12.0 current release and symbol baseline
 
 The current release was re-verified from its downloaded GitHub asset on August
-8, 2026. Tag `v0.11.2` points to
-`c08de9714d51b6f6aa580ce9e9b71bebf4fb86be`; the ZIP has SHA-256
-`2a51a87d541be50cd3b2ab9418dfcaf20927d16499a265298b53bbc100d4eca5`,
+8, 2026. Tag `v0.12.0` points to
+`adf9f89b676d79be23bcc4e930952adb81942dc7`; the ZIP has SHA-256
+`367ab1f8b6129f4154fb6c5e90bfcbe5d86909e6c71dd9b2cb24afb5ec455e6d`,
 and `appcast.xml` has SHA-256
-`04ac0ea7efcade3d0ea87455a1ab849ebd853c9a288c09b545d3d59bfc04feaa`.
-The extracted app reports version 0.11.2, build 23, bundle ID
+`7b7732d91085be4dbf5eecbf9663739e8414bf71c9db05454167dc8c79c16621`.
+The extracted app reports version 0.12.0, build 24, bundle ID
 `dev.caezium.Burrow`, and Team ID `YGSM2722TZ`; strict nested-signature,
 designated-requirement, stapler, and Gatekeeper checks all pass.
 
 The distributed binary UUIDs are
+`9DBA7960-5620-3924-8140-1A48AC6A1A19` (arm64) and
+`A99B795D-2FAC-3452-AEE8-4F52260A9493` (x86_64). The
+[tag workflow log](https://github.com/caezium/Burrow/actions/runs/31248528339)
+records those exact two UUIDs as uploaded Sentry debug companions, proving that
+the 0.12.0 dSYM matches the public release binary. The live Homebrew cask is
+also 0.12.0 with the same ZIP SHA, preserves quarantine, and contains no
+`postflight`, `xattr -cr`, or unsigned-build caveat.
+
+### 0.11.2 BURROW-9E symbol baseline
+
+The downloaded 0.11.2 binary UUIDs are
 `324C0B80-A09E-346C-8153-7BDCCB37A24C` (arm64) and
 `B0DF1FAF-0575-3865-8C7F-E2CBFFD141CC` (x86_64). The
-[tag workflow log](https://github.com/caezium/Burrow/actions/runs/30934193823)
-records those exact two UUIDs as uploaded Sentry debug companions, proving that
-the 0.11.2 dSYM matches the public release binary. That evidence does not
-recover BURROW-9E by itself: the older event still needs restricted Sentry data
-and an actionable frame, so the trigger below remains in force.
+[0.11.2 tag workflow log](https://github.com/caezium/Burrow/actions/runs/30934193823)
+records those exact two UUIDs as uploaded Sentry debug companions. That proves
+the matching symbols were uploaded, but it does not recover BURROW-9E by
+itself: the older event still needs restricted Sentry data and an actionable
+frame, so the trigger below remains in force.
 
 ### 0.11.1 trust-chain baseline
 
-The current release was verified on August 3, 2026. Tag `v0.11.1` points to
+That release was verified on August 3, 2026. Tag `v0.11.1` points to
 `d482544e415d10cf9cb0c606c8a8ce149ddad99d`; the published ZIP has SHA-256
 `d9b2267cce68ff091d898bdfca30e0b0f861a411ee92c4a4b60b70bcf0b8bceb`, and
 the signed `appcast.xml` asset has SHA-256
