@@ -1074,7 +1074,9 @@ final class StatusModel: ObservableObject {
             recomputeSortedRows()
             // Opt-in watchdog: evaluate this tick, dispatch any new firings.
             for f in watchdog.step(processes: v.processes, cadenceSeconds: 2) {
-                watchdog.dispatch(pid: f.pid, name: f.name)
+                watchdog.dispatch(pid: f.pid, name: f.name) { [weak self] in
+                    self?.invalidateProcess(f.pid)
+                }
             }
         }
     }

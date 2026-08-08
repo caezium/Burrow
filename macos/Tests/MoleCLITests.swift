@@ -114,6 +114,15 @@ final class MoleCLITests: XCTestCase {
         XCTAssertTrue(s.contains("'/tmp/m o/mo' 'clean' '--dry-run'"))
     }
 
+    func testElevatedScript_replacesTheAmbientRootEnvironment() {
+        let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/mo"), args: ["clean"])
+
+        XCTAssertTrue(s.contains("'/usr/bin/env' '-i'"))
+        XCTAssertTrue(s.contains("'PATH=/usr/bin:/bin:/usr/sbin:/sbin'"))
+        XCTAssertTrue(s.contains("'HOME=/Users/test'"))
+        XCTAssertTrue(s.contains("'LC_ALL=C'"))
+    }
+
     func testElevatedScript_neutralizesShellMetacharacters() {
         let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/$(reboot)/mo"),
                                        args: ["a;b", "`x`"])

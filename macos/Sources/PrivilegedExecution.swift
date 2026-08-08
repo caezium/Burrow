@@ -130,6 +130,7 @@ struct PinnedFileIdentity: Sendable, Equatable, Codable {
 
     var isDirectory: Bool { (mode_t(mode) & S_IFMT) == S_IFDIR }
     var isRegular: Bool { (mode_t(mode) & S_IFMT) == S_IFREG }
+    var isSymbolicLink: Bool { (mode_t(mode) & S_IFMT) == S_IFLNK }
 
     static func capture(_ path: String, rejectSymlink: Bool = true) throws -> Self {
         var st = stat()
@@ -140,7 +141,10 @@ struct PinnedFileIdentity: Sendable, Equatable, Codable {
     }
 
     func matchesCurrent() -> Bool {
-        guard let current = try? Self.capture(path) else { return false }
+        // A reviewed descendant may itself be a symlink. Capture the link's
+        // identity without following it; a regular-file-to-symlink swap still
+        // fails because the inode and complete mode are pinned.
+        guard let current = try? Self.capture(path, rejectSymlink: false) else { return false }
         return current.device == device && current.inode == inode &&
             current.owner == owner && current.mode == mode
     }

@@ -167,35 +167,6 @@ enum HelperDaemonIdentityResolver {
 // MARK: - Engine resolution
 
 enum HelperEngine {
-
-    /// The signed engine inside the app bundle that contains this helper,
-    /// resolved RELATIVE TO OUR OWN EXECUTABLE:
-    ///
-    ///   …/Burrow.app/Contents/MacOS/BurrowHelper   ← us
-    ///   …/Burrow.app/Contents/Resources/engine/mole ← the engine
-    ///
-    /// Never `PATH`, never an environment variable, never a caller-supplied
-    /// path. A root process that resolves its executable through any of those
-    /// hands root to whoever wins the race to shadow the name — which is the
-    /// exact reason `MoleCLI.trustedExecutable()` already refuses PATH on the
-    /// osascript path.
-    static func bundledEnginePath() -> String? {
-        guard let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
-        let contents = executable            // …/Contents/MacOS/BurrowHelper
-            .deletingLastPathComponent()     // …/Contents/MacOS
-            .deletingLastPathComponent()     // …/Contents
-        let engine = contents
-            .appendingPathComponent("Resources/engine/mole")
-            .standardizedFileURL
-
-        // Belt and braces: after standardizing, the engine must still sit
-        // inside our own Contents directory. A symlink pointing out of the
-        // bundle would otherwise be followed as root.
-        guard engine.path.hasPrefix(contents.standardizedFileURL.path + "/") else { return nil }
-        guard FileManager.default.isExecutableFile(atPath: engine.path) else { return nil }
-        return engine.path
-    }
-
     /// The app bundle containing this helper.
     static func appBundleURL() -> URL? {
         guard let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
@@ -224,12 +195,44 @@ enum HelperEngine {
     /// check is skipped and the fact is logged. Release builds always have
     /// one, and the release gate refuses to ship a helper without it.
     static func verifyContainingBundle(teamID: String?) -> Bool {
+        guard let bundle = appBundleURL() else { return false }
+        return verifyBundle(at: bundle, teamID: teamID)
+    }
+
+    /// Clone first, then validate the clone that will actually be executed.
+    /// The snapshot's 0700 root-owned parent removes the signature-check/path-
+    /// exec window without relying on another best-effort stat immediately
+    /// before `Process.run()`.
+    static func executableSnapshot(teamID: String?) -> HelperExecutableSnapshot? {
+        guard let bundle = appBundleURL() else { return nil }
+        do {
+            return try HelperExecutableSnapshot.prepare(
+                appBundleURL: bundle,
+                expectedBundleID: HelperNames.clientBundleID,
+                expectedBuild: HelperService.build) { copiedBundle in
+                verifyBundle(at: copiedBundle, teamID: teamID)
+            }
+        } catch {
+            helperTrace("bundle execution snapshot could not be prepared")
+            return nil
+        }
+    }
+
+    private static func verifyBundle(at bundle: URL, teamID: String?) -> Bool {
+        guard HelperExecutableSnapshot.matchesSealedMetadata(
+            at: bundle,
+            expectedBundleID: HelperNames.clientBundleID,
+            expectedBuild: HelperService.build) else {
+            helperTrace("bundle verification failed: identity or build mismatch")
+            return false
+        }
         guard let teamID else {
             helperTrace("bundle signature check skipped: helper is ad-hoc signed (development build)")
             return true
         }
-        guard let requirement = HelperCodeRequirement.sameTeam(teamID: teamID),
-              let bundle = appBundleURL() else { return false }
+        let requirement = HelperCodeRequirement.string(bundleID: HelperNames.clientBundleID,
+                                                       teamID: teamID)
+        guard requirement != HelperCodeRequirement.unsatisfiable else { return false }
 
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(bundle as CFURL, [], &staticCode) == errSecSuccess,
@@ -518,17 +521,18 @@ final class HelperService: NSObject, BurrowHelperProtocol {
 
         // Gate 5 — execution. Our own signed engine, or a system tool from the
         // closed set; fixed argv either way.
-        guard HelperEngine.verifyContainingBundle(teamID: teamID) else {
-            helperTrace("engine unavailable: containing app bundle failed signature verification")
-            return respond(.engineUnavailable)
-        }
+        var engineSnapshot: HelperExecutableSnapshot?
         var enginePath: String?
         if request.operation.engineArguments != nil {
-            guard let verifiedPath = HelperEngine.bundledEnginePath() else {
-                helperTrace("engine unavailable: no bundled engine at Contents/Resources/engine/mole")
+            guard let snapshot = HelperEngine.executableSnapshot(teamID: teamID) else {
+                helperTrace("engine unavailable: signed execution snapshot could not be prepared")
                 return respond(.engineUnavailable)
             }
-            enginePath = verifiedPath
+            engineSnapshot = snapshot
+            enginePath = snapshot.executableURL.path
+        } else if !HelperEngine.verifyContainingBundle(teamID: teamID) {
+            helperTrace("engine unavailable: containing app bundle failed signature verification")
+            return respond(.engineUnavailable)
         }
 
         helperTrace("running \(request.operation.rawValue) (mutating: \(request.operation.mutatesDisk))")
@@ -542,6 +546,9 @@ final class HelperService: NSObject, BurrowHelperProtocol {
                               invokingUser: invokingUser) { line in
             client?.helperDidEmit(line: line, operationID: operationID)
         }
+        // Keep the validated clone alive until Process has exited and every
+        // output pipe has drained; deinit then removes the private snapshot.
+        withExtendedLifetime(engineSnapshot) {}
         helperTrace("operation finished with status \(code)")
         respond(.exited(code))
     }

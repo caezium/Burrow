@@ -215,7 +215,6 @@ jobs:
                 continue
               fi
 
-              firstSeen=$(jq -r '.firstSeen // empty' <<<"$issue")
               fsEpoch=$(date -u -d "$firstSeen" +%s 2>/dev/null || echo 0)
               if [ "$fsEpoch" -lt "$cutoff" ]; then
                 echo "Skipping ${shortId}: firstSeen ${firstSeen} is outside the ${LOOKBACK_HOURS}h lookback."

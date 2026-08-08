@@ -425,7 +425,7 @@ struct TuneUpView: View {
         case .clean(let plan):
             flow.start(ToolOperation(
                 label: NSLocalizedString("Tune-Up: cleaning reviewed caches", comment: ""),
-                executable: .path("/usr/bin/find"), arguments: [], elevated: true,
+                executable: .path("/bin/sh"), arguments: [], elevated: true,
                 cleanupPlan: plan, reduce: { parseTaskReport($0) }, notifyOnEnd: true))
         case .optimize:
             flow.start(.moleStream(["optimize"], elevated: true,
@@ -455,14 +455,13 @@ struct TuneUpView: View {
     private func handleFlowChange() {
         guard phase == .running else { return }
         switch flow.state {
-        case .finished(.done):
+        case .finished(.done(exit: 0)):
             if let line = flow.report?.summary?.completionLine, !line.isEmpty {
                 stepSummaries.append(line)
             }
             advance()
-        case .finished(.failed), .finished(.cancelled):
+        case .finished(.done), .finished(.failed), .finished(.cancelled):
             phase = .done
-            recordRun()
         default:
             break
         }
