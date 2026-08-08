@@ -220,10 +220,23 @@ final class OperationFlowTests: XCTestCase {
     // stopped being a transport-only decision and started being able to flip a live clean into a
     // silent no-op. These pin that the fallback branch now translates whenever it resolves the
     // bundled engine, and does NOT translate when it resolves anything else.
+    //
+    // Both therefore have to REACH that branch, and the `bundledExecutableOverride` each one sets
+    // is what makes reaching it a deliberate act: `BurrowConductor.executableURL()` IS
+    // `MoleCLI.bundledExecutable()` (one resolver, on purpose), so the same override that lets the
+    // fallback recognise the bundled engine also makes a conductor "bundled". With the streaming
+    // switch at its shipped default (ON for clean/optimize), `streamOverride` then answers first
+    // and the spawn is the CONDUCTOR's — `["clean", "--apply", "--stream"]` at the override's path,
+    // whatever `resolveMo` was told to return. Turning the documented kill switch off is the one
+    // thing that sends a `clean` down the direct path with an engine still bundled, which is
+    // exactly the production configuration these two describe. Without it both tests silently
+    // asserted about the branch they mean to bypass.
 
     func testFallbackPath_stillTranslatesArgv_whenResolveMoFindsTheBundledEngine() async throws {
         MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
         defer { MoleCLI.bundledExecutableOverride = nil }
+        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
+        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
         let port = FakeProcessPort(script: Self.cannedCleanStream)
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
                                                 resolveMo: { _ in "/fake/bundled/burrow" },
@@ -238,6 +251,9 @@ final class OperationFlowTests: XCTestCase {
                        "a live mo-style run that falls through to the (still bundled-engine) " +
                        "direct path must gain --apply just like the conductor path would, or a " +
                        "real clean silently no-ops against the engine's dry-run default")
+        XCTAssertFalse(spec.arguments.contains("--stream"),
+                       "and it must be the DIRECT spawn being asserted: --stream is the " +
+                       "conductor transport, so its presence means this never reached the fallback")
     }
 
     func testFallbackPath_leavesArgvUntranslated_whenResolveMoFindsAnExternalMo() async throws {
@@ -247,6 +263,8 @@ final class OperationFlowTests: XCTestCase {
         // this elevated PREVIEW into a live delete instead — the dangerous direction.
         MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
         defer { MoleCLI.bundledExecutableOverride = nil }
+        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
+        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
         let port = FakeProcessPort(script: Self.cannedClean)
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
                                                 resolveMo: { _ in "/opt/homebrew/bin/mo" },

@@ -319,6 +319,22 @@ final class SoftwareModelTests: XCTestCase {
             .components(separatedBy: ":\n\n").first ?? ""
     }
 
+    private var keptSentence: String {
+        NSLocalizedString("These stay installed — only the reviewed support files move to the Trash, and you can put them back:\n\n%@", comment: "")
+            .components(separatedBy: ":\n\n").first ?? ""
+    }
+
+    /// The names a given sentence governs. `confirmCopy` formats every block as
+    /// `"<sentence>:\n\n<names>"` and then joins the blocks with "\n\n" — so slicing the whole body
+    /// on "\n\n" (what the mixed-case test used to do) cuts each block at its OWN separator: the
+    /// sentence lands in one component and the names it introduces in the next, and "the removal
+    /// block lists Steam" comes out false however right the copy is. Anchor on the sentence's own
+    /// separator instead and take the single paragraph it introduces.
+    private func listed(under sentence: String, in body: String) -> String {
+        guard let intro = body.range(of: sentence + ":\n\n") else { return "" }
+        return body[intro.upperBound...].components(separatedBy: "\n\n").first ?? ""
+    }
+
     func testConfirmCopy_aKeptAppIsNeverDescribedAsMovingToTheTrash() {
         let copy = SoftwareModel.confirmCopy(
             lines: [SoftwareModel.ConfirmLine(name: "Stats", reviewedCount: 3,
@@ -343,11 +359,16 @@ final class SoftwareModelTests: XCTestCase {
                     SoftwareModel.ConfirmLine(name: "Stats", reviewedCount: 3,
                                               removesAppBundle: false)],
             skipped: [], hasReviewedSubset: true)
-        let trashBlock = copy.body.components(separatedBy: "\n\n")
-            .first { $0.contains(trashSentence) } ?? ""
-        XCTAssertTrue(trashBlock.contains("Steam"), copy.body)
-        XCTAssertFalse(trashBlock.contains("Stats"),
+        let trashed = listed(under: trashSentence, in: copy.body)
+        XCTAssertTrue(trashed.contains("Steam"), copy.body)
+        XCTAssertFalse(trashed.contains("Stats"),
                        "the kept app must not be listed under the sentence that removes it: \(copy.body)")
+        // The other half of "each gets the true sentence", which the old slicing couldn't state:
+        // the kept app is under the promise that keeps it, and the removed one is not.
+        let kept = listed(under: keptSentence, in: copy.body)
+        XCTAssertTrue(kept.contains("Stats"), copy.body)
+        XCTAssertFalse(kept.contains("Steam"),
+                       "the removed app must not be listed under the sentence that keeps it: \(copy.body)")
     }
 
     /// A whole-app removal is unchanged — the default is still "the bundle goes".
