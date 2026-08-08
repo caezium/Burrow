@@ -154,6 +154,82 @@ final class BurrowEnvelopeTests: XCTestCase {
             ["uninstall", "--permanent", "Slack", "--apply"])
     }
 
+    // MARK: assertDryRun — read-only stated on the wire, not inherited from the engine's default
+
+    func testEngineArgv_assertDryRun_spellsTheFlagInsteadOfRelyingOnTheDefault() {
+        // Without it a preview is "no flag", which is read-only only for as long as the engine
+        // keeps defaulting that way. With it the argv says so — and `uninstall` is the command
+        // where that distinction now costs an application rather than a wrong screen.
+        XCTAssertEqual(
+            BurrowConductor.engineArgv(fromMo: ["uninstall", "--dry-run", "Slack"],
+                                       assertDryRun: true),
+            ["uninstall", "Slack", "--dry-run"])
+        XCTAssertEqual(
+            BurrowConductor.engineArgv(fromMo: ["uninstall", "--dry-run", "Slack", "Zoom"],
+                                       assertDryRun: true),
+            ["uninstall", "Slack", "Zoom", "--dry-run"])
+    }
+
+    func testEngineArgv_assertDryRun_forcesThePreviewEvenOnLiveMoArgv() {
+        // It means "this run must not change anything", not "pass the flag along if one was
+        // already there". A caller that asks for it on mo's LIVE spelling gets the preview, not
+        // a live run with an ignored parameter — the failure direction has to be the safe one.
+        XCTAssertEqual(BurrowConductor.engineArgv(fromMo: ["uninstall", "Slack"],
+                                                  assertDryRun: true),
+                       ["uninstall", "Slack", "--dry-run"])
+        XCTAssertEqual(BurrowConductor.engineArgv(fromMo: ["clean"], assertDryRun: true),
+                       ["clean", "--dry-run"])
+    }
+
+    func testEngineArgv_defaultIsOff_soEveryExistingCallerIsByteIdentical() {
+        // `mint`, `streamArgv` and OperationFlow all call the one-argument form. Adding a
+        // parameter must not have moved any of them.
+        for mo in [["clean"], ["clean", "--dry-run"], ["optimize"],
+                   ["uninstall", "--dry-run", "Slack"], ["uninstall", "--permanent", "Slack"]] {
+            XCTAssertEqual(BurrowConductor.engineArgv(fromMo: mo),
+                           BurrowConductor.engineArgv(fromMo: mo, assertDryRun: false), "\(mo)")
+        }
+    }
+
+    /// The one combination the engine refuses outright: `reject_contradictory_flags` answers
+    /// `--apply` + `--dry-run` with `ok:false` and **exit 2** ("uninstall cannot take both …"),
+    /// before dispatch reaches the command. Verified against burrow-engine @ `4a46426`, both
+    /// orderings. So a translation that could emit the pair doesn't delete anything — it turns
+    /// every uninstall into an unreadable failure — but the pre-flight would then abort on a
+    /// format problem rather than on what the engine actually said, which is the wrong sentence
+    /// in front of the user and one refactor away from being the wrong outcome too.
+    ///
+    /// Swept over both the mo spellings and both parameter values rather than pinned by example:
+    /// the guarantee is structural (the two appends are the arms of one `if`), so the test that
+    /// matches it is exhaustive, not illustrative.
+    func testEngineArgv_neverEmitsApplyAndDryRunTogether() {
+        let moShapes: [[String]] = [
+            ["clean"], ["clean", "--dry-run"],
+            ["optimize"], ["optimize", "--dry-run"],
+            ["purge"], ["purge", "--dry-run"],
+            ["installer"], ["installer", "--dry-run"],
+            ["uninstall", "Slack"], ["uninstall", "--dry-run", "Slack"],
+            ["uninstall", "--permanent", "Slack"],
+            ["uninstall", "--permanent", "--dry-run", "Slack", "Zoom"],
+        ]
+        for mo in moShapes {
+            for assert in [false, true] {
+                let out = BurrowConductor.engineArgv(fromMo: mo, assertDryRun: assert)
+                XCTAssertFalse(out.contains("--apply") && out.contains("--dry-run"),
+                               "\(mo) assertDryRun:\(assert) → \(out): the engine refuses this " +
+                               "pair at exit 2 and no argv this function builds may contain it")
+                // Belt and braces on the same fact: at most one of the two, ever.
+                XCTAssertLessThanOrEqual(
+                    out.filter { $0 == "--apply" || $0 == "--dry-run" }.count, 1, "\(out)")
+            }
+        }
+        // And `streamArgv`, which only ever adds a transport flag on top.
+        for mo in moShapes {
+            let out = BurrowConductor.streamArgv(fromMo: mo)
+            XCTAssertFalse(out.contains("--apply") && out.contains("--dry-run"), "\(out)")
+        }
+    }
+
     func testStreamArgv_preview_dropsDryRun_neverApply() {
         // Delegates to engineArgv, plus the transport-only --stream.
         XCTAssertEqual(BurrowConductor.streamArgv(fromMo: ["clean", "--dry-run"]),

@@ -170,10 +170,32 @@ enum BurrowConductor {
     /// Safety-critical, so it's directly unit-tested, not just through `streamArgv`: get the
     /// direction backwards and a preview turns into a live destructive run (see `streamArgv`'s
     /// doc), or a live run silently no-ops (the §2 bug this whole mapping exists to close).
-    static func engineArgv(fromMo moArgs: [String]) -> [String] {
-        let isPreview = moArgs.contains("--dry-run")
+    ///
+    /// `assertDryRun` makes a run's read-only-ness a FACT ON THE WIRE instead of an inherited
+    /// default, and forces the preview regardless of what `moArgs` said. Callers that only want a
+    /// preview don't need it — dropping `--dry-run` already lands on the engine's own default, and
+    /// that is what every preview here has always relied on. The uninstall PRE-FLIGHT is different
+    /// in kind: it is the probe that runs BEFORE consent is acted on, against a command that (since
+    /// burrow-engine `df9ea3f`) deletes applications and not merely their `~/Library` leftovers. A
+    /// flagless `["uninstall", <ids>]` is read-only only for as long as the engine keeps defaulting
+    /// that way, and "safe because of a default" is not a property this file can check. With the
+    /// flag on, `wants_apply` (`cli.rs`) reads an explicit `--dry-run` as beating `--apply` even on
+    /// the seams that skip argv validation, so the probe cannot delete however the default moves.
+    ///
+    /// It can never produce `--dry-run` alongside `--apply` — the engine refuses that pair outright
+    /// (`reject_contradictory_flags`, exit 2, "cannot take both") — because the two appends are the
+    /// two arms of one `if`, mutually exclusive by control flow rather than by caller discipline.
+    /// That structure is the point: the engine's own doc for that refusal names this function as
+    /// half of why no real caller can construct the pair, so the guarantee has to survive reading,
+    /// not just testing.
+    static func engineArgv(fromMo moArgs: [String], assertDryRun: Bool = false) -> [String] {
+        let isPreview = assertDryRun || moArgs.contains("--dry-run")
         var out = moArgs.filter { $0 != "--dry-run" }
-        if !isPreview { out.append("--apply") }   // mo-live → the engine needs --apply
+        if !isPreview {
+            out.append("--apply")     // mo-live → the engine needs --apply
+        } else if assertDryRun {
+            out.append("--dry-run")   // read-only, stated rather than inferred from the default
+        }
         return out
     }
 

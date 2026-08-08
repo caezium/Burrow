@@ -86,9 +86,26 @@ enum MoAction: Equatable {
     /// `BurrowConductor.engineArgv` translation `mint` applies — this bypasses `mint` (it isn't a
     /// runnable ticket, just the probe `execute()` runs before answering any prompt), so without
     /// this it would reach the engine untranslated like every other pre-repoint call site did.
+    ///
+    /// **`assertDryRun` is what makes the probe read-only, and it is the one caller that asks for
+    /// it.** Translation alone drops `--dry-run` and lands on the engine's dry-run DEFAULT, which
+    /// is right for every ticket `mint` builds — a preview the user asked for is allowed to inherit
+    /// the default, because the worst a wrong default does there is show the wrong screen. This is
+    /// not that. The pre-flight runs before the user's consent has been acted on, and since
+    /// burrow-engine `df9ea3f` the command it probes with removes the `.app` itself. Flagless, its
+    /// non-destructiveness was an assumption about the engine that nothing on either side asserted;
+    /// with the flag it is a fact on the argv, and `wants_apply` resolves toward the dry run even on
+    /// the engine's internal seams that never see argv validation. It cannot collide with `--apply`:
+    /// `engineArgv` appends at most one of the two (see its doc), and the engine refuses the pair at
+    /// exit 2 if anything ever did.
+    ///
+    /// `--permanent` is deliberately absent — the mo argv here is the PREVIEW spelling, so the probe
+    /// asks what would be removed and never how. A flag that only distinguishes Trash from outright
+    /// deletion has nothing to say about a run that deletes neither.
     var preflightCommand: ActionCommand? {
         guard case .uninstall(let apps, _) = self else { return nil }
-        return ActionCommand(args: BurrowConductor.engineArgv(fromMo: ["uninstall", "--dry-run"] + apps),
+        return ActionCommand(args: BurrowConductor.engineArgv(fromMo: ["uninstall", "--dry-run"] + apps,
+                                                              assertDryRun: true),
                              stdin: "", timeout: 120, elevated: false)
     }
 

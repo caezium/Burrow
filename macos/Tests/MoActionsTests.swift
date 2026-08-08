@@ -243,6 +243,95 @@ final class MoActionsTests: XCTestCase {
         }
     }
 
+    // MARK: - The uninstall pre-flight's argv (read-only ASSERTED, not assumed)
+    //
+    // `preflightCommand` is the probe that runs before the user's consent is acted on, and its
+    // argv was untested — the section above pins what `mint` builds, which is a different string.
+    // It used to translate to `["uninstall", <ids>]`: no flag at all, non-destructive purely
+    // because the engine happens to default that way. That was a small bet while `uninstall` only
+    // swept `~/Library` leftovers and a much larger one since burrow-engine `df9ea3f`, where the
+    // same command deletes the `.app`. So the flag is on the wire now, and these pin it.
+
+    /// The exact argv `preflightCommand` builds for one app, and the ONE definition of it in this
+    /// file — the capture below is the verbatim stdout of running it, so a change to either has to
+    /// move both, rather than leaving a hardcoded string quietly describing a run that no longer
+    /// happens.
+    private let preflightArgvLocalSend = ["uninstall", "org.localsend.localsendApp", "--dry-run"]
+
+    /// Verbatim stdout of `burrow-engine` @ `4a46426` invoked with exactly
+    /// `preflightArgvLocalSend`, captured 2026-08-08 against the real /Applications on this
+    /// machine. Two things were established at the same time, neither of them hand-typed:
+    ///
+    ///  - The output is **byte-identical** to the flagless `uninstall org.localsend.localsendApp`
+    ///    this argv replaces, so spelling the flag changed the guarantee and not the answer — the
+    ///    guard reads the same plan it always did.
+    ///  - `/Applications/LocalSend.app` was still on disk afterwards. The probe removes nothing.
+    ///
+    /// `data.dry_run` is the engine's own statement about which code path ran: `cli.rs` hard-codes
+    /// `"dry_run":true` inside the `if !apply` branch and `"dry_run":false` in the apply branch, so
+    /// it reports the branch taken rather than echoing a flag back.
+    private let preflightCapture = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","data":{"dry_run":true,"total_bytes":58727750,"total_human":"58.7MB","items":[{"path":"/Applications/LocalSend.app","label":"Application","size":58686554,"size_human":"58.7MB","bundle_id":"org.localsend.localsendApp","kind":"application"},{"path":"/Users/henry/Library/Containers/org.localsend.localsendApp","label":"Container","size":41196,"size_human":"41KB","bundle_id":"org.localsend.localsendApp","kind":"leftover"}],"apps":[{"query":"org.localsend.localsendApp","name":"LocalSend","bundle_id":"org.localsend.localsendApp","path":"/Applications/LocalSend.app","matched_by":"identifier","item_count":1,"leftover_bytes":41196,"total_bytes":58727750,"total_human":"58.7MB","application":{"path":"/Applications/LocalSend.app","present":true,"size":58686554,"size_human":"58.7MB","needs_admin":false,"action":"delete","cask":null,"refusal":null,"symlink":false,"symlink_target":null}}],"unmatched":[],"matched_count":1,"requires_confirmation":false,"ambiguous":[],"removes_applications":1,"requires_admin":false,"external_commands":[],"warnings":[]}}"#
+
+    func testPreflight_argvCarriesTheDryRunFlag_soReadOnlyIsNotInheritedFromADefault() throws {
+        let action = MoAction.uninstall(apps: ["org.localsend.localsendApp"], permanent: false)
+        let pre = try XCTUnwrap(action.preflightCommand)
+        XCTAssertEqual(pre.args, preflightArgvLocalSend)
+        XCTAssertFalse(pre.elevated, "the probe never elevates — the uninstall ticket doesn't either")
+    }
+
+    /// The capture is what makes the pin above worth something: it is what the engine ANSWERED to
+    /// that exact argv, so "read-only" is a measurement and not a belief about a default.
+    func testPreflight_theCapturedAnswerToThatArgv_saysItRanReadOnly() throws {
+        let envelope = try XCTUnwrap(BurrowEnvelope.inOutput(preflightCapture))
+        XCTAssertTrue(envelope.ok)
+        let data = try XCTUnwrap(envelope.data)
+        let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(payload["dry_run"] as? Bool, true,
+                       "the engine reports which branch ran; anything but true means the probe " +
+                       "was a real removal")
+        // And the probe still does its job with the flag on — the guard's whole input is here.
+        let plan = UninstallGuard.decodePlan(payload)
+        XCTAssertEqual(plan.apps.map(\.query), ["org.localsend.localsendApp"])
+        XCTAssertEqual(plan.apps.first?.path, "/Applications/LocalSend.app")
+        XCTAssertEqual(plan.removesApplications, 1)
+        XCTAssertNil(UninstallGuard.abortReason(confirmed: ["org.localsend.localsendApp"],
+                                                dryRun: .engine(plan), expecting: []),
+                     "a clean single-app resolution must still pass the guard")
+    }
+
+    /// The pair the engine refuses outright (`reject_contradictory_flags`, exit 2, "cannot take
+    /// both"). Swept over the catalog rather than shown by example, because the pre-flight is built
+    /// on a different code path from `mint` and only one of the two used to be covered at all.
+    func testPreflight_neverCarriesApply_andNeverBothFlags() throws {
+        let actions: [MoAction] = [
+            .uninstall(apps: ["Slack"], permanent: false),
+            .uninstall(apps: ["Slack"], permanent: true),
+            .uninstall(apps: ["Slack", "Zoom"], permanent: true),
+        ]
+        for action in actions {
+            let pre = try XCTUnwrap(action.preflightCommand)
+            XCTAssertTrue(pre.args.contains("--dry-run"),
+                          "\(action): the probe must SAY it is read-only, not inherit it")
+            XCTAssertFalse(pre.args.contains("--apply"),
+                           "\(action): the probe runs before consent is acted on — it may never " +
+                           "carry the flag that deletes")
+            XCTAssertFalse(pre.args.contains("--permanent"),
+                           "\(action): a preview asks what would go, never how")
+        }
+        XCTAssertNil(MoAction.clean.preflightCommand, "only uninstall has a pre-flight")
+        XCTAssertNil(MoAction.purge.preflightCommand)
+    }
+
+    /// Multi-app, which also pins the flag's position after the positionals — verified accepted by
+    /// the real binary, whose output for that spelling is byte-identical to the leading one.
+    func testPreflight_multiAppArgv_isByteStable() throws {
+        let action = MoAction.uninstall(apps: ["Slack", "Zoom"], permanent: true)
+        let pre = try XCTUnwrap(action.preflightCommand)
+        XCTAssertEqual(pre.args, ["uninstall", "Slack", "Zoom", "--dry-run"])
+        XCTAssertEqual(pre.stdin, "")
+        XCTAssertEqual(pre.timeout, 120)
+    }
+
     // MARK: - The frozen wire format (golden tests)
 
     func testWire_simpleDryRunResult_isByteStable() {
