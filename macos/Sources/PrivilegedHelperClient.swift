@@ -233,7 +233,19 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     /// takes at the authentication prompt plus as long as the operation runs.
     func run(operation: HelperOperation,
              interface: String? = nil,
+             invokingUser suppliedIdentity: InvokingUserIdentity? = nil,
              onLine: @escaping (String) -> Void) -> ElevatedOutcome {
+        // Resolve while still running as the caller and before showing an auth
+        // prompt. The daemon treats this as a claim and independently binds it
+        // to the XPC peer's effective uid and getpwuid record.
+        let invokingUser: InvokingUserIdentity
+        do {
+            invokingUser = try suppliedIdentity ?? InvokingUserIdentity.current()
+        } catch {
+            helperClientLog.notice("invoking identity unavailable; privileged request refused locally")
+            return .launchFailed
+        }
+
         // Ask the user to authenticate. This is the prompt — raised here, in a
         // real session, so SecurityAgent can offer Touch ID. The daemon then
         // verifies the resulting reference without prompting.
@@ -258,7 +270,7 @@ final class PrivilegedHelperClient: @unchecked Sendable {
         // not a guarantee.
         return withExtendedLifetime(granted) {
             send(payload: granted.externalForm, operation: operation,
-                 interface: interface, onLine: onLine)
+                 interface: interface, invokingUser: invokingUser, onLine: onLine)
         }
     }
 
@@ -266,10 +278,13 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     /// transcript rather than a live stream (reading the Login Items dump).
     ///
     /// Blocking — call off the main thread.
-    func capture(operation: HelperOperation, interface: String? = nil) -> (outcome: ElevatedOutcome, output: String) {
+    func capture(operation: HelperOperation,
+                 interface: String? = nil,
+                 invokingUser: InvokingUserIdentity? = nil) -> (outcome: ElevatedOutcome, output: String) {
         var lines: [String] = []
         let lock = NSLock()
-        let outcome = run(operation: operation, interface: interface) { line in
+        let outcome = run(operation: operation, interface: interface,
+                          invokingUser: invokingUser) { line in
             lock.lock(); lines.append(line); lock.unlock()
         }
         lock.lock(); let joined = lines.joined(separator: "\n"); lock.unlock()
@@ -288,10 +303,14 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     private func send(payload authorization: Data,
                       operation: HelperOperation,
                       interface: String?,
+                      invokingUser: InvokingUserIdentity,
                       onLine: @escaping (String) -> Void) -> ElevatedOutcome {
         let request = HelperRequest(operation: operation,
                                     operationID: UUID().uuidString,
                                     clientBuild: Self.appBuild,
+                                    invokingUser: HelperInvokingUserClaim(
+                                        uid: UInt32(invokingUser.uid),
+                                        canonicalHome: invokingUser.canonicalHome),
                                     networkInterface: interface)
         guard let payload = try? JSONEncoder().encode(request) else { return .launchFailed }
 
@@ -355,7 +374,8 @@ struct HelperAwareProcessPort: ProcessPort {
                 switch client.route(for: spec.arguments) {
                 case .helper(let operation):
                     var sawOutput = false
-                    let outcome = client.run(operation: operation) { line in
+                    let outcome = client.run(operation: operation,
+                                             invokingUser: spec.invokingUser) { line in
                         sawOutput = true
                         continuation.yield(.line(line))
                     }

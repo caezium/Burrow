@@ -30,6 +30,7 @@
 //
 
 import Foundation
+import Darwin
 import Security
 import os
 
@@ -82,6 +83,85 @@ func helperTrace(_ message: String) {
     let stamp = ISO8601DateFormatter().string(from: Date())
     helperTraceLock.lock(); defer { helperTraceLock.unlock() }
     try? helperTraceHandle.write(contentsOf: Data("[\(stamp)] \(message)\n".utf8))
+}
+
+// MARK: - Invoking identity
+
+/// Reconstructs the invoking account entirely inside the daemon. The request's
+/// uid/home are comparison values only; getpwuid_r and descriptor-backed stat
+/// facts are the authority used to build the child environment.
+enum HelperDaemonIdentityResolver {
+    static func resolve(peerUID: uid_t,
+                        claim: HelperInvokingUserClaim) throws -> HelperResolvedInvokingUser {
+        let account = try account(for: peerUID)
+        return try HelperInvokingUserResolver.resolve(
+            peerUID: UInt32(peerUID),
+            claim: claim,
+            accounts: [account],
+            inspectHome: inspectHome)
+    }
+
+    private static func account(for uid: uid_t) throws -> HelperInvokingUserAccount {
+        var record = passwd()
+        var result: UnsafeMutablePointer<passwd>?
+        let configured = sysconf(_SC_GETPW_R_SIZE_MAX)
+        let capacity = configured > 0 ? Int(configured) : 16_384
+        var buffer = [CChar](repeating: 0, count: capacity)
+        let status = buffer.withUnsafeMutableBufferPointer { bytes in
+            getpwuid_r(uid, &record, bytes.baseAddress, bytes.count, &result)
+        }
+        guard status == 0, result != nil,
+              let name = record.pw_name, let home = record.pw_dir else {
+            throw HelperInvokingUserResolutionError.missingAccount
+        }
+        return HelperInvokingUserAccount(uid: UInt32(record.pw_uid),
+                                         username: String(cString: name),
+                                         homeDirectory: String(cString: home))
+    }
+
+    private static func inspectHome(_ rawPath: String) -> HelperHomeInspection {
+        var before = stat()
+        guard lstat(rawPath, &before) == 0 else {
+            return HelperHomeInspection(kind: .missing, canonicalPath: nil, ownerUID: nil)
+        }
+        switch before.st_mode & S_IFMT {
+        case S_IFLNK:
+            return HelperHomeInspection(kind: .symbolicLink, canonicalPath: nil,
+                                        ownerUID: UInt32(before.st_uid))
+        case S_IFDIR:
+            break
+        default:
+            return HelperHomeInspection(kind: .other, canonicalPath: nil,
+                                        ownerUID: UInt32(before.st_uid))
+        }
+
+        guard let firstCanonical = canonicalPath(rawPath) else {
+            return HelperHomeInspection(kind: .missing, canonicalPath: nil, ownerUID: nil)
+        }
+        let descriptor = Darwin.open(rawPath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard descriptor >= 0 else {
+            return HelperHomeInspection(kind: .missing, canonicalPath: nil, ownerUID: nil)
+        }
+        defer { Darwin.close(descriptor) }
+
+        var opened = stat()
+        guard fstat(descriptor, &opened) == 0,
+              (opened.st_mode & S_IFMT) == S_IFDIR,
+              opened.st_dev == before.st_dev,
+              opened.st_ino == before.st_ino,
+              canonicalPath(rawPath) == firstCanonical else {
+            return HelperHomeInspection(kind: .other, canonicalPath: nil, ownerUID: nil)
+        }
+        return HelperHomeInspection(kind: .directory,
+                                    canonicalPath: firstCanonical,
+                                    ownerUID: UInt32(opened.st_uid))
+    }
+
+    private static func canonicalPath(_ path: String) -> String? {
+        guard let resolved = realpath(path, nil) else { return nil }
+        defer { free(resolved) }
+        return String(cString: resolved)
+    }
 }
 
 // MARK: - Engine resolution
@@ -195,13 +275,18 @@ final class HelperOperationRunner: @unchecked Sendable {
     func run(operation: HelperOperation,
              operationID: String,
              interface: String?,
-             enginePath: String,
+             enginePath: String?,
+             invokingUser: HelperResolvedInvokingUser,
              emit: @escaping (String) -> Void) -> Int32 {
         var last: Int32 = 0
         for step in operation.steps(interface: interface) {
             let path: String
             switch step.executable {
             case .bundledEngine:
+                guard let enginePath else {
+                    helperTrace("refused: bundled engine step has no verified engine")
+                    return 127
+                }
                 path = enginePath
             case .system(let systemPath):
                 // Re-check against the closed set at the moment of use, not
@@ -215,7 +300,8 @@ final class HelperOperationRunner: @unchecked Sendable {
                 path = systemPath
             }
             last = runOne(path: path, arguments: step.arguments,
-                          operationID: operationID, emit: emit)
+                          operationID: operationID, environment: invokingUser.childEnvironment,
+                          emit: emit)
             guard last == 0 else { break }
         }
         return last
@@ -224,6 +310,7 @@ final class HelperOperationRunner: @unchecked Sendable {
     private func runOne(path: String,
                         arguments: [String],
                         operationID: String,
+                        environment: [String: String],
                         emit: @escaping (String) -> Void) -> Int32 {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -236,11 +323,7 @@ final class HelperOperationRunner: @unchecked Sendable {
         // inherited from the launchd context that could redirect a lookup
         // (PATH, DYLD_*, the engine's own overrides) is dropped rather than
         // passed through.
-        process.environment = [
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME": NSHomeDirectory(),
-            "LC_ALL": "C",
-        ]
+        process.environment = environment
 
         let outPipe = Pipe(), errPipe = Pipe()
         process.standardOutput = outPipe
@@ -324,10 +407,6 @@ final class HelperService: NSObject, BurrowHelperProtocol {
     private let runner = HelperOperationRunner()
     private let teamID: String?
 
-    /// The client callback for the connection currently being served. Set by
-    /// the listener delegate per connection.
-    weak var currentConnection: NSXPCConnection?
-
     init(teamID: String?) {
         self.teamID = teamID
         super.init()
@@ -381,6 +460,14 @@ final class HelperService: NSObject, BurrowHelperProtocol {
             reply(encoded)
         }
 
+        // Capture the connection for THIS invocation. A listener-wide mutable
+        // `currentConnection` lets a second client race the first and receive
+        // its output; Foundation binds current() to the dispatching XPC call.
+        guard let connection = NSXPCConnection.current() else {
+            helperTrace("request refused: no current XPC connection")
+            return respond(.rejected(.invalidInvokingUser))
+        }
+
         // Gate 2 — shape. An unknown operation cannot survive decoding.
         guard let request = try? JSONDecoder().decode(HelperRequest.self, from: requestData) else {
             helperTrace("request refused: malformed payload")
@@ -395,6 +482,19 @@ final class HelperService: NSObject, BurrowHelperProtocol {
             helperTrace("request refused: \(rejection.rawValue)")
             return respond(.rejected(rejection))
         }
+
+        let invokingUser: HelperResolvedInvokingUser
+        do {
+            invokingUser = try HelperDaemonIdentityResolver.resolve(
+                peerUID: connection.effectiveUserIdentifier,
+                claim: request.invokingUser)
+        } catch {
+            // Numeric uid is useful for auditing account-switch/mismatch
+            // failures. Never log the account name, home, or claim text.
+            helperTrace("request refused: invoking identity mismatch for uid \(connection.effectiveUserIdentifier)")
+            return respond(.rejected(.invalidInvokingUser))
+        }
+        helperTrace("invoking identity accepted for uid \(invokingUser.uid); canonical home matched")
 
         // Gate 3 — freshness. One authorization buys exactly one operation, so
         // a captured payload cannot be replayed for a second root run.
@@ -418,23 +518,28 @@ final class HelperService: NSObject, BurrowHelperProtocol {
 
         // Gate 5 — execution. Our own signed engine, or a system tool from the
         // closed set; fixed argv either way.
-        guard let enginePath = HelperEngine.bundledEnginePath() else {
-            helperTrace("engine unavailable: no bundled engine at Contents/Resources/engine/mole")
-            return respond(.engineUnavailable)
-        }
         guard HelperEngine.verifyContainingBundle(teamID: teamID) else {
             helperTrace("engine unavailable: containing app bundle failed signature verification")
             return respond(.engineUnavailable)
         }
+        var enginePath: String?
+        if request.operation.engineArguments != nil {
+            guard let verifiedPath = HelperEngine.bundledEnginePath() else {
+                helperTrace("engine unavailable: no bundled engine at Contents/Resources/engine/mole")
+                return respond(.engineUnavailable)
+            }
+            enginePath = verifiedPath
+        }
 
         helperTrace("running \(request.operation.rawValue) (mutating: \(request.operation.mutatesDisk))")
 
-        let client = currentConnection?.remoteObjectProxy as? BurrowHelperClientProtocol
+        let client = connection.remoteObjectProxy as? BurrowHelperClientProtocol
         let operationID = request.operationID
         let code = runner.run(operation: request.operation,
                               operationID: operationID,
                               interface: request.networkInterface,
-                              enginePath: enginePath) { line in
+                              enginePath: enginePath,
+                              invokingUser: invokingUser) { line in
             client?.helperDidEmit(line: line, operationID: operationID)
         }
         helperTrace("operation finished with status \(code)")
@@ -461,7 +566,6 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate {
         connection.exportedInterface = HelperInterface.daemon()
         connection.exportedObject = service
         connection.remoteObjectInterface = HelperInterface.client()
-        service.currentConnection = connection
         connection.resume()
         helperTrace("connection accepted from a verified Burrow client")
         return true
