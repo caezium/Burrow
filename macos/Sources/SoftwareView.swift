@@ -15,12 +15,14 @@
 //      `mo history`); a subset → Burrow trashes exactly the reviewed,
 //      ticked paths (Trash semantics, logged in Burrow's Activity
 //      instead — the trade-off the review header states).
-//      SCOPE, on both paths against the bundled engine: the per-app
-//      support files under ~/Library. The `.app` bundle is NOT deleted
-//      and no `brew uninstall --cask` runs, so the app stays installed
-//      — `confirmCopy` is where that is said to the user, and
-//      `UninstallGuard.unavailableReason` is why the whole-app path is
-//      still refused rather than run.
+//      SCOPE, on the whole-app path: the `.app` bundle AND the per-app
+//      support files under ~/Library. The bundle is entry 0 of the
+//      dry run and goes to the Trash with everything else, except for
+//      a Homebrew cask, which `brew uninstall --cask --zap` removes
+//      without the Trash and with an unbounded zap stanza —
+//      `confirmCopy` is where both are said to the user before consent,
+//      and `UninstallGuard` confirms the engine resolved exactly the
+//      confirmed set before anything is removed.
 //
 //    Updates — unified list with per-source badges (UpdatesView).
 //
@@ -418,11 +420,11 @@ struct AppRow: View {
             .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.black.opacity(0.22)))
             .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
         } else if preview != nil {
-            // Deliberately says nothing about what Remove will then do. It used to promise "Remove
-            // uses the engine's full uninstall", which is wrong twice over: the engine's uninstall
-            // isn't full (it leaves the .app bundle and any Homebrew cask in place), and a row
-            // Burrow can't name to the engine at all is skipped rather than run. The confirm sheet
-            // states both, per app, at the moment it matters — before consent.
+            // Still says nothing about what Remove will then do, for the one reason that survived
+            // the engine gaining bundle removal: a row Burrow can't name to the engine at all is
+            // skipped rather than run, so promising anything here would be a promise about a run
+            // that may not include this app. The confirm sheet states the scope per app at the
+            // moment it matters — before consent.
             Text("Couldn't enumerate this app's files — there's nothing to review here.")
                 .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
                 .padding(10)
@@ -930,43 +932,76 @@ final class SoftwareModel: ObservableObject {
         let name: String
         /// nil = the whole enumerated set (or never reviewed); a count = a reviewed subset.
         let reviewedCount: Int?
+        /// The Homebrew cask token when this app is brew-managed (`--list` row `source:
+        /// "Homebrew"`, `uninstall_name` = the token), else nil.
+        ///
+        /// It is here because it changes what is TRUE of this line, not how it looks. A brew app is
+        /// removed by `brew uninstall --cask --zap <token>` — brew unlinks, it does not Trash, so
+        /// "you can put it back" is false for it, and `--zap` runs the cask's zap stanza, which
+        /// deletes paths no enumeration can predict. Both facts come from the inventory row, so the
+        /// sheet can state them without paying for a dry run first.
+        let homebrewCask: String?
+
+        init(name: String, reviewedCount: Int?, homebrewCask: String? = nil) {
+            self.name = name
+            self.reviewedCount = reviewedCount
+            self.homebrewCask = homebrewCask
+        }
     }
 
     /// The confirm sheet's exact words. Pure and split out from `NSAlert` because the claim it
-    /// makes is the thing that was wrong, and a claim about recoverability deserves a test.
+    /// makes is the thing that keeps being wrong, and a claim about where your applications go
+    /// deserves a test.
     ///
-    /// It used to say "Remove 2 apps?" over "These move to the Trash (recoverable):" and a list of
-    /// app names. Against the bundled engine none of that is true of the APPS: `uninstall --apply`
-    /// removes the per-app support files under `~/Library` (containers, Application Support,
-    /// caches, preferences, logs, saved state, HTTP storage, WebKit data, cookies) and nothing
-    /// else. It never deletes the `.app` bundle and never runs `brew uninstall --cask`, both of
-    /// which the bash oracle's `batch_uninstall_applications` does — the engine says so in its own
-    /// `cli.rs` and its dry-run enumeration contains no `.app` path to tick. So the apps stay
-    /// installed and the sheet has to say so before anyone consents.
+    /// # What it now says, and why each part is load-bearing
     ///
-    /// `removesAppBundle` is that difference, not a style flag: a real legacy `mo`/MIT-fork binary
-    /// DOES enumerate and remove `/Applications/Foo.app`, so on that path the original wording is
-    /// accurate and is kept verbatim — including its existing zh translations.
+    /// It said "These move to the Trash (recoverable)". Then the engine turned out to remove only
+    /// `~/Library` leftovers, so it was rewritten to "The apps themselves stay installed". Now
+    /// burrow-engine @ df9ea3f removes the `.app` too — the port of `lib/uninstall/batch.sh` — so
+    /// the second wording is false in the other direction, and there is no longer any engine/legacy
+    /// split to describe: BOTH binaries remove the bundle, both route it through Trash by default,
+    /// and both hand a Homebrew cask to `brew uninstall --cask --zap`. One copy, no flag.
+    ///
+    ///  - **Where the app goes.** Burrow's GUI ticket is minted with `permanent: false`
+    ///    (`engineUninstall`), so the bundle and its support files go to the real Trash and can be
+    ///    put back. `--permanent` is the only thing that deletes outright and the GUI never sends
+    ///    it; the sheet therefore promises the Trash without hedging.
+    ///  - **Homebrew is a different sentence, not a footnote.** `brew uninstall --cask --zap` does
+    ///    not Trash anything and removes bytes outside the enumerated paths, so brew-managed apps
+    ///    get their own paragraph naming the command. Mixing them into the Trash sentence would
+    ///    make the sheet's central promise false for exactly the apps where it matters most.
+    ///  - **Partial outcomes.** The engine gates the leftover sweep on the bundle coming away
+    ///    (`batch.sh:840`), so an app it cannot remove keeps its support files too. Stating that
+    ///    here is what makes an "nothing happened for this one" outcome legible rather than
+    ///    baffling; `UninstallGuard.problemReport` says which app afterwards.
     nonisolated static func confirmCopy(lines: [ConfirmLine], skipped: [String],
-                                        hasReviewedSubset: Bool,
-                                        removesAppBundle: Bool) -> (title: String, body: String, confirmButton: String) {
-        let listed = lines.map { line -> String in
-            guard let count = line.reviewedCount else { return "• \(line.name)" }
-            return "• \(line.name) — \(String(format: NSLocalizedString("%d reviewed files", comment: ""), count))"
-        }.joined(separator: "\n")
-
-        let title: String
-        var body: String
-        let confirmButton: String
-        if removesAppBundle {
-            title = String(format: NSLocalizedString(lines.count == 1 ? "Remove %d app?" : "Remove %d apps?", comment: ""), lines.count)
-            body = String(format: NSLocalizedString("These move to the Trash (recoverable):\n\n%@", comment: ""), listed)
-            confirmButton = NSLocalizedString("Move to Trash", comment: "")
-        } else {
-            title = String(format: NSLocalizedString(lines.count == 1 ? "Remove leftover files for %d app?" : "Remove leftover files for %d apps?", comment: ""), lines.count)
-            body = String(format: NSLocalizedString("The apps themselves stay installed. Burrow removes the support files they keep in your Library — containers, caches, preferences, saved state — and those move to the Trash (recoverable):\n\n%@", comment: ""), listed)
-            confirmButton = NSLocalizedString("Move Files to Trash", comment: "")
+                                        hasReviewedSubset: Bool) -> (title: String, body: String, confirmButton: String) {
+        func render(_ subset: [ConfirmLine]) -> String {
+            subset.map { line -> String in
+                guard let count = line.reviewedCount else { return "• \(line.name)" }
+                return "• \(line.name) — \(String(format: NSLocalizedString("%d reviewed files", comment: ""), count))"
+            }.joined(separator: "\n")
         }
+        let brewed = lines.filter { $0.homebrewCask != nil }
+        let direct = lines.filter { $0.homebrewCask == nil }
+
+        let title = String(format: NSLocalizedString(lines.count == 1 ? "Remove %d app?" : "Remove %d apps?", comment: ""), lines.count)
+        var blocks: [String] = []
+        if !direct.isEmpty {
+            blocks.append(String(format: NSLocalizedString("These move to the Trash — the app itself and the support files it keeps in your Library (containers, caches, preferences, saved state). You can put them back:\n\n%@", comment: ""),
+                                 render(direct)))
+        }
+        if !brewed.isEmpty {
+            blocks.append(String(format: NSLocalizedString("Homebrew removes these by running `brew uninstall --cask --zap`. That doesn't use the Trash, and `--zap` also deletes configuration and data the cask declares — more than the file list can show:\n\n%@", comment: ""),
+                                 render(brewed)))
+        }
+        var body = blocks.joined(separator: "\n\n")
+        body += "\n\n" + NSLocalizedString("If an app can't be removed, Burrow leaves its support files alone too, rather than half-removing it.", comment: "")
+        // The button names the mechanism it triggers. With a brew cask in the set there is no one
+        // mechanism to name, and "Move to Trash" would be the false half.
+        let confirmButton = brewed.isEmpty
+            ? NSLocalizedString("Move to Trash", comment: "")
+            : NSLocalizedString("Remove", comment: "")
         if hasReviewedSubset {
             body += "\n\n" + NSLocalizedString("Reviewed subsets are trashed by Burrow directly and appear in Burrow's Activity log, not `mo history`.", comment: "")
         }
@@ -995,7 +1030,14 @@ final class SoftwareModel: ObservableObject {
         // trashed by Burrow from paths the engine already enumerated, so it needs no identifier.
         let batch = Self.uninstallBatch(for: wholeApps, resolvedIsBundledEngine: isEngine)
 
-        var lines = batch.addressable.map { Self.ConfirmLine(name: $0.name, reviewedCount: nil) }
+        // A whole-app removal is the only kind brew can be involved in — a reviewed subset is
+        // Burrow trashing ticked paths itself, which never shells out to brew — so only these
+        // lines carry a cask token. `uninstallName` IS the token on a `source: "Homebrew"` row
+        // (the engine's `--list` puts it there); on every other row it is the display name.
+        var lines = batch.addressable.map {
+            Self.ConfirmLine(name: $0.name, reviewedCount: nil,
+                             homebrewCask: $0.source == "Homebrew" ? $0.uninstallName : nil)
+        }
         lines += subsetApps.map {
             Self.ConfirmLine(name: $0.name, reviewedCount: pathSelections[$0.id]?.count ?? 0)
         }
@@ -1014,8 +1056,7 @@ final class SoftwareModel: ObservableObject {
 
         let copy = Self.confirmCopy(lines: lines,
                                     skipped: batch.unaddressable.map(\.name),
-                                    hasReviewedSubset: !subsetApps.isEmpty,
-                                    removesAppBundle: !isEngine)
+                                    hasReviewedSubset: !subsetApps.isEmpty)
         let alert = NSAlert()
         alert.messageText = copy.title
         alert.informativeText = copy.body
@@ -1026,7 +1067,7 @@ final class SoftwareModel: ObservableObject {
 
         if !subsetApps.isEmpty { trashSubsets(subsetApps) }
         if !batch.addressable.isEmpty {
-            engineUninstall(batch.addressable, arguments: batch.arguments, removesAppBundle: !isEngine)
+            engineUninstall(batch.addressable, arguments: batch.arguments)
         }
     }
 
@@ -1070,8 +1111,8 @@ final class SoftwareModel: ObservableObject {
         }
     }
 
-    /// The engine path — `mo uninstall <ids>`, Trash-based, with the matcher pre-flight (audit H4)
-    /// before any y is answered.
+    /// The engine path — `mo uninstall <ids>`, Trash-based, with the matched-set pre-flight
+    /// (audit H4) before any y is answered.
     ///
     /// `arguments` arrives already resolved by `uninstallBatch` rather than being derived here.
     /// That is the fix for the defect this method WAS: it built its own argv from
@@ -1079,13 +1120,11 @@ final class SoftwareModel: ObservableObject {
     /// sharing a display name the sheet reviewed one app's leftovers and this ran against
     /// another's. One resolution per user action, shared by the preview, the sheet and the run.
     ///
-    /// `arguments` is also what goes to `UninstallGuard.mismatchDescription` as `confirmed`, which
-    /// keeps that comparison inside a single namespace: a matched set only ever comes back
-    /// non-nil from the LEGACY text format, and on that path `arguments` are display names, the
-    /// same thing mo prints. Should a matched set ever appear on the engine path, bundle ids vs.
-    /// display names would read as a mismatch and abort — fail-closed in both directions.
-    private func engineUninstall(_ targets: [InstalledApp], arguments: [String],
-                                 removesAppBundle: Bool) {
+    /// `arguments` is also what the pre-flight compares against, and against the bundled engine
+    /// that comparison is now EXACT rather than a text parse: `apps[].query` echoes each argument
+    /// back verbatim, so bundle ids are checked against the very bundle ids that were sent, in one
+    /// namespace, with the engine's refusals and its ambiguity verdict read from the same payload.
+    private func engineUninstall(_ targets: [InstalledApp], arguments: [String]) {
         // The dialog above is the consent; the ticket (argv / stdin /
         // timeout / preflight) is minted by the shared gate — the same
         // truth table and catalog the MCP server uses. (One deliberate
@@ -1095,62 +1134,43 @@ final class SoftwareModel: ObservableObject {
             .uninstall(apps: arguments, permanent: false), .real,
             .gui(hasFullDiskAccess: true, userConfirmed: true)) else { return }
         loading = true
-        // Surface the run in the menu-bar HUD's Activity section too. The label says what the
-        // resolved binary actually does: the engine takes the apps' `~/Library` support files and
-        // leaves the `.app` bundles installed, so "Uninstalling N apps" would be the same false
-        // claim the confirm sheet used to make.
+        // Surface the run in the menu-bar HUD's Activity section too. Both resolved binaries now
+        // remove the `.app` as well as its support files, so "Uninstalling" is the true label —
+        // it was "Removing leftover files" only for as long as the engine really did leave the
+        // bundles installed.
         let opId = UUID()
-        let hudLabel = removesAppBundle
-            ? "Uninstalling \(targets.count) app\(targets.count == 1 ? "" : "s")"
-            : "Removing leftover files for \(targets.count) app\(targets.count == 1 ? "" : "s")"
+        let hudLabel = "Uninstalling \(targets.count) app\(targets.count == 1 ? "" : "s")"
         OperationCenter.shared.begin(opId, label: hudLabel, notifiesOnEnd: true)
         DispatchQueue.global(qos: .userInitiated).async {
-            // Pre-flight (audit H4): mo does its own name matching, so before
-            // answering any prompt, verify what it MATCHED equals what the
-            // user CONFIRMED. `--dry-run` changes nothing and exits at its
-            // prompt on stdin EOF; an unparseable result aborts (fail closed).
+            // Pre-flight (audit H4): the resolved binary does its own matching, so before anything
+            // is removed, verify what it says it will ACT ON equals what the user CONFIRMED.
+            // `--dry-run` changes nothing; anything unreadable aborts (fail closed).
             let pre = ticket.action.preflightCommand!
             let dry = try? MoEngine.shared.capture(
                 MoCommand(target: .mo, args: pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120))
-            let dryText = (dry?.stdout ?? "") + "\n" + (dry?.stderr ?? "")
-            // Read the dry run's OWN failure before deciding what to tell the user. The matcher
-            // below is unchanged and still fails closed on the engine's JSON; this only stops
-            // the alert from blaming the build when the engine actually said something specific
-            // (a bad bundle id, a permission denial) on the stdout channel nothing here read.
-            let dryFailed = (dry?.exitCode ?? 1) != 0
-                || BurrowEnvelope.reportsFailure(stdout: dry?.stdout ?? "")
-            let dryReason = dryFailed
+            let reading = UninstallGuard.readDryRun(stdout: dry?.stdout ?? "",
+                                                    stderr: dry?.stderr ?? "")
+            // A non-zero exit with an unreadable body is its own failure, and the engine's reason
+            // lives on stdout (see BurrowEnvelope) — read it so an abort can name a bad bundle id
+            // or a permission denial instead of blaming the format.
+            let dryReason = ((dry?.exitCode ?? 1) != 0
+                             || BurrowEnvelope.reportsFailure(stdout: dry?.stdout ?? ""))
                 ? BurrowEnvelope.failureReason(stdout: dry?.stdout ?? "", stderr: dry?.stderr ?? "")
                 : nil
-            let matched = UninstallGuard.matchedApps(inDryRunOutput: dryText)
-            let problem: String?
-            if let matched {
-                problem = UninstallGuard.mismatchDescription(confirmed: arguments, matched: matched)
-            } else {
-                // The bundled engine answers in JSON, not the legacy "Matched N app(s):" text
-                // this guard parses, so `matched` is nil on (almost) every real call — see
-                // UninstallGuard.unavailableReason for the ONE reason that still keeps this
-                // closed now that multi-app resolution, `--permanent`/Trash routing and the
-                // bundle-id argument have all landed. Teaching this guard to read the engine's
-                // JSON is the small half of opening it; read that doc comment first.
-                problem = UninstallGuard.unavailableReason
-            }
-            if let problem {
+            if let problem = UninstallGuard.abortReason(confirmed: arguments, dryRun: reading) {
                 Task { @MainActor in
                     self.loading = false
                     OperationCenter.shared.end(opId, success: false,
-                                               detail: matched == nil
-                                                   ? NSLocalizedString("aborted — uninstall unavailable in this build", comment: "")
-                                                   : NSLocalizedString("aborted — matcher mismatch", comment: ""))
+                                               detail: NSLocalizedString("aborted — nothing removed", comment: ""))
                     let alert = NSAlert()
                     alert.messageText = NSLocalizedString("Uninstall aborted", comment: "")
-                    // The nil-match case IS the whole story (a build limitation, not a specific
-                    // disagreement) — state it directly rather than folding it into the
-                    // "matcher didn't agree" template, which would misdescribe it.
-                    var informative = matched == nil ? problem : String(
-                        format: NSLocalizedString("mo's matcher didn't agree with your selection, so nothing was removed.\n\n%@", comment: ""),
-                        problem)
-                    if let dryReason {
+                    var informative = problem
+                    // Only add the engine's raw reason when the abort didn't already come FROM it:
+                    // `.engineRefused` already quotes that exact sentence, and printing it twice
+                    // reads as two separate problems.
+                    var quotesEngineReason = false
+                    if case .engineRefused = reading { quotesEngineReason = true }
+                    if let dryReason, !quotesEngineReason {
                         informative += "\n\n" + String(
                             format: NSLocalizedString("The engine reported: %@", comment: ""),
                             String(dryReason.prefix(300)))
@@ -1175,6 +1195,39 @@ final class SoftwareModel: ObservableObject {
             // uninstall that really happened is re-labelled as failed.
             let ok = (res?.exitCode ?? 1) == 0
                 && !BurrowEnvelope.reportsFailure(stdout: res?.stdout ?? "")
+
+            // PARTIAL, and it has to be read BEFORE the generic failure branch below. A run where
+            // one app's bundle was refused still exits non-zero with an `ok:TRUE` envelope — the
+            // engine's `i32::from(failed)` — so `ok` is false while `failureReason` has no
+            // classified message to find and would fall back to printing the whole JSON document.
+            // The per-app `status` is the real answer, and it is also the only place "the leftovers
+            // went and the app did not" is visible at all.
+            let outcome = UninstallGuard.readOutcome(stdout: res?.stdout ?? "")
+            if let outcome, let report = UninstallGuard.problemReport(outcome) {
+                let (parsed, unavailable) = Self.fetch()
+                Task { @MainActor in
+                    // Something DID come away for the apps that succeeded, so the list is stale —
+                    // re-scan (unlike the total-failure branch, which keeps the selection to retry).
+                    self.apps = parsed
+                    self.inventoryUnavailable = unavailable
+                    self.selected = []
+                    self.loading = false
+                    self.recentLoaded = false
+                    if self.sort == .recent { self.ensureRecentDates() }
+                    OperationCenter.shared.end(
+                        opId, success: false,
+                        detail: "\(outcome.applicationsRemoved) removed · \(outcome.problems.count) not")
+                    let alert = NSAlert()
+                    alert.messageText = outcome.applicationsRemoved == 0
+                        ? NSLocalizedString("Uninstall didn't finish", comment: "")
+                        : NSLocalizedString("Uninstall finished partly", comment: "")
+                    alert.informativeText = report
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+                    alert.runModalQuiet()
+                }
+                return
+            }
 
             // FAILURE (#254): the apps are still installed, so there's nothing to re-scan —
             // keep the list AND the selection so the user can retry, and surface the
@@ -1221,10 +1274,25 @@ final class SoftwareModel: ObservableObject {
                 // would silently collapse after an uninstall.
                 self.recentLoaded = false
                 if self.sort == .recent { self.ensureRecentDates() }
-                OperationCenter.shared.end(opId, success: true,
-                                           detail: removesAppBundle
-                                               ? "\(targets.count) moved to Trash"
-                                               : "leftovers trashed for \(targets.count) app\(targets.count == 1 ? "" : "s")")
+                // Say which mechanism actually removed them. `via: "brew"` is NOT the Trash —
+                // brew unlinks — so claiming "moved to Trash" for a cask would send the user
+                // looking somewhere the app isn't.
+                let viaBrew = outcome?.apps.filter { $0.application.via == "brew" }.count ?? 0
+                OperationCenter.shared.end(
+                    opId, success: true,
+                    detail: viaBrew > 0
+                        ? "\(targets.count) removed · \(viaBrew) via Homebrew"
+                        : "\(targets.count) moved to Trash")
+                // Reachable only on an elevated run, which this call site never mints — but a
+                // warning the engine bothered to emit is not something to swallow on the way past.
+                if let warnings = outcome?.warnings, !warnings.isEmpty {
+                    let alert = NSAlert()
+                    alert.messageText = NSLocalizedString("Uninstall finished", comment: "")
+                    alert.informativeText = warnings.joined(separator: "\n\n")
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+                    alert.runModalQuiet()
+                }
             }
         }
     }

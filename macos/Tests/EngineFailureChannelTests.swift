@@ -245,10 +245,10 @@ final class EngineFailureChannelTests: XCTestCase {
     }
 
     func testWire_uninstallAbort_engineErrorIsAdditive_andNeverFlipsRan() throws {
-        let plain = ActionWire.uninstallAbort(apps: ["Slack"], matched: nil)
+        let plain = ActionWire.uninstallAbort(apps: ["Slack"], reason: "nothing was removed")
         XCTAssertFalse(plain.contains("engine_error"), "absent unless the dry run itself failed")
 
-        let json = ActionWire.uninstallAbort(apps: ["Slack"], matched: nil,
+        let json = ActionWire.uninstallAbort(apps: ["Slack"], reason: "nothing was removed",
                                              engineError: "No matching applications found. (Slack)")
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertEqual(obj["engine_error"] as? String, "No matching applications found. (Slack)")
@@ -256,19 +256,25 @@ final class EngineFailureChannelTests: XCTestCase {
         XCTAssertNotNil(obj["error"], "the abort still says why it aborted")
     }
 
-    /// The fail-closed pre-flight is a DECISION point, not a display string, and reading the
-    /// envelope must not have opened it. The engine's dry-run answer is JSON, so the legacy
-    /// "Matched N app(s):" parser either cannot read it (nil → abort) or reads its
-    /// "No matching applications found." wording as an EMPTY matched set — which then disagrees
-    /// with the confirmed selection and aborts too. Both roads end at "nothing was removed".
-    func testUninstallPreflight_engineDryRun_stillFailsClosed() {
+    /// The pre-flight is a DECISION point, and OPENING it must not have opened this hole with it.
+    /// The engine keeps the oracle's exact "No matching applications found." wording, which is the
+    /// one sentence the legacy text parser reads as an empty matched set — so fed engine JSON it
+    /// used to answer `[]`, and the run failed closed only because `[]` then disagreed with a
+    /// non-empty confirmed set. That coincidence is gone: the envelope is checked first, the two
+    /// paths share no parsing, and the refusal is now reported as the engine's own refusal.
+    func testUninstallPreflight_engineRefusal_isReadAsARefusalNotAsAnEmptyMatch() throws {
         let engineDryRunFailure = #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","error":{"kind":"error","message":"No matching applications found. (NoSuchAppXYZ)","platform":"macos"}}"#
-        let matched = UninstallGuard.matchedApps(inDryRunOutput: engineDryRunFailure)
-        if let matched {
-            XCTAssertNotNil(
-                UninstallGuard.mismatchDescription(confirmed: ["com.foo.Bar"], matched: matched),
-                "an empty matched set must disagree with a non-empty confirmed set")
+        XCTAssertNil(UninstallGuard.matchedApps(inDryRunOutput: engineDryRunFailure),
+                     "an envelope is never a legacy matched set — nil, not []")
+        guard case .engineRefused(let message) = UninstallGuard.readDryRun(stdout: engineDryRunFailure,
+                                                                          stderr: "") else {
+            return XCTFail("an ok:false envelope is the refusal case")
         }
+        XCTAssertEqual(message, "No matching applications found. (NoSuchAppXYZ)")
+        let reason = try XCTUnwrap(UninstallGuard.abortReason(
+            confirmed: ["com.foo.Bar"],
+            dryRun: UninstallGuard.readDryRun(stdout: engineDryRunFailure, stderr: "")))
+        XCTAssertTrue(reason.contains("NoSuchAppXYZ"), reason)
         XCTAssertNil(UninstallGuard.matchedApps(inDryRunOutput: analyzeSuccess),
                      "a success envelope is not a matched set either")
     }

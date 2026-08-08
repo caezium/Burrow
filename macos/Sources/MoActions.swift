@@ -334,27 +334,22 @@ enum ActionWire {
         return json(obj)
     }
 
-    /// `engineError` is the dry run's OWN reason, present only when the pre-flight run itself
-    /// failed. Without it, an engine failure (bad bundle id, permission denial) came back
-    /// wearing the generic "uninstall is unavailable in this build" message — true of the build,
-    /// but not what happened. It never changes the outcome: this function only ever emits
-    /// `ran: false`.
-    static func uninstallAbort(apps: [String], matched: [String]?,
-                               mismatch: String? = nil, engineError: String? = nil) -> String {
-        var obj: [String: Any] = ["command": "uninstall", "ran": false, "apps": apps]
+    /// `reason` is `UninstallGuard.abortReason`'s verdict — the ONE sentence a GUI user and an
+    /// agent both see, so neither surface invents its own guess at why nothing was removed.
+    ///
+    /// `matched` is the set the resolved binary said it would act on, when it said anything: the
+    /// echoed `apps[].query` from the engine, the parsed display names from a legacy `mo`, and nil
+    /// when the dry run was refused or unreadable. `engineError` is the dry run's OWN reason,
+    /// present only when that run itself failed — without it, an engine failure (a bad bundle id, a
+    /// permission denial) came back wearing a generic message that described the wrong thing.
+    ///
+    /// None of it changes the outcome: this function only ever emits `ran: false`.
+    static func uninstallAbort(apps: [String], reason: String,
+                               matched: [String]? = nil, engineError: String? = nil) -> String {
+        var obj: [String: Any] = ["command": "uninstall", "ran": false, "apps": apps,
+                                  "error": "aborted: " + reason]
         if let engineError, !engineError.isEmpty { obj["engine_error"] = engineError }
-        if let matched {
-            obj["matched"] = matched
-            obj["error"] = "aborted: mo matched a different set than requested "
-                + "(\(mismatch ?? "")). Use exact names from burrow_list_apps."
-        } else {
-            // The bundled engine answers in JSON, not the legacy text this preflight parses, so
-            // `matched` is nil on (almost) every real call — say plainly that uninstall is
-            // unavailable in this build (and why) rather than implying a check was attempted
-            // and came back inconclusive. Same wording an agent and a GUI user both see —
-            // UninstallGuard.unavailableReason is the one place it's spelled out.
-            obj["error"] = "aborted: " + UninstallGuard.unavailableReason
-        }
+        if let matched { obj["matched"] = matched }
         return json(obj)
     }
 

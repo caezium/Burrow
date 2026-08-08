@@ -203,7 +203,6 @@
 "Uninstall (%d)" = "解除安裝 (%d)";
 "Uninstall %d app?" = "要解除安裝 %d 個 App 嗎？";
 "Uninstall %d apps?" = "要解除安裝 %d 個 App 嗎？";
-"These move to the Trash (recoverable):\n\n%@" = "這些 App 會移到垃圾桶（可復原）：\n\n%@";
 "Move to Trash" = "移到垃圾桶";
 "Checking Homebrew…" = "正在檢查 Homebrew…";
 "Everything's up to date" = "所有項目都是最新版本";
@@ -444,13 +443,31 @@
 "Also allow uninstalls & permanent deletes" = "同時允許解除安裝與永久刪除";
 "A second key for what the Trash can't undo: real `mo uninstall`, and `permanent:true` deletes. Needs the cleanup switch above too; an uninstall also aborts unless mo matches exactly the requested apps." = "針對垃圾桶無法挽回的操作的第二道開關：真正的 `mo uninstall`，以及 `permanent:true` 的永久刪除。還需要上方的清理開關同時開啟；若 mo 比對到的應用程式與請求不完全一致，解除安裝也會中止。";
 "Uninstall aborted" = "解除安裝已中止";
-"mo's matcher didn't agree with your selection, so nothing was removed.\n\n%@" = "mo 比對到的應用程式與你的選擇不一致，因此未刪除任何內容。\n\n%@";
 "mo would also remove: %@" = "mo 還會額外刪除：%@";
 "mo did not match: %@" = "mo 未比對到：%@";
-"couldn't verify which apps mo matched" = "無法確認 mo 比對到了哪些應用程式";
-"aborted — matcher mismatch" = "已中止 — 比對不一致";
+"The dry run's output wasn't in a format Burrow can confirm a matched set from, so nothing was removed." = "預演輸出的格式無法讓 Burrow 確認比對到的 App 集合，因此未刪除任何內容。";
+"The engine refused the dry run, so nothing was removed: %@" = "引擎拒絕了這次預演，因此未刪除任何內容：%@";
+"The engine matched no installed app for: %@" = "引擎沒有為以下項目比對到任何已安裝的 App：%@";
+"“%1$@” resolves to %2$d applications (%3$@), so the engine refuses to act on it. Remove them one at a time." = "「%1$@」會比對到 %2$d 個 App（%3$@），引擎因此拒絕執行。請逐一刪除。";
+"The engine resolved %1$d applications for %2$d selected, so the sets don't line up." = "你選擇了 %2$d 個 App，引擎卻解析出 %1$d 個，兩者對不上。";
+"The engine won't remove %1$@: %2$@" = "引擎不會刪除 %1$@：%2$@";
+"Needs an administrator: %@. Burrow doesn't elevate this run, so it may fail on the app itself." = "需要管理者權限：%@。Burrow 不會提升這次執行的權限，因此刪除 App 本體時可能失敗。";
+"one of these apps" = "其中某個 App";
+"Homebrew removes %1$@: `%2$@`. `--zap` also deletes configuration and data the cask declares, which the preview can't list." = "Homebrew 會刪除 %1$@：`%2$@`。`--zap` 還會刪除該 cask 宣告的設定與資料，預覽無法列出這些內容。";
+"aborted — nothing removed" = "已中止 — 未刪除任何內容";
 "uninstall failed" = "解除安裝失敗";
 "OK" = "好";
+
+/* ===== Uninstall outcomes (per app: removed / partial / refused) ===== */
+"Uninstall didn't finish" = "解除安裝未完成";
+"Uninstall finished partly" = "解除安裝只完成了一部分";
+"Uninstall finished" = "解除安裝已完成";
+"%@ — the engine refused to remove the application." = "%@ —— 引擎拒絕刪除該 App。";
+"%@ — the application could not be removed." = "%@ —— 無法刪除該 App。";
+"%@ — the application was removed, but some of its support files were not." = "%@ —— App 已刪除，但部分支援檔案未刪除。";
+"%@ — the removal finished partly." = "%@ —— 刪除只完成了一部分。";
+"Its support files were left alone, so the app is still installed rather than half-removed." = "它的支援檔案原樣保留，因此 App 仍是完整安裝的，而不是刪掉一半。";
+"Next: %@" = "下一步：%@";
 "done" = "完成";
 "failed" = "失敗";
 "select none" = "全部取消";
@@ -607,10 +624,9 @@
 "Remove %d" = "移除 %d 項";
 "Remove %d app?" = "移除 %d 個 App？";
 "Remove %d apps?" = "移除 %d 個 App？";
-"Remove leftover files for %d app?" = "移除 %d 個 App 的殘留檔案？";
-"Remove leftover files for %d apps?" = "移除 %d 個 App 的殘留檔案？";
-"The apps themselves stay installed. Burrow removes the support files they keep in your Library — containers, caches, preferences, saved state — and those move to the Trash (recoverable):\n\n%@" = "App 本身仍會保留。Burrow 只移除它們存放在「資源庫」中的支援檔案 —— 容器、快取、偏好設定、已儲存狀態 —— 這些檔案會移到垃圾桶（可復原）：\n\n%@";
-"Move Files to Trash" = "將檔案移到垃圾桶";
+"These move to the Trash — the app itself and the support files it keeps in your Library (containers, caches, preferences, saved state). You can put them back:\n\n%@" = "以下內容會移到垃圾桶 —— App 本身，以及它存放在「資源庫」裡的支援檔案（容器、快取、偏好設定、已儲存狀態）。你可以把它們放回原處：\n\n%@";
+"Homebrew removes these by running `brew uninstall --cask --zap`. That doesn't use the Trash, and `--zap` also deletes configuration and data the cask declares — more than the file list can show:\n\n%@" = "以下內容由 Homebrew 透過 `brew uninstall --cask --zap` 刪除。這道指令不經過垃圾桶，而且 `--zap` 還會刪除該 cask 宣告的設定與資料 —— 比檔案清單列出的更多：\n\n%@";
+"If an app can't be removed, Burrow leaves its support files alone too, rather than half-removing it." = "如果某個 App 無法刪除，Burrow 也會原樣保留它的支援檔案，而不是把它刪掉一半。";
 "Skipped — these have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@" = "已略過 —— 這些 App 沒有 Bundle ID，Burrow 無法向引擎指明是哪一個：\n\n%@";
 "Nothing Burrow can remove" = "沒有 Burrow 可以移除的項目";
 "These have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@" = "這些 App 沒有 Bundle ID，Burrow 無法向引擎指明是哪一個：\n\n%@";

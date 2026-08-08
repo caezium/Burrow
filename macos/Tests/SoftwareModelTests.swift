@@ -207,56 +207,87 @@ final class SoftwareModelTests: XCTestCase {
 
     // MARK: - confirmCopy
     //
-    // The sheet used to say "Remove 2 apps?" over "These move to the Trash (recoverable):" and a
-    // list of app names. Against the bundled engine the apps do not move to the Trash and are not
-    // removed at all — their `~/Library` support files are. Asserted by comparing against the
-    // localized keys themselves rather than English substrings, so these hold in any locale the
-    // test host runs under.
+    // This sheet has now been wrong in BOTH directions. It said "These move to the Trash
+    // (recoverable)" while the engine removed only `~/Library` leftovers; it was corrected to "The
+    // apps themselves stay installed"; and burrow-engine @ df9ea3f then made THAT false by porting
+    // `lib/uninstall/batch.sh`'s bundle removal. So the assertions below pin the two claims that
+    // can be false about a real machine — where the app goes, and what Homebrew does instead —
+    // rather than the wording around them. Compared against the localized keys themselves, not
+    // English substrings, so they hold in any locale the test host runs under.
 
     private func lines(_ names: [String]) -> [SoftwareModel.ConfirmLine] {
         names.map { SoftwareModel.ConfirmLine(name: $0, reviewedCount: nil) }
     }
 
-    func testConfirmCopy_enginePath_doesNotClaimTheAppsAreRemovedOrTrashed() {
+    /// Reverting to either dead wording — "These move to the Trash (recoverable)" with no mention
+    /// of the app, or "The apps themselves stay installed" — fails this, because neither produces
+    /// the sentence asserted here. A negative assertion against the old English literals would not
+    /// add anything: those keys no longer exist in either `.strings` file, so under a zh test host
+    /// they would compare against themselves and pass vacuously.
+    func testConfirmCopy_saysTheAppItselfGoesToTheTrash() {
         let copy = SoftwareModel.confirmCopy(lines: lines(["Steam", "Stats"]), skipped: [],
-                                             hasReviewedSubset: false, removesAppBundle: false)
-        let legacySentence = String(format: NSLocalizedString("These move to the Trash (recoverable):\n\n%@", comment: ""),
-                                    "• Steam\n• Stats")
-        XCTAssertFalse(copy.body.contains(legacySentence),
-                       "the engine removes leftovers, not the apps — that sentence is the false promise")
-        XCTAssertEqual(copy.body,
-                       String(format: NSLocalizedString("The apps themselves stay installed. Burrow removes the support files they keep in your Library — containers, caches, preferences, saved state — and those move to the Trash (recoverable):\n\n%@", comment: ""),
-                              "• Steam\n• Stats"))
-        XCTAssertEqual(copy.title,
-                       String(format: NSLocalizedString("Remove leftover files for %d apps?", comment: ""), 2))
-        XCTAssertEqual(copy.confirmButton, NSLocalizedString("Move Files to Trash", comment: ""))
-    }
-
-    func testConfirmCopy_enginePath_singularTitle() {
-        let copy = SoftwareModel.confirmCopy(lines: lines(["Steam"]), skipped: [],
-                                             hasReviewedSubset: false, removesAppBundle: false)
-        XCTAssertEqual(copy.title,
-                       String(format: NSLocalizedString("Remove leftover files for %d app?", comment: ""), 1))
-    }
-
-    /// A real legacy `mo` DOES enumerate and remove `/Applications/Foo.app`, so on that path the
-    /// original wording is accurate and must be kept — the caveat is about the engine, not about
-    /// hedging everywhere.
-    func testConfirmCopy_legacyPath_keepsTheOriginalWording() {
-        let copy = SoftwareModel.confirmCopy(lines: lines(["Steam", "Stats"]), skipped: [],
-                                             hasReviewedSubset: false, removesAppBundle: true)
+                                             hasReviewedSubset: false)
+        XCTAssertTrue(copy.body.contains(
+            String(format: NSLocalizedString("These move to the Trash — the app itself and the support files it keeps in your Library (containers, caches, preferences, saved state). You can put them back:\n\n%@", comment: ""),
+                   "• Steam\n• Stats")), copy.body)
         XCTAssertEqual(copy.title,
                        String(format: NSLocalizedString("Remove %d apps?", comment: ""), 2))
-        XCTAssertEqual(copy.body,
-                       String(format: NSLocalizedString("These move to the Trash (recoverable):\n\n%@", comment: ""),
-                              "• Steam\n• Stats"))
         XCTAssertEqual(copy.confirmButton, NSLocalizedString("Move to Trash", comment: ""))
+    }
+
+    func testConfirmCopy_singularTitle() {
+        let copy = SoftwareModel.confirmCopy(lines: lines(["Steam"]), skipped: [],
+                                             hasReviewedSubset: false)
+        XCTAssertEqual(copy.title,
+                       String(format: NSLocalizedString("Remove %d app?", comment: ""), 1))
+    }
+
+    /// A Homebrew cask is removed by `brew uninstall --cask --zap`, which does not Trash anything
+    /// and deletes more than the preview can enumerate. Folding it into the Trash sentence would
+    /// make the sheet's central promise false for exactly the apps where it matters most, so it
+    /// gets its own paragraph and the button stops naming a mechanism that only half applies.
+    func testConfirmCopy_homebrewAppsGetTheirOwnParagraphAndNoTrashPromise() {
+        let copy = SoftwareModel.confirmCopy(
+            lines: [SoftwareModel.ConfirmLine(name: "Stats", reviewedCount: nil, homebrewCask: "stats")],
+            skipped: [], hasReviewedSubset: false)
+        XCTAssertTrue(copy.body.contains(
+            String(format: NSLocalizedString("Homebrew removes these by running `brew uninstall --cask --zap`. That doesn't use the Trash, and `--zap` also deletes configuration and data the cask declares — more than the file list can show:\n\n%@", comment: ""),
+                   "• Stats")), copy.body)
+        XCTAssertFalse(copy.body.contains(
+            String(format: NSLocalizedString("These move to the Trash — the app itself and the support files it keeps in your Library (containers, caches, preferences, saved state). You can put them back:\n\n%@", comment: ""),
+                   "• Stats")),
+            "a brew app does not go to the Trash, so it must not appear under that sentence")
+        XCTAssertEqual(copy.confirmButton, NSLocalizedString("Remove", comment: ""),
+                       "with a cask in the set there is no single mechanism for the button to name")
+    }
+
+    func testConfirmCopy_mixedSetSplitsTheTwoMechanisms() {
+        let copy = SoftwareModel.confirmCopy(
+            lines: [SoftwareModel.ConfirmLine(name: "Steam", reviewedCount: nil),
+                    SoftwareModel.ConfirmLine(name: "Stats", reviewedCount: nil, homebrewCask: "stats")],
+            skipped: [], hasReviewedSubset: false)
+        XCTAssertTrue(copy.body.contains("• Steam"), copy.body)
+        XCTAssertTrue(copy.body.contains("• Stats"), copy.body)
+        // Each app is listed once, under the mechanism that actually applies to it.
+        XCTAssertEqual(copy.body.components(separatedBy: "• Steam").count - 1, 1, copy.body)
+        XCTAssertEqual(copy.body.components(separatedBy: "• Stats").count - 1, 1, copy.body)
+        XCTAssertEqual(copy.confirmButton, NSLocalizedString("Remove", comment: ""))
+    }
+
+    /// The engine gates the leftover sweep on the bundle coming away, so an app it cannot remove
+    /// keeps its support files too. Said before consent, it makes a "nothing happened for this one"
+    /// outcome legible instead of baffling.
+    func testConfirmCopy_statesThatAFailedRemovalLeavesTheSupportFilesAlone() {
+        let copy = SoftwareModel.confirmCopy(lines: lines(["Steam"]), skipped: [],
+                                             hasReviewedSubset: false)
+        XCTAssertTrue(copy.body.contains(NSLocalizedString("If an app can't be removed, Burrow leaves its support files alone too, rather than half-removing it.", comment: "")),
+                      copy.body)
     }
 
     func testConfirmCopy_namesEveryAppItWillActOnAndEveryAppItSkips() {
         let copy = SoftwareModel.confirmCopy(lines: lines(["Steam", "Stats"]),
                                              skipped: ["Synergy", "Stardew Valley"],
-                                             hasReviewedSubset: false, removesAppBundle: false)
+                                             hasReviewedSubset: false)
         for name in ["Steam", "Stats", "Synergy", "Stardew Valley"] {
             XCTAssertTrue(copy.body.contains(name), "\(name) must appear in the sheet: \(copy.body)")
         }
@@ -267,7 +298,7 @@ final class SoftwareModelTests: XCTestCase {
     func testConfirmCopy_reviewedSubsetShowsItsFileCountAndTheActivityLogCaveat() {
         let copy = SoftwareModel.confirmCopy(
             lines: [SoftwareModel.ConfirmLine(name: "Stats", reviewedCount: 3)],
-            skipped: [], hasReviewedSubset: true, removesAppBundle: false)
+            skipped: [], hasReviewedSubset: true)
         XCTAssertTrue(copy.body.contains(String(format: NSLocalizedString("%d reviewed files", comment: ""), 3)),
                       copy.body)
         XCTAssertTrue(copy.body.contains(NSLocalizedString("Reviewed subsets are trashed by Burrow directly and appear in Burrow's Activity log, not `mo history`.", comment: "")),

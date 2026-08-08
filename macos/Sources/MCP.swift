@@ -374,7 +374,7 @@ struct ToolCatalog {
             ],
             [
                 "name": "burrow_list_apps",
-                "description": "Installed applications and the identifiers `burrow_uninstall` accepts (from `mo uninstall --list`): each row carries `name`, `bundle_id`, `uninstall_name` (the Homebrew cask token for brew-managed apps, else the display name), `path` and `size`. Read-only. Call this first and pass `bundle_id` to burrow_uninstall — `name` is not unique across installed apps, so it can resolve to a different application than the one you meant. A row whose `bundle_id` is `\"unknown\"` has no bundle identifier at all and cannot be targeted safely.",
+                "description": "Installed applications and the identifiers `burrow_uninstall` accepts (from `mo uninstall --list`): each row carries `name`, `bundle_id`, `source`, `uninstall_name` (the Homebrew cask token for brew-managed apps, else the display name), `path` and `size`. Read-only. Call this first and pass `bundle_id` to burrow_uninstall — `name` is not unique across installed apps, so it can resolve to a different application than the one you meant. A row whose `bundle_id` is `\"unknown\"` has no bundle identifier at all and cannot be targeted safely. A row with `source: \"Homebrew\"` is removed by `brew uninstall --cask --zap`, not by moving it to the Trash — check this before telling a user their app is recoverable.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [String: Any](),
@@ -491,13 +491,13 @@ struct ToolCatalog {
             ],
             [
                 "name": "burrow_uninstall",
-                "description": "Remove an app's LEFTOVER SUPPORT FILES via `mo uninstall <app>…` — the per-app data under ~/Library (containers, Application Support, caches, preferences, logs, saved state, HTTP storage, WebKit data, cookies). IT DOES NOT UNINSTALL THE APPLICATION: the .app bundle is left in place and no `brew uninstall --cask` is run, so the app stays installed and will still appear in burrow_list_apps afterwards. Report it that way to the user — do not tell them an app was removed. Identify apps by `bundle_id` from burrow_list_apps: display names are not unique (a machine can hold several apps called `Steam` or `Updater`) and the engine resolves an ambiguous name to whichever one it sees first. SAFE BY DEFAULT: without confirm:true it runs `--dry-run` (preview only). A real run needs confirm:true AND BOTH Settings opt-ins (cleanups + the dedicated uninstall/permanent switch), else it's reported as blocked; it also aborts unless the matcher resolves exactly the requested apps. Removed files go to the Trash (recoverable) unless `permanent` is true.",
+                "description": "UNINSTALL an application via `mo uninstall <app>…` — the .app bundle itself AND the per-app data under ~/Library (containers, Application Support, caches, preferences, logs, saved state, HTTP storage, WebKit data, cookies). The bundle and its files move to the Trash, where the user can put them back, unless `permanent` is true — then they are deleted outright and are not recoverable. EXCEPTION, and tell the user before you confirm: an app installed by Homebrew (`source: \"Homebrew\"` in burrow_list_apps) is removed by `brew uninstall --cask --zap <token>`, which does NOT use the Trash and, via the cask's zap stanza, also deletes configuration and data the dry-run file list cannot enumerate. Identify apps by `bundle_id` from burrow_list_apps: display names are not unique (a machine can hold several apps called `Steam` or `Updater`) and an ambiguous term is REFUSED rather than guessed. SAFE BY DEFAULT: without confirm:true it runs `--dry-run` (preview only; its `items[]` carry `kind: \"application\"|\"leftover\"`, and `requires_admin` tells you the run needs elevation Burrow does not have). A real run needs confirm:true AND BOTH Settings opt-ins (cleanups + the dedicated uninstall/permanent switch), else it's reported as blocked; it also aborts unless the dry run resolves exactly the requested apps. OUTCOMES ARE PER APP: `apps[].status` is `removed`, `partial` or `refused`, and a bundle that could not be removed leaves its support files in place too — report `partial`/`refused` honestly, with the engine's `suggestion`, instead of summarising the run as done.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "apps": ["type": "array", "items": ["type": "string"], "description": "One `bundle_id` per app, exactly as burrow_list_apps reports it. A display name or Homebrew cask token also resolves, but only a bundle id is unambiguous."],
                         "confirm": ["type": "boolean", "description": "true = actually uninstall (requires the Settings opt-in). Omit/false = dry-run preview only."],
-                        "permanent": ["type": "boolean", "description": "true = bypass the Trash and delete immediately. Default false (recoverable)."],
+                        "permanent": ["type": "boolean", "description": "true = bypass the Trash and delete the app and its files immediately, with no way to put them back. Default false, which moves them to the Trash. Ignored for a Homebrew cask: brew never uses the Trash either way."],
                     ],
                     "required": ["apps"],
                     "additionalProperties": false,
@@ -1016,23 +1016,27 @@ struct ToolCatalog {
         if case .verifyUninstallMatch(let expected) = ticket.preflight,
            let pre = ticket.action.preflightCommand {
             let dry = Self.runMo(pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120)
-            // `matchedApps` keeps parsing the LEGACY "Matched N app(s):" text and keeps failing
-            // closed against the engine's JSON — deliberately. It is a decision point, not a
-            // display string: teaching it to read the envelope would open a real uninstall on
-            // an engine that removes support files but never the .app (see
-            // UninstallGuard.unavailableReason). What changes is only that the abort now carries
-            // the engine's own error when the dry run FAILED, so an agent isn't told the build
-            // is limited when the actual problem was e.g. a permission denial.
+            // The decision point, and it fails closed on anything it cannot read. Against the
+            // bundled engine it reads `apps[].query` — the arguments echoed back verbatim — so an
+            // agent's requested set is checked against the engine's resolved set exactly, in one
+            // namespace; against a legacy `mo` it still parses that binary's "Matched N app(s):"
+            // display-name list. The two are routed by the envelope discriminator and share no
+            // parsing, which is what stops the engine's "No matching applications found." wording
+            // from being read as the legacy parser's empty-match answer.
             let dryFailed = dry.exitCode != 0 || BurrowEnvelope.reportsFailure(stdout: dry.stdout)
             let dryReason = dryFailed
                 ? BurrowEnvelope.failureReason(stdout: dry.stdout, stderr: dry.stderr)
                 : nil
-            guard let matched = UninstallGuard.matchedApps(inDryRunOutput: dry.stdout + "\n" + dry.stderr) else {
-                return ActionWire.uninstallAbort(apps: expected, matched: nil, engineError: dryReason)
-            }
-            if let mismatch = UninstallGuard.mismatchDescription(confirmed: expected, matched: matched) {
-                return ActionWire.uninstallAbort(apps: expected, matched: matched,
-                                                 mismatch: mismatch, engineError: dryReason)
+            let reading = UninstallGuard.readDryRun(stdout: dry.stdout, stderr: dry.stderr)
+            if let reason = UninstallGuard.abortReason(confirmed: expected, dryRun: reading) {
+                var matched: [String]?
+                switch reading {
+                case .engine(let plan): matched = plan.apps.map(\.query)
+                case .legacy(let names): matched = names
+                case .engineRefused, .unreadable: matched = nil
+                }
+                return ActionWire.uninstallAbort(apps: expected, reason: reason,
+                                                 matched: matched, engineError: dryReason)
             }
         }
         let timeout = ticket.command.timeout ?? 600

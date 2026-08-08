@@ -300,35 +300,28 @@ final class MoActionsTests: XCTestCase {
         XCTAssertEqual(json, #"{"command":"purge","dry_run":true,"exit_code":0,"interactive_only":true,"note":"Real `mo purge` is an interactive selection flow — run it from the Burrow app. This is the preview.","output":"would purge","ran":false}"#)
     }
 
+    /// This test is about the WIRE FORMAT being byte stable — key order, escaping, `ran:false`,
+    /// `matched` present only when the binary said something. The abort PROSE is passed in rather
+    /// than composed here, and `UninstallGuardTests` owns whether each reason is the right one; a
+    /// copy of the prose in this file would only catch edits, and it already went red once for a
+    /// source change that was correct.
     func testWire_uninstallAborts_areByteStable() {
-        // The nil-matched case is what every real call against the bundled engine hits (it
-        // answers in JSON, never the legacy text `matchedApps` parses) — the message must say
-        // uninstall is unavailable in this build and why, not the old "couldn't verify" non-answer.
-        // The reason is INTERPOLATED, not retyped. This test is about the WIRE FORMAT being byte
-        // stable — key order, escaping, `ran:false` — and `unavailableReason` is prose that changes
-        // whenever the blocker changes. Hardcoding it made this test go red for a source edit that
-        // was correct, and it stayed red invisibly because a stale string still compiles.
-        // UninstallGuardTests owns the prose itself (it asserts the reason names `.app` and does NOT
-        // name the two blockers that have since been fixed), which is the assertion that can
-        // actually catch a wrong reason. Duplicating it here only catches edits.
         XCTAssertEqual(
-            ActionWire.uninstallAbort(apps: ["Slack"], matched: nil),
-            #"{"apps":["Slack"],"command":"uninstall","error":"aborted: \#(UninstallGuard.unavailableReason)","ran":false}"#)
+            ActionWire.uninstallAbort(apps: ["Slack"], reason: "the engine matched nothing."),
+            #"{"apps":["Slack"],"command":"uninstall","error":"aborted: the engine matched nothing.","ran":false}"#)
         XCTAssertEqual(
-            ActionWire.uninstallAbort(apps: ["Slack"], matched: ["Slack", "Slackpad"],
-                                      mismatch: "mo would also remove: Slackpad"),
-            #"{"apps":["Slack"],"command":"uninstall","error":"aborted: mo matched a different set than requested (mo would also remove: Slackpad). Use exact names from burrow_list_apps.","matched":["Slack","Slackpad"],"ran":false}"#)
+            ActionWire.uninstallAbort(apps: ["Slack"], reason: "mo would also remove: Slackpad",
+                                      matched: ["Slack", "Slackpad"]),
+            #"{"apps":["Slack"],"command":"uninstall","error":"aborted: mo would also remove: Slackpad","matched":["Slack","Slackpad"],"ran":false}"#)
     }
 
-    /// Guards the exact honesty property Fix 2 introduced: the nil-matched abort must name the
-    /// build limitation, and must NOT claim a verification was attempted (the old wording read as
-    /// "we tried to check and couldn't", when in fact no check is even possible against this
-    /// engine yet).
-    func testWire_uninstallAbort_nilMatch_namesTheRealReason() {
-        let json = ActionWire.uninstallAbort(apps: ["Slack"], matched: nil)
-        XCTAssertTrue(json.contains("unavailable in this build"),
-                      "must say uninstall is unavailable in this build: \(json)")
-        XCTAssertFalse(json.contains("couldn't verify"),
-                       "must not claim a verification was attempted and came back inconclusive: \(json)")
+    /// An abort never claims a run happened, whatever it was handed.
+    func testWire_uninstallAbort_neverFlipsRan() throws {
+        for matched in [nil, [], ["Slack"]] as [[String]?] {
+            let json = ActionWire.uninstallAbort(apps: ["Slack"], reason: "nope", matched: matched)
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertEqual(obj["ran"] as? Bool, false, json)
+            XCTAssertNotNil(obj["error"], json)
+        }
     }
 }

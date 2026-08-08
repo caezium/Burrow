@@ -203,7 +203,6 @@
 "Uninstall (%d)" = "卸载 (%d)";
 "Uninstall %d app?" = "确定卸载 %d 个应用吗？";
 "Uninstall %d apps?" = "确定卸载 %d 个应用吗？";
-"These move to the Trash (recoverable):\n\n%@" = "这些应用会移到废纸篓（可恢复）：\n\n%@";
 "Move to Trash" = "移到废纸篓";
 "Checking Homebrew…" = "正在检查 Homebrew…";
 "Everything's up to date" = "所有内容都是最新的";
@@ -448,13 +447,31 @@
 
 /* ===== Uninstall pre-flight verification ===== */
 "Uninstall aborted" = "卸载已中止";
-"mo's matcher didn't agree with your selection, so nothing was removed.\n\n%@" = "mo 匹配到的应用与你的选择不一致，因此没有删除任何内容。\n\n%@";
 "mo would also remove: %@" = "mo 还会额外删除：%@";
 "mo did not match: %@" = "mo 未匹配到：%@";
-"couldn't verify which apps mo matched" = "无法确认 mo 匹配到了哪些应用";
-"aborted — matcher mismatch" = "已中止 — 匹配不一致";
+"The dry run's output wasn't in a format Burrow can confirm a matched set from, so nothing was removed." = "预演输出的格式无法让 Burrow 确认匹配到的应用集合，因此没有删除任何内容。";
+"The engine refused the dry run, so nothing was removed: %@" = "引擎拒绝了这次预演，因此没有删除任何内容：%@";
+"The engine matched no installed app for: %@" = "引擎没有为以下项匹配到任何已安装的应用：%@";
+"“%1$@” resolves to %2$d applications (%3$@), so the engine refuses to act on it. Remove them one at a time." = "“%1$@”会匹配到 %2$d 个应用（%3$@），引擎因此拒绝执行。请逐个删除。";
+"The engine resolved %1$d applications for %2$d selected, so the sets don't line up." = "你选择了 %2$d 个应用，引擎却解析出 %1$d 个，两者对不上。";
+"The engine won't remove %1$@: %2$@" = "引擎不会删除 %1$@：%2$@";
+"Needs an administrator: %@. Burrow doesn't elevate this run, so it may fail on the app itself." = "需要管理员权限：%@。Burrow 不会提升这次运行的权限，因此删除应用本体时可能失败。";
+"one of these apps" = "其中某个应用";
+"Homebrew removes %1$@: `%2$@`. `--zap` also deletes configuration and data the cask declares, which the preview can't list." = "Homebrew 会删除 %1$@：`%2$@`。`--zap` 还会删除该 cask 声明的配置与数据，预览无法列出这些内容。";
+"aborted — nothing removed" = "已中止 — 未删除任何内容";
 "uninstall failed" = "卸载失败";
 "OK" = "好";
+
+/* ===== Uninstall outcomes (per app: removed / partial / refused) ===== */
+"Uninstall didn't finish" = "卸载未完成";
+"Uninstall finished partly" = "卸载只完成了一部分";
+"Uninstall finished" = "卸载已完成";
+"%@ — the engine refused to remove the application." = "%@ —— 引擎拒绝删除该应用。";
+"%@ — the application could not be removed." = "%@ —— 无法删除该应用。";
+"%@ — the application was removed, but some of its support files were not." = "%@ —— 应用已删除，但部分支持文件没有删掉。";
+"%@ — the removal finished partly." = "%@ —— 删除只完成了一部分。";
+"Its support files were left alone, so the app is still installed rather than half-removed." = "它的支持文件被原样保留，因此应用仍是完整安装的，而不是删掉一半。";
+"Next: %@" = "下一步：%@";
 
 /* ===== i18n backfill (2026-06): legacy hardcoded strings ===== */
 /* Installer/purge chooser — clean (non-plural) labels */
@@ -622,10 +639,9 @@
 "Remove %d" = "移除 %d 项";
 "Remove %d app?" = "移除 %d 个应用？";
 "Remove %d apps?" = "移除 %d 个应用？";
-"Remove leftover files for %d app?" = "移除 %d 个应用的残留文件？";
-"Remove leftover files for %d apps?" = "移除 %d 个应用的残留文件？";
-"The apps themselves stay installed. Burrow removes the support files they keep in your Library — containers, caches, preferences, saved state — and those move to the Trash (recoverable):\n\n%@" = "应用本身仍会保留。Burrow 只移除它们在“资源库”中的支持文件 —— 容器、缓存、偏好设置、已存储状态 —— 这些文件会移到废纸篓（可恢复）：\n\n%@";
-"Move Files to Trash" = "将文件移到废纸篓";
+"These move to the Trash — the app itself and the support files it keeps in your Library (containers, caches, preferences, saved state). You can put them back:\n\n%@" = "以下内容会移到废纸篓 —— 应用本身，以及它保存在“资源库”里的支持文件（容器、缓存、偏好设置、已存储状态）。你可以把它们放回原处：\n\n%@";
+"Homebrew removes these by running `brew uninstall --cask --zap`. That doesn't use the Trash, and `--zap` also deletes configuration and data the cask declares — more than the file list can show:\n\n%@" = "以下内容由 Homebrew 通过 `brew uninstall --cask --zap` 删除。这条命令不经过废纸篓，而且 `--zap` 还会删除该 cask 声明的配置与数据 —— 比文件清单列出的更多：\n\n%@";
+"If an app can't be removed, Burrow leaves its support files alone too, rather than half-removing it." = "如果某个应用无法删除，Burrow 也会原样保留它的支持文件，而不是把它删掉一半。";
 "Skipped — these have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@" = "已跳过 —— 这些应用没有 Bundle ID，Burrow 无法向引擎指明是哪一个：\n\n%@";
 "Nothing Burrow can remove" = "没有 Burrow 可以移除的内容";
 "These have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@" = "这些应用没有 Bundle ID，Burrow 无法向引擎指明是哪一个：\n\n%@";
