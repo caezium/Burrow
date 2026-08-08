@@ -14,10 +14,64 @@
 //  of the code, not a discipline.
 //
 //  Deliberately pure: no Store, no Privacy, no AppKit — consent arrives
-//  as data in the gate, verdicts come out.
+//  as data in the gate, verdicts come out. Which BINARY a ticket will be
+//  spawned against arrives the same way, through `decide`'s `resolve` seam
+//  (production default: `EngineTarget.resolve`), because the argv a ticket
+//  carries is only correct relative to the program that will read it.
 //
 
 import Foundation
+
+// MARK: - Which binary: resolved once, carried on the ticket
+
+/// The binary a ticket will actually be spawned against, resolved ONCE at mint and carried on
+/// the ticket so the decision and the spawn cannot disagree.
+///
+/// Two different programs sit behind `mo` discovery and they read the SAME argv with opposite
+/// meanings. The bundled Rust engine previews by default and deletes on `--apply`; a legacy `mo`
+/// deletes by default and previews on `--dry-run` (verified against the installed mole 1.46.0:
+/// `libexec/bin/clean.sh` treats a bare `clean` as the live run and rejects an unknown `--apply`
+/// with exit 1). So "translate this ticket's argv?" is a question about WHICH FILE resolved, and
+/// it has to be answered by the same lookup that produces the path the spawn uses — resolving
+/// once to decide and again to spawn is precisely the disagreement that turns a preview into a
+/// deletion.
+struct EngineTarget: Equatable {
+    /// Absolute path to the resolved binary; nil when nothing resolved at all.
+    let path: String?
+    /// True ONLY when `path` is the engine sealed inside Burrow.app — the same path-identity
+    /// check `OperationFlow.start` makes before translating its fallback spawn. Anything else (a
+    /// Homebrew `mo`, the Go fork, an unresolved lookup) speaks mo's own convention as far as
+    /// this side can tell, so its argv is left exactly as the catalog spelled it.
+    let isBundledEngine: Bool
+
+    /// Nothing resolved: mo-style argv, and a spawn that fails cleanly. Engine argv is never sent
+    /// to a binary that could not be identified.
+    static let unresolved = EngineTarget(path: nil, isBundledEngine: false)
+
+    static func bundledEngine(_ path: String) -> EngineTarget {
+        EngineTarget(path: path, isBundledEngine: true)
+    }
+
+    /// Any resolved binary that is NOT the bundled engine. Named for the wire format it speaks
+    /// rather than for a product, because upstream `mo` and the MIT fork are both in here.
+    static func moStyle(_ path: String) -> EngineTarget {
+        EngineTarget(path: path, isBundledEngine: false)
+    }
+
+    /// Production resolution — the same pair of lookups `OperationFlow`'s `resolveMo` default
+    /// uses, so a ticket and a streamed operation land on the same file: an elevated run never
+    /// accepts a PATH hit (a user-writable directory could shadow the engine and be handed root),
+    /// everything else uses the cached discovery.
+    ///
+    /// When an engine IS bundled the two sides of the identity test are the same file by
+    /// construction, because `trustedExecutable()`/`findExecutable()` both consult
+    /// `bundledExecutable()` first — one resolver, so they cannot drift.
+    static func resolve(elevated: Bool) -> EngineTarget {
+        let resolved = elevated ? MoleCLI.trustedExecutable() : MoleCLI.findExecutable()
+        return EngineTarget(path: resolved,
+                            isBundledEngine: resolved != nil && resolved == MoleCLI.bundledExecutable())
+    }
+}
 
 // MARK: - What: the action catalog
 
@@ -78,14 +132,19 @@ enum MoAction: Equatable {
         }
     }
 
-    /// The match-preflight command (uninstall only): pin what mo's matcher
+    /// The match-preflight command (uninstall only): pin what the resolved binary's matcher
     /// resolves BEFORE answering its prompts. `--dry-run` changes nothing
     /// and exits at its prompt on stdin EOF.
     ///
-    /// Built from mo-style argv, same as every other command here, so it goes through the same
-    /// `BurrowConductor.engineArgv` translation `mint` applies — this bypasses `mint` (it isn't a
-    /// runnable ticket, just the probe `execute()` runs before answering any prompt), so without
-    /// this it would reach the engine untranslated like every other pre-repoint call site did.
+    /// Built from mo-style argv, same as every other command here, and translated for the same
+    /// reason and under the same condition `mint` translates: only when `target` IS the bundled
+    /// engine. The untranslated mo spelling is already the read-only one — `["uninstall",
+    /// "--dry-run", <apps>]` is what a legacy `mo` documents and what its `uninstall.sh` reads —
+    /// so a probe against that binary needs no translation and must not receive one.
+    ///
+    /// `mint` calls this with the target it resolved and hangs the result on the ticket, so the
+    /// probe and the run it guards are guaranteed to be the same binary. A probe that read one
+    /// binary's plan while the apply went to another would be a guard in name only.
     ///
     /// **`assertDryRun` is what makes the probe read-only, and it is the one caller that asks for
     /// it.** Translation alone drops `--dry-run` and lands on the engine's dry-run DEFAULT, which
@@ -102,10 +161,13 @@ enum MoAction: Equatable {
     /// `--permanent` is deliberately absent — the mo argv here is the PREVIEW spelling, so the probe
     /// asks what would be removed and never how. A flag that only distinguishes Trash from outright
     /// deletion has nothing to say about a run that deletes neither.
-    var preflightCommand: ActionCommand? {
+    func preflightCommand(on target: EngineTarget) -> ActionCommand? {
         guard case .uninstall(let apps, _) = self else { return nil }
-        return ActionCommand(args: BurrowConductor.engineArgv(fromMo: ["uninstall", "--dry-run"] + apps,
-                                                              assertDryRun: true),
+        let moArgs = ["uninstall", "--dry-run"] + apps
+        return ActionCommand(executable: target.path,
+                             args: target.isBundledEngine
+                                 ? BurrowConductor.engineArgv(fromMo: moArgs, assertDryRun: true)
+                                 : moArgs,
                              stdin: "", timeout: 120, elevated: false)
     }
 
@@ -143,10 +205,20 @@ enum ActionSurface: Equatable {
 
 /// Engine-agnostic process recipe (RFC #48's engine will consume this).
 struct ActionCommand: Equatable {
+    /// The exact binary this recipe must be spawned against: the path `mint` resolved at the
+    /// moment it decided whether to translate `args`. Carried rather than looked up again,
+    /// because `args` is only correct relative to this file — a second discovery that answered
+    /// differently would hand one program the other's wire format. nil when nothing resolved.
+    var executable: String? = nil
     var args: [String]
     var stdin: String?
     var timeout: TimeInterval?
     var elevated: Bool
+
+    /// What to spawn. `/usr/bin/false` for an unresolved binary reproduces exactly the
+    /// degradation `MoEngine.capture` already applies to a `.mo` target it can't resolve — a
+    /// clean nonzero exit rather than a crash — without asking discovery a second question.
+    var spawnPath: String { executable ?? "/usr/bin/false" }
 }
 
 // MARK: - May we: the pure gate
@@ -188,15 +260,21 @@ struct RunTicket: Equatable {
     let mode: RunMode
     let command: ActionCommand
     let preflight: ActionPreflight?
+    /// The read-only probe `preflight` requires, built against the SAME resolved binary as
+    /// `command` and non-nil exactly when `preflight` is. Minted here rather than rebuilt at the
+    /// call site so the guard and the run it guards cannot end up describing different files.
+    let preflightCommand: ActionCommand?
     /// Interactive-only redirect text (agent purge/installer downgrade).
     let note: String?
 
     fileprivate init(action: MoAction, mode: RunMode, command: ActionCommand,
-                     preflight: ActionPreflight?, note: String?) {
+                     preflight: ActionPreflight?, preflightCommand: ActionCommand?,
+                     note: String?) {
         self.action = action
         self.mode = mode
         self.command = command
         self.preflight = preflight
+        self.preflightCommand = preflightCommand
         self.note = note
     }
 }
@@ -213,55 +291,79 @@ enum Verdict: Equatable {
 enum MoActions {
     /// The truth table. Pure: consent is data in the gate, a verdict comes
     /// out, and `.run` is the only way to obtain a ticket.
-    static func decide(_ action: MoAction, _ mode: RunMode, _ gate: ActionGate) -> Verdict {
+    ///
+    /// `resolve` is the one impure input, and it is asked at most ONCE per call — only on the
+    /// paths that actually mint, and never for a refusal. Callers that already resolved the
+    /// binary for their own UI (the Software tab's confirm sheet describes what a specific binary
+    /// is about to do) pass that answer in, so one user action means one resolution end to end.
+    static func decide(_ action: MoAction, _ mode: RunMode, _ gate: ActionGate,
+                       resolve: (_ elevated: Bool) -> EngineTarget = EngineTarget.resolve) -> Verdict {
         let spec = action.spec
         switch gate {
         case .agent(let actionsOptIn, let irreversibleOptIn):
             if mode == .preview {
-                return .run(mint(action, .preview, surface: .agent))
+                return .run(mint(action, .preview, surface: .agent, resolve: resolve))
             }
             if spec.interactiveOnly {
                 // Real run is TUI-only: DOWNGRADE to a preview ticket with
                 // the redirect note, instead of blocking or pretending.
                 return .run(mint(action, .preview, surface: .agent,
-                                 note: redirectNote(for: action)))
+                                 note: redirectNote(for: action), resolve: resolve))
             }
             guard actionsOptIn else { return .blocked(.agentCleanupsOptInOff) }
             if spec.severity == .irreversible, !irreversibleOptIn {
                 return .blocked(.agentUninstallOptInOff)
             }
-            return .run(mint(action, .real, surface: .agent))
+            return .run(mint(action, .real, surface: .agent, resolve: resolve))
 
         case .gui(let hasFDA, let userConfirmed, let elevationGranted):
             if mode == .real {
                 if spec.interactiveOnly { return .interactiveFlow }
                 if spec.needsExplicitConfirm, !userConfirmed { return .needsConfirmation }
-                return .run(mint(action, .real, surface: .gui))
+                return .run(mint(action, .real, surface: .gui, resolve: resolve))
             }
             // Previews: un-elevated TCC walks need FDA; "Scan with admin"
             // resolves the gate because root bypasses TCC.
             if spec.previewNeedsFDA, !hasFDA, !elevationGranted {
                 return .needsFullDiskAccess
             }
-            return .run(mint(action, .preview, surface: .gui, elevated: elevationGranted))
+            return .run(mint(action, .preview, surface: .gui, elevated: elevationGranted,
+                             resolve: resolve))
         }
     }
 
     private static func mint(_ action: MoAction, _ mode: RunMode,
                              surface: ActionSurface, elevated: Bool = false,
-                             note: String? = nil) -> RunTicket {
+                             note: String? = nil,
+                             resolve: (_ elevated: Bool) -> EngineTarget) -> RunTicket {
         let spec = action.spec
         let isElevated = elevated || (mode == .real && surface == .gui && spec.elevatedRealRunGUI)
+        // THE one resolution. Elevation is settled first because it changes which lookup is
+        // legitimate (elevated runs never accept a PATH hit), and the answer is then used for
+        // BOTH halves of this ticket: whether to translate the argv, and what to spawn. Nothing
+        // downstream resolves again — `ActionCommand.executable` carries this exact path, and
+        // both call sites spawn `.executable(command.spawnPath)` rather than `.mo`.
+        let target = resolve(isElevated)
+        let moArgs = action.argv(mode)
         let command = ActionCommand(
+            executable: target.path,
             // `action.argv(mode)` is mo-style — mo runs LIVE by default, `--dry-run` previews.
-            // The bundled binary every RunTicket ultimately reaches is the engine (post-repoint),
-            // which inverts that (dry-run by default, `--apply` to run for real), so the mo-style
-            // table above is translated here, ONCE, for every surface and every mode alike —
-            // `BurrowConductor.engineArgv` is the same pure mapping the streaming GUI path uses,
-            // so there's exactly one place that knows the mo↔engine wire difference. Getting this
-            // backwards is the highest-severity class of bug in this file: a preview that gains
-            // `--apply` deletes on a "just show me what would happen" request.
-            args: BurrowConductor.engineArgv(fromMo: action.argv(mode)),
+            // The engine inverts that (dry-run by default, `--apply` to run for real), so a
+            // ticket bound for it is translated here, ONCE, for every surface and every mode
+            // alike — `BurrowConductor.engineArgv` is the same pure mapping the streaming GUI
+            // path uses, so there's exactly one place that knows the mo↔engine wire difference.
+            //
+            // TRANSLATE ONLY WHEN THE RESOLVED BINARY IS THE BUNDLED ENGINE. This is the same
+            // path-identity guard `OperationFlow.start` applies to its fallback spawn, and it is
+            // load-bearing in both directions. A shipped build always resolves the bundled engine
+            // (`trustedExecutable()`/`findExecutable()` both prefer it), so translation still
+            // happens there and the argv is unchanged. A build without a staged engine resolves
+            // whatever discovery finds — on a dev machine that is `/opt/homebrew/bin/mo` — and
+            // translating for THAT binary inverts the meaning of every ticket: engine-style
+            // `["clean"]`, minted for a PREVIEW because the engine's default is dry-run, is a
+            // legacy `mo`'s LIVE clean. A preview that deletes is the highest-severity bug this
+            // file can produce, so it may not depend on which build the code happens to be in.
+            args: target.isBundledEngine ? BurrowConductor.engineArgv(fromMo: moArgs) : moArgs,
             // mo uninstall is interactive ("Proceed? [y/N]" + "Enter confirm");
             // feed yes so a non-TTY run doesn't block forever. The gate +
             // preflight are the consent, not these answers.
@@ -269,9 +371,14 @@ enum MoActions {
                 ? String(repeating: "y\n", count: 4) : nil,
             timeout: timeout(action, mode, surface),
             elevated: isElevated)
+        let needsPreflight = mode == .real && spec.requiresMatchPreflight
         return RunTicket(action: action, mode: mode, command: command,
-                         preflight: (mode == .real && spec.requiresMatchPreflight)
+                         preflight: needsPreflight
                              ? .verifyUninstallMatch(expected: action.wireApps ?? []) : nil,
+                         // Built from the SAME `target`, so the probe reads the plan of the
+                         // binary that is about to act on it — and reuses the resolution rather
+                         // than making a second one.
+                         preflightCommand: needsPreflight ? action.preflightCommand(on: target) : nil,
                          note: note)
     }
 

@@ -848,9 +848,16 @@ final class SoftwareModel: ObservableObject {
     ///    `UninstallPreview.parse` already understands, and it wants the display name, not a
     ///    bundle id.
     ///
-    /// `resolved == MoleCLI.bundledExecutable()` is the same check `OperationFlow`/`MoActions`
-    /// already use to decide when engine-specific argv translation applies — not a new pattern
-    /// introduced here.
+    /// `resolved == MoleCLI.bundledExecutable()` is a path-identity check, and it is the same one
+    /// two other places make before assuming engine semantics — go read them rather than take
+    /// this sentence's word for it: `OperationFlow.start` compares `resolved` against
+    /// `MoleCLI.bundledExecutable()` inline before translating its fallback spawn's argv, and
+    /// `MoActions.mint` gets the same answer as data, from `EngineTarget.isBundledEngine`, and
+    /// carries it on the ticket so the spawn cannot re-resolve to a different file.
+    ///
+    /// This call site resolves independently because it is a different action — expanding a row,
+    /// not confirming a removal. `confirmAndUninstall` is where one user action means one
+    /// resolution, shared by the sheet, the argv and the gate.
     ///
     /// No longer unreachable: this used to note that `MoleClient.listAppsResult()` always came
     /// back `.unavailable` against the bundled engine because it had no `--list`, so no row
@@ -861,18 +868,22 @@ final class SoftwareModel: ObservableObject {
         let resolved = MoleCLI.findExecutable()
         let source = uninstallTarget(for: app,
                                      resolvedIsBundledEngine: resolved != nil && resolved == MoleCLI.bundledExecutable())
+        // Spawn the file this resolution named, not a second lookup: `source` above already
+        // decided what to SAY to the binary, and the two answers have to be about the same one.
+        // `/usr/bin/false` for an unresolved lookup is the same degradation `.mo` already gave.
+        let target = MoCommand.Target.executable(resolved ?? "/usr/bin/false")
         switch source {
         case .unavailable:
             return UninstallPreview(appName: nil, totalText: nil, entries: [])
         case .engine(let bundleId):
             let res = try? MoEngine.shared.capture(
-                MoCommand(target: .mo, args: ["uninstall", "--dry-run", bundleId], timeout: 120))
+                MoCommand(target: target, args: ["uninstall", "--dry-run", bundleId], timeout: 120))
             return UninstallPreview.fromEngineEnvelope(res?.stdout ?? "")
                 ?? UninstallPreview(appName: nil, totalText: nil, entries: [])
         case .legacy(let name):
             // EOF after the prompt makes --dry-run print the enumeration and exit.
             let res = try? MoEngine.shared.capture(
-                MoCommand(target: .mo, args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120))
+                MoCommand(target: target, args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120))
             let text = Ansi.strip((res?.stdout ?? "") + "\n" + (res?.stderr ?? ""))
             return UninstallPreview.parse(text.components(separatedBy: "\n"))
         }
@@ -1082,14 +1093,19 @@ final class SoftwareModel: ObservableObject {
     func confirmAndUninstall() {
         let targets = selectedApps
         guard !targets.isEmpty else { return }
-        // Resolve the binary ONCE, here, and hand the answer to both the sheet and the run. The
-        // sheet describes what a specific binary is about to do, so a second resolution later
+        // Resolve the binary ONCE, here, and hand the answer to the sheet, the argv AND the gate.
+        // The sheet describes what a specific binary is about to do, so a second resolution later
         // could describe one binary and run another. In a shipped build this is a `Bundle.main`
         // lookup plus an `isExecutableFile` stat with no subprocess (`trustedExecutable` hits the
         // bundled engine first) — `AppDelegate` already gates its destructive actions on the same
         // call from the main thread.
-        let resolved = MoleCLI.findExecutable()
-        let isEngine = resolved != nil && resolved == MoleCLI.bundledExecutable()
+        //
+        // `elevated: false` is the truth about this flow, not a shortcut: an uninstall ticket is
+        // never elevated (`ActionSpec.elevatedRealRunGUI` is false for `.uninstall`), so the
+        // un-elevated lookup is the one the gate would have made anyway. Passing this same value
+        // into `MoActions.decide` below is what keeps it at one resolution per user action.
+        let engine = EngineTarget.resolve(elevated: false)
+        let isEngine = engine.isBundledEngine
 
         let wholeApps = targets.filter { !isSubsetRemoval($0) }
         let subsetApps = targets.filter { isSubsetRemoval($0) }
@@ -1146,7 +1162,7 @@ final class SoftwareModel: ObservableObject {
         case .engineThenTrash(let subsets):
             engineUninstall(batch.addressable, arguments: batch.arguments,
                             promised: Self.promisedMechanisms(batch.addressable, batch.arguments),
-                            thenTrash: subsets)
+                            thenTrash: subsets, on: engine)
         }
     }
 
@@ -1289,15 +1305,23 @@ final class SoftwareModel: ObservableObject {
     /// dry run has confirmed the set, so an abort really does mean nothing was removed.
     private func engineUninstall(_ targets: [InstalledApp], arguments: [String],
                                  promised: [String: UninstallGuard.Mechanism],
-                                 thenTrash subsets: [InstalledApp]) {
+                                 thenTrash subsets: [InstalledApp],
+                                 on engine: EngineTarget) {
         // The dialog above is the consent; the ticket (argv / stdin /
         // timeout / preflight) is minted by the shared gate — the same
         // truth table and catalog the MCP server uses. (One deliberate
         // change rides along: the catalog's unified 600 s uninstall
         // timeout replaces this view's old 300 s.)
+        //
+        // `engine` is `confirmAndUninstall`'s own resolution, handed in rather than looked up
+        // again here. It decides two things that must agree: which argv dialect this ticket
+        // speaks, and which file the two spawns below run. `uninstallBatch` already built
+        // `arguments` from the same answer, so the identifiers, the argv and the binary all come
+        // from ONE lookup — the sheet the user agreed to describes the run that happens.
         guard case .run(let ticket) = MoActions.decide(
             .uninstall(apps: arguments, permanent: false), .real,
-            .gui(hasFullDiskAccess: true, userConfirmed: true)) else { return }
+            .gui(hasFullDiskAccess: true, userConfirmed: true),
+            resolve: { _ in engine }) else { return }
         loading = true
         // Surface the run in the menu-bar HUD's Activity section too. Both resolved binaries now
         // remove the `.app` as well as its support files, so "Uninstalling" is the true label —
@@ -1310,9 +1334,13 @@ final class SoftwareModel: ObservableObject {
             // Pre-flight (audit H4): the resolved binary does its own matching, so before anything
             // is removed, verify what it says it will ACT ON equals what the user CONFIRMED.
             // `--dry-run` changes nothing; anything unreadable aborts (fail closed).
-            let pre = ticket.action.preflightCommand!
+            // Minted with the ticket, from the same resolution, so this probe and the apply below
+            // are the same binary reading argv built for it. Non-nil whenever `ticket.preflight`
+            // is, which a real uninstall always sets.
+            let pre = ticket.preflightCommand!
             let dry = try? MoEngine.shared.capture(
-                MoCommand(target: .mo, args: pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120))
+                MoCommand(target: .executable(pre.spawnPath), args: pre.args, stdin: pre.stdin,
+                          timeout: pre.timeout ?? 120))
             let reading = UninstallGuard.readDryRun(stdout: dry?.stdout ?? "",
                                                     stderr: dry?.stderr ?? "")
             // A non-zero exit with an unreadable body is its own failure, and the engine's reason
@@ -1410,8 +1438,8 @@ final class SoftwareModel: ObservableObject {
             // final confirm); they only ever apply to the set the dry run
             // just pinned.
             let res = try? MoEngine.shared.capture(
-                MoCommand(target: .mo, args: ticket.command.args, stdin: ticket.command.stdin,
-                          timeout: ticket.command.timeout ?? 600))
+                MoCommand(target: .executable(ticket.command.spawnPath), args: ticket.command.args,
+                          stdin: ticket.command.stdin, timeout: ticket.command.timeout ?? 600))
             // A zero exit alone isn't removal: an `ok:false` envelope is the engine saying it
             // refused or failed, so it counts as a failure here too. Narrowing only — a legacy
             // `mo` emits no envelope, and a success envelope leaves this untouched, so no

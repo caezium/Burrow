@@ -1070,8 +1070,12 @@ struct ToolCatalog {
     /// before any prompt is answered — fail closed), spawn, render.
     private func execute(_ ticket: RunTicket) -> String {
         if case .verifyUninstallMatch(let expected) = ticket.preflight,
-           let pre = ticket.action.preflightCommand {
-            let dry = Self.runMo(pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120)
+           let pre = ticket.preflightCommand {
+            // `pre.spawnPath` and `ticket.command.spawnPath` are the same file by construction —
+            // the gate resolved once and put the answer on both — so the plan this reads is the
+            // plan the apply below executes, and neither is re-discovered here.
+            let dry = Self.runMo(pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120,
+                                 executable: pre.spawnPath)
             // The decision point, and it fails closed on anything it cannot read. Against the
             // bundled engine it reads `apps[].query` — the arguments echoed back verbatim — so an
             // agent's requested set is checked against the engine's resolved set exactly, in one
@@ -1104,8 +1108,11 @@ struct ToolCatalog {
             }
         }
         let timeout = ticket.command.timeout ?? 600
+        // Spawn the binary the gate resolved, not a fresh lookup: `ticket.command.args` is only
+        // correct for that file (mo-style or engine-style), so re-discovering here could hand one
+        // program the other's wire format.
         let res = Self.runMo(ticket.command.args, stdin: ticket.command.stdin,
-                             timeout: timeout)
+                             timeout: timeout, executable: ticket.command.spawnPath)
         var permanent: Bool?
         if case .uninstall(_, let p) = ticket.action, ticket.mode == .real { permanent = p }
         // `ran` is a CLAIM about the disk — see `realRunClaim`, which owns both it and the reason
@@ -1449,9 +1456,16 @@ struct ToolCatalog {
 
     /// Run `mo` with the given args, never throwing — a missing binary
     /// becomes exit code 127 so callers can degrade gracefully.
-    private static func runMo(_ args: [String], stdin: String? = nil, timeout: TimeInterval) -> MoleCLI.Result {
+    ///
+    /// `executable` pins the spawn to an already-resolved path. The read tools leave it nil and
+    /// let discovery answer, because their argv means the same thing to either binary; a gated
+    /// ACTION must pass the path its ticket was minted against, since that is the file its argv
+    /// was translated (or deliberately not translated) for.
+    private static func runMo(_ args: [String], stdin: String? = nil, timeout: TimeInterval,
+                              executable: String? = nil) -> MoleCLI.Result {
+        let target: MoCommand.Target = executable.map { .executable($0) } ?? .mo
         guard let cap = try? MoEngine.shared.capture(
-            MoCommand(target: .mo, args: args, stdin: stdin, timeout: timeout)) else {
+            MoCommand(target: target, args: args, stdin: stdin, timeout: timeout)) else {
             return MoleCLI.Result(stdout: "", stderr: "mo not found", exitCode: 127)
         }
         return MoleCLI.Result(stdout: cap.stdout, stderr: cap.stderr,
