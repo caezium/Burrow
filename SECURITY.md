@@ -101,8 +101,17 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
   - **It runs only your engine, or those four Apple tools.** The engine it
     executes is the copy inside the app bundle, resolved relative to the
     helper's own path, never through `PATH` or an environment variable. Before
-    running anything the helper verifies the whole app bundle against its own
-    signing team, which seals the engine and every library the engine loads.
+    running anything the helper copies the bundle below a fresh root-only
+    directory, then verifies that exact snapshot against Burrow's bundle
+    identifier, the helper's build number, and its signing team. The launched
+    bytes are therefore the verified bytes, including the sealed engine and
+    every library it loads.
+  - **The elevated environment is explicit.** An approved administrator probe
+    on 2026-08-08 observed UID 0 with the invoking user's `HOME`, but also an
+    inherited user-controlled `PATH`. Burrow therefore ignores that ambient
+    environment: both elevation paths use the daemon-validated canonical home
+    and fixed `/usr/bin:/bin:/usr/sbin:/sbin` path. The audit records only the
+    numeric uid and canonical-match decision, not the username or home path.
   - **You can remove it** from Settings, or from System Settings ▸ General ▸
     Login Items & Extensions.
   - Code: `macos/Sources/PrivilegedHelper/`, `macos/HelperSources/`.

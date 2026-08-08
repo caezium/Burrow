@@ -59,6 +59,11 @@ class SentryIssuesWorkflowTests(unittest.TestCase):
         self.assertNotIn("latest stack trace", workflow)
         self.assertNotIn("Stack trace (most recent event)", workflow)
         self.assertNotIn("${title}", workflow)
+        self.assertNotIn("<<<\"$issue\"", workflow)
+        self.assertEqual(
+            workflow.count("firstSeen=$(jq -r '.firstSeen' \"$summary_json\")"),
+            1,
+        )
 
     def test_app_hangs_are_aggregated_instead_of_silently_skipped(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

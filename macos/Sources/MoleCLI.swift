@@ -133,7 +133,8 @@ enum MoleCLI {
     /// identity explicitly instead of inheriting root's HOME/USER.
     static func elevatedScript(command: ValidatedElevatedCommand, args: [String],
                                logSink: PrivilegedLogSink? = nil,
-                               cleanupPlan: CleanupExecutionPlan? = nil) -> String {
+                               cleanupPlan: CleanupExecutionPlan? = nil,
+                               cleanupExecution: CleanupIrreversibleExecution? = nil) -> String {
         func identityCheck(_ identity: PinnedFileIdentity) -> String {
             let stat = "/usr/bin/stat -f '%d:%i:%u:%p' -- \(shellQuote(identity.path)) 2>/dev/null"
             return "[ \"$(\(stat))\" = \(shellQuote(identity.shellStatToken)) ] || exit 126"
@@ -147,21 +148,29 @@ enum MoleCLI {
 
         let user = command.invokingUser
         let environment = [
+            "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
             "HOME=\(user.canonicalHome)",
             "USER=\(user.username)",
             "LOGNAME=\(user.username)",
             "SUDO_USER=\(user.username)",
             "SUDO_UID=\(user.uid)",
+            "LC_ALL=C",
         ]
+        let isolatedEnvironment = ["/usr/bin/env", "-i"] + environment
         let run: String
         if let cleanupPlan {
             statements.append(contentsOf: cleanupPlan.executionBoundaryChecks().map { $0 + " || exit 124" })
-            let quotedPaths = cleanupPlan.items.map { shellQuote($0.identity.path) }.joined(separator: " ")
-            // BSD find defaults to -P (do not follow symlinks); -x prevents a
-            // reviewed directory from crossing into a later-mounted volume.
-            run = "failed=0; for p in \(quotedPaths); do /usr/bin/find -x \"$p\" -depth -delete || failed=1; done; [ \"$failed\" -eq 0 ]"
+            let cleanupShell = cleanupExecution?.snapshotID == cleanupPlan.snapshotID
+                ? cleanupExecution?.shell ?? "exit 124"
+                : "exit 124"
+            run = (isolatedEnvironment + ["/bin/sh", "-c", cleanupShell])
+                .map(shellQuote).joined(separator: " ")
         } else {
-            run = (["/usr/bin/env"] + environment + [command.executable.path] + args)
+            // `do shell script … with administrator privileges` inherits the
+            // caller's PATH on current macOS releases. Start from an empty
+            // environment so no user-writable tool can be resolved by the
+            // root engine or one of its child scripts.
+            run = (isolatedEnvironment + [command.executable.path] + args)
                 .map(shellQuote).joined(separator: " ")
         }
 

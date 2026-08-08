@@ -49,7 +49,7 @@ Current Windows-specific adaptations:
 
 - `dotnet build BurrowWin.csproj -p:Platform=x64 -nr:false -v:minimal` succeeds with 0 warnings and 0 errors.
 - `dotnet build Tests\BurrowWin.Tests\BurrowWin.Tests.csproj -nr:false -v:minimal` succeeds with 0 warnings and 0 errors.
-- `dotnet test Tests\BurrowWin.Tests\BurrowWin.Tests.csproj --no-build -v:minimal` passes 66 tests with 0 failures and 0 skipped tests.
+- The last Windows-host verification before the authenticated loopback changes passed 66 tests with 0 failures and 0 skipped tests. The expanded suite must be rerun in Windows CI before this evidence is refreshed.
 - Mole command history normalization is covered by `ExecuteCommandAsync_RecordsAnsiFreeHistorySummary`, including ANSI color removal, control character removal, and CLI icon placeholder removal.
 - HTTP runtime settings changes are covered by `HttpServerSettingsPlannerTests`, including no-op, start, stop, restart, and disabled-stays-disabled decisions.
 - `.\run-local.ps1 -NoBuild -SmokeTest -Restart -RequireHealth -TimeoutSeconds 45` starts the x64 Debug GUI, confirms the `BurrowWin` main window is visible, confirms `/health` returns `ok: true`, and writes startup diagnostics to `%LOCALAPPDATA%\BurrowWin\startup.log`.
@@ -77,7 +77,7 @@ Current Windows-specific adaptations:
 - Runtime smoke verified the x64 Debug app starts, authenticated requests to `http://127.0.0.1:9277/health`, `/snapshot`, and `/metrics?limit=2` return live local telemetry, and `Assets\Mcp\burrow-mcp-stdio.exe` reads the per-install credential and can call `burrow_snapshot`, `burrow_info`, `burrow_top_processes`, and `burrow_process_usage`.
 - Runtime smoke after the tray HUD/menu work launched `bin\x64\Debug\...\BurrowWin.exe` and confirmed `/health` returned `ok: true`, engine availability, and a fresh `latest_sample_at`.
 - Latest tray HUD screenshot smoke launched `bin\x64\Debug\...\BurrowWin.exe` with `BURROWWIN_SHOW_TRAY_HUD=1`, captured `artifacts\burrowwin-tray-hud-smoke.png`, and visually confirmed the HUD window, status cards, activity card, top CPU process rows, and quick navigation buttons render without clipping.
-- `.\scripts\build-release.ps1` restores, builds Release x64, runs the 66-test suite, publishes the portable WinUI payload, creates `Burrow-v0.1.0-preview.1-win-x64-setup.exe`, creates `Burrow-v0.1.0-preview.1-win-x64.zip`, writes `SHA256SUMS.txt`, writes WinGet manifests, and copies release docs into the payload.
+- `.\scripts\build-release.ps1` restores, builds Release x64, runs the Windows test suite, publishes the portable WinUI payload, creates `Burrow-v0.1.0-preview.1-win-x64-setup.exe`, creates `Burrow-v0.1.0-preview.1-win-x64.zip`, writes `SHA256SUMS.txt`, writes WinGet manifests, and copies release docs into the payload.
 - The generated installer and ZIP contain `BurrowWin.exe`, `Assets\Mole\mo.exe`, `Assets\Mcp\burrow-mcp-stdio.exe`, README, LICENSE, release notes, Windows alignment notes, and Mole gap notes.
 - The generated installer and ZIP hashes verify against `artifacts\release\SHA256SUMS.txt`.
 - The generated WinGet manifest targets `Caezium.Burrow`, package name `Burrow`, `InstallerType: inno`, `Scope: user`, x64 architecture, and the GitHub Release setup exe URL.

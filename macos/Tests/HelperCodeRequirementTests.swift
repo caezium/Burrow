@@ -18,6 +18,7 @@
 //
 
 import XCTest
+import Darwin
 @testable import Burrow
 
 final class HelperCodeRequirementTests: XCTestCase {
@@ -124,6 +125,105 @@ final class HelperCodeRequirementTests: XCTestCase {
         XCTAssertFalse(HelperCodeRequirement.unsatisfiable.isEmpty)
         XCTAssertTrue(HelperCodeRequirement.unsatisfiable.contains("identifier"))
         XCTAssertNil(HelperCodeRequirement.validated(identifier: HelperCodeRequirement.unsatisfiable))
+    }
+
+    // MARK: - Exact executable snapshot
+
+    func testExecutableSnapshotIsTheVerifiedCopyNotTheLaterSourcePath() throws {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("burrow-helper-snapshot-\(UUID().uuidString)")
+        let app = temp.appendingPathComponent("Source.app")
+        let engineDirectory = app.appendingPathComponent("Contents/Resources/engine")
+        let engine = engineDirectory.appendingPathComponent("mole")
+        try FileManager.default.createDirectory(at: engineDirectory,
+                                                withIntermediateDirectories: true)
+        try writeInfoPlist(to: app, build: "24")
+        try Data("#!/bin/sh\nprintf original\\n".utf8).write(to: engine)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: engine.path)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        var verifiedURL: URL?
+        let snapshot = try HelperExecutableSnapshot.prepare(
+            appBundleURL: app,
+            parentDirectory: temp.resolvingSymlinksInPath(),
+            expectedOwner: geteuid(),
+            expectedBundleID: HelperNames.clientBundleID,
+            expectedBuild: "24",
+            verify: { copiedApp in
+                verifiedURL = copiedApp
+                return true
+            })
+
+        try FileManager.default.removeItem(at: engine)
+        try Data("#!/bin/sh\nprintf replaced\\n".utf8).write(to: engine)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: engine.path)
+
+        XCTAssertEqual(verifiedURL, snapshot.appBundleURL)
+        XCTAssertTrue(snapshot.executableURL.path.hasPrefix(snapshot.rootURL.path + "/"))
+        XCTAssertTrue(try String(contentsOf: snapshot.executableURL).contains("original"),
+                      "the exact verified copy must be what the helper later executes")
+    }
+
+    func testExecutableSnapshotRejectsASymlinkedEngine() throws {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("burrow-helper-snapshot-link-\(UUID().uuidString)")
+        let app = temp.appendingPathComponent("Source.app")
+        let engineDirectory = app.appendingPathComponent("Contents/Resources/engine")
+        let outside = temp.appendingPathComponent("outside")
+        try FileManager.default.createDirectory(at: engineDirectory,
+                                                withIntermediateDirectories: true)
+        try Data("#!/bin/sh\n".utf8).write(to: outside)
+        try FileManager.default.createSymbolicLink(
+            at: engineDirectory.appendingPathComponent("mole"), withDestinationURL: outside)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        XCTAssertThrowsError(try HelperExecutableSnapshot.prepare(
+            appBundleURL: app,
+            parentDirectory: temp.resolvingSymlinksInPath(),
+            expectedOwner: geteuid(),
+            expectedBundleID: HelperNames.clientBundleID,
+            expectedBuild: "24",
+            verify: { _ in true }))
+    }
+
+    func testExecutableSnapshotRejectsAnOlderSameTeamBundle() throws {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("burrow-helper-snapshot-old-\(UUID().uuidString)")
+        let app = temp.appendingPathComponent("Source.app")
+        let engine = app.appendingPathComponent("Contents/Resources/engine/mole")
+        try FileManager.default.createDirectory(at: engine.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try writeInfoPlist(to: app, build: "23")
+        try Data("#!/bin/sh\n".utf8).write(to: engine)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: engine.path)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        var sameTeamSignatureAccepted = false
+        XCTAssertThrowsError(try HelperExecutableSnapshot.prepare(
+            appBundleURL: app,
+            parentDirectory: temp.resolvingSymlinksInPath(),
+            expectedOwner: geteuid(),
+            expectedBundleID: HelperNames.clientBundleID,
+            expectedBuild: "24",
+            verify: { _ in
+                sameTeamSignatureAccepted = true
+                return true
+            }))
+        XCTAssertTrue(sameTeamSignatureAccepted,
+                      "the regression must reach the same-team-pass/build-mismatch boundary")
+    }
+
+    private func writeInfoPlist(to app: URL, build: String) throws {
+        let info: [String: Any] = [
+            "CFBundleIdentifier": HelperNames.clientBundleID,
+            "CFBundleVersion": build,
+        ]
+        let data = try PropertyListSerialization.data(fromPropertyList: info,
+                                                       format: .binary, options: 0)
+        try data.write(to: app.appendingPathComponent("Contents/Info.plist"))
     }
 
     // MARK: - Version skew between app and helper

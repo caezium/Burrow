@@ -272,17 +272,29 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                 case .exited(let code):
                     guard !self.cancelRequested else { return }
                     self.reactivateIfElevated(op)   // backstop: no-output runs
-                    self.report = op.reduce(lines)
                     self.rawLog = lines.joined(separator: "\n")
-                    self.state = .finished(.done(exit: code))
-                    if op.label != nil {
-                        // Replace the last streamed line with the parsed
-                        // result line where the op provides one — that's
-                        // what a completion notification shows.
-                        let detail = self.report.map { op.finalDetail?($0) ?? "" } ?? ""
-                        self.center.end(id, success: code == 0, detail: detail)
+                    if code == 0 {
+                        self.report = op.reduce(lines)
+                        self.state = .finished(.done(exit: code))
+                        if op.label != nil {
+                            // Replace the last streamed line with the parsed
+                            // result line where the op provides one — that's
+                            // what a completion notification shows.
+                            let detail = self.report.map { op.finalDetail?($0) ?? "" } ?? ""
+                            self.center.end(id, success: true, detail: detail)
+                        }
+                        self.captureTelemetryCompletion(result: "succeeded")
+                    } else {
+                        // A cleanup report may contain the preview's optimistic
+                        // summary even though the exact-tree guard stopped the
+                        // deletion. Do not render or notify with that summary.
+                        self.report = op.cleanupPlan == nil ? op.reduce(lines) : nil
+                        let message = Self.failureMessage(exitCode: code,
+                                                          isCleanup: op.cleanupPlan != nil)
+                        self.state = .finished(.failed(message))
+                        if op.label != nil { self.center.end(id, success: false, detail: message) }
+                        self.captureTelemetryCompletion(result: "failed")
                     }
-                    self.captureTelemetryCompletion(result: code == 0 ? "succeeded" : "failed")
                 case .authCancelled:
                     // Auth-cancel is classified by the runner now (#48 taxonomy),
                     // not by a view-level "elevated + nonzero + no output" guess.
@@ -319,6 +331,18 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
               let command = operation.arguments.first,
               ["clean", "optimize"].contains(command) else { return nil }
         return command
+    }
+
+    private static func failureMessage(exitCode: Int32, isCleanup: Bool) -> String {
+        if isCleanup {
+            return String(
+                format: NSLocalizedString(
+                    "Cleanup stopped because the reviewed files changed or could not be secured (exit %d). Rescan before trying again.",
+                    comment: ""),
+                exitCode)
+        }
+        return String(format: NSLocalizedString("Operation failed with exit status %d.", comment: ""),
+                      exitCode)
     }
 
     private func captureTelemetryCompletion(result: String) {
@@ -390,6 +414,12 @@ struct SystemProcessPort: ProcessPort {
             }
 
             let outPipe = Pipe(), errPipe = Pipe()
+            let cleanupExecution: CleanupIrreversibleExecution?
+            if spec.elevated, let plan = spec.cleanupPlan {
+                cleanupExecution = try? plan.prepareIrreversibleCleanup()
+            } else {
+                cleanupExecution = nil
+            }
 
             if spec.elevated {
                 // The osascript `do shell script` wrapper has no stdin channel,
@@ -403,14 +433,17 @@ struct SystemProcessPort: ProcessPort {
                         executable: spec.executable, invokingUser: invokingUser,
                         requireCurrentBundle: spec.requiresCurrentBundle),
                       let logSink = try? PrivilegedLogSink.make(),
-                      spec.cleanupPlan?.validateForLaunch() != false else {
+                      spec.cleanupPlan?.validateForLaunch() != false,
+                      spec.cleanupPlan == nil || cleanupExecution != nil else {
+                    cleanupExecution?.remove()
                     streamQ.async { finish(126) }
                     return
                 }
                 let script = MoleCLI.elevatedScript(command: command,
                                                     args: spec.arguments,
                                                     logSink: logSink,
-                                                    cleanupPlan: spec.cleanupPlan)
+                                                    cleanupPlan: spec.cleanupPlan,
+                                                    cleanupExecution: cleanupExecution)
                 t.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
                 t.arguments = ["-e", script]
                 t.standardOutput = outPipe
@@ -428,6 +461,7 @@ struct SystemProcessPort: ProcessPort {
 
                 t.terminationHandler = { proc in
                     killTimer?.cancel()
+                    cleanupExecution?.remove()
                     DispatchQueue.main.async { tailTimer?.invalidate() }
                     streamQ.async {
                         if let h = logHandle {                  // last tail of the log
@@ -504,6 +538,7 @@ struct SystemProcessPort: ProcessPort {
                     }
                 }
             } catch {
+                cleanupExecution?.remove()
                 streamQ.async { finish(127) }
             }
         }

@@ -24,6 +24,22 @@ final class ProcessActionsTests: XCTestCase {
         XCTAssertTrue(signals.values.isEmpty)
     }
 
+    func testTerminateFailsClosedWhenProcessExitedBeforeTheSignal() {
+        let expected = target(identity: identity())
+        let signals = LockedSignals()
+
+        let result = ProcessActions.terminate(
+            expected,
+            force: false,
+            currentUID: 501,
+            readIdentity: { _ in nil },
+            sendSignal: { pid, signal in signals.append(pid: pid, signal: signal); return 0 }
+        )
+
+        XCTAssertEqual(result, .stale)
+        XCTAssertTrue(signals.values.isEmpty)
+    }
+
     func testTerminateFailsClosedWhenExecutableChangedAfterConfirmation() {
         let expected = target(identity: identity(path: "/Applications/Before.app/Contents/MacOS/Before"))
         let signals = LockedSignals()

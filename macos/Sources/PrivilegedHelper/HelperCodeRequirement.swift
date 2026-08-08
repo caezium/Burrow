@@ -40,6 +40,7 @@
 
 import Foundation
 import Security
+import Darwin
 
 enum HelperCodeRequirement {
 
@@ -151,5 +152,148 @@ enum HelperCodeRequirement {
     static func sameTeam(teamID: String) -> String? {
         guard let team = validated(identifier: teamID) else { return nil }
         return #"anchor apple generic and certificate leaf[subject.OU] = "\#(team)""#
+    }
+}
+
+/// A private copy of the app whose resource seal has been verified in place.
+///
+/// `SecStaticCodeCheckValidity` accepts a path, and `Process` also launches a
+/// path. Validating the installed bundle and later launching from it leaves a
+/// rename window between those two operations. The helper closes that window
+/// by cloning the bundle beneath a fresh 0700 root-owned directory, validating
+/// that clone, and retaining it until the child exits. No unprivileged process
+/// can replace anything below `rootURL`, so the validated bytes and launched
+/// bytes are the same filesystem objects.
+final class HelperExecutableSnapshot {
+    enum SnapshotError: Error {
+        case invalidParent
+        case cannotCreateRoot(Int32)
+        case copyFailed(Int32)
+        case verificationFailed
+    }
+
+    let rootURL: URL
+    let appBundleURL: URL
+    let executableURL: URL
+
+    private let lock = NSLock()
+    private var removed = false
+
+    private init(rootURL: URL, appBundleURL: URL, executableURL: URL) {
+        self.rootURL = rootURL
+        self.appBundleURL = appBundleURL
+        self.executableURL = executableURL
+    }
+
+    /// The verifier is injectable only so unit tests can exercise the
+    /// filesystem boundary with a tiny fixture. The daemon supplies the real
+    /// Security-framework resource-seal check.
+    static func prepare(appBundleURL source: URL,
+                        parentDirectory: URL = URL(fileURLWithPath: "/private/var/tmp",
+                                                   isDirectory: true),
+                        expectedOwner: uid_t = 0,
+                        expectedBundleID: String,
+                        expectedBuild: String,
+                        verify: (URL) -> Bool) throws -> HelperExecutableSnapshot {
+        guard let canonicalParent = canonicalPath(parentDirectory.path) else {
+            throw SnapshotError.invalidParent
+        }
+        let parent = URL(fileURLWithPath: canonicalParent, isDirectory: true)
+        var parentStat = stat()
+        guard lstat(parent.path, &parentStat) == 0,
+              (parentStat.st_mode & S_IFMT) == S_IFDIR,
+              parentStat.st_uid == expectedOwner else {
+            throw SnapshotError.invalidParent
+        }
+        // A writable parent is safe only when sticky: /private/var/tmp lets a
+        // user create their own entries but not replace a root-owned one.
+        let writable = parentStat.st_mode & 0o022 != 0
+        guard !writable || parentStat.st_mode & S_ISVTX != 0 else {
+            throw SnapshotError.invalidParent
+        }
+
+        var template = Array((parent.path + "/dev.caezium.burrow.engine.XXXXXX").utf8CString)
+        let created: String? = template.withUnsafeMutableBufferPointer { bytes in
+            guard let path = mkdtemp(bytes.baseAddress) else { return nil }
+            return String(cString: path)
+        }
+        guard let rootPath = created else { throw SnapshotError.cannotCreateRoot(errno) }
+        let root = URL(fileURLWithPath: rootPath, isDirectory: true)
+        var keep = false
+        defer {
+            if !keep { try? FileManager.default.removeItem(at: root) }
+        }
+        guard chmod(rootPath, 0o700) == 0 else {
+            throw SnapshotError.cannotCreateRoot(errno)
+        }
+
+        let copiedApp = root.appendingPathComponent("Burrow.app", isDirectory: true)
+        let cloneFlags = copyfile_flags_t(COPYFILE_ALL | COPYFILE_RECURSIVE | COPYFILE_CLONE)
+        var copyResult = copyfile(source.path, copiedApp.path, nil, cloneFlags)
+        if copyResult != 0 {
+            let firstError = errno
+            try? FileManager.default.removeItem(at: copiedApp)
+            let fallbackFlags = copyfile_flags_t(COPYFILE_ALL | COPYFILE_RECURSIVE)
+            copyResult = copyfile(source.path, copiedApp.path, nil, fallbackFlags)
+            guard copyResult == 0 else {
+                throw SnapshotError.copyFailed(errno == 0 ? firstError : errno)
+            }
+        }
+
+        let contents = copiedApp.appendingPathComponent("Contents", isDirectory: true)
+        let resources = contents.appendingPathComponent("Resources", isDirectory: true)
+        let engineDirectory = resources.appendingPathComponent("engine", isDirectory: true)
+        let executable = engineDirectory.appendingPathComponent("mole", isDirectory: false)
+        guard [copiedApp, contents, resources, engineDirectory].allSatisfy(isRealDirectory),
+              isExecutableRegularFile(executable),
+              verify(copiedApp),
+              matchesSealedMetadata(at: copiedApp,
+                                    expectedBundleID: expectedBundleID,
+                                    expectedBuild: expectedBuild) else {
+            throw SnapshotError.verificationFailed
+        }
+
+        keep = true
+        return HelperExecutableSnapshot(rootURL: root, appBundleURL: copiedApp,
+                                        executableURL: executable)
+    }
+
+    func remove() {
+        lock.lock()
+        guard !removed else { lock.unlock(); return }
+        removed = true
+        lock.unlock()
+        try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    deinit { remove() }
+
+    private static func canonicalPath(_ path: String) -> String? {
+        guard let resolved = realpath(path, nil) else { return nil }
+        defer { free(resolved) }
+        return String(cString: resolved)
+    }
+
+    private static func isRealDirectory(_ url: URL) -> Bool {
+        var value = stat()
+        return lstat(url.path, &value) == 0 && (value.st_mode & S_IFMT) == S_IFDIR
+    }
+
+    private static func isExecutableRegularFile(_ url: URL) -> Bool {
+        var value = stat()
+        return lstat(url.path, &value) == 0 &&
+            (value.st_mode & S_IFMT) == S_IFREG && value.st_mode & 0o111 != 0
+    }
+
+    static func matchesSealedMetadata(at appBundleURL: URL,
+                                      expectedBundleID: String,
+                                      expectedBuild: String) -> Bool {
+        let infoURL = appBundleURL.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: infoURL),
+              let value = try? PropertyListSerialization.propertyList(from: data,
+                                                                       format: nil),
+              let info = value as? [String: Any] else { return false }
+        return info["CFBundleIdentifier"] as? String == expectedBundleID &&
+            info["CFBundleVersion"] as? String == expectedBuild
     }
 }

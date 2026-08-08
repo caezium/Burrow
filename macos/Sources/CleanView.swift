@@ -201,7 +201,7 @@ struct CleanView: View {
     }
 
     private var reviewAvailable: Bool {
-        if case .finished(.done) = dryFlow.state { return CleanList.loadLive() != nil }
+        if case .finished(.done(exit: 0)) = dryFlow.state { return CleanList.loadLive() != nil }
         return false
     }
 
@@ -286,7 +286,7 @@ struct CleanView: View {
         screen = .hero
         realFlow.start(ToolOperation(
             label: NSLocalizedString("Cleaning reviewed caches", comment: ""),
-            executable: .path("/usr/bin/find"), arguments: [], elevated: true,
+            executable: .path("/bin/sh"), arguments: [], elevated: true,
             cleanupPlan: plan, reduce: { parseTaskReport($0) }, notifyOnEnd: true))
     }
 
@@ -361,7 +361,7 @@ struct CleanView: View {
             }
             .padding(.horizontal, 18).padding(.top, 4).padding(.bottom, 12)
             Rectangle().fill(Brand.hairline).frame(height: 1)
-            if case .finished(.done) = realFlow.state {
+            if case .finished(.done(exit: 0)) = realFlow.state {
                 DoneBanner(accent: Tool.clean.accent, title: "Cleaned", detail: cleanedDetail)
                     .task { await loadLifetime() }
             }
@@ -378,7 +378,9 @@ struct CleanView: View {
     private var realStatusText: String {
         switch realFlow.state {
         case .running: return NSLocalizedString("Cleaning… don't quit.", comment: "")
-        case .finished(.done): return NSLocalizedString("Done — caches cleared.", comment: "")
+        case .finished(.done(exit: 0)): return NSLocalizedString("Done — caches cleared.", comment: "")
+        case .finished(.done(let code)):
+            return String(format: NSLocalizedString("Failed: cleanup exited with status %d.", comment: ""), code)
         case .finished(.cancelled): return NSLocalizedString("Stopped.", comment: "")
         case .finished(.failed(let m)): return String(format: NSLocalizedString("Failed: %@", comment: ""), m)
         case .idle, .gated: return ""

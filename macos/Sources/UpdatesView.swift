@@ -54,6 +54,59 @@ struct AppUpdateItem: Identifiable {
     }
 }
 
+/// One source-check response. Keeping this value independent from the view
+/// model makes forced responses deterministic in tests and keeps retries from
+/// smuggling partial state into the main actor.
+struct AppUpdateCheckResult: Equatable, Sendable {
+    let id: String
+    var latestVersion: String?
+    var pageURL: URL?
+    var releaseNotesURL: URL?
+    var minimumOS: String?
+    var electronDescriptor: ElectronUpdateDescriptor?
+    var phase: UpdatePhase
+
+    static func failure(id: String, failure: UpdateFailure) -> Self {
+        Self(
+            id: id,
+            latestVersion: nil,
+            pageURL: nil,
+            releaseNotesURL: nil,
+            minimumOS: nil,
+            electronDescriptor: nil,
+            phase: .failed(failure)
+        )
+    }
+
+    static func available(
+        id: String,
+        version: String,
+        electronDescriptor: ElectronUpdateDescriptor? = nil
+    ) -> Self {
+        Self(
+            id: id,
+            latestVersion: version,
+            pageURL: nil,
+            releaseNotesURL: nil,
+            minimumOS: nil,
+            electronDescriptor: electronDescriptor,
+            phase: .available
+        )
+    }
+
+    static func completed(id: String, version: String? = nil) -> Self {
+        Self(
+            id: id,
+            latestVersion: version,
+            pageURL: nil,
+            releaseNotesURL: nil,
+            minimumOS: nil,
+            electronDescriptor: nil,
+            phase: .completed
+        )
+    }
+}
+
 struct UpdatesView: View {
     @ObservedObject var model: UpdatesModel
     var apps: [InstalledApp] = []
@@ -101,7 +154,7 @@ struct UpdatesView: View {
                 Text(verbatim: "\(model.updateAllCompleted)/\(model.updateAllTotal)")
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
                     .accessibilityLabel(String(
-                        format: NSLocalizedString("%d of %d updates complete", comment: ""),
+                        format: NSLocalizedString("%d of %d update steps processed", comment: ""),
                         model.updateAllCompleted,
                         model.updateAllTotal
                     ))
@@ -367,20 +420,56 @@ final class UpdatesModel: ObservableObject {
     private var checkGeneration = 0
     private let sourceDetector: (InstalledApp) -> UpdateSources.Source?
     private let sourceFingerprinter: (InstalledApp) -> String
+    private let checkItem: (AppUpdateItem) async -> AppUpdateCheckResult
+    private let retrySleep: (UInt64) async -> Void
+    private let retryDelayNanoseconds: UInt64
+    private let loadBrewOutdated: () async -> [OutdatedItem]
+    private let stageElectron: (String, ElectronUpdateDescriptor) async -> ElectronStageOutcome
+    private let installElectron: @MainActor (StagedElectronUpdate) async -> ElectronInstallOutcome
+    private let confirmRestart: @MainActor (AppUpdateItem) -> Bool
     private var brewSurfaced = false
     private var electronDescriptors: [String: ElectronUpdateDescriptor] = [:]
     private var stagedElectronUpdates: [String: StagedElectronUpdate] = [:]
-    private var sparkleSessions: [String: ExternalSparkleUpdateSession] = [:]
-    private var appTasks: [String: Task<Void, Never>] = [:]
+    private var checkFailureIDs: Set<String> = []
+    private struct TrackedSparkleSession {
+        let generation: UInt64
+        let session: ExternalSparkleUpdateSession
+    }
+    private var sparkleSessions: [String: TrackedSparkleSession] = [:]
+    private var sparkleSessionGeneration: UInt64 = 0
+    private struct TrackedAppTask {
+        let generation: UInt64
+        let task: Task<Void, Never>
+    }
+    private enum AppUpdateOwner {
+        case row(UInt64)
+        case updateAll(inventoryGeneration: Int)
+    }
+    private var appTasks: [String: TrackedAppTask] = [:]
+    private var appTaskGeneration: UInt64 = 0
     private var updateAllTask: Task<Void, Never>?
     private var cancelUpdateAllAfterCurrent = false
 
     init(
         detectSource: ((InstalledApp) -> UpdateSources.Source?)? = nil,
-        sourceFingerprint: ((InstalledApp) -> String)? = nil
+        sourceFingerprint: ((InstalledApp) -> String)? = nil,
+        checkItem: ((AppUpdateItem) async -> AppUpdateCheckResult)? = nil,
+        retrySleep: ((UInt64) async -> Void)? = nil,
+        retryDelayNanoseconds: UInt64 = 750_000_000,
+        loadBrewOutdated: (() async -> [OutdatedItem])? = nil,
+        stageElectron: ((String, ElectronUpdateDescriptor) async -> ElectronStageOutcome)? = nil,
+        installElectron: (@MainActor (StagedElectronUpdate) async -> ElectronInstallOutcome)? = nil,
+        confirmRestart: (@MainActor (AppUpdateItem) -> Bool)? = nil
     ) {
         sourceDetector = detectSource ?? { UpdateSources.detect(appPath: $0.path) }
         sourceFingerprinter = sourceFingerprint ?? { UpdateSources.detectionFingerprint(appPath: $0.path) }
+        self.checkItem = checkItem ?? { await Self.check($0) }
+        self.retrySleep = retrySleep ?? { delay in try? await Task.sleep(nanoseconds: delay) }
+        self.retryDelayNanoseconds = min(retryDelayNanoseconds, 2_000_000_000)
+        self.loadBrewOutdated = loadBrewOutdated ?? { await Self.brewOutdated() }
+        self.stageElectron = stageElectron ?? { await ElectronReplacementInstaller.stage(appPath: $0, descriptor: $1) }
+        self.installElectron = installElectron ?? { await ElectronReplacementInstaller.install($0) }
+        self.confirmRestart = confirmRestart ?? { Self.confirmRestartBeforeInstalling($0) }
     }
 
     var availableItems: [AppUpdateItem] { appItems.filter(\.updateAvailable) }
@@ -429,10 +518,11 @@ final class UpdatesModel: ObservableObject {
         appItems.removeAll { !unchangedIDs.contains($0.id) }
         uncheckableApps.removeAll { !unchangedIDs.contains($0.id) }
         phases = phases.filter { nextIDs.contains($0.key) && unchangedIDs.contains($0.key) }
+        checkFailureIDs.formIntersection(unchangedIDs)
         electronDescriptors = electronDescriptors.filter { unchangedIDs.contains($0.key) }
         for id in invalidatedIDs {
             stagedElectronUpdates.removeValue(forKey: id)?.discard()
-            appTasks.removeValue(forKey: id)?.cancel()
+            cancelAppTask(for: id)
         }
 
         guard !apps.isEmpty else { return }
@@ -472,7 +562,7 @@ final class UpdatesModel: ObservableObject {
         brewSurfaced = true
         brewSurfacing = true
         Task {
-            let brews = await Self.brewOutdated()
+            let brews = await loadBrewOutdated()
             await MainActor.run {
                 if self.brewItems.isEmpty { self.brewItems = brews }
                 self.brewSurfacing = false
@@ -489,14 +579,28 @@ final class UpdatesModel: ObservableObject {
         checkGeneration &+= 1
         let generation = checkGeneration
         let items = appItems
-        for item in items { phases[item.id] = .checking }
+        let checkItem = self.checkItem
+        let retrySleep = self.retrySleep
+        let retryDelayNanoseconds = self.retryDelayNanoseconds
+        let loadBrewOutdated = self.loadBrewOutdated
+        for item in items {
+            phases[item.id] = .checking
+            checkFailureIDs.remove(item.id)
+        }
         Task {
-            var results: [CheckResult] = []
-            await withTaskGroup(of: CheckResult.self) { group in
+            var results: [AppUpdateCheckResult] = []
+            await withTaskGroup(of: AppUpdateCheckResult.self) { group in
                 var iterator = items.makeIterator()
                 var inFlight = 0
                 func enqueue(_ item: AppUpdateItem) {
-                    group.addTask { await Self.check(item) }
+                    group.addTask {
+                        await Self.checkWithRetry(
+                            item,
+                            checkItem: checkItem,
+                            retrySleep: retrySleep,
+                            retryDelayNanoseconds: retryDelayNanoseconds
+                        )
+                    }
                 }
                 while inFlight < 6, let next = iterator.next() { enqueue(next); inFlight += 1 }
                 for await result in group {
@@ -504,22 +608,44 @@ final class UpdatesModel: ObservableObject {
                     if let next = iterator.next() { enqueue(next) }
                 }
             }
-            let brews = await Self.brewOutdated()
+            let brews = await loadBrewOutdated()
             await MainActor.run {
                 guard generation == self.checkGeneration else { return }
                 let byID = Dictionary(uniqueKeysWithValues: results.map { ($0.id, $0) })
                 self.appItems = self.appItems.map { live in
                     guard let result = byID[live.id] else { return live }
                     var copy = live
-                    // A failed check never erases a previously known update.
-                    if let latest = result.latestVersion { copy.latestVersion = latest }
-                    if let pageURL = result.pageURL { copy.pageURL = pageURL }
-                    if let releaseNotesURL = result.releaseNotesURL { copy.releaseNotesURL = releaseNotesURL }
-                    if let minimumOS = result.minimumOS { copy.minimumOS = minimumOS }
-                    if let descriptor = result.electronDescriptor {
-                        self.electronDescriptors[live.id] = descriptor
+                    // A failed, cached, or otherwise older response never
+                    // erases a release we already confirmed. Apply metadata as
+                    // one versioned unit so an older Electron descriptor cannot
+                    // be paired with the preserved newer version.
+                    let acceptsResultMetadata: Bool
+                    if let latest = result.latestVersion {
+                        if let known = live.latestVersion,
+                           UpdateCheck.isNewer(known, than: latest) {
+                            acceptsResultMetadata = false
+                        } else {
+                            copy.latestVersion = latest
+                            acceptsResultMetadata = true
+                        }
+                    } else {
+                        acceptsResultMetadata = false
                     }
-                    self.phases[live.id] = result.phase
+                    if acceptsResultMetadata {
+                        if let pageURL = result.pageURL { copy.pageURL = pageURL }
+                        if let releaseNotesURL = result.releaseNotesURL { copy.releaseNotesURL = releaseNotesURL }
+                        if let minimumOS = result.minimumOS { copy.minimumOS = minimumOS }
+                        if let descriptor = result.electronDescriptor {
+                            self.electronDescriptors[live.id] = descriptor
+                        }
+                    }
+                    if case .failed = result.phase {
+                        self.checkFailureIDs.insert(live.id)
+                        self.phases[live.id] = result.phase
+                    } else {
+                        self.checkFailureIDs.remove(live.id)
+                        self.phases[live.id] = copy.updateAvailable ? .available : result.phase
+                    }
                     return copy
                 }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
                 self.brewItems = brews
@@ -552,18 +678,21 @@ final class UpdatesModel: ObservableObject {
         }
     }
 
-    private struct CheckResult: Sendable {
-        let id: String
-        var latestVersion: String?
-        var pageURL: URL?
-        var releaseNotesURL: URL?
-        var minimumOS: String?
-        var electronDescriptor: ElectronUpdateDescriptor?
-        var phase: UpdatePhase
+    private static func checkWithRetry(
+        _ item: AppUpdateItem,
+        checkItem: (AppUpdateItem) async -> AppUpdateCheckResult,
+        retrySleep: (UInt64) async -> Void,
+        retryDelayNanoseconds: UInt64
+    ) async -> AppUpdateCheckResult {
+        let first = await checkItem(item)
+        guard case let .failed(failure) = first.phase, failure.canRetry else { return first }
+        await retrySleep(retryDelayNanoseconds)
+        guard !Task.isCancelled else { return first }
+        return await checkItem(item)
     }
 
-    private static func check(_ item: AppUpdateItem) async -> CheckResult {
-        var result = CheckResult(
+    private static func check(_ item: AppUpdateItem) async -> AppUpdateCheckResult {
+        var result = AppUpdateCheckResult(
             id: item.id,
             latestVersion: nil,
             pageURL: nil,
@@ -644,33 +773,137 @@ final class UpdatesModel: ObservableObject {
     }
 
     func update(_ item: AppUpdateItem) {
-        guard appTasks[item.id] == nil, !phase(for: item.id).isBusy else { return }
+        guard !updateAllRunning,
+              updateAllTask == nil,
+              appTasks[item.id] == nil,
+              !phase(for: item.id).isBusy else { return }
+        let generation = nextAppTaskGeneration()
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.performUpdate(item, installElectronImmediately: false)
-            self.appTasks.removeValue(forKey: item.id)
+            await self.performUpdate(item, owner: .row(generation))
+            self.finishAppTask(for: item.id, generation: generation)
         }
-        appTasks[item.id] = task
+        appTasks[item.id] = TrackedAppTask(generation: generation, task: task)
     }
 
     func retry(_ item: AppUpdateItem) {
-        if item.updateAvailable { update(item) }
+        if checkFailureIDs.contains(item.id) { checkNow() }
+        else if item.updateAvailable { update(item) }
         else { checkNow() }
     }
 
     func installReady(_ item: AppUpdateItem) {
-        guard let staged = stagedElectronUpdates.removeValue(forKey: item.id) else { return }
-        appTasks[item.id]?.cancel()
+        guard !updateAllRunning, updateAllTask == nil else { return }
+        let inventoryGeneration = prepareGeneration
+        let capturedFingerprint = inventoryFingerprint(for: item)
+        guard isLiveUpdateIdentity(item),
+              let staged = stagedElectronUpdates[item.id],
+              confirmRestart(item) else { return }
+        // The restart alert runs a modal event loop. Any inventory/fingerprint
+        // change while it is open invalidates this consent, even if the same ID
+        // is detected and republished before the user returns.
+        guard prepareGeneration == inventoryGeneration,
+              inventoryFingerprint(for: item) == capturedFingerprint,
+              isLiveUpdateIdentity(item) else { return }
+        guard let currentStaged = stagedElectronUpdates[item.id],
+              isSameStagedUpdate(currentStaged, staged) else {
+            staged.discard()
+            return
+        }
+        stagedElectronUpdates.removeValue(forKey: item.id)
+        cancelAppTask(for: item.id)
+        let generation = nextAppTaskGeneration()
         let task = Task { @MainActor [weak self] in
             guard let self else { staged.discard(); return }
-            await self.install(staged, for: item.id)
-            self.appTasks.removeValue(forKey: item.id)
+            await self.install(staged, for: item.id, owner: .row(generation))
+            self.finishAppTask(for: item.id, generation: generation)
         }
-        appTasks[item.id] = task
+        appTasks[item.id] = TrackedAppTask(generation: generation, task: task)
+    }
+
+    private func nextAppTaskGeneration() -> UInt64 {
+        appTaskGeneration &+= 1
+        return appTaskGeneration
+    }
+
+    private func finishAppTask(for id: String, generation: UInt64) {
+        guard appTasks[id]?.generation == generation else { return }
+        appTasks.removeValue(forKey: id)
+    }
+
+    private func isCurrentUpdateAll(inventoryGeneration: Int) -> Bool {
+        updateAllRunning && prepareGeneration == inventoryGeneration
+    }
+
+    private func isCurrentAppUpdate(for id: String, owner: AppUpdateOwner) -> Bool {
+        switch owner {
+        case let .row(generation):
+            return appTasks[id]?.generation == generation
+                && appItems.contains(where: { $0.id == id })
+        case let .updateAll(inventoryGeneration):
+            return isCurrentUpdateAll(inventoryGeneration: inventoryGeneration)
+                && appItems.contains(where: { $0.id == id })
+        }
+    }
+
+    private func cancelAppTask(for id: String) {
+        appTasks.removeValue(forKey: id)?.task.cancel()
+    }
+
+    private func inventoryFingerprint(for item: AppUpdateItem) -> InventoryFingerprint? {
+        preparedInventory.first {
+            $0.id == item.id && $0.bundleID == item.bundleID && $0.path == item.path
+        }
+    }
+
+    private func isLiveUpdateIdentity(_ expected: AppUpdateItem) -> Bool {
+        appItems.contains {
+            $0.id == expected.id
+                && $0.path == expected.path
+                && $0.bundleID == expected.bundleID
+                && $0.installedVersion == expected.installedVersion
+                && $0.source == expected.source
+        }
+    }
+
+    private func isSameStagedUpdate(
+        _ lhs: StagedElectronUpdate,
+        _ rhs: StagedElectronUpdate
+    ) -> Bool {
+        lhs.targetURL.standardizedFileURL == rhs.targetURL.standardizedFileURL
+            && lhs.candidateURL.standardizedFileURL == rhs.candidateURL.standardizedFileURL
+            && lhs.stagingDirectory.standardizedFileURL == rhs.stagingDirectory.standardizedFileURL
+    }
+
+    private func confirmedStagedUpdate(for item: AppUpdateItem) -> StagedElectronUpdate? {
+        guard let staged = stagedElectronUpdates[item.id], confirmRestart(item) else { return nil }
+        stagedElectronUpdates.removeValue(forKey: item.id)
+        return staged
+    }
+
+    private static func confirmRestartBeforeInstalling(_ item: AppUpdateItem) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = String(
+            format: NSLocalizedString("Install and restart %@?", comment: ""),
+            item.name
+        )
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "Save any work in %@ before continuing. Burrow will ask the app to quit, replace its verified app bundle, and reopen it. Choosing Not Yet leaves the verified update ready to install.",
+                comment: ""
+            ),
+            item.name
+        )
+        alert.addButton(withTitle: NSLocalizedString("Install & Restart", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Not Yet", comment: ""))
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModalQuiet() == .alertFirstButtonReturn
     }
 
     func cancel(_ item: AppUpdateItem) {
-        appTasks.removeValue(forKey: item.id)?.cancel()
+        guard !updateAllRunning, updateAllTask == nil else { return }
+        cancelAppTask(for: item.id)
         stagedElectronUpdates.removeValue(forKey: item.id)?.discard()
         phases[item.id] = .failed(.cancelled)
     }
@@ -679,17 +912,22 @@ final class UpdatesModel: ObservableObject {
         if let url = item.releaseNotesURL ?? item.pageURL { NSWorkspace.shared.open(url) }
     }
 
-    private func performUpdate(_ item: AppUpdateItem, installElectronImmediately: Bool) async {
+    private func performUpdate(_ item: AppUpdateItem, owner: AppUpdateOwner) async {
+        guard isCurrentAppUpdate(for: item.id, owner: owner) else { return }
         switch item.source {
         case .sparkle:
-            await runSparkle(item)
+            await runSparkle(item, owner: owner)
         case .electron:
             guard let descriptor = electronDescriptors[item.id] else {
                 handOffToOwnUpdater(item)
                 return
             }
             phases[item.id] = .downloading(progress: nil)
-            let outcome = await ElectronReplacementInstaller.stage(appPath: item.path, descriptor: descriptor)
+            let outcome = await stageElectron(item.path, descriptor)
+            guard isCurrentAppUpdate(for: item.id, owner: owner) else {
+                if case let .ready(staged) = outcome { staged.discard() }
+                return
+            }
             guard !Task.isCancelled else {
                 if case let .ready(staged) = outcome { staged.discard() }
                 phases[item.id] = .failed(.cancelled)
@@ -700,10 +938,6 @@ final class UpdatesModel: ObservableObject {
                 stagedElectronUpdates[item.id]?.discard()
                 stagedElectronUpdates[item.id] = staged
                 phases[item.id] = .readyToInstall
-                if installElectronImmediately {
-                    stagedElectronUpdates.removeValue(forKey: item.id)
-                    await install(staged, for: item.id)
-                }
             case let .failure(failure):
                 phases[item.id] = .failed(failure)
                 if case .unsupported = failure { handOffToOwnUpdater(item) }
@@ -717,16 +951,24 @@ final class UpdatesModel: ObservableObject {
         }
     }
 
-    private func runSparkle(_ item: AppUpdateItem) async {
+    private func runSparkle(_ item: AppUpdateItem, owner: AppUpdateOwner) async {
+        guard isCurrentAppUpdate(for: item.id, owner: owner) else { return }
+        sparkleSessionGeneration &+= 1
+        let sessionGeneration = sparkleSessionGeneration
         await withCheckedContinuation { continuation in
             guard let session = ExternalSparkleUpdateSession(
                 appPath: item.path,
                 onPhase: { [weak self] phase in
-                    guard let self, self.appItems.contains(where: { $0.id == item.id }) else { return }
+                    guard let self,
+                          self.isCurrentSparkleSession(for: item.id, generation: sessionGeneration),
+                          self.isCurrentAppUpdate(for: item.id, owner: owner),
+                          self.appItems.contains(where: { $0.id == item.id }) else { return }
                     self.phases[item.id] = phase
                 },
                 onMetadata: { [weak self] version, releaseNotesURL in
-                    guard let self else { return }
+                    guard let self,
+                          self.isCurrentSparkleSession(for: item.id, generation: sessionGeneration),
+                          self.isCurrentAppUpdate(for: item.id, owner: owner) else { return }
                     self.appItems = self.appItems.map { live in
                         guard live.id == item.id else { return live }
                         var copy = live
@@ -736,7 +978,7 @@ final class UpdatesModel: ObservableObject {
                     }
                 },
                 onFinish: { [weak self] in
-                    self?.sparkleSessions.removeValue(forKey: item.id)
+                    self?.finishSparkleSession(for: item.id, generation: sessionGeneration)
                     continuation.resume()
                 }
             ) else {
@@ -748,17 +990,42 @@ final class UpdatesModel: ObservableObject {
                 continuation.resume()
                 return
             }
-            sparkleSessions[item.id] = session
+            sparkleSessions[item.id] = TrackedSparkleSession(
+                generation: sessionGeneration,
+                session: session
+            )
             if session.begin() != nil {
-                sparkleSessions.removeValue(forKey: item.id)
+                finishSparkleSession(for: item.id, generation: sessionGeneration)
                 handOffToOwnUpdater(item)
             }
         }
     }
 
-    private func install(_ staged: StagedElectronUpdate, for id: String) async {
+    private func isCurrentSparkleSession(for id: String, generation: UInt64) -> Bool {
+        sparkleSessions[id]?.generation == generation
+    }
+
+    private func finishSparkleSession(for id: String, generation: UInt64) {
+        guard isCurrentSparkleSession(for: id, generation: generation) else { return }
+        sparkleSessions.removeValue(forKey: id)
+    }
+
+    private func install(
+        _ staged: StagedElectronUpdate,
+        for id: String,
+        owner: AppUpdateOwner
+    ) async {
+        guard isCurrentAppUpdate(for: id, owner: owner) else {
+            staged.discard()
+            return
+        }
         phases[id] = .installing
-        switch await ElectronReplacementInstaller.install(staged) {
+        let outcome = await installElectron(staged)
+        guard isCurrentAppUpdate(for: id, owner: owner) else {
+            staged.discard()
+            return
+        }
+        switch outcome {
         case .installed:
             phases[id] = .completed
         case let .failure(failure):
@@ -781,19 +1048,27 @@ final class UpdatesModel: ObservableObject {
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.performBrewUpdate(item)
-            self.brewItems = await Self.brewOutdated()
+            self.brewItems = await self.loadBrewOutdated()
         }
     }
 
-    /// Updates every available item serially. Cancellation is deliberately a
-    /// boundary between apps: interrupting a package replacement or `brew`
-    /// transaction halfway through is less safe than finishing the current
-    /// item and stopping before the next one.
+    /// Processes every available item serially. Electron replacements stop at
+    /// the visible ready-to-install boundary; only an explicit Install &
+    /// Restart confirmation may let the batch or row quit and replace it.
+    /// Cancellation is deliberately a boundary between apps: interrupting a
+    /// download or `brew` transaction halfway through is less safe than
+    /// finishing the current item and stopping before the next one.
     func updateAll() {
-        guard !updateAllRunning, upgrading.isEmpty else { return }
+        guard !updateAllRunning,
+              updateAllTask == nil,
+              upgrading.isEmpty,
+              appTasks.isEmpty,
+              sparkleSessions.isEmpty else { return }
         let apps = availableItems
         let brews = brewItems
         guard !apps.isEmpty || !brews.isEmpty else { return }
+        let inventoryGeneration = prepareGeneration
+        let owner = AppUpdateOwner.updateAll(inventoryGeneration: inventoryGeneration)
         cancelUpdateAllAfterCurrent = false
         updateAllRunning = true
         updateAllCompleted = 0
@@ -801,16 +1076,24 @@ final class UpdatesModel: ObservableObject {
         updateAllTask = Task { @MainActor [weak self] in
             guard let self else { return }
             for item in apps {
-                if self.cancelUpdateAllAfterCurrent { break }
-                await self.performUpdate(item, installElectronImmediately: true)
+                guard !self.cancelUpdateAllAfterCurrent,
+                      self.isCurrentAppUpdate(for: item.id, owner: owner) else { break }
+                await self.performUpdate(item, owner: owner)
+                guard self.isCurrentAppUpdate(for: item.id, owner: owner) else { break }
+                if let staged = self.confirmedStagedUpdate(for: item) {
+                    await self.install(staged, for: item.id, owner: owner)
+                    guard self.isCurrentAppUpdate(for: item.id, owner: owner) else { break }
+                }
                 self.updateAllCompleted += 1
             }
             for item in brews {
-                if self.cancelUpdateAllAfterCurrent { break }
+                guard !self.cancelUpdateAllAfterCurrent,
+                      self.isCurrentUpdateAll(inventoryGeneration: inventoryGeneration) else { break }
                 await self.performBrewUpdate(item)
+                guard self.isCurrentUpdateAll(inventoryGeneration: inventoryGeneration) else { break }
                 self.updateAllCompleted += 1
             }
-            self.brewItems = await Self.brewOutdated()
+            self.brewItems = await self.loadBrewOutdated()
             self.updateAllRunning = false
             self.updateAllTask = nil
             self.cancelUpdateAllAfterCurrent = false

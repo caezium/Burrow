@@ -172,10 +172,23 @@ enum ProcessActions {
             return .stale
         }
 
+        return confirmTermination(target, force: force, onRefresh: onRefresh)
+    }
+
+    /// Present and act on one immutable candidate. Callers that discover a
+    /// process asynchronously can pass the exact PID/owner/start/path snapshot
+    /// they intend to show; the same value is then re-read and compared before
+    /// any signal is sent.
+    @MainActor @discardableResult
+    static func confirmTermination(
+        _ target: TerminationTarget,
+        force: Bool = false,
+        onRefresh: @escaping () -> Void = {}
+    ) -> TerminationResult? {
         let alert = NSAlert()
         alert.messageText = force
-            ? String(format: NSLocalizedString("Force kill %@?", comment: ""), displayName)
-            : String(format: NSLocalizedString("Quit %@?", comment: ""), displayName)
+            ? String(format: NSLocalizedString("Force kill %@?", comment: ""), target.displayName)
+            : String(format: NSLocalizedString("Quit %@?", comment: ""), target.displayName)
         let consequence = force
             ? NSLocalizedString("SIGKILL ends it immediately, so unsaved work in this process is lost.", comment: "")
             : NSLocalizedString("SIGTERM asks the process to quit. It may save and exit, or ignore the request.", comment: "")
@@ -219,20 +232,6 @@ enum ProcessActions {
         alert.alertStyle = .warning
         alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
         alert.runModalQuiet()
-    }
-
-    /// SIGTERM — the polite ask. Caller confirms first.
-    @discardableResult
-    static func quit(pid: Int) -> Bool {
-        guard let target = terminationTarget(pid: pid, displayName: "pid \(pid)") else { return false }
-        return terminate(target, force: false) == .sent
-    }
-
-    /// SIGKILL — the hammer. Caller double-confirms first.
-    @discardableResult
-    static func forceKill(pid: Int) -> Bool {
-        guard let target = terminationTarget(pid: pid, displayName: "pid \(pid)") else { return false }
-        return terminate(target, force: true) == .sent
     }
 
     /// SIGSTOP — pause a process (freeze it without killing). Reversible via
