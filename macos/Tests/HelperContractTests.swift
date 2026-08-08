@@ -157,15 +157,25 @@ final class HelperContractTests: XCTestCase {
 
     // MARK: - The closed operation set
     //
-    // The approved scope is exactly: privileged scan, clean, optimize. Not
-    // "run this binary", not "run this shell string", not "run mo with these
-    // args". A new case here is a deliberate security decision, so the count
-    // is pinned — adding one without updating this test is a failing build.
+    // The approved scope is exactly: privileged scan, clean, optimize, the
+    // reviewed clean, and three system-state operations. Not "run this binary",
+    // not "run this shell string", not "run mo with these args". A new case
+    // here is a deliberate security decision, so the set is pinned — adding one
+    // without updating this test is a failing build.
 
     func testOperationSet_isPinned() {
         XCTAssertEqual(Set(HelperOperation.allCases.map(\.rawValue)),
-                       ["scan", "clean", "optimize", "optimizeScan", "flushDNS", "renewDHCP", "readLoginItems"],
+                       ["scan", "clean", "cleanReviewed", "optimize", "optimizeScan",
+                        "flushDNS", "renewDHCP", "readLoginItems"],
                        "the helper's operation set is closed; widening it is a security decision")
+    }
+
+    /// `cleanReviewed` is the only operation carrying caller data, so the
+    /// property that matters is that it stays the only one.
+    func testOnlyTheReviewedCleanAcceptsCallerSuppliedPaths() {
+        let accepting = HelperOperation.allCases.filter(\.needsReviewedPaths)
+        XCTAssertEqual(accepting, [.cleanReviewed],
+                       "widening which operations take paths is a security decision")
     }
 
     // MARK: - The closed executable set
@@ -184,7 +194,7 @@ final class HelperContractTests: XCTestCase {
     func testSystemTools_setIsExactlyWhatTheOperationsNeed() {
         XCTAssertEqual(HelperSystemTool.all,
                        ["/usr/bin/dscacheutil", "/usr/bin/killall",
-                        "/usr/sbin/ipconfig", "/usr/bin/sfltool"])
+                        "/usr/sbin/ipconfig", "/usr/bin/sfltool", "/usr/bin/find"])
     }
 
     /// No step may ever name a shell. The path this replaces elevated
@@ -304,8 +314,11 @@ final class HelperContractTests: XCTestCase {
     /// anywhere in here would signal that someone started templating strings
     /// into a command that runs as root.
     func testArguments_neverEmptyAndNeverShellMetacharacters() {
+        // The reviewed clean is driven by its path list, so it is given one —
+        // and a path the daemon would have had to validate before it got here.
+        let reviewedPaths = ["/Users/henry/Library/Caches/example"]
         for op in HelperOperation.allCases {
-            let steps = op.steps(interface: "en0")
+            let steps = op.steps(interface: "en0", reviewedPaths: reviewedPaths)
             XCTAssertFalse(steps.isEmpty, "\(op) must resolve to at least one command")
             for token in steps.flatMap(\.arguments) {
                 XCTAssertFalse(token.contains(where: { ";|&`$<>\n\0".contains($0) }),
@@ -463,5 +476,193 @@ final class HelperContractTests: XCTestCase {
         XCTAssertEqual(HelperResponse.Outcome.authorizationCancelled.elevatedOutcome, .authCancelled)
         XCTAssertEqual(HelperResponse.Outcome.engineUnavailable.elevatedOutcome, .launchFailed)
         XCTAssertEqual(HelperResponse.Outcome.authorizationDenied.elevatedOutcome, .authCancelled)
+    }
+}
+
+// MARK: - Reviewed cleanup targets
+//
+// The one operation that accepts data from the caller beyond a verb. Every
+// rule below is enforced against facts the DAEMON gathers, so these tests
+// inject the inspection rather than the policy trusting a supplied fact.
+
+final class HelperReviewedPathPolicyTests: XCTestCase {
+    private let uid: UInt32 = 501
+    private let homeDevice: UInt64 = 1
+    private let cacheDevice: UInt64 = 1
+
+    private var roots: [HelperReviewedRoot] {
+        [
+            HelperReviewedRoot(path: "/Users/henry", device: homeDevice, allowsForeignOwner: false),
+            HelperReviewedRoot(path: "/Library/Caches", device: cacheDevice, allowsForeignOwner: true),
+        ]
+    }
+
+    private func target(device: UInt64? = nil,
+                        owner: UInt32? = nil,
+                        exists: Bool = true,
+                        isSymbolicLink: Bool = false,
+                        canonical: String?) -> HelperReviewedTarget {
+        HelperReviewedTarget(exists: exists, isSymbolicLink: isSymbolicLink,
+                             canonicalPath: canonical,
+                             device: device ?? homeDevice, ownerUID: owner ?? uid)
+    }
+
+    private func validate(_ paths: [String],
+                          inspect: @escaping (String) -> HelperReviewedTarget)
+        -> Result<[String], HelperReviewedPathRejection> {
+        HelperReviewedPathPolicy.validate(paths: paths, roots: roots,
+                                          invokingUID: uid, inspect: inspect)
+    }
+
+    func testAcceptsOwnedEntriesBelowAnApprovedRoot() throws {
+        let path = "/Users/henry/Library/Caches/app"
+        let result = validate([path]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(try result.get(), [path])
+    }
+
+    func testRefusesAPathOutsideEveryApprovedRoot() {
+        let result = validate(["/System/Library/Caches/x"]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(result.failureRejection, .outsideApprovedRoots)
+    }
+
+    /// A root itself is not a cache entry. Deleting `/Library/Caches` wholesale
+    /// is never what a reviewed selection meant.
+    func testRefusesAnApprovedRootItself() {
+        let result = validate(["/Library/Caches"]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(result.failureRejection, .outsideApprovedRoots)
+    }
+
+    func testRefusesTraversalOutOfAnApprovedRoot() {
+        let result = validate(["/Users/henry/../root/.ssh"]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(result.failureRejection, .malformedPath)
+    }
+
+    /// A symlink would put the delete wherever it points, which is the whole
+    /// reason the daemon lstats instead of trusting the string.
+    func testRefusesASymbolicLink() {
+        let result = validate(["/Users/henry/Library/Caches/link"]) { [unowned self] in
+            self.target(isSymbolicLink: true, canonical: $0)
+        }
+        XCTAssertEqual(result.failureRejection, .symbolicLink)
+    }
+
+    /// realpath disagreeing with the literal path means some ANCESTOR is a
+    /// link, so the entry is not where the client says it is.
+    func testRefusesWhenAnAncestorIsASymbolicLink() {
+        let result = validate(["/Users/henry/Library/Caches/app"]) { [unowned self] _ in
+            self.target(canonical: "/Volumes/elsewhere/app")
+        }
+        XCTAssertEqual(result.failureRejection, .notCanonical)
+    }
+
+    func testRefusesAnEntryOnAnotherVolume() {
+        let result = validate(["/Users/henry/Library/Caches/app"]) { [unowned self] in
+            self.target(device: 99, canonical: $0)
+        }
+        XCTAssertEqual(result.failureRejection, .foreignVolume)
+    }
+
+    /// The escalation that matters. Per-user trees hold other accounts' files,
+    /// and root deleting those is something the invoking user could not do
+    /// themselves — unlike anything in their own home.
+    func testRefusesAnotherAccountsEntryInAPerUserTree() {
+        let result = validate(["/Users/henry/Library/Caches/app"]) { [unowned self] in
+            self.target(owner: 502, canonical: $0)
+        }
+        XCTAssertEqual(result.failureRejection, .foreignOwner)
+    }
+
+    /// System cache trees are root-owned and shared, so foreign ownership
+    /// there is normal rather than suspicious.
+    func testAllowsForeignOwnershipUnderSharedSystemCaches() throws {
+        let path = "/Library/Caches/com.apple.something"
+        let result = validate([path]) { [unowned self] in self.target(owner: 0, canonical: $0) }
+        XCTAssertEqual(try result.get(), [path])
+    }
+
+    func testRefusesAMissingEntryRatherThanSkippingIt() {
+        let result = validate(["/Users/henry/Library/Caches/gone"]) { [unowned self] in
+            self.target(exists: false, canonical: $0)
+        }
+        XCTAssertEqual(result.failureRejection, .missingPath)
+    }
+
+    func testRefusesAnEmptyOrOversizedSelection() {
+        XCTAssertEqual(validate([]) { [unowned self] in self.target(canonical: $0) }.failureRejection,
+                       .emptySelection)
+        let many = (0...HelperReviewedPathPolicy.maximumTargets)
+            .map { "/Users/henry/Library/Caches/app-\($0)" }
+        XCTAssertEqual(validate(many) { [unowned self] in self.target(canonical: $0) }.failureRejection,
+                       .tooManyTargets)
+    }
+
+    func testDeduplicatesRepeatedEntries() throws {
+        let path = "/Users/henry/Library/Caches/app"
+        let result = validate([path, path]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(try result.get(), [path])
+    }
+}
+
+final class HelperReviewedRequestTests: XCTestCase {
+    private func claim() -> HelperInvokingUserClaim {
+        HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/henry")
+    }
+
+    private func request(_ operation: HelperOperation, paths: [String]) -> HelperRequest {
+        HelperRequest(operation: operation, operationID: UUID().uuidString,
+                      clientBuild: "1", invokingUser: claim(), reviewedPaths: paths)
+    }
+
+    func testReviewedPathsRoundTripAcrossTheWire() throws {
+        let original = request(.cleanReviewed, paths: ["/Users/henry/Library/Caches/a"])
+        let decoded = try JSONDecoder().decode(
+            HelperRequest.self, from: try JSONEncoder().encode(original))
+        XCTAssertEqual(decoded, original)
+    }
+
+    func testCleanReviewedRequiresAtLeastOnePath() {
+        XCTAssertEqual(request(.cleanReviewed, paths: []).validate(expectedBuild: "1"),
+                       .invalidReviewedPaths)
+    }
+
+    /// Paths on an operation that takes none means the caller and the contract
+    /// disagree; refuse rather than silently ignoring them.
+    func testOtherOperationsRefusePathsRatherThanIgnoringThem() {
+        XCTAssertEqual(request(.clean, paths: ["/Users/henry/x"]).validate(expectedBuild: "1"),
+                       .invalidReviewedPaths)
+    }
+
+    /// The recogniser maps engine argv onto operations. A reviewed cleanup has
+    /// no engine argv, so it must never be reachable that way.
+    func testReviewedCleanupIsNotReachableFromEngineArguments() {
+        for operation in HelperOperation.allCases {
+            if let argv = operation.engineArguments {
+                XCTAssertNotEqual(HelperOperation(engineArguments: argv), .cleanReviewed)
+            }
+        }
+        XCTAssertNil(HelperOperation.cleanReviewed.engineArguments)
+    }
+
+    func testStepsAreFixedFindInvocationsOverTheValidatedPaths() {
+        let paths = ["/Users/henry/Library/Caches/a", "/Library/Caches/b"]
+        let steps = HelperOperation.cleanReviewed.steps(interface: nil, reviewedPaths: paths)
+        XCTAssertEqual(steps.count, 2)
+        for (step, path) in zip(steps, paths) {
+            XCTAssertEqual(step.executable, .system(HelperSystemTool.find))
+            XCTAssertEqual(step.arguments, ["-x", path, "-depth", "-delete"])
+        }
+        XCTAssertTrue(HelperSystemTool.all.contains(HelperSystemTool.find))
+    }
+
+    func testNoReviewedPathsMeansNoStepsRatherThanADeleteOfSomethingElse() {
+        XCTAssertTrue(HelperOperation.cleanReviewed.steps(interface: nil,
+                                                          reviewedPaths: []).isEmpty)
+    }
+}
+
+private extension Result where Success == [String], Failure == HelperReviewedPathRejection {
+    var failureRejection: HelperReviewedPathRejection? {
+        if case .failure(let rejection) = self { return rejection }
+        return nil
     }
 }

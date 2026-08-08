@@ -77,20 +77,30 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
     other processes, `allow-root: false` stops the root helper satisfying it
     by itself), and each operation ID is served at most once so a captured
     request cannot be replayed.
-  - **It cannot be asked to run anything else.** The helper accepts seven typed
-    operations — scan, clean, optimize, the optimize preview, flush DNS,
-    renew DHCP, and reading the Login Items list — and derives every command
-    line itself. There is no field in its API for a path, a shell string, or
-    an executable, so a caller that fully controls the message still cannot
-    express "run this".
-  - **The only value a caller supplies** is the network interface name for
-    renew DHCP. It is checked twice: against a strict `en0`-shaped pattern,
-    and against the interfaces that actually exist on the machine. A
-    well-formed name for an interface that isn't there is refused.
-  - **No shell.** The helper runs the bundled engine, plus exactly four
+  - **It cannot be asked to run anything else.** The helper accepts eight typed
+    operations — scan, clean, the reviewed clean, optimize, the optimize
+    preview, flush DNS, renew DHCP, and reading the Login Items list — and
+    derives every command line itself. There is no field in its API for a shell
+    string or an executable, so a caller that fully controls the message still
+    cannot express "run this".
+  - **The two values a caller supplies** are the network interface name for
+    renew DHCP, and the list of entries to remove for the reviewed clean.
+    Neither is ever executed; both are checked by the privileged side against
+    facts it gathers itself.
+    - The interface name is checked twice: against a strict `en0`-shaped
+      pattern, and against the interfaces that actually exist on the machine.
+      A well-formed name for an interface that isn't there is refused.
+    - Every entry in a reviewed clean must, according to the helper's own
+      `lstat` and its own copy of your account record: exist, not be a symbolic
+      link, match its own canonical path (so no parent directory is a link
+      either), sit strictly inside your home or a system cache directory, be on
+      that same volume, and — outside the shared system caches — belong to you.
+      The list is capped, and one entry that fails any of these refuses the
+      whole request rather than deleting the rest.
+  - **No shell.** The helper runs the bundled engine, plus exactly five
     system tools by absolute path (`/usr/bin/dscacheutil`, `/usr/bin/killall`,
-    `/usr/sbin/ipconfig`, `/usr/bin/sfltool`), each as a separate process with
-    fixed arguments.
+    `/usr/sbin/ipconfig`, `/usr/bin/sfltool`, `/usr/bin/find`), each as a
+    separate process with fixed arguments.
     This is stricter than the path it replaces: flushing DNS previously
     elevated `/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"`,
     handing a command string to a root shell.

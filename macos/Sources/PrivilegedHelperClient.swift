@@ -71,9 +71,10 @@ enum PrivilegeRoute: Equatable {
     case osascript
 
     /// The routing rule. The helper is used only when ALL of these hold:
-    ///   * the argv maps onto one of the three typed operations;
     ///   * the daemon is registered and enabled;
-    ///   * its build matches this app's.
+    ///   * its build matches this app's;
+    ///   * the work is either a reviewed cleanup plan, or argv that maps onto
+    ///     one of the typed engine operations.
     ///
     /// Any doubt routes to osascript. That is a genuine fallback rather than a
     /// silent downgrade: the osascript path is the elevation Burrow has always
@@ -82,10 +83,15 @@ enum PrivilegeRoute: Equatable {
     /// cancellation, not the authentication itself.
     static func decide(arguments: [String],
                        registration: HelperRegistrationStatus,
-                       skew: HelperVersionSkew.Skew) -> PrivilegeRoute {
+                       skew: HelperVersionSkew.Skew,
+                       hasReviewedCleanup: Bool = false) -> PrivilegeRoute {
+        guard registration == .enabled, skew == .matched else { return .osascript }
+        // A reviewed cleanup has no engine argv to recognise — it is described
+        // by its plan, not by a command. Without this it fell through to
+        // osascript every time, which is how the permanent clean quietly lost
+        // Touch ID while every other elevated operation kept it.
+        if hasReviewedCleanup { return .helper(.cleanReviewed) }
         guard let operation = HelperOperation(engineArguments: arguments) else { return .osascript }
-        guard registration == .enabled else { return .osascript }
-        guard skew == .matched else { return .osascript }
         return .helper(operation)
     }
 }
@@ -208,16 +214,18 @@ final class PrivilegedHelperClient: @unchecked Sendable {
 
     /// The route for an elevated invocation described the way `OperationFlow`
     /// already describes it.
-    func route(for arguments: [String]) -> PrivilegeRoute {
+    func route(for arguments: [String], hasReviewedCleanup: Bool = false) -> PrivilegeRoute {
         let status = registrationStatus
         // Don't pay for an XPC round trip to learn the version when the daemon
         // isn't usable anyway.
         guard status == .enabled else {
             helperClientLog.notice("route: osascript (registration \(String(describing: status), privacy: .public))")
-            return PrivilegeRoute.decide(arguments: arguments, registration: status, skew: .mismatched)
+            return PrivilegeRoute.decide(arguments: arguments, registration: status,
+                                         skew: .mismatched, hasReviewedCleanup: hasReviewedCleanup)
         }
         let skew = versionSkew()
-        let route = PrivilegeRoute.decide(arguments: arguments, registration: status, skew: skew)
+        let route = PrivilegeRoute.decide(arguments: arguments, registration: status,
+                                          skew: skew, hasReviewedCleanup: hasReviewedCleanup)
         helperClientLog.notice("""
             route: \(String(describing: route), privacy: .public) \
             (app build \(Self.appBuild, privacy: .public), skew \(String(describing: skew), privacy: .public))
@@ -233,6 +241,7 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     /// takes at the authentication prompt plus as long as the operation runs.
     func run(operation: HelperOperation,
              interface: String? = nil,
+             reviewedPaths: [String] = [],
              invokingUser suppliedIdentity: InvokingUserIdentity? = nil,
              onLine: @escaping (String) -> Void) -> ElevatedOutcome {
         // Resolve while still running as the caller and before showing an auth
@@ -270,7 +279,8 @@ final class PrivilegedHelperClient: @unchecked Sendable {
         // not a guarantee.
         return withExtendedLifetime(granted) {
             send(payload: granted.externalForm, operation: operation,
-                 interface: interface, invokingUser: invokingUser, onLine: onLine)
+                 interface: interface, reviewedPaths: reviewedPaths,
+                 invokingUser: invokingUser, onLine: onLine)
         }
     }
 
@@ -303,6 +313,7 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     private func send(payload authorization: Data,
                       operation: HelperOperation,
                       interface: String?,
+                      reviewedPaths: [String],
                       invokingUser: InvokingUserIdentity,
                       onLine: @escaping (String) -> Void) -> ElevatedOutcome {
         let request = HelperRequest(operation: operation,
@@ -311,7 +322,8 @@ final class PrivilegedHelperClient: @unchecked Sendable {
                                     invokingUser: HelperInvokingUserClaim(
                                         uid: UInt32(invokingUser.uid),
                                         canonicalHome: invokingUser.canonicalHome),
-                                    networkInterface: interface)
+                                    networkInterface: interface,
+                                    reviewedPaths: reviewedPaths)
         guard let payload = try? JSONEncoder().encode(request) else { return .launchFailed }
 
         let connection = makeConnection()
@@ -371,10 +383,29 @@ struct HelperAwareProcessPort: ProcessPort {
             // for as long as the user takes to authenticate. Neither may
             // happen on the main thread.
             DispatchQueue.global(qos: .userInitiated).async {
-                switch client.route(for: spec.arguments) {
+                switch client.route(for: spec.arguments,
+                                    hasReviewedCleanup: spec.cleanupPlan != nil) {
                 case .helper(let operation):
                     var sawOutput = false
+                    // Re-validate the plan on THIS side of the prompt too. The
+                    // daemon checks the paths independently, but a plan that
+                    // already went stale should never raise a prompt at all.
+                    let reviewedPaths: [String]
+                    if operation.needsReviewedPaths {
+                        guard let plan = spec.cleanupPlan, plan.validateForLaunch() else {
+                            continuation.yield(.line(NSLocalizedString(
+                                "The reviewed items changed before the run started, so nothing was cleaned.",
+                                comment: "")))
+                            continuation.yield(.exited(ElevatedExitCode.boundaryCheckFailed))
+                            continuation.finish()
+                            return
+                        }
+                        reviewedPaths = plan.items.map(\.identity.path)
+                    } else {
+                        reviewedPaths = []
+                    }
                     let outcome = client.run(operation: operation,
+                                             reviewedPaths: reviewedPaths,
                                              invokingUser: spec.invokingUser) { line in
                         sawOutput = true
                         continuation.yield(.line(line))
