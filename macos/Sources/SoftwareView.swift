@@ -381,16 +381,17 @@ struct AppRow: View {
                     // "Clear Data" = every leftover except the .app bundle. Shown only
                     // when there's a bundle to exclude, so it's always a true subset
                     // (kept app, removed data) routed through the native-trash path.
-                    let dataPaths = UninstallPlan.dataOnly(paths: preview.entries.map(\.path))
+                    let tickable = preview.entries.filter { preview.handRemovalRefusals[$0.path] == nil }
+                    let dataPaths = UninstallPlan.dataOnly(paths: tickable.map(\.path))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(app.name).font(Brand.sans(12, .semibold)).foregroundStyle(Brand.textPrimary)
                         Text(prettyPath).font(Brand.mono(9)).foregroundStyle(Brand.textTertiary)
                             .lineLimit(1).truncationMode(.middle)
                     }
                     Spacer()
-                    Text(verbatim: "\(pathSelection.count)/\(preview.entries.count) selected")
+                    Text(verbatim: "\(pathSelection.count)/\(tickable.count) selected")
                         .font(Brand.mono(10)).foregroundStyle(Brand.textSecondary)
-                    if dataPaths.count < preview.entries.count {
+                    if dataPaths.count < tickable.count {
                         Button(NSLocalizedString("Clear Data", comment: "")) {
                             pathSelection = Set(dataPaths)
                         }
@@ -398,7 +399,7 @@ struct AppRow: View {
                         .help(NSLocalizedString("Select everything except the app itself — removes its data but keeps the app installed.", comment: ""))
                     }
                     Button(NSLocalizedString("Select all", comment: "")) {
-                        pathSelection = Set(preview.entries.map(\.path))
+                        pathSelection = Set(tickable.map(\.path))
                     }
                     .buttonStyle(.plain).font(Brand.sans(10, .semibold)).foregroundStyle(Tool.apps.accent)
                 }
@@ -432,25 +433,30 @@ struct AppRow: View {
     }
 
     private func groupHeader(_ title: String, entries: [UninstallPreview.Entry]) -> some View {
-        let selectedCount = entries.filter { pathSelection.contains($0.path) }.count
+        // "All of them" means all the ones Burrow may actually remove. Counting a locked row in
+        // the denominator would leave the group toggle permanently stuck on "some selected".
+        let tickable = entries.filter { preview?.handRemovalRefusals[$0.path] == nil }
+        let selectedCount = tickable.filter { pathSelection.contains($0.path) }.count
+        let allSelected = !tickable.isEmpty && selectedCount == tickable.count
         return HStack(spacing: 8) {
             Button {
-                let paths = entries.map(\.path)
-                if selectedCount == entries.count {
+                let paths = tickable.map(\.path)
+                if allSelected {
                     pathSelection.subtract(paths)
                 } else {
                     pathSelection.formUnion(paths)
                 }
             } label: {
-                Image(systemName: selectedCount == entries.count ? "checkmark.square.fill"
+                Image(systemName: allSelected ? "checkmark.square.fill"
                       : (selectedCount == 0 ? "square" : "minus.square.fill"))
                     .font(.system(size: 12))
                     .foregroundStyle(selectedCount == 0 ? Brand.textTertiary : Tool.apps.accent)
             }
             .buttonStyle(.plain)
+            .disabled(tickable.isEmpty)
             .accessibilityLabel(String(format: NSLocalizedString("Toggle %@ group", comment: ""), title))
             Text(title.uppercased()).font(Brand.mono(9, .bold)).tracking(0.6).foregroundStyle(Brand.textTertiary)
-            Text(verbatim: "\(selectedCount)/\(entries.count)")
+            Text(verbatim: "\(selectedCount)/\(tickable.count)")
                 .font(Brand.mono(9)).foregroundStyle(Brand.textTertiary)
             Spacer()
         }
@@ -458,29 +464,46 @@ struct AppRow: View {
     }
 
     private func entryRow(_ entry: UninstallPreview.Entry) -> some View {
+        // The engine's verdict for this exact path, when it has one. A refused bundle and a
+        // Homebrew cask's `.app` are shown — they ARE in scope for the run — but Burrow will not
+        // hand-trash either, so the tick is not offered rather than offered and then failing
+        // closed somewhere the user can't see.
+        let refusal = preview?.handRemovalRefusals[entry.path]
         let ticked = pathSelection.contains(entry.path)
         return HStack(spacing: 9) {
             Button {
+                guard refusal == nil else { return }
                 if ticked { pathSelection.remove(entry.path) } else { pathSelection.insert(entry.path) }
             } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(ticked ? Tool.apps.accent.opacity(0.9) : Color.white.opacity(0.07))
                         .frame(width: 14, height: 14)
-                    if ticked {
+                    if refusal != nil {
+                        Image(systemName: "lock.fill").font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(Brand.textTertiary)
+                    } else if ticked {
                         Image(systemName: "checkmark").font(.system(size: 7, weight: .bold)).foregroundStyle(.black)
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Brand.hairline, lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .disabled(refusal != nil)
             .accessibilityLabel(entry.path)
-            .accessibilityValue(ticked ? NSLocalizedString("selected", comment: "") : NSLocalizedString("not selected", comment: ""))
+            .accessibilityValue(refusal ?? (ticked ? NSLocalizedString("selected", comment: "")
+                                                   : NSLocalizedString("not selected", comment: "")))
 
             Text(entry.kind.label).font(Brand.sans(10, .medium)).foregroundStyle(Brand.textSecondary)
                 .frame(width: 96, alignment: .leading)
             Text(entry.path).font(Brand.mono(9)).foregroundStyle(Brand.textTertiary)
                 .lineLimit(1).truncationMode(.middle)
+            if let refusal {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 9)).foregroundStyle(Brand.gold)
+                    .help(refusal)
+                    .accessibilityLabel(refusal)
+            }
             if UninstallPlan.isInputMethod(entry.path) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 9)).foregroundStyle(Brand.gold)
@@ -697,9 +720,10 @@ final class SoftwareModel: ObservableObject {
                 guard let self else { return }
                 self.previewLoading.remove(app.id)
                 self.previews[app.id] = preview
-                // Default ticks: the auto-selected kinds.
+                // Default ticks: the auto-selected kinds, minus anything the engine already said
+                // Burrow may not remove by hand (a refused bundle, a Homebrew cask's `.app`).
                 if self.pathSelections[app.id] == nil {
-                    self.pathSelections[app.id] = Set(preview.entries.filter(\.kind.autoSelected).map(\.path))
+                    self.pathSelections[app.id] = preview.defaultTicked
                 }
             }
         }
@@ -760,8 +784,15 @@ final class SoftwareModel: ObservableObject {
     ///    bundle id looks like this; refusing costs nothing and closes the shape.
     ///
     /// A row that fails this is never silently dropped from a removal — see `uninstallBatch`.
+    ///
+    /// The rule itself now lives in `UninstallGuard`, because it was this surface's alone and the
+    /// MCP tool's `apps[]` went to the same argv having been only trimmed for whitespace — so an
+    /// agent could send the one value this predicate exists to refuse. One predicate, both
+    /// surfaces, plus the guard's own last look before an apply. (It also folds case now: the
+    /// engine lowercases both sides of its bundle-id comparison, so `"Unknown"` resolves exactly
+    /// as `"unknown"` does.)
     nonisolated static func isSendableBundleID(_ bundleId: String) -> Bool {
-        !bundleId.isEmpty && bundleId != "unknown" && !bundleId.hasPrefix("-")
+        UninstallGuard.isSendableArgument(bundleId)
     }
 
     nonisolated static func uninstallTarget(for app: InstalledApp,
@@ -941,11 +972,22 @@ final class SoftwareModel: ObservableObject {
         /// deletes paths no enumeration can predict. Both facts come from the inventory row, so the
         /// sheet can state them without paying for a dry run first.
         let homebrewCask: String?
+        /// Whether THIS line's removal takes the `.app` with it.
+        ///
+        /// True for a whole-app removal. For a reviewed subset it is whatever the user left
+        /// ticked — and "Clear Data" is the button that deliberately leaves it unticked, which is
+        /// the case that made the sheet lie: `UninstallPlan.dataOnly` filters the bundle out, the
+        /// removal is therefore a subset, and the sheet still printed "These move to the Trash —
+        /// the app itself and the support files…" over a run that keeps the app installed. The
+        /// copy branched on this before the rewrite; it has to again.
+        let removesAppBundle: Bool
 
-        init(name: String, reviewedCount: Int?, homebrewCask: String? = nil) {
+        init(name: String, reviewedCount: Int?, homebrewCask: String? = nil,
+             removesAppBundle: Bool = true) {
             self.name = name
             self.reviewedCount = reviewedCount
             self.homebrewCask = homebrewCask
+            self.removesAppBundle = removesAppBundle
         }
     }
 
@@ -974,6 +1016,12 @@ final class SoftwareModel: ObservableObject {
     ///    (`batch.sh:840`), so an app it cannot remove keeps its support files too. Stating that
     ///    here is what makes an "nothing happened for this one" outcome legible rather than
     ///    baffling; `UninstallGuard.problemReport` says which app afterwards.
+    ///  - **A kept app is a third sentence, not an exception to the first.** "One copy, no flag"
+    ///    was too few copies: the rewrite dropped the branch on whether the `.app` is actually in
+    ///    the removal, and "Clear Data" — the button whose own tooltip says it keeps the app
+    ///    installed — then consented the user to "the app itself … moves to the Trash". Whether
+    ///    the bundle goes is a per-LINE fact (`ConfirmLine.removesAppBundle`), like Homebrew is,
+    ///    so it gets a per-line paragraph the same way.
     nonisolated static func confirmCopy(lines: [ConfirmLine], skipped: [String],
                                         hasReviewedSubset: Bool) -> (title: String, body: String, confirmButton: String) {
         func render(_ subset: [ConfirmLine]) -> String {
@@ -983,20 +1031,39 @@ final class SoftwareModel: ObservableObject {
             }.joined(separator: "\n")
         }
         let brewed = lines.filter { $0.homebrewCask != nil }
-        let direct = lines.filter { $0.homebrewCask == nil }
+        let direct = lines.filter { $0.homebrewCask == nil && $0.removesAppBundle }
+        // Kept apps: a reviewed subset that leaves the `.app` unticked. Their own sentence,
+        // because the promise being made about them is the opposite one.
+        let dataOnly = lines.filter { $0.homebrewCask == nil && !$0.removesAppBundle }
 
-        let title = String(format: NSLocalizedString(lines.count == 1 ? "Remove %d app?" : "Remove %d apps?", comment: ""), lines.count)
+        // A sheet where nothing loses its bundle must not ASK to remove apps — that question and
+        // the body underneath it would contradict each other on the one dialog that takes consent.
+        let removesAnyApp = lines.contains { $0.removesAppBundle }
+        let title: String
+        if removesAnyApp {
+            title = String(format: NSLocalizedString(lines.count == 1 ? "Remove %d app?" : "Remove %d apps?", comment: ""), lines.count)
+        } else {
+            title = String(format: NSLocalizedString(lines.count == 1 ? "Remove data from %d app?" : "Remove data from %d apps?", comment: ""), lines.count)
+        }
         var blocks: [String] = []
         if !direct.isEmpty {
             blocks.append(String(format: NSLocalizedString("These move to the Trash — the app itself and the support files it keeps in your Library (containers, caches, preferences, saved state). You can put them back:\n\n%@", comment: ""),
                                  render(direct)))
+        }
+        if !dataOnly.isEmpty {
+            blocks.append(String(format: NSLocalizedString("These stay installed — only the reviewed support files move to the Trash, and you can put them back:\n\n%@", comment: ""),
+                                 render(dataOnly)))
         }
         if !brewed.isEmpty {
             blocks.append(String(format: NSLocalizedString("Homebrew removes these by running `brew uninstall --cask --zap`. That doesn't use the Trash, and `--zap` also deletes configuration and data the cask declares — more than the file list can show:\n\n%@", comment: ""),
                                  render(brewed)))
         }
         var body = blocks.joined(separator: "\n\n")
-        body += "\n\n" + NSLocalizedString("If an app can't be removed, Burrow leaves its support files alone too, rather than half-removing it.", comment: "")
+        // Only true of a run that removes bundles — it describes the engine's leftover gate. On a
+        // data-only sheet it would describe a removal nobody is being asked to consent to.
+        if removesAnyApp {
+            body += "\n\n" + NSLocalizedString("If an app can't be removed, Burrow leaves its support files alone too, rather than half-removing it.", comment: "")
+        }
         // The button names the mechanism it triggers. With a brew cask in the set there is no one
         // mechanism to name, and "Move to Trash" would be the false half.
         let confirmButton = brewed.isEmpty
@@ -1038,8 +1105,14 @@ final class SoftwareModel: ObservableObject {
             Self.ConfirmLine(name: $0.name, reviewedCount: nil,
                              homebrewCask: $0.source == "Homebrew" ? $0.uninstallName : nil)
         }
-        lines += subsetApps.map {
-            Self.ConfirmLine(name: $0.name, reviewedCount: pathSelections[$0.id]?.count ?? 0)
+        lines += subsetApps.map { app in
+            let ticked = pathSelections[app.id] ?? []
+            // Does THIS subset take the bundle? "Clear Data" is exactly the subset that doesn't,
+            // and the sheet has to say so rather than print the whole-app promise over it.
+            let takesBundle = (previews[app.id]?.entries ?? [])
+                .contains { ticked.contains($0.path) && $0.kind == .application }
+            return Self.ConfirmLine(name: app.name, reviewedCount: ticked.count,
+                                    removesAppBundle: takesBundle)
         }
         // Nothing addressable and nothing reviewed: there is no destructive action to consent to,
         // so don't offer one. Saying which apps and why beats a sheet whose OK button does nothing.
@@ -1065,16 +1138,75 @@ final class SoftwareModel: ObservableObject {
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         guard alert.runModalQuiet() == .alertFirstButtonReturn else { return }
 
-        if !subsetApps.isEmpty { trashSubsets(subsetApps) }
-        if !batch.addressable.isEmpty {
-            engineUninstall(batch.addressable, arguments: batch.arguments)
+        switch Self.removalRoute(addressable: batch.addressable, subsets: subsetApps) {
+        case .none:
+            break
+        case .trashOnly(let subsets):
+            trashSubsets(subsets)
+        case .engineThenTrash(let subsets):
+            engineUninstall(batch.addressable, arguments: batch.arguments,
+                            promised: Self.promisedMechanisms(batch.addressable, batch.arguments),
+                            thenTrash: subsets)
         }
+    }
+
+    /// Which of the two removal mechanisms runs, and — the part that matters — in what
+    /// relationship to the pre-flight.
+    ///
+    /// **This is a safety property, so it is a value and not statement order.** The code here used
+    /// to call `trashSubsets` FIRST and unconditionally — no guard, no dry run — and only then
+    /// hand the rest to the engine. Every `abortReason` sentence ends "so nothing was removed";
+    /// when the pre-flight aborted, the user read that over a Trash that already held a subset
+    /// app's files, its `.app` included. There is no `.trashOnly` case alongside an engine run any
+    /// more: with an addressable app present the subsets are handed to `engineUninstall` and go
+    /// only once its dry run has confirmed the set.
+    enum RemovalRoute: Equatable {
+        /// Nothing to do.
+        case none
+        /// No engine argv, so no pre-flight to wait behind: Burrow trashes the reviewed paths.
+        case trashOnly([InstalledApp])
+        /// The engine runs, and these subsets are trashed AFTER its dry run confirms the set.
+        case engineThenTrash([InstalledApp])
+    }
+
+    nonisolated static func removalRoute(addressable: [InstalledApp],
+                                         subsets: [InstalledApp]) -> RemovalRoute {
+        if addressable.isEmpty {
+            return subsets.isEmpty ? .none : .trashOnly(subsets)
+        }
+        return .engineThenTrash(subsets)
+    }
+
+    /// What the sheet just told the user about each engine-bound app: Trash, or Homebrew.
+    ///
+    /// Keyed by the lowercased argument so `UninstallGuard.consentDivergence` can line it up with
+    /// `apps[].query`. This is the tab's INVENTORY SNAPSHOT talking — the same `source ==
+    /// "Homebrew"` the confirm lines were built from — which is precisely why it has to be handed
+    /// forward and checked against the engine's own fresh answer rather than trusted.
+    nonisolated static func promisedMechanisms(_ apps: [InstalledApp],
+                                               _ arguments: [String]) -> [String: UninstallGuard.Mechanism] {
+        var out: [String: UninstallGuard.Mechanism] = [:]
+        for (app, argument) in zip(apps, arguments) {
+            out[argument.lowercased()] = app.source == "Homebrew" ? .homebrew : .direct
+        }
+        return out
     }
 
     /// Burrow trashes exactly the reviewed, ticked paths. Every path is
     /// asserted to come from the engine's own enumeration — the safety
     /// scan decided the candidate set, the review only narrowed it.
+    ///
+    /// "Came from the enumeration" turned out to be the weaker half of that sentence. The engine
+    /// puts an app's `.app` in `items[]` on `bundle.present` ALONE, with no refusal check
+    /// (`bundle.rs:584-591`) — being IN the preview is not permission to delete it. The verdict
+    /// lives in `apps[].application`, which `UninstallPreview` now carries as
+    /// `handRemovalRefusals`, and it covers the two cases where this method would otherwise
+    /// hand-delete something the engine would not: a bundle a protection rail already declined,
+    /// and a Homebrew cask, whose rule is `brew uninstall --cask --zap` or nothing (trashing the
+    /// `.app` leaves brew's Caskroom believing it is still installed).
     private func trashSubsets(_ apps: [InstalledApp]) {
+        guard !apps.isEmpty else { return }
+        var refused: [(name: String, reason: String)] = []
         let work: [(app: InstalledApp, paths: [String])] = apps.compactMap { app in
             guard let preview = previews[app.id], let ticked = pathSelections[app.id] else { return nil }
             let enumerated = Set(preview.entries.map(\.path))
@@ -1086,9 +1218,28 @@ final class SoftwareModel: ObservableObject {
                 assertionFailure("ticked paths must come from the dry-run enumeration")
                 return nil
             }
+            // SECOND HARD RULE, same shape: the engine's refusals win over the tick. Fail closed
+            // for the whole app rather than dropping the refused path and trashing the rest — a
+            // removal the user reviewed as one thing must not silently become a different one.
+            let declined = preview.refusedAmong(ticked)
+            guard declined.isEmpty else {
+                refused.append(contentsOf: declined.map { (app.name, $0.reason) })
+                return nil
+            }
             let paths = ticked.map { ($0 as NSString).expandingTildeInPath }
             return (app, paths)
         }
+        if !refused.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = NSLocalizedString("Burrow won't remove these itself", comment: "")
+            alert.informativeText = refused
+                .map { "\($0.name) — \($0.reason)" }
+                .joined(separator: "\n\n")
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+            alert.runModalQuiet()
+        }
+        guard !work.isEmpty else { return }
         let opId = UUID()
         OperationCenter.shared.begin(opId, label: NSLocalizedString("Removing reviewed files", comment: ""),
                                      notifiesOnEnd: true)
@@ -1120,11 +1271,25 @@ final class SoftwareModel: ObservableObject {
     /// sharing a display name the sheet reviewed one app's leftovers and this ran against
     /// another's. One resolution per user action, shared by the preview, the sheet and the run.
     ///
-    /// `arguments` is also what the pre-flight compares against, and against the bundled engine
-    /// that comparison is now EXACT rather than a text parse: `apps[].query` echoes each argument
-    /// back verbatim, so bundle ids are checked against the very bundle ids that were sent, in one
-    /// namespace, with the engine's refusals and its ambiguity verdict read from the same payload.
-    private func engineUninstall(_ targets: [InstalledApp], arguments: [String]) {
+    /// `arguments` is also what the pre-flight compares against — but only ever as one half of it.
+    /// `apps[].query` echoes each argument back verbatim, so comparing the two confirms that the
+    /// engine heard us and NOTHING about which applications it resolved; `unknown` in, `unknown`
+    /// out, Synergy deleted. `targets` is positionally aligned with `arguments`, so the row the
+    /// user actually picked — its path and its bundle id — goes to the guard as well, and the
+    /// engine's `apps[].path` is checked against it.
+    ///
+    /// `promised` is what the confirm sheet claimed about each app (Trash or Homebrew), taken from
+    /// the tab's inventory snapshot. The dry run below answers the same question from a fresh
+    /// inventory, and the two can disagree — a `brew_wedged` breaker during one scan and not the
+    /// other degrades every cask row to `source: "App"`. Where they disagree the user gets asked
+    /// again, with the corrected sentence, rather than getting `--zap` after being promised the
+    /// Trash.
+    ///
+    /// `thenTrash` is the reviewed-subset work, deliberately deferred to here: it runs once the
+    /// dry run has confirmed the set, so an abort really does mean nothing was removed.
+    private func engineUninstall(_ targets: [InstalledApp], arguments: [String],
+                                 promised: [String: UninstallGuard.Mechanism],
+                                 thenTrash subsets: [InstalledApp]) {
         // The dialog above is the consent; the ticket (argv / stdin /
         // timeout / preflight) is minted by the shared gate — the same
         // truth table and catalog the MCP server uses. (One deliberate
@@ -1157,7 +1322,15 @@ final class SoftwareModel: ObservableObject {
                              || BurrowEnvelope.reportsFailure(stdout: dry?.stdout ?? ""))
                 ? BurrowEnvelope.failureReason(stdout: dry?.stdout ?? "", stderr: dry?.stderr ?? "")
                 : nil
-            if let problem = UninstallGuard.abortReason(confirmed: arguments, dryRun: reading) {
+            // The identity half of the pre-flight: which inventory row each argument was MEANT to
+            // name. Built from `targets`, which `uninstallBatch` produced alongside `arguments` in
+            // the same order, so the pairing is the batch's own and not re-derived here.
+            let expecting = zip(arguments, targets).map {
+                UninstallGuard.Expectation(query: $0, name: $1.name, path: $1.path,
+                                           bundleId: $1.bundleId)
+            }
+            if let problem = UninstallGuard.abortReason(confirmed: arguments, dryRun: reading,
+                                                        expecting: expecting) {
                 Task { @MainActor in
                     self.loading = false
                     OperationCenter.shared.end(opId, success: false,
@@ -1181,6 +1354,56 @@ final class SoftwareModel: ObservableObject {
                     alert.runModalQuiet()
                 }
                 return
+            }
+
+            // THE POST-CONSENT DRY RUN IS THE AUTHORITY ON WHAT THE USER WAS TOLD.
+            //
+            // It was already being decoded and thrown away: `abortReason` reads the set and the
+            // refusals, and `application.action`, `application.cask`, `external_commands[]`,
+            // `warnings[]` and `requires_admin` — the fields that say HOW each app comes off the
+            // disk and what else will happen — went nowhere. Meanwhile the sheet had answered the
+            // brew-vs-Trash question minutes earlier from the tab's stale inventory. Two answers
+            // to one question, and the newer, more expensive one was the one being discarded.
+            //
+            // A disagreement about the Trash is a re-consent, not a footnote: "you can put them
+            // back" is false for `--zap`, and it is the sentence the user agreed on. Warnings get
+            // the same treatment — the `/var/root` `$HOME` detection means the run will remove the
+            // bundle and never even look for the support files, which is not the removal that was
+            // described.
+            if case .engine(let plan) = reading {
+                let divergence = UninstallGuard.consentDivergence(plan: plan, promised: promised)
+                if divergence != nil || !plan.warnings.isEmpty {
+                    // `advisories` folds in `requires_admin`, the `--zap` commands and the engine's
+                    // own `warnings[]` — all three previously had no production reader at all.
+                    let advisories = UninstallGuard.advisories(for: plan)
+                    // Synchronously, because the answer decides whether the very next line runs a
+                    // destructive command. `Task { @MainActor }` would let it run first.
+                    let confirmed: Bool = DispatchQueue.main.sync { MainActor.assumeIsolated {
+                        let alert = NSAlert()
+                        alert.messageText = NSLocalizedString("This isn't quite what Burrow just told you", comment: "")
+                        var body: [String] = []
+                        if let divergence { body.append(divergence) }
+                        body.append(contentsOf: advisories)
+                        alert.informativeText = body.joined(separator: "\n\n")
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: NSLocalizedString("Remove anyway", comment: ""))
+                        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
+                        return alert.runModalQuiet() == .alertFirstButtonReturn
+                    } }
+                    guard confirmed else {
+                        Task { @MainActor in
+                            self.loading = false
+                            OperationCenter.shared.end(opId, success: false,
+                                                       detail: NSLocalizedString("cancelled — nothing removed", comment: ""))
+                        }
+                        return
+                    }
+                }
+            }
+
+            // Past every gate: the subsets Burrow trashes itself go now, not before the dry run.
+            if !subsets.isEmpty {
+                DispatchQueue.main.sync { MainActor.assumeIsolated { self.trashSubsets(subsets) } }
             }
 
             // Verified — the ticket's stdin answers mo's prompts (proceed +

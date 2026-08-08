@@ -615,13 +615,7 @@ struct ToolCatalog {
         case "burrow_optimize":
             return self.runAction(.optimize, confirm: (arguments["confirm"] as? Bool) ?? false)
         case "burrow_uninstall":
-            let apps = (arguments["apps"] as? [String])?
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty } ?? []
-            guard !apps.isEmpty else {
-                throw MCPToolError.badArguments("uninstall needs `apps`: one or more app names (see burrow_list_apps)")
-            }
-            return self.runAction(.uninstall(apps: apps,
+            return self.runAction(.uninstall(apps: try Self.uninstallApps(arguments),
                                              permanent: (arguments["permanent"] as? Bool) ?? false),
                                   confirm: (arguments["confirm"] as? Bool) ?? false)
         case "burrow_purge":
@@ -631,6 +625,66 @@ struct ToolCatalog {
         default:
             throw MCPToolError.unknown(name)
         }
+    }
+
+    /// The agent-supplied `apps[]` for `burrow_uninstall`, or a refusal.
+    ///
+    /// Pure and separated from the spawn because it is the one dangerous decision on this surface:
+    /// which strings an agent may put on the argv of a command that deletes applications, with
+    /// `permanent: true` honoured (`MoActions.argv`), i.e. not into the Trash and not recoverable.
+    ///
+    /// It used to trim and drop empties, and nothing else. The GUI meanwhile refused three values
+    /// (`SoftwareModel.isSendableBundleID`) — and the one that only the GUI refused was reachable
+    /// here in a single call: `burrow_list_apps` reports `"bundle_id": "unknown"` for every app
+    /// with no `CFBundleIdentifier` (five rows on the machine this was verified against), an agent
+    /// hands that string back, and the engine's exact bundle-id pass resolves it to whichever such
+    /// row comes first. Verified live: `uninstall --dry-run unknown` → Synergy,
+    /// `removes_applications: 1`, `unmatched: []`, `ambiguous: []`, `refusal: null`. Every rail the
+    /// pre-flight checked agreed, because they all compared the request against itself.
+    ///
+    /// One predicate now, `UninstallGuard.isSendableArgument`, shared with the GUI and re-checked
+    /// inside the guard itself.
+    static func uninstallApps(_ arguments: [String: Any]) throws -> [String] {
+        let apps = (arguments["apps"] as? [String])?
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty } ?? []
+        guard !apps.isEmpty else {
+            throw MCPToolError.badArguments("uninstall needs `apps`: one or more app names (see burrow_list_apps)")
+        }
+        if let unsendable = apps.first(where: { !UninstallGuard.isSendableArgument($0) }) {
+            throw MCPToolError.badArguments(
+                "\"\(unsendable)\" doesn't name one app — it resolves to whichever app the engine matches first. "
+                + "Apps with no bundle identifier are listed by burrow_list_apps as `\"bundle_id\": \"unknown\"`; "
+                + "remove those by their exact `name` instead.")
+        }
+        return apps
+    }
+
+    /// What a REAL run of a gated action may claim about the disk, and what to report when it
+    /// didn't fully succeed. Pure, so the branch that matters is tested against a real capture
+    /// instead of needing a partial uninstall to happen.
+    ///
+    /// The shape it exists for: `uninstall --apply` over several apps, where one bundle is refused
+    /// and another is deleted, exits **1 with an `ok:true` envelope** — the engine's
+    /// `i32::from(failed)`, verified against the real binary over two scratch bundles. So
+    /// `reportsFailure` is false, and the old `exitCode == 0 && !failed` drove `ran` to FALSE for
+    /// a run that had just deleted an application. `error` was no better: with no `error.message`
+    /// to classify on a success envelope, `failureReason` fell through to its raw-stdout fallback
+    /// and returned the whole JSON document as the error string.
+    ///
+    /// `ran` is documented on the wire as a claim about the disk, so the per-app accounting
+    /// decides it: an application removed, or a support file removed. A run that was refused
+    /// outright still reports `ran: false`, which is the honest answer for it.
+    static func realRunClaim(exitCode: Int32, stdout: String, stderr: String) -> (ran: Bool, error: String?) {
+        let failed = BurrowEnvelope.reportsFailure(stdout: stdout)
+        let outcome = UninstallGuard.readOutcome(stdout: stdout)
+        let ran = outcome.map(\.changedTheDisk) ?? (exitCode == 0 && !failed)
+        guard failed || exitCode != 0 else { return (ran, nil) }
+        // The engine's own per-app account when there is one — the same text the GUI shows — and
+        // only otherwise the classified reason.
+        let error = outcome.flatMap(UninstallGuard.problemReport)
+            ?? BurrowEnvelope.failureReason(stdout: stdout, stderr: stderr)
+        return (ran, error)
     }
 
     // MARK: Tool implementations
@@ -1028,7 +1082,15 @@ struct ToolCatalog {
                 ? BurrowEnvelope.failureReason(stdout: dry.stdout, stderr: dry.stderr)
                 : nil
             let reading = UninstallGuard.readDryRun(stdout: dry.stdout, stderr: dry.stderr)
-            if let reason = UninstallGuard.abortReason(confirmed: expected, dryRun: reading) {
+            // No `expecting`: an agent hands over strings, not the inventory row it had in mind,
+            // so there is no picked row to check the engine's resolution against. What the guard
+            // CAN do here without one is hold every resolved app to `AppPlan.isNamedBy` — the term
+            // must be that app's own name or bundle id, not a fragment the substring sweep
+            // happened to hit — which is the rail that stops an agent removing an app it never
+            // named. Passing `[]` says "this surface has no expectation", explicitly, rather than
+            // inheriting a default that would silently skip the check.
+            if let reason = UninstallGuard.abortReason(confirmed: expected, dryRun: reading,
+                                                       expecting: []) {
                 var matched: [String]?
                 switch reading {
                 case .engine(let plan): matched = plan.apps.map(\.query)
@@ -1044,15 +1106,18 @@ struct ToolCatalog {
                              timeout: timeout)
         var permanent: Bool?
         if case .uninstall(_, let p) = ticket.action, ticket.mode == .real { permanent = p }
-        // `ran` is a CLAIM about the disk, so it narrows in one direction only: an `ok:false`
-        // envelope means the engine refused or failed, and a run that failed did not run — even
-        // if the process somehow exited 0. `reportsFailure` is false for a legacy `mo` (no
-        // envelope) and false for a success envelope, so no run that really happened can be
-        // demoted by this.
-        let failed = BurrowEnvelope.reportsFailure(stdout: res.stdout)
+        // `ran` is a CLAIM about the disk — see `realRunClaim`, which owns both it and the reason
+        // string for a run that didn't fully succeed. A PREVIEW never ran by definition, and the
+        // dry run's own transcript must not be mined for a per-app outcome it doesn't contain.
+        let claim = ticket.mode == .real
+            ? Self.realRunClaim(exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr)
+            : (ran: false,
+               error: (BurrowEnvelope.reportsFailure(stdout: res.stdout) || res.exitCode != 0)
+                   ? BurrowEnvelope.failureReason(stdout: res.stdout, stderr: res.stderr)
+                   : nil)
         return ActionWire.result(command: ticket.action.commandName,
                                  dryRun: ticket.mode == .preview,
-                                 ran: ticket.mode == .real && res.exitCode == 0 && !failed,
+                                 ran: claim.ran,
                                  exitCode: res.exitCode,
                                  // `output` stays the raw transcript — `summaryObject` parses it
                                  // and agents have always read it. The classified reason rides
@@ -1063,9 +1128,7 @@ struct ToolCatalog {
                                  permanent: permanent,
                                  note: ticket.note,
                                  timedOutAfter: res.timedOut ? timeout : nil,
-                                 error: (failed || res.exitCode != 0)
-                                     ? BurrowEnvelope.failureReason(stdout: res.stdout, stderr: res.stderr)
-                                     : nil,
+                                 error: claim.error,
                                  kind: BurrowEnvelope.failureKind(stdout: res.stdout))
     }
 

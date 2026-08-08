@@ -447,8 +447,10 @@
 
 /* ===== Uninstall pre-flight verification ===== */
 "Uninstall aborted" = "卸载已中止";
-"mo would also remove: %@" = "mo 还会额外删除：%@";
-"mo did not match: %@" = "mo 未匹配到：%@";
+"%1$@ would also remove: %2$@" = "%1$@还会额外删除：%2$@";
+"%1$@ did not match: %2$@" = "%1$@未匹配到：%2$@";
+"The engine" = "引擎";
+"mo" = "mo";
 "The dry run's output wasn't in a format Burrow can confirm a matched set from, so nothing was removed." = "预演输出的格式无法让 Burrow 确认匹配到的应用集合，因此没有删除任何内容。";
 "The engine refused the dry run, so nothing was removed: %@" = "引擎拒绝了这次预演，因此没有删除任何内容：%@";
 "The engine matched no installed app for: %@" = "引擎没有为以下项匹配到任何已安装的应用：%@";
@@ -809,3 +811,26 @@
 "Measuring…" = "测量中…";
 "Scanning %@, %d of %d" = "正在扫描 %1$@，第 %2$d 项，共 %3$d 项";
 "Scanning" = "扫描中";
+
+/* ===== Uninstall pre-flight: identity of the resolved app ===== */
+"“%@” isn't an identifier that names one app — it resolves to whichever app the engine happens to match first, so nothing was removed. Use the app's bundle id or its exact name." = "“%@”不是能指明某一个应用的标识符 —— 它会匹配到引擎恰好最先命中的那个应用，因此没有删除任何内容。请使用该应用的 Bundle ID 或它的准确名称。";
+"The engine didn't say which application “%@” resolves to, so Burrow can't confirm it's the right one and nothing was removed." = "引擎没有说明“%@”会解析到哪个应用，Burrow 无法确认它是否正确，因此没有删除任何内容。";
+"The engine resolved %@ twice, so the run wouldn't act on the set it reported." = "引擎把 %@ 解析了两次，这次运行不会正好作用于它所报告的集合。";
+"“%1$@” isn't %2$@'s name or bundle id — the engine matched it by substring, so it may not be the app you meant. Nothing was removed; ask for it by name: %3$@." = "“%1$@”既不是 %2$@ 的名称也不是它的 Bundle ID —— 引擎是按子串匹配到它的，未必是你想要的应用。没有删除任何内容；请按名称指明：%3$@。";
+"The engine resolved an argument Burrow didn't send (“%@”), so nothing was removed." = "引擎解析出了一个 Burrow 并未发送的参数（“%@”），因此没有删除任何内容。";
+"“%1$@” resolves to %2$@ (%3$@), not the %4$@ you picked (%5$@), so nothing was removed." = "“%1$@”解析到的是 %2$@（%3$@），而不是你选中的 %4$@（%5$@），因此没有删除任何内容。";
+"“%1$@” resolves to an app whose bundle id is %2$@, not the %3$@ you picked, so nothing was removed." = "“%1$@”解析到的应用 Bundle ID 是 %2$@，而不是你选中的 %3$@，因此没有删除任何内容。";
+
+/* ===== Uninstall: the plan disagrees with the confirm sheet ===== */
+"This isn't quite what Burrow just told you" = "这与 Burrow 刚才的说明不完全一致";
+"Remove anyway" = "仍然删除";
+"cancelled — nothing removed" = "已取消 —— 未删除任何内容";
+"Homebrew removes these after all, with `brew uninstall --cask --zap` — that doesn't use the Trash, so you can't put them back: %@" = "以下应用实际上由 Homebrew 通过 `brew uninstall --cask --zap` 删除 —— 该方式不经过废纸篓，因此无法放回：%@";
+"These aren't Homebrew's after all — Burrow moves them to the Trash itself: %@" = "以下应用实际上并非由 Homebrew 管理 —— Burrow 会自行把它们移到废纸篓：%@";
+
+/* ===== Uninstall review: what Burrow may not remove by hand ===== */
+"Homebrew installed %1$@ — it has to be removed with `brew uninstall --cask --zap %2$@`. Trashing the app on its own would leave Homebrew still believing it's installed." = "%1$@ 由 Homebrew 安装 —— 必须用 `brew uninstall --cask --zap %2$@` 删除。单独把应用移到废纸篓，会让 Homebrew 仍以为它还装着。";
+"Burrow won't remove these itself" = "Burrow 不会自行删除以下内容";
+"These stay installed — only the reviewed support files move to the Trash, and you can put them back:\n\n%@" = "以下应用会保持安装状态 —— 只有经确认的支持文件会移到废纸篓，你可以把它们放回原处：\n\n%@";
+"Remove data from %d app?" = "删除 %d 个应用的数据？";
+"Remove data from %d apps?" = "删除 %d 个应用的数据？";

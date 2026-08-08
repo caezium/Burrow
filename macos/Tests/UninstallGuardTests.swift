@@ -14,6 +14,12 @@
 //  bundles under `dev.caezium.*` that this session created and then removed — no installed
 //  application was ever passed to `--apply`.
 //
+//  `dryRunUnknown` was captured the same way in a later session, from the bundled binary at
+//  `macos/vendor/burrow-engine/target/aarch64-apple-darwin/release/burrow-engine` (the submodule
+//  at df9ea3f), by running `burrow-engine uninstall --dry-run unknown` against the real
+//  /Applications. `dryRunBrew` was re-captured at the same time and compared byte-for-byte against
+//  the copy already here — identical, which is what makes these fixtures worth trusting.
+//
 
 import XCTest
 @testable import Burrow
@@ -27,6 +33,13 @@ final class UninstallGuardTests: XCTestCase {
 
     /// `uninstall --dry-run eu.exelban.Stats` — a Homebrew cask.
     private let dryRunBrew = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","data":{"dry_run":true,"total_bytes":57386539,"total_human":"57.4MB","items":[{"path":"/Applications/Stats.app","label":"Application","size":56047466,"size_human":"56.0MB","bundle_id":"eu.exelban.Stats","kind":"application"},{"path":"/Users/henry/Library/Caches/eu.exelban.Stats","label":"Cache","size":320920,"size_human":"321KB","bundle_id":"eu.exelban.Stats","kind":"leftover"},{"path":"/Users/henry/Library/Preferences/eu.exelban.Stats.plist","label":"Preferences","size":2281,"size_human":"2KB","bundle_id":"eu.exelban.Stats","kind":"leftover"},{"path":"/Users/henry/Library/HTTPStorages/eu.exelban.Stats","label":"HTTP storage","size":729056,"size_human":"729KB","bundle_id":"eu.exelban.Stats","kind":"leftover"},{"path":"/Users/henry/Library/WebKit/eu.exelban.Stats","label":"WebKit data","size":286816,"size_human":"287KB","bundle_id":"eu.exelban.Stats","kind":"leftover"}],"apps":[{"query":"eu.exelban.Stats","name":"Stats","bundle_id":"eu.exelban.Stats","path":"/Applications/Stats.app","item_count":4,"leftover_bytes":1339073,"total_bytes":57386539,"total_human":"57.4MB","application":{"path":"/Applications/Stats.app","present":true,"size":56047466,"size_human":"56.0MB","needs_admin":false,"action":"brew_zap","cask":"stats","refusal":null}}],"unmatched":[],"matched_count":1,"requires_confirmation":false,"ambiguous":[],"removes_applications":1,"requires_admin":false,"external_commands":[{"bundle_id":"eu.exelban.Stats","name":"Stats","command":"brew uninstall --cask --zap stats","note":"Homebrew removes this app; --zap also deletes configuration and data the cask declares, which are not enumerated above."}],"warnings":[]}}"#
+
+    /// `uninstall --dry-run unknown` — THE CRITICAL FIXTURE. `"unknown"` is the literal
+    /// `uninstall --list` records for a bundle with no `CFBundleIdentifier` (five rows here), and
+    /// `burrow_list_apps` reports it to agents verbatim. Every rail the guard used to check agrees
+    /// with itself: `unmatched: []`, `ambiguous: []`, one app for one query, no refusal — and the
+    /// application it resolved is Synergy, which no caller named.
+    private let dryRunUnknown = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","data":{"dry_run":true,"total_bytes":93970,"total_human":"94KB","items":[{"path":"/Users/henry/Applications/Synergy.app","label":"Application","size":93970,"size_human":"94KB","bundle_id":"unknown","kind":"application"}],"apps":[{"query":"unknown","name":"Synergy","bundle_id":"unknown","path":"/Users/henry/Applications/Synergy.app","item_count":0,"leftover_bytes":0,"total_bytes":93970,"total_human":"94KB","application":{"path":"/Users/henry/Applications/Synergy.app","present":true,"size":93970,"size_human":"94KB","needs_admin":false,"action":"delete","cask":null,"refusal":null}}],"unmatched":[],"matched_count":1,"requires_confirmation":false,"ambiguous":[],"removes_applications":1,"requires_admin":false,"external_commands":[],"warnings":[]}}"#
 
     /// `uninstall --dry-run pdate` — one term, two apps, both called "Updater".
     private let dryRunAmbiguous = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","data":{"dry_run":true,"total_bytes":377374,"total_human":"377KB","items":[{"path":"/Users/henry/Applications/Trader Workstation/.install4j/Updater.app","label":"Application","size":188695,"size_human":"189KB","bundle_id":"com.install4j.5889-6375-8446-2021.443","kind":"application"},{"path":"/Users/henry/Applications/IBKR Desktop/.install4j/Updater.app","label":"Application","size":188679,"size_human":"189KB","bundle_id":"com.install4j.5557-0173-2810-0000.443","kind":"application"}],"apps":[{"query":"pdate","name":"Updater","bundle_id":"com.install4j.5889-6375-8446-2021.443","path":"/Users/henry/Applications/Trader Workstation/.install4j/Updater.app","item_count":0,"leftover_bytes":0,"total_bytes":188695,"total_human":"189KB","application":{"path":"/Users/henry/Applications/Trader Workstation/.install4j/Updater.app","present":true,"size":188695,"size_human":"189KB","needs_admin":false,"action":"delete","cask":null,"refusal":null}},{"query":"pdate","name":"Updater","bundle_id":"com.install4j.5557-0173-2810-0000.443","path":"/Users/henry/Applications/IBKR Desktop/.install4j/Updater.app","item_count":0,"leftover_bytes":0,"total_bytes":188679,"total_human":"189KB","application":{"path":"/Users/henry/Applications/IBKR Desktop/.install4j/Updater.app","present":true,"size":188679,"size_human":"189KB","needs_admin":false,"action":"delete","cask":null,"refusal":null}}],"unmatched":[],"matched_count":2,"requires_confirmation":true,"ambiguous":[{"query":"pdate","matched":2,"names":["Updater","Updater"]}],"removes_applications":2,"requires_admin":false,"external_commands":[],"warnings":[]}}"#
@@ -164,7 +177,11 @@ final class UninstallGuardTests: XCTestCase {
     func testAbort_nilWhenTheEngineResolvedExactlyWhatWasConfirmed() {
         let reading = UninstallGuard.readDryRun(stdout: dryRunPlain, stderr: "")
         XCTAssertNil(UninstallGuard.abortReason(confirmed: ["org.localsend.localsendApp"],
-                                                dryRun: reading))
+                                                dryRun: reading, expecting: []))
+        XCTAssertNil(UninstallGuard.abortReason(
+            confirmed: ["org.localsend.localsendApp"], dryRun: reading,
+            expecting: [localSendExpectation]),
+            "and still nil when the caller names the very row the engine resolved")
     }
 
     /// Compared as bundle ids — display names are the ambiguity this path exists to remove — but
@@ -173,7 +190,7 @@ final class UninstallGuardTests: XCTestCase {
     func testAbort_whenTheEngineResolvedADifferentAppThanTheOneConfirmed() throws {
         let reading = UninstallGuard.readDryRun(stdout: dryRunPlain, stderr: "")
         let reason = try XCTUnwrap(UninstallGuard.abortReason(confirmed: ["com.valvesoftware.steam"],
-                                                              dryRun: reading))
+                                                              dryRun: reading, expecting: []))
         XCTAssertTrue(reason.contains("LocalSend (org.localsend.localsendApp)"), reason)
         XCTAssertTrue(reason.contains("com.valvesoftware.steam"), reason)
     }
@@ -182,7 +199,108 @@ final class UninstallGuardTests: XCTestCase {
     func testMismatch_labelsDoNotAffectTheVerdict() {
         XCTAssertNil(UninstallGuard.mismatchDescription(confirmed: ["com.foo.Bar"],
                                                         matched: ["com.foo.Bar"],
-                                                        labels: ["com.foo.bar": "Something Else"]))
+                                                        labels: ["com.foo.bar": "Something Else"],
+                                                        subject: UninstallGuard.engineSubject))
+    }
+
+    private var localSendExpectation: UninstallGuard.Expectation {
+        UninstallGuard.Expectation(query: "org.localsend.localsendApp", name: "LocalSend",
+                                   path: "/Applications/LocalSend.app",
+                                   bundleId: "org.localsend.localsendApp")
+    }
+
+    // MARK: - Identity: what the engine RESOLVED, not what it echoed
+    //
+    // The class of defect these cover. `abortReason` used to compare the arguments Burrow sent
+    // against `apps[].query`, which is those same arguments echoed back — so the comparison could
+    // only ever confirm that the engine heard us. Every other rail agreed with it, and the run
+    // deleted whatever the engine had actually matched.
+
+    /// **The critical one.** `"unknown"` is what `uninstall --list` records for a bundle with no
+    /// `CFBundleIdentifier`, and `burrow_list_apps` hands it to agents verbatim. Fed back in, the
+    /// engine's exact bundle-id pass resolves it to the first such row — Synergy, live, on this
+    /// machine — with `unmatched: []`, `ambiguous: []`, `removes_applications: 1` and no refusal.
+    /// The old guard returned nil for all of it.
+    func testAbort_theUnknownSentinelIsRefusedEvenThoughEveryOtherRailAgrees() throws {
+        guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: dryRunUnknown, stderr: "") else {
+            return XCTFail("expected the engine case")
+        }
+        // The fixture really is the trap: everything the old guard looked at lines up.
+        XCTAssertEqual(plan.apps.map(\.query), ["unknown"])
+        XCTAssertTrue(plan.unmatched.isEmpty)
+        XCTAssertTrue(plan.ambiguous.isEmpty)
+        XCTAssertTrue(plan.refusedApps.isEmpty)
+        XCTAssertEqual(plan.removesApplications, 1)
+        XCTAssertEqual(plan.apps.first?.name, "Synergy")
+        XCTAssertEqual(plan.apps.first?.path, "/Users/henry/Applications/Synergy.app")
+
+        let reason = try XCTUnwrap(
+            UninstallGuard.abortReason(confirmed: ["unknown"], dryRun: .engine(plan), expecting: []),
+            "the guard must refuse a term that resolves to an app nobody named")
+        XCTAssertTrue(reason.contains("unknown"), reason)
+    }
+
+    /// Case folds, because the engine's own comparison does: `"UNKNOWN"` and `"Unknown"` both
+    /// resolve Synergy against the real binary. A case-sensitive check would be a hole on any
+    /// surface that takes free text, which the MCP tool is.
+    func testSendableArgument_refusesTheThreeShapesThatNameNoSingleApp() {
+        for bad in ["", "   ", "unknown", "UNKNOWN", "Unknown", " unknown ", "-x", "--permanent"] {
+            XCTAssertFalse(UninstallGuard.isSendableArgument(bad), "must refuse \(bad.debugDescription)")
+        }
+        for good in ["org.localsend.localsendApp", "Synergy", "eu.exelban.Stats", "Stardew Valley"] {
+            XCTAssertTrue(UninstallGuard.isSendableArgument(good), "must allow \(good)")
+        }
+    }
+
+    /// The rail that works with no caller expectation at all — the MCP surface's only identity
+    /// check. `pdate` is a real substring hit on this machine (two apps both called "Updater");
+    /// even reduced to a single resolved app it is still a term that names nothing.
+    func testAbort_aTermThatIsNeitherTheAppsNameNorItsBundleIdIsRefused() throws {
+        // One app only, so the ambiguity rail cannot be what fires here.
+        let single = dryRunAmbiguous.replacingOccurrences(
+            of: #","ambiguous":[{"query":"pdate","matched":2,"names":["Updater","Updater"]}]"#,
+            with: #","ambiguous":[]"#)
+        guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: single, stderr: "") else {
+            return XCTFail("expected the engine case")
+        }
+        let oneApp = UninstallGuard.Plan(
+            apps: Array(plan.apps.prefix(1)), unmatched: plan.unmatched, ambiguous: [],
+            removesApplications: 1, requiresAdmin: false, externalCommands: [],
+            warnings: [], totalHuman: plan.totalHuman)
+        XCTAssertTrue(oneApp.ambiguous.isEmpty)
+        let reason = try XCTUnwrap(
+            UninstallGuard.abortReason(confirmed: ["pdate"], dryRun: .engine(oneApp), expecting: []))
+        XCTAssertTrue(reason.contains("pdate"), reason)
+        XCTAssertTrue(reason.contains("Updater"), reason)
+    }
+
+    /// The strong form, available to the GUI: it picked a row, so it can say which one, and the
+    /// engine's `apps[].path` is checked against that row's path. A term that IS the app's bundle
+    /// id but resolves somewhere else still stops here.
+    func testAbort_whenTheResolvedPathIsntTheRowTheCallerPicked() throws {
+        let reading = UninstallGuard.readDryRun(stdout: dryRunPlain, stderr: "")
+        let wrongRow = UninstallGuard.Expectation(
+            query: "org.localsend.localsendApp", name: "LocalSend",
+            path: "/Users/henry/Applications/LocalSend.app",   // a different LocalSend
+            bundleId: "org.localsend.localsendApp")
+        let reason = try XCTUnwrap(
+            UninstallGuard.abortReason(confirmed: ["org.localsend.localsendApp"],
+                                       dryRun: reading, expecting: [wrongRow]))
+        XCTAssertTrue(reason.contains("/Applications/LocalSend.app"), reason)
+        XCTAssertTrue(reason.contains("/Users/henry/Applications/LocalSend.app"), reason)
+    }
+
+    /// A plan that names no application at all cannot be identity-checked, so it fails closed
+    /// rather than proceeding on a payload the guard can't read.
+    func testAbort_aResolvedAppWithNoPathFailsClosed() throws {
+        let pathless = dryRunPlain
+            .replacingOccurrences(of: #""path":"/Applications/LocalSend.app""#, with: #""path":"""#)
+        guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: pathless, stderr: "") else {
+            return XCTFail("expected the engine case")
+        }
+        XCTAssertEqual(plan.apps.first?.path, "")
+        XCTAssertNotNil(UninstallGuard.abortReason(confirmed: ["org.localsend.localsendApp"],
+                                                   dryRun: .engine(plan), expecting: []))
     }
 
     /// The ambiguity refusal, met BEFORE the apply rather than bounced off it. `uninstall --apply
@@ -190,7 +308,8 @@ final class UninstallGuardTests: XCTestCase {
     /// over-broad instead of turning a refusal into a mystery.
     func testAbort_onTheEnginesOwnAmbiguityVerdict() throws {
         let reading = UninstallGuard.readDryRun(stdout: dryRunAmbiguous, stderr: "")
-        let reason = try XCTUnwrap(UninstallGuard.abortReason(confirmed: ["pdate"], dryRun: reading))
+        let reason = try XCTUnwrap(UninstallGuard.abortReason(confirmed: ["pdate"], dryRun: reading,
+                                                              expecting: []))
         XCTAssertTrue(reason.contains("pdate"), reason)
         XCTAssertTrue(reason.contains("Updater"), reason)
     }
@@ -201,7 +320,7 @@ final class UninstallGuardTests: XCTestCase {
         let reading = UninstallGuard.readDryRun(stdout: dryRunRefusedBundle, stderr: "")
         let reason = try XCTUnwrap(
             UninstallGuard.abortReason(confirmed: ["dev.caezium.BurrowScratchRefused"],
-                                       dryRun: reading))
+                                       dryRun: reading, expecting: []))
         XCTAssertTrue(reason.contains("path validation failed"), reason)
     }
 
@@ -209,7 +328,7 @@ final class UninstallGuardTests: XCTestCase {
         for fixture in [errorNoMatch, errorProtected] {
             let reading = UninstallGuard.readDryRun(stdout: fixture, stderr: "")
             let reason = try XCTUnwrap(UninstallGuard.abortReason(confirmed: ["com.foo.Bar"],
-                                                                  dryRun: reading))
+                                                                  dryRun: reading, expecting: []))
             XCTAssertTrue(reason.contains("No matching applications found.")
                           || reason.contains("protected system component"), reason)
         }
@@ -217,10 +336,11 @@ final class UninstallGuardTests: XCTestCase {
 
     func testAbort_unreadableOutputFailsClosed() {
         XCTAssertNotNil(UninstallGuard.abortReason(confirmed: ["com.foo.Bar"],
-                                                   dryRun: .unreadable))
+                                                   dryRun: .unreadable, expecting: []))
         XCTAssertNotNil(UninstallGuard.abortReason(
             confirmed: ["com.foo.Bar"],
-            dryRun: UninstallGuard.readDryRun(stdout: "Segmentation fault", stderr: "")))
+            dryRun: UninstallGuard.readDryRun(stdout: "Segmentation fault", stderr: ""),
+            expecting: []))
     }
 
     /// `requires_admin` is deliberately NOT an abort: the engine's `needs_admin` is an `access(2)`
@@ -235,7 +355,7 @@ final class UninstallGuardTests: XCTestCase {
         }
         XCTAssertTrue(plan.requiresAdmin)
         XCTAssertNil(UninstallGuard.abortReason(confirmed: ["org.localsend.localsendApp"],
-                                                dryRun: .engine(plan)))
+                                                dryRun: .engine(plan), expecting: []))
         XCTAssertTrue(UninstallGuard.advisories(for: plan).contains { $0.contains("LocalSend") },
                       "the advisory must name the app that needs elevation")
     }
@@ -300,30 +420,86 @@ final class UninstallGuardTests: XCTestCase {
 
     // MARK: - Mismatch description
 
+    private func mismatch(_ confirmed: [String], _ matched: [String]) -> String? {
+        UninstallGuard.mismatchDescription(confirmed: confirmed, matched: matched,
+                                           subject: UninstallGuard.engineSubject)
+    }
+
     func testMismatch_nilWhenSetsAgree() {
-        XCTAssertNil(UninstallGuard.mismatchDescription(confirmed: ["IDLE"], matched: ["IDLE"]))
-        XCTAssertNil(UninstallGuard.mismatchDescription(confirmed: ["Slack", "Zoom"],
-                                                        matched: ["Zoom", "Slack"]),
-                     "order must not matter")
-        XCTAssertNil(UninstallGuard.mismatchDescription(confirmed: ["idle"], matched: ["IDLE"]),
+        XCTAssertNil(mismatch(["IDLE"], ["IDLE"]))
+        XCTAssertNil(mismatch(["Slack", "Zoom"], ["Zoom", "Slack"]), "order must not matter")
+        XCTAssertNil(mismatch(["idle"], ["IDLE"]),
                      "case must not matter — names echo mo's own canonical list")
     }
 
     func testMismatch_reportsExtraApps() throws {
-        let desc = try XCTUnwrap(UninstallGuard.mismatchDescription(confirmed: ["Slack"],
-                                                                    matched: ["Slack", "Zoom"]))
+        let desc = try XCTUnwrap(mismatch(["Slack"], ["Slack", "Zoom"]))
         XCTAssertTrue(desc.contains("Zoom"),
                       "the app the binary would remove beyond the confirmation must be named")
     }
 
     func testMismatch_reportsMissingApps() throws {
-        let desc = try XCTUnwrap(UninstallGuard.mismatchDescription(confirmed: ["Slack", "Zoom"],
-                                                                    matched: ["Slack"]))
+        let desc = try XCTUnwrap(mismatch(["Slack", "Zoom"], ["Slack"]))
         XCTAssertTrue(desc.contains("Zoom"))
     }
 
     func testMismatch_countDivergenceAlwaysMismatches() {
-        XCTAssertNotNil(UninstallGuard.mismatchDescription(confirmed: ["Slack"], matched: []))
-        XCTAssertNotNil(UninstallGuard.mismatchDescription(confirmed: [], matched: ["Slack"]))
+        XCTAssertNotNil(mismatch(["Slack"], []))
+        XCTAssertNotNil(mismatch([], ["Slack"]))
+    }
+
+    /// The sentence names WHICH BINARY is about to delete something, and it said "mo" on the
+    /// engine path — the one line in the rewritten copy that still described the other program.
+    func testMismatch_namesTheBinaryThatActuallyAnswered() throws {
+        let onEngine = try XCTUnwrap(UninstallGuard.abortReason(
+            confirmed: ["com.valvesoftware.steam"],
+            dryRun: UninstallGuard.readDryRun(stdout: dryRunPlain, stderr: ""),
+            expecting: []))
+        XCTAssertTrue(onEngine.contains(UninstallGuard.engineSubject), onEngine)
+
+        let onLegacy = try XCTUnwrap(UninstallGuard.abortReason(
+            confirmed: ["Slack"],
+            dryRun: UninstallGuard.readDryRun(stdout: legacyMulti, stderr: ""),
+            expecting: []))
+        XCTAssertTrue(onLegacy.contains(UninstallGuard.legacySubject), onLegacy)
+    }
+
+    // MARK: - Trash vs. Homebrew, re-checked after consent
+    //
+    // The sheet answers this from the Software tab's inventory SNAPSHOT; the engine answers it from
+    // an inventory it rebuilds inside every invocation, behind a `brew info` sweep with a 10 s
+    // deadline and a `brew_wedged` breaker that degrades every Homebrew row to `source: "App"` once
+    // it trips. The two can therefore disagree, and the sheet's promise ("you can put them back")
+    // is false for the half that turns out to be `--zap`.
+
+    func testConsentDivergence_nilWhenTheSheetAndThePlanAgree() throws {
+        guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: dryRunBrew, stderr: "") else {
+            return XCTFail("expected the engine case")
+        }
+        XCTAssertNil(UninstallGuard.consentDivergence(
+            plan: plan, promised: ["eu.exelban.stats": .homebrew]))
+        XCTAssertNil(UninstallGuard.consentDivergence(plan: plan, promised: [:]),
+                     "a caller that promised nothing cannot have contradicted itself")
+    }
+
+    /// The `brew_wedged` shape: `--list` degraded Stats to `source: "App"`, so the sheet said
+    /// Trash; the apply's own inventory found the cask, so it will `--zap`.
+    func testConsentDivergence_catchesATrashPromiseThatIsAboutToBecomeAZap() throws {
+        guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: dryRunBrew, stderr: "") else {
+            return XCTFail("expected the engine case")
+        }
+        let divergence = try XCTUnwrap(UninstallGuard.consentDivergence(
+            plan: plan, promised: ["eu.exelban.stats": .direct]))
+        XCTAssertTrue(divergence.contains("Stats"), divergence)
+        XCTAssertTrue(divergence.contains("--zap"), divergence)
+    }
+
+    func testConsentDivergence_catchesTheOppositeDirectionToo() throws {
+        guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: dryRunPlain, stderr: "") else {
+            return XCTFail("expected the engine case")
+        }
+        let divergence = try XCTUnwrap(UninstallGuard.consentDivergence(
+            plan: plan, promised: ["org.localsend.localsendapp": .homebrew]))
+        XCTAssertTrue(divergence.contains("LocalSend"), divergence)
     }
 }

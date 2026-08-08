@@ -273,7 +273,8 @@ final class EngineFailureChannelTests: XCTestCase {
         XCTAssertEqual(message, "No matching applications found. (NoSuchAppXYZ)")
         let reason = try XCTUnwrap(UninstallGuard.abortReason(
             confirmed: ["com.foo.Bar"],
-            dryRun: UninstallGuard.readDryRun(stdout: engineDryRunFailure, stderr: "")))
+            dryRun: UninstallGuard.readDryRun(stdout: engineDryRunFailure, stderr: ""),
+            expecting: []))
         XCTAssertTrue(reason.contains("NoSuchAppXYZ"), reason)
         XCTAssertNil(UninstallGuard.matchedApps(inDryRunOutput: analyzeSuccess),
                      "a success envelope is not a matched set either")

@@ -304,4 +304,92 @@ final class SoftwareModelTests: XCTestCase {
         XCTAssertTrue(copy.body.contains(NSLocalizedString("Reviewed subsets are trashed by Burrow directly and appear in Burrow's Activity log, not `mo history`.", comment: "")),
                       copy.body)
     }
+
+    // MARK: - "Clear Data": the subset that KEEPS the app
+    //
+    // The button's own tooltip is "Select everything except the app itself — removes its data but
+    // keeps the app installed", and it sets `UninstallPlan.dataOnly`, which filters the `.app` out.
+    // That makes the removal a subset, and the rewritten sheet printed the whole-app sentence over
+    // it: "These move to the Trash — the app itself and the support files…". The consent dialog
+    // said the opposite of what the button does. The surviving subset test asserted only the
+    // "%d reviewed files" fragment, so it passed either way — these do not.
+
+    private var trashSentence: String {
+        NSLocalizedString("These move to the Trash — the app itself and the support files it keeps in your Library (containers, caches, preferences, saved state). You can put them back:\n\n%@", comment: "")
+            .components(separatedBy: ":\n\n").first ?? ""
+    }
+
+    func testConfirmCopy_aKeptAppIsNeverDescribedAsMovingToTheTrash() {
+        let copy = SoftwareModel.confirmCopy(
+            lines: [SoftwareModel.ConfirmLine(name: "Stats", reviewedCount: 3,
+                                              removesAppBundle: false)],
+            skipped: [], hasReviewedSubset: true)
+        XCTAssertFalse(copy.body.contains(trashSentence),
+                       "Clear Data keeps the app installed — the sheet must not promise otherwise: \(copy.body)")
+        XCTAssertTrue(copy.body.contains(
+            String(format: NSLocalizedString("These stay installed — only the reviewed support files move to the Trash, and you can put them back:\n\n%@", comment: ""),
+                   "• Stats — \(String(format: NSLocalizedString("%d reviewed files", comment: ""), 3))")),
+            copy.body)
+        XCTAssertFalse(copy.title.contains(
+            String(format: NSLocalizedString("Remove %d app?", comment: ""), 1)),
+            "and it must not ASK to remove an app it is about to keep: \(copy.title)")
+    }
+
+    /// The branch has to cut both ways in one sheet: select-all on one app and Clear Data on
+    /// another, and each line appears under the promise that is true of it.
+    func testConfirmCopy_mixedKeptAndRemovedAppsEachGetTheTrueSentence() {
+        let copy = SoftwareModel.confirmCopy(
+            lines: [SoftwareModel.ConfirmLine(name: "Steam", reviewedCount: nil),
+                    SoftwareModel.ConfirmLine(name: "Stats", reviewedCount: 3,
+                                              removesAppBundle: false)],
+            skipped: [], hasReviewedSubset: true)
+        let trashBlock = copy.body.components(separatedBy: "\n\n")
+            .first { $0.contains(trashSentence) } ?? ""
+        XCTAssertTrue(trashBlock.contains("Steam"), copy.body)
+        XCTAssertFalse(trashBlock.contains("Stats"),
+                       "the kept app must not be listed under the sentence that removes it: \(copy.body)")
+    }
+
+    /// A whole-app removal is unchanged — the default is still "the bundle goes".
+    func testConfirmCopy_wholeAppRemovalStillPromisesTheAppItself() {
+        let copy = SoftwareModel.confirmCopy(lines: lines(["Steam"]), skipped: [],
+                                             hasReviewedSubset: false)
+        XCTAssertTrue(copy.body.contains(trashSentence), copy.body)
+    }
+
+    // MARK: - Ordering: the subsets ride BEHIND the pre-flight
+    //
+    // `trashSubsets` used to run first and unconditionally, before any dry run. When the guard
+    // then aborted, the user was shown a sentence ending "so nothing was removed" over a Trash
+    // that already held a subset app's files — its `.app` among them, since the bundle is
+    // auto-ticked. Route, not statement order, so it can be asserted.
+
+    func testRemovalRoute_aMixedSelectionDefersTheHandTrashBehindTheEngineRun() {
+        let whole = row(named: "Steam", bundleId: "com.valvesoftware.steam")
+        let subset = row(named: "Stats", bundleId: "eu.exelban.Stats")
+        XCTAssertEqual(SoftwareModel.removalRoute(addressable: [whole], subsets: [subset]),
+                       .engineThenTrash([subset]),
+                       "there must be no route that trashes a subset alongside an unverified engine run")
+    }
+
+    func testRemovalRoute_subsetsAloneHaveNoPreflightToWaitFor() {
+        let subset = row(named: "Stats", bundleId: "eu.exelban.Stats")
+        XCTAssertEqual(SoftwareModel.removalRoute(addressable: [], subsets: [subset]),
+                       .trashOnly([subset]))
+        XCTAssertEqual(SoftwareModel.removalRoute(addressable: [], subsets: []), .none)
+    }
+
+    /// The sheet's brew-vs-Trash claim, captured at consent time so the post-consent dry run has
+    /// something to be checked against. Keyed by the argument, lowercased, to line up with the
+    /// engine's `apps[].query`.
+    func testPromisedMechanisms_recordWhatTheSheetToldTheUserPerArgument() {
+        // Straight off the real `--list` capture: Stats is `source: "Homebrew"`, Steam is `"App"`.
+        let brewed = row(named: "Stats", bundleId: "eu.exelban.Stats")
+        let plain = row(named: "Steam", bundleId: "com.valvesoftware.steam")
+        XCTAssertEqual(brewed.source, "Homebrew")
+        let promised = SoftwareModel.promisedMechanisms([brewed, plain],
+                                                        ["eu.exelban.Stats", "com.valvesoftware.steam"])
+        XCTAssertEqual(promised["eu.exelban.stats"], .homebrew)
+        XCTAssertEqual(promised["com.valvesoftware.steam"], .direct)
+    }
 }

@@ -335,6 +335,96 @@ final class MCPTests: XCTestCase {
         XCTAssertEqual((obj["sessions"] as? [Any])?.count, 0)
     }
 
+    // MARK: - burrow_uninstall's `apps[]`: what an agent may put on a deleting argv
+    //
+    // This surface honours `permanent: true` (`MoActions.argv`), so a value that resolves to the
+    // wrong application here is an outright delete of it — no Trash, nothing to put back. The GUI
+    // refused three values; this one trimmed whitespace and dropped empties, and the difference
+    // was reachable in a single call.
+
+    func testUninstallApps_refusesTheUnknownSentinelBurrowListAppsHandsOut() {
+        // Live against the bundled engine at df9ea3f: `uninstall --dry-run unknown` resolves to
+        // Synergy — `removes_applications: 1`, `unmatched: []`, `ambiguous: []`, `refusal: null`.
+        // Nothing downstream disagreed with itself, because nothing downstream was comparing the
+        // request against the application.
+        for bad in ["unknown", "UNKNOWN", " unknown "] {
+            XCTAssertThrowsError(try ToolCatalog.uninstallApps(["apps": [bad]]),
+                                 "\(bad.debugDescription) must not reach argv") { error in
+                guard case MCPToolError.badArguments(let message) = error else {
+                    return XCTFail("expected badArguments, got \(error)")
+                }
+                XCTAssertTrue(message.contains("name"), message)
+            }
+        }
+    }
+
+    func testUninstallApps_refusesAFlagShapedArgumentAndAnEmptyList() {
+        XCTAssertThrowsError(try ToolCatalog.uninstallApps(["apps": ["-permanent"]]),
+                             "a leading `-` is skipped by the engine's positional scan, so the run "
+                             + "would act on fewer apps than it reported")
+        XCTAssertThrowsError(try ToolCatalog.uninstallApps(["apps": ["   "]]))
+        XCTAssertThrowsError(try ToolCatalog.uninstallApps([:]))
+    }
+
+    func testUninstallApps_stillAcceptsARealBundleIdOrAnAppsOwnName() throws {
+        XCTAssertEqual(try ToolCatalog.uninstallApps(["apps": [" eu.exelban.Stats ", "Synergy"]]),
+                       ["eu.exelban.Stats", "Synergy"],
+                       "an app with no CFBundleIdentifier is still removable — by its name")
+    }
+
+    // MARK: - A partial uninstall is not "didn't run"
+    //
+    // Real capture, `burrow-engine uninstall --apply --permanent` over TWO purpose-built scratch
+    // bundles under a temporary `$HOME` — one whose path a protection rail declines, one ordinary.
+    // No installed application was passed to `--apply`. It exits **1** with an **`ok:true`**
+    // envelope (`i32::from(failed)`), having deleted one of the two applications.
+    private static let applyPartialAcrossApps = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","data":{"dry_run":false,"freed_bytes":399,"freed_human":"399B","applications_removed":1,"applications_refused":1,"warnings":[],"removed":[{"path":"/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchOK.app","size":388,"bundle_id":"dev.caezium.burrow.scratch.ok","kind":"application"},{"path":"/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Library/Application Support/dev.caezium.burrow.scratch.ok","size":5,"bundle_id":"dev.caezium.burrow.scratch.ok","kind":"leftover"},{"path":"/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Library/Caches/dev.caezium.burrow.scratch.ok","size":6,"bundle_id":"dev.caezium.burrow.scratch.ok","kind":"leftover"}],"errors":[{"path":"/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchControlCenter.app","error":"protected path skipped: /private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchControlCenter.app","bundle_id":"dev.caezium.burrow.scratch.refused","kind":"application"}],"protected":["/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchControlCenter.app"],"apps":[{"query":"dev.caezium.burrow.scratch.refused","name":"BurrowScratchControlCenter","bundle_id":"dev.caezium.burrow.scratch.refused","path":"/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchControlCenter.app","status":"refused","application":{"path":"/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchControlCenter.app","state":"refused","via":null,"bytes":0,"reason":"protected path skipped: /private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchControlCenter.app","suggestion":null},"removed_count":0,"leftover_freed_bytes":0,"error_count":0,"protected_count":0,"freed_bytes":0,"freed_human":"0B","leftovers_attempted":false},{"query":"dev.caezium.burrow.scratch.ok","name":"BurrowScratchOK","bundle_id":"dev.caezium.burrow.scratch.ok","path":"/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchOK.app","status":"removed","application":{"path":"/private/tmp/claude-501/-Users-henry-Desktop-Burrow/447eac01-68b0-4709-9b47-4353173bbf3b/scratchpad/fakehome/Applications/BurrowScratchOK.app","state":"removed","via":"permanent","bytes":388,"reason":null,"suggestion":null},"removed_count":2,"leftover_freed_bytes":11,"error_count":0,"protected_count":0,"freed_bytes":399,"freed_human":"399B","leftovers_attempted":true}],"unmatched":[]}}"#
+
+    /// `ran` is documented on the wire as a CLAIM about the disk. An application was deleted here,
+    /// so the claim is true — and the old rule (`exitCode == 0 && !reportsFailure`) said false,
+    /// which is the wrong answer in the direction that matters.
+    func testRealRunClaim_aPartialUninstallReportsThatItRan() {
+        let claim = ToolCatalog.realRunClaim(exitCode: 1, stdout: Self.applyPartialAcrossApps,
+                                             stderr: "")
+        XCTAssertFalse(BurrowEnvelope.reportsFailure(stdout: Self.applyPartialAcrossApps),
+                       "the fixture is the trap: exit 1 over an ok:true envelope")
+        XCTAssertTrue(claim.ran, "one of the two applications was deleted")
+    }
+
+    /// And the reason string is the engine's own per-app account, not the whole JSON document —
+    /// which is what `failureReason`'s raw-stdout fallback returned, because a success envelope
+    /// carries no `error.message` for it to classify.
+    func testRealRunClaim_reportsThePerAppAccountNotTheEnvelopeItself() throws {
+        let claim = ToolCatalog.realRunClaim(exitCode: 1, stdout: Self.applyPartialAcrossApps,
+                                             stderr: "")
+        let error = try XCTUnwrap(claim.error)
+        XCTAssertFalse(error.contains("\"burrow_cli\""),
+                       "the error must not be the envelope document: \(error.prefix(120))")
+        XCTAssertTrue(error.contains("BurrowScratchControlCenter"), error)
+        XCTAssertTrue(error.contains("protected path skipped"), error)
+        XCTAssertFalse(error.contains("BurrowScratchOK"),
+                       "the app that came away cleanly is not a problem to report: \(error)")
+    }
+
+    /// A run the engine refused outright removed nothing, and still says so.
+    func testRealRunClaim_aFullyRefusedRunDidNotRun() throws {
+        let refusedBoth = Self.applyPartialAcrossApps
+            .replacingOccurrences(of: #""applications_removed":1"#, with: #""applications_removed":0"#)
+            .replacingOccurrences(of: #""removed_count":2"#, with: #""removed_count":0"#)
+            .replacingOccurrences(of: #""status":"removed""#, with: #""status":"refused""#)
+        let claim = ToolCatalog.realRunClaim(exitCode: 1, stdout: refusedBoth, stderr: "")
+        XCTAssertFalse(claim.ran)
+        XCTAssertNotNil(claim.error)
+    }
+
+    /// Nothing about a legacy `mo` or a clean run changes: no envelope to decode, so the exit code
+    /// still decides, and a zero exit is still a run.
+    func testRealRunClaim_fallsBackToTheExitCodeWhenThereIsNoEngineOutcome() {
+        XCTAssertTrue(ToolCatalog.realRunClaim(exitCode: 0, stdout: "Removed 1 app", stderr: "").ran)
+        XCTAssertFalse(ToolCatalog.realRunClaim(exitCode: 1, stdout: "", stderr: "boom").ran)
+        XCTAssertEqual(ToolCatalog.realRunClaim(exitCode: 1, stdout: "", stderr: "boom").error, "boom")
+    }
+
     // MARK: - Deletions log path (Fix 1, secondary check: `logs` sits under `data` in a real
     // envelope, not at the top level — the pre-fix code read the top level directly and always
     // missed it, silently falling back to the (today accidentally-correct) hardcoded path).

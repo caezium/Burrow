@@ -68,7 +68,39 @@ struct UninstallPreview: Equatable {
     let totalText: String?      // "239.6MB"
     let entries: [Entry]
 
+    /// Paths in `entries` that Burrow must NOT hand-delete, and the sentence saying why. Keyed by
+    /// the path exactly as it appears in `entries`.
+    ///
+    /// It exists because `items[]` alone is a trap. The engine emits an app's `.app` as `items[0]`
+    /// on `bundle.present` ALONE — no refusal check, deliberately, because the preview has to show
+    /// that the application is in scope even when it will not come away (`bundle.rs:584-591`). The
+    /// verdict lives one field over, in `apps[].application`, which this parser used to drop
+    /// entirely. So a bundle the engine refuses, and a Homebrew cask the engine will hand to
+    /// `brew uninstall --cask --zap`, both arrived in the review UI as an ordinary `.application`
+    /// row — auto-ticked — and the reviewed-subset path trashes ticked paths itself, with
+    /// `FileManager.trashItem`, without ever consulting the engine again.
+    ///
+    /// Two different lies, one shape: Burrow hand-deleting what a protection rail declined, and
+    /// Burrow trashing a cask's `.app` out from under Homebrew, whose Caskroom then still believes
+    /// it is installed.
+    var handRemovalRefusals: [String: String] = [:]
+
     var isEmpty: Bool { entries.isEmpty }
+
+    /// The paths that may be ticked when the review first opens: the auto-selected kinds, minus
+    /// anything Burrow is not allowed to remove by hand. One place, so the rule cannot be applied
+    /// at one call site and forgotten at another.
+    var defaultTicked: Set<String> {
+        Set(entries.filter { $0.kind.autoSelected && handRemovalRefusals[$0.path] == nil }
+                   .map(\.path))
+    }
+
+    /// Ticked paths Burrow must refuse to hand-delete — the rail `trashSubsets` fails closed on.
+    func refusedAmong(_ ticked: Set<String>) -> [(path: String, reason: String)] {
+        ticked.sorted().compactMap { path in
+            handRemovalRefusals[path].map { (path, $0) }
+        }
+    }
 
     // MARK: - Parsing
 
@@ -148,6 +180,23 @@ struct UninstallPreview: Equatable {
             guard let path = item["path"] as? String else { return nil }
             return Entry(path: path, kind: classify(path))
         }
-        return UninstallPreview(appName: nil, totalText: payload["total_human"] as? String, entries: entries)
+        // `apps[]` — the half of the payload this parser used to ignore. Decoded through
+        // `UninstallGuard.decodePlan` rather than re-read here, so the review UI and the pre-flight
+        // are looking at ONE decoding of the engine's verdict instead of two that can drift.
+        var refusals: [String: String] = [:]
+        for app in UninstallGuard.decodePlan(payload).apps {
+            let bundle = app.application
+            let path = bundle.path.isEmpty ? app.path : bundle.path
+            guard !path.isEmpty else { continue }
+            if let refusal = bundle.refusal, !refusal.isEmpty {
+                refusals[path] = refusal
+            } else if bundle.isHomebrewCask {
+                refusals[path] = String(
+                    format: NSLocalizedString("Homebrew installed %1$@ — it has to be removed with `brew uninstall --cask --zap %2$@`. Trashing the app on its own would leave Homebrew still believing it's installed.", comment: "uninstall review"),
+                    app.name, bundle.cask ?? app.name)
+            }
+        }
+        return UninstallPreview(appName: nil, totalText: payload["total_human"] as? String,
+                                entries: entries, handRemovalRefusals: refusals)
     }
 }
