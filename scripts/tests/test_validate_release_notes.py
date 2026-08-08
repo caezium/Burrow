@@ -1,4 +1,4 @@
-import plistlib
+import re
 import subprocess
 import tempfile
 import unittest
@@ -52,8 +52,14 @@ class ReleaseNotesValidationTests(unittest.TestCase):
         self.assertIn("exactly one top-level heading", result.stderr)
 
     def test_checked_in_release_notes_are_safe_for_sparkle(self) -> None:
-        with (ROOT / "macos" / "Resources" / "Info.plist").open("rb") as stream:
-            version = plistlib.load(stream)["CFBundleShortVersionString"]
+        project = (ROOT / "macos" / "project.yml").read_text(encoding="utf-8")
+        versions = re.findall(
+            r'^\s+MARKETING_VERSION: "([0-9]+\.[0-9]+\.[0-9]+)"$',
+            project,
+            re.MULTILINE,
+        )
+        self.assertEqual(len(versions), 1)
+        version = versions[0]
         result = subprocess.run(
             [
                 "python3",

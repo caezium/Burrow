@@ -56,8 +56,10 @@ jobs:
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Install checksum-pinned XcodeGen
+        run: |
+          bash ../scripts/fetch-xcodegen.sh "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       # Sentry is a vendored local framework (not SPM — its binary download
       # hangs xcodebuild). Fetch it before generating the project, or xcodegen
@@ -71,8 +73,10 @@ jobs:
       - name: Fetch vendored Sparkle framework
         run: bash ../scripts/fetch-sparkle.sh
 
-      - name: Generate project
-        run: xcodegen generate
+      - name: Verify deterministic generated metadata
+        run: |
+          python3 ../scripts/verify-project-generation.py \
+            --xcodegen "$(command -v xcodegen)" --check-git
 
       - name: Test
         run: |
@@ -99,8 +103,10 @@ jobs:
           sw_vers
           xcodebuild -version
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Install checksum-pinned XcodeGen
+        run: |
+          bash ../scripts/fetch-xcodegen.sh "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Fetch vendored Sentry framework
         run: bash ../scripts/fetch-sentry.sh

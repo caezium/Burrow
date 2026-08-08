@@ -429,7 +429,9 @@
 "Use Settings › Engine › Update external engine, then try again." = "前往“设置 › 引擎 › 更新外部引擎”，然后重试。";
 "Reinstall Burrow to restore the bundled engine." = "重新安装 Burrow 以恢复捆绑引擎。";
 "Lets `sudo` and admin prompts accept your fingerprint instead of a password, where macOS supports it. Configured via `mo touchid`; turning it on or off needs your password once." = "在 macOS 支持的情况下，让 `sudo` 和管理员提示接受你的指纹而非密码。通过 `mo touchid` 配置；开启或关闭需要输入一次密码。";
-"Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch." = "供仪表盘或 curl 使用的可选 REST 接口：在本机提供 /health、/info、/snapshot、/metrics。与上面的 MCP stdio 服务器相互独立；开关与端口更改在重新启动后生效。";
+"Authentication" = "身份验证";
+"Bearer token required" = "需要 Bearer 令牌";
+"Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Every request needs the per-install token; retrieve it locally with `defaults read dev.caezium.Burrow query_auth_token`. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch." = "供仪表盘或 curl 使用的可选 REST 接口：在本机提供 /health、/info、/snapshot、/metrics。每个请求都需要该安装实例的令牌；可在本机运行 `defaults read dev.caezium.Burrow query_auth_token` 获取。它与上面的 MCP stdio 服务器相互独立；开关与端口更改会在重新启动后生效。";
 "Applies immediately. When off, Burrow shows a Dock icon instead so it stays reachable — a Dock click reopens the window." = "立即生效。关闭后，Burrow 会改为显示 Dock 图标以便随时可达 — 点击 Dock 图标即可重新打开窗口。";
 
 /* Onboarding / Full Disk Access */

@@ -1,20 +1,4 @@
-"""The app and the privileged helper must ship the same version.
-
-The helper reports its own build over XPC and the client refuses to use a
-helper whose build doesn't match the app's — that check is deliberate, because
-a registered daemon outlives the app that installed it and a stale root helper
-is exactly the drift worth refusing.
-
-The cost of that design is a coupling: `macos/project.yml` spells the version
-twice, once for the app target and once for the helper target, and Xcode has
-no way to derive one from the other. Bump the app for a release and forget the
-helper and nothing fails loudly — the helper simply stops being used, every
-user silently falls back to the password-only prompt, and the feature dies
-quietly.
-
-That failure is invisible in the build, invisible in the tests, and invisible
-in the release artifact. So it gets caught here instead.
-"""
+"""The app and privileged helper inherit one version/build declaration."""
 
 import re
 import unittest
@@ -35,36 +19,22 @@ class HelperVersionSyncTests(unittest.TestCase):
     def test_project_file_exists(self) -> None:
         self.assertTrue(PROJECT.is_file(), f"missing {PROJECT}")
 
-    def test_build_number_matches_between_app_and_helper(self) -> None:
-        app = _scalar("CFBundleVersion")
-        helper = _scalar("CURRENT_PROJECT_VERSION")
+    def test_one_repository_wide_build_number(self) -> None:
+        self.assertEqual(len(_scalar("CURRENT_PROJECT_VERSION")), 1,
+                         "app and helper must inherit one build-number declaration")
 
-        self.assertEqual(len(app), 1, "expected exactly one app CFBundleVersion")
-        self.assertEqual(len(helper), 1, "expected exactly one helper CURRENT_PROJECT_VERSION")
-        self.assertEqual(
-            app[0],
-            helper[0],
-            "app CFBundleVersion and helper CURRENT_PROJECT_VERSION must match, "
-            "or HelperVersionSkew refuses the helper at runtime and every user "
-            "silently falls back to the password prompt",
-        )
+    def test_one_repository_wide_marketing_version(self) -> None:
+        self.assertEqual(len(_scalar("MARKETING_VERSION")), 1,
+                         "app and helper must inherit one marketing-version declaration")
 
-    def test_marketing_version_matches_between_app_and_helper(self) -> None:
-        app = _scalar("CFBundleShortVersionString")
-        helper = _scalar("MARKETING_VERSION")
-
-        self.assertEqual(len(app), 1, "expected exactly one app CFBundleShortVersionString")
-        self.assertEqual(len(helper), 1, "expected exactly one helper MARKETING_VERSION")
-        self.assertEqual(
-            app[0],
-            helper[0],
-            "app and helper marketing versions must match",
-        )
+    def test_app_plist_references_shared_build_settings(self) -> None:
+        self.assertEqual(_scalar("CFBundleVersion"), ["$(CURRENT_PROJECT_VERSION)"])
+        self.assertEqual(_scalar("CFBundleShortVersionString"), ["$(MARKETING_VERSION)"])
 
     def test_versions_are_plausible(self) -> None:
         """Guards against the regex silently matching nothing useful."""
-        build = _scalar("CFBundleVersion")[0]
-        marketing = _scalar("CFBundleShortVersionString")[0]
+        build = _scalar("CURRENT_PROJECT_VERSION")[0]
+        marketing = _scalar("MARKETING_VERSION")[0]
         self.assertTrue(build.isdigit(), f"build number should be an integer, got {build!r}")
         self.assertRegex(marketing, r"^\d+\.\d+(\.\d+)?$")
 

@@ -365,7 +365,9 @@ enum DiagnosticPrivacy {
         "api_key", "token", "authorization", "password", "secret",
         "file_path", "path", "url", "home", "home_dir", "username",
         "user", "email", "clipboard", "file_name", "contents",
-        "run_id", "distinct_id", "device_id"
+        "run_id", "distinct_id", "device_id", "account", "apikey", "argv",
+        "argument", "arguments", "command", "command_line", "cookie", "headers",
+        "payload", "session"
     ]
 
     private static let urlPattern = try! NSRegularExpression(
@@ -422,6 +424,37 @@ enum DiagnosticPrivacy {
             }
         }
         return sanitized
+    }
+
+    /// Preserve only bounded symbol/type labels. Path syntax, email/URL
+    /// redactions, control characters, and credential-shaped text fail closed.
+    static func safeDiagnosticLabel(_ value: String?) -> String? {
+        guard let value, !value.isEmpty, value.utf8.count <= 240,
+              redact(value) == value else { return nil }
+        let lowered = value.lowercased()
+        let sensitiveMarkers = [
+            "api_key", "apikey", "authorization", "bearer ", "password",
+            "secret", "sk-live", "token=", "token:", "x-api-key",
+        ]
+        guard !sensitiveMarkers.contains(where: lowered.contains) else { return nil }
+        let allowed = CharacterSet.alphanumerics.union(
+            CharacterSet(charactersIn: " _.$:+<>()[]{}?!,@#&'`~-=")
+        )
+        guard value.unicodeScalars.allSatisfy(allowed.contains) else { return nil }
+        return value
+    }
+
+    static func safeHexAddress(_ value: String?) -> String? {
+        guard let value,
+              value.range(of: #"^0x[0-9a-fA-F]{1,16}$"#, options: .regularExpression) != nil
+        else { return nil }
+        return value
+    }
+
+    static func safeDebugID(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let pattern = #"^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$"#
+        return value.range(of: pattern, options: .regularExpression) == nil ? nil : value
     }
 
     static func isSafeIdentifier(_ value: String) -> Bool {

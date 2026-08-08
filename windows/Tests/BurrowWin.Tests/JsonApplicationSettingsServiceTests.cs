@@ -26,6 +26,12 @@ public sealed class JsonApplicationSettingsServiceTests : IDisposable
         Assert.True(service.Current.HttpServerEnabled);
         Assert.True(service.Current.TrayIconEnabled);
         Assert.False(service.Current.McpDestructiveActionsEnabled);
+        Assert.True(service.Current.HttpServerAuthToken.Length >= 43);
+        Assert.True(File.Exists(_settingsPath),
+            "first-run credentials must be persisted for the stdio bridge");
+
+        var reloaded = new JsonApplicationSettingsService(_settingsPath);
+        Assert.Equal(service.Current.HttpServerAuthToken, reloaded.Current.HttpServerAuthToken);
     }
 
     [Fact]
@@ -41,6 +47,7 @@ public sealed class JsonApplicationSettingsServiceTests : IDisposable
             HistoryRetentionDays = 1000,
             HttpServerEnabled = false,
             HttpServerPort = 10,
+            HttpServerAuthToken = service.Current.HttpServerAuthToken,
             TrayIconEnabled = false,
             McpDestructiveActionsEnabled = true
         });
@@ -57,7 +64,22 @@ public sealed class JsonApplicationSettingsServiceTests : IDisposable
         Assert.Equal(saved.SamplingIntervalSeconds, reloaded.Current.SamplingIntervalSeconds);
         Assert.Equal(saved.HistoryRetentionDays, reloaded.Current.HistoryRetentionDays);
         Assert.Equal(saved.HttpServerPort, reloaded.Current.HttpServerPort);
+        Assert.Equal(saved.HttpServerAuthToken, reloaded.Current.HttpServerAuthToken);
         Assert.False(reloaded.Current.HttpServerEnabled);
+    }
+
+    [Fact]
+    public void Constructor_MigratesMissingCredentialWithoutChangingOtherSettings()
+    {
+        File.WriteAllText(_settingsPath,
+            "{\"SamplingIntervalSeconds\":42,\"HttpServerPort\":9444,\"HttpServerAuthToken\":\"\"}");
+
+        var service = new JsonApplicationSettingsService(_settingsPath);
+
+        Assert.Equal(42, service.Current.SamplingIntervalSeconds);
+        Assert.Equal(9444, service.Current.HttpServerPort);
+        Assert.True(service.Current.HttpServerAuthToken.Length >= 43);
+        Assert.Contains(service.Current.HttpServerAuthToken, File.ReadAllText(_settingsPath));
     }
 
     public void Dispose()

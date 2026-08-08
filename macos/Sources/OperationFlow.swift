@@ -28,6 +28,9 @@ struct ProcessSpec: Sendable, Equatable {
     var stdin: String?
     var elevated: Bool
     var timeout: TimeInterval?
+    var invokingUser: InvokingUserIdentity? = nil
+    var requiresCurrentBundle: Bool = false
+    var cleanupPlan: CleanupExecutionPlan? = nil
 }
 
 enum ProcessEvent: Sendable {
@@ -64,6 +67,7 @@ struct ToolOperation<Report: Sendable> {
     var gate: Gate = .none
     var elevated: Bool = false
     var timeout: TimeInterval? = nil
+    var cleanupPlan: CleanupExecutionPlan? = nil
     var reduce: @Sendable ([String]) -> Report
     /// Optional line → HUD detail mapping (clean/optimize use
     /// TaskReportText.line); nil shows the raw line.
@@ -130,6 +134,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
     /// Resolves the mo executable; elevated runs use trusted locations only
     /// (never a PATH lookup a user-writable directory could shadow).
     private let resolveMo: (_ elevated: Bool) -> String?
+    private let resolveInvokingUser: () throws -> InvokingUserIdentity
     private let center: OperationCenter
 
     private var task: Task<Void, Never>?
@@ -162,10 +167,12 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
          resolveMo: @escaping (_ elevated: Bool) -> String? = {
              $0 ? MoleCLI.trustedExecutable() : MoleCLI.findExecutable()
          },
+         resolveInvokingUser: @escaping () throws -> InvokingUserIdentity = InvokingUserIdentity.current,
          center: OperationCenter = .shared) {
         self.process = process
         self.hasFullDiskAccess = hasFullDiskAccess
         self.resolveMo = resolveMo
+        self.resolveInvokingUser = resolveInvokingUser
         self.center = center
     }
 
@@ -199,8 +206,24 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
             return
         }
 
+        let invokingUser: InvokingUserIdentity?
+        if op.elevated {
+            do { invokingUser = try resolveInvokingUser() }
+            catch {
+                state = .finished(.failed(error.localizedDescription))
+                return
+            }
+        } else {
+            invokingUser = nil
+        }
+        let requiresCurrentBundle: Bool
+        if case .mo = op.executable { requiresCurrentBundle = op.elevated }
+        else { requiresCurrentBundle = false }
         let spec = ProcessSpec(executable: executable, arguments: arguments,
-                               stdin: op.stdin, elevated: op.elevated, timeout: op.timeout)
+                               stdin: op.stdin, elevated: op.elevated, timeout: op.timeout,
+                               invokingUser: invokingUser,
+                               requiresCurrentBundle: requiresCurrentBundle,
+                               cleanupPlan: op.cleanupPlan)
         state = .running
         report = nil
         lastReportAt = .distantPast
@@ -359,10 +382,10 @@ struct SystemProcessPort: ProcessPort {
             func emit(_ s: String) {                       // streamQ only
                 for line in splitter.ingest(Ansi.strip(s)) { cont.yield(.line(line)) }
             }
-            func finish(_ code: Int32) {                   // streamQ only
+            func finish(_ code: Int32, appleScriptStderr: String = "") { // streamQ only
                 for line in splitter.flush() { cont.yield(.line(line)) }
                 cont.yield(Self.finalEvent(exitCode: code, elevated: spec.elevated,
-                                           sawOutput: splitter.sawAnyLine))
+                                           appleScriptStderr: appleScriptStderr))
                 cont.finish()
             }
 
@@ -375,20 +398,27 @@ struct SystemProcessPort: ProcessPort {
                 // assert so the unsupported combo fails loudly rather than
                 // silently dropping the input if someone wires it up later.
                 assert(spec.stdin == nil, "elevated runs don't support stdin")
-                let safe = spec.arguments.map { $0.filter(\.isLetter) }.joined(separator: "-")
-                let logPath = NSTemporaryDirectory() + "burrow-op-\(safe).log"
-                FileManager.default.createFile(atPath: logPath, contents: Data())
-                let script = MoleCLI.elevatedScript(executable: spec.executable,
-                                                    args: spec.arguments, redirectTo: logPath)
+                guard let invokingUser = spec.invokingUser,
+                      let command = try? ValidatedElevatedCommand.prepare(
+                        executable: spec.executable, invokingUser: invokingUser,
+                        requireCurrentBundle: spec.requiresCurrentBundle),
+                      let logSink = try? PrivilegedLogSink.make(),
+                      spec.cleanupPlan?.validateForLaunch() != false else {
+                    streamQ.async { finish(126) }
+                    return
+                }
+                let script = MoleCLI.elevatedScript(command: command,
+                                                    args: spec.arguments,
+                                                    logSink: logSink,
+                                                    cleanupPlan: spec.cleanupPlan)
                 t.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
                 t.arguments = ["-e", script]
                 t.standardOutput = outPipe
                 t.standardError = errPipe
 
-                let handle = FileHandle(forReadingAtPath: logPath)
-                logHandle = handle
-                let timer = Timer(timeInterval: 0.3, repeats: true) { _ in
-                    guard let h = handle else { return }
+                let timer = Timer(timeInterval: 0.05, repeats: true) { _ in
+                    if logHandle == nil { logHandle = logSink.openForReading() }
+                    guard let h = logHandle else { return }
                     let data = h.readDataToEndOfFile()
                     guard !data.isEmpty, let s = String(data: data, encoding: .utf8) else { return }
                     streamQ.async { emit(s) }
@@ -405,7 +435,11 @@ struct SystemProcessPort: ProcessPort {
                             if !data.isEmpty, let s = String(data: data, encoding: .utf8) { emit(s) }
                             try? h.close()
                         }
-                        finish(proc.terminationStatus)
+                        let stderr = String(
+                            decoding: errPipe.fileHandleForReading.readDataToEndOfFile(),
+                            as: UTF8.self)
+                        _ = outPipe.fileHandleForReading.readDataToEndOfFile()
+                        finish(proc.terminationStatus, appleScriptStderr: stderr)
                     }
                 }
             } else {
@@ -475,13 +509,12 @@ struct SystemProcessPort: ProcessPort {
         }
     }
 
-    /// The one final-event rule (issue #48's error taxonomy): an elevated
-    /// run that exits nonzero having produced NOTHING is a dismissed auth
-    /// prompt, not a command failure. The predicate itself lives in
-    /// `AuthCancel` so the streaming runner and the one-shot
-    /// `SystemPrivilegeBroker` share one source of truth. Pure → table-tested.
-    static func finalEvent(exitCode: Int32, elevated: Bool, sawOutput: Bool) -> ProcessEvent {
-        if AuthCancel.isAuthCancelled(elevated: elevated, exitCode: exitCode, sawOutput: sawOutput) {
+    /// Both streaming and one-shot elevation require AppleScript's canonical
+    /// -128 diagnostic. A silent nonzero root command remains a real failure.
+    static func finalEvent(exitCode: Int32, elevated: Bool,
+                           appleScriptStderr: String) -> ProcessEvent {
+        if AuthCancel.isAuthCancelled(elevated: elevated, exitCode: exitCode,
+                                      appleScriptStderr: appleScriptStderr) {
             return .authCancelled
         }
         return .exited(exitCode)

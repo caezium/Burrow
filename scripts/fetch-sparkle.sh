@@ -19,11 +19,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="2.9.4"
-# sha256 of Sparkle-2.9.4.tar.xz from the official GitHub release. Framework
-# and appcast tools both come through this single pin.
-SHA256="ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9"
-URL="https://github.com/sparkle-project/Sparkle/releases/download/${VERSION}/Sparkle-${VERSION}.tar.xz"
+VERSION="$(python3 scripts/release-input.py frameworks.sparkle.version)"
+# Framework and appcast tools both come through this single content pin.
+SHA256="$(python3 scripts/release-input.py frameworks.sparkle.sha256)"
+URL="$(python3 scripts/release-input.py frameworks.sparkle.url)"
 DEST="macos/vendor/Sparkle.framework"
 CACHE_DIR="macos/vendor/.sparkle-cache"
 ARCHIVE="$CACHE_DIR/Sparkle-${VERSION}.tar.xz"

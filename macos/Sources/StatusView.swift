@@ -607,7 +607,8 @@ struct ProcessCard: View {
                             ProcRow(p: p,
                                     pinned: model.pinned.contains(p.pid),
                                     energy: model.energies[p.pid],
-                                    onInspect: { inspecting = ProcessInspectTarget(proc: p) }) {
+                                    onInspect: { inspecting = ProcessInspectTarget(proc: p) },
+                                    onTermination: { model.invalidateProcess($0) }) {
                                 model.togglePin(p.pid)
                             }
                         }
@@ -728,6 +729,7 @@ struct ProcRow: View {
     /// Cumulative billed energy (nJ) — nil renders "—", never estimated.
     var energy: UInt64? = nil
     var onInspect: () -> Void = {}
+    var onTermination: (Int) -> Void = { _ in }
     let onPin: () -> Void
     @State private var hover = false
 
@@ -834,18 +836,12 @@ struct ProcRow: View {
     }
 
     private func confirmQuit(force: Bool) {
-        let alert = NSAlert()
-        alert.messageText = force
-            ? String(format: NSLocalizedString("Force kill %@?", comment: ""), p.name)
-            : String(format: NSLocalizedString("Quit %@?", comment: ""), p.name)
-        alert.informativeText = force
-            ? NSLocalizedString("SIGKILL ends it immediately — unsaved work in this process is lost.", comment: "")
-            : NSLocalizedString("Sends a polite quit (SIGTERM). The process may save and exit, or ignore it.", comment: "")
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: force ? NSLocalizedString("Force Kill", comment: "") : NSLocalizedString("Quit Process", comment: ""))
-        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
-        guard alert.runModalQuiet() == .alertFirstButtonReturn else { return }
-        if force { ProcessActions.forceKill(pid: p.pid) } else { ProcessActions.quit(pid: p.pid) }
+        ProcessActions.confirmTermination(
+            pid: p.pid,
+            displayName: p.name,
+            force: force,
+            onRefresh: { onTermination(p.pid) }
+        )
     }
 
     private var cpuBar: some View {
@@ -996,6 +992,7 @@ final class StatusModel: ObservableObject {
     /// Typed predicate filter over the table (PRD §α), e.g. "cpu > 20" or
     /// "name ~ chrome". Empty = no filter. Parsed once per change, not per row.
     @Published var filterText: String = ""
+    private var invalidatedProcessIDs: Set<Int> = []
 
     let db: DB
     private let live: LiveFeed
@@ -1069,6 +1066,7 @@ final class StatusModel: ObservableObject {
             }.value
         }
         for await v in feed.subscribeValues() {
+            invalidatedProcessIDs.removeAll()
             // Empty pass (spawn failure) keeps the table on the snapshot's
             // engine top five — recomputeSortedRows() falls back when empty.
             processes = v.processes
@@ -1098,6 +1096,11 @@ final class StatusModel: ObservableObject {
         recomputeSortedRows()
     }
 
+    func invalidateProcess(_ pid: Int) {
+        invalidatedProcessIDs.insert(pid)
+        recomputeSortedRows()
+    }
+
     /// Re-sort the table from the current inputs and publish the result into
     /// `sortedRows`. O(n log n) over a few hundred rows, but run once per
     /// real change instead of once per `ProcessCard.body` evaluation — the
@@ -1105,6 +1108,7 @@ final class StatusModel: ObservableObject {
     /// mutates a `@Published`); every caller already does.
     func recomputeSortedRows() {
         var procs = processes.isEmpty ? (snap?.topProcesses ?? []) : processes
+        procs.removeAll { invalidatedProcessIDs.contains($0.pid) }
         if let pred = ProcessFilter.parse(filterText) {
             procs = procs.filter {
                 ProcessFilter.matches(ProcessFilter.Record(

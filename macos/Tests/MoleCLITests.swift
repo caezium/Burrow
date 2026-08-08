@@ -8,6 +8,7 @@
 //
 
 import XCTest
+import Darwin
 @testable import Burrow
 
 final class MoleCLITests: XCTestCase {
@@ -106,60 +107,54 @@ final class MoleCLITests: XCTestCase {
     // the shell, then backslash/quote escaping for the AppleScript literal.
 
     func testElevatedScript_shellQuotesEveryArgument() {
-        let s = MoleCLI.elevatedScript(executable: "/tmp/m o/mo", args: ["clean", "--dry-run"])
+        let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/m o/mo"),
+                                       args: ["clean", "--dry-run"])
         XCTAssertTrue(s.hasPrefix("do shell script \""))
         XCTAssertTrue(s.hasSuffix("\" with administrator privileges"))
         XCTAssertTrue(s.contains("'/tmp/m o/mo' 'clean' '--dry-run'"))
     }
 
     func testElevatedScript_neutralizesShellMetacharacters() {
-        let s = MoleCLI.elevatedScript(executable: "/tmp/$(reboot)/mo", args: ["a;b", "`x`"])
+        let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/$(reboot)/mo"),
+                                       args: ["a;b", "`x`"])
         XCTAssertTrue(s.contains("'/tmp/$(reboot)/mo' 'a;b' '`x`'"),
                       "metacharacters must ride inert inside single quotes")
     }
 
     func testElevatedScript_escapesAppleScriptLiteralBreakers() {
         // A double quote in a path must not terminate the AppleScript string.
-        let s = MoleCLI.elevatedScript(executable: #"/tmp/he said "hi"/mo"#, args: [])
+        let s = MoleCLI.elevatedScript(command: fakeCommand(#"/tmp/he said "hi"/mo"#), args: [])
         XCTAssertFalse(s.contains(#"said "hi""#), "raw quote would break out of the literal")
         XCTAssertTrue(s.contains(#"said \"hi\""#))
         // A single quote goes through the shell's '\'' dance, whose
         // backslash must itself be AppleScript-escaped.
-        let s2 = MoleCLI.elevatedScript(executable: "/tmp/a'b/mo", args: [])
+        let s2 = MoleCLI.elevatedScript(command: fakeCommand("/tmp/a'b/mo"), args: [])
         XCTAssertTrue(s2.contains(#"'/tmp/a'\\''b/mo'"#))
     }
 
     func testElevatedScript_redirectsThroughQuotedLogPath() {
-        let s = MoleCLI.elevatedScript(executable: "/usr/local/bin/mo", args: ["clean"],
-                                       redirectTo: "/tmp/my log.txt")
-        XCTAssertTrue(s.contains("> '/tmp/my log.txt' 2>&1"))
+        let sink = try! PrivilegedLogSink.make(token: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        let s = MoleCLI.elevatedScript(command: fakeCommand("/usr/local/bin/mo"), args: ["clean"],
+                                       logSink: sink)
+        XCTAssertTrue(s.contains("> '\(sink.filePath)' 2>&1"))
     }
 
-    /// The invariant: an elevated run resolves its binary from the app bundle
-    /// or from a fixed absolute location, NEVER from a PATH lookup a
-    /// user-writable directory could shadow.
-    ///
-    /// The old version of this test listed only the three `mo` paths, so it
-    /// passed purely because CI and dev checkouts had no bundled engine. With
-    /// the engine actually bundled — which is what every release ships —
-    /// `trustedExecutable()` correctly returns the in-bundle copy first and
-    /// the assertion failed. It was checking a stale list, not the invariant.
+    /// Elevation may execute only the engine sealed inside Burrow.app.
+    /// Homebrew prefixes and PATH entries are mutable by the invoking user.
     func testTrustedExecutable_onlyEverReturnsKnownLocations() {
-        guard let resolved = MoleCLI.trustedExecutable() else {
-            return  // nothing installed in a trusted spot is a valid outcome
+        if let p = MoleCLI.trustedExecutable() {
+            XCTAssertEqual(p, MoleCLI.bundledExecutable(),
+                           "elevation must never use a Homebrew/user-mutable engine")
         }
+    }
 
-        let fixedLocations = [
-            "/opt/homebrew/bin/burrow-engine", "/usr/local/bin/burrow-engine",
-            "/opt/homebrew/bin/mo", "/usr/local/bin/mo", "/usr/bin/mo",
-        ]
-        if fixedLocations.contains(resolved) { return }
-
-        // Otherwise it must be the engine sealed inside our own app bundle.
-        XCTAssertEqual(resolved, MoleCLI.bundledExecutable(),
-                       "trusted lookup must be the bundled engine or a fixed absolute path, never PATH")
-        XCTAssertTrue(resolved.contains("/Burrow.app/Contents/Resources/engine/"),
-                      "the bundled engine must live inside the signed app bundle")
+    private func fakeCommand(_ path: String) -> ValidatedElevatedCommand {
+        let identity = PinnedFileIdentity(path: path, device: 1, inode: 2,
+                                          owner: 0, mode: UInt16(S_IFREG | 0o755))
+        let user = InvokingUserIdentity(uid: 501, username: "test",
+                                        canonicalHome: "/Users/test")
+        return ValidatedElevatedCommand(executable: identity, components: [],
+                                        invokingUser: user, signedBundlePath: nil)
     }
 
     func testRun_timesOutInsteadOfHanging() throws {

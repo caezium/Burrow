@@ -71,10 +71,12 @@ final class MCPServer {
     private let dec = JSONDecoder()
     private let enc = JSONEncoder()
     private let catalog: ToolCatalog
+    private let serverVersion: String
 
-    init(db: DB) {
+    init(db: DB, serverVersion: String = RuntimeEnvironment.current.appVersion) {
         self.db = db
         self.catalog = ToolCatalog(db: db)
+        self.serverVersion = serverVersion
         self.enc.outputFormatting = [.withoutEscapingSlashes]
     }
 
@@ -147,7 +149,7 @@ final class MCPServer {
                 "capabilities": ["tools": [String: Any]()],
                 "serverInfo": [
                     "name": "burrow",
-                    "version": "0.3.0",
+                    "version": self.serverVersion,
                 ],
             ],
         ]

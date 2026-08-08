@@ -161,6 +161,30 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(Store.queryServerPort, Int(QueryServer.defaultPort))
     }
 
+    func testQueryServerCredential_isRandomLookingAndStable() {
+        let first = Store.queryAuthToken
+        let second = Store.queryAuthToken
+        XCTAssertEqual(first, second)
+        XCTAssertGreaterThanOrEqual(first.utf8.count, 43,
+                                    "the loopback credential needs at least 256 random bits")
+        XCTAssertFalse(first.contains("/"), "credential must be safe in an HTTP header")
+        XCTAssertFalse(first.contains("+"), "credential must be safe in an HTTP header")
+    }
+
+    func testQueryServerCredential_rotatesLegacyShortToken() {
+        Store.d.set("legacy-short-token", forKey: "query_auth_token")
+        let migrated = Store.queryAuthToken
+        XCTAssertNotEqual(migrated, "legacy-short-token")
+        XCTAssertGreaterThanOrEqual(migrated.utf8.count, 43)
+    }
+
+    func testQueryServerCredential_rotatesHeaderUnsafeToken() {
+        Store.d.set(String(repeating: "a", count: 63) + "\n", forKey: "query_auth_token")
+        let migrated = Store.queryAuthToken
+        XCTAssertFalse(migrated.contains("\n"))
+        XCTAssertGreaterThanOrEqual(migrated.utf8.count, 43)
+    }
+
     func testLastHistoryRangeMinutes_defaultsToOneHour() {
         XCTAssertEqual(Store.lastHistoryRangeMinutes, 60)
     }

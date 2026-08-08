@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "swiftPackages": [],
+  "frameworks": {
+    "sentry": {
+      "version": "9.24.0",
+      "url": "https://github.com/getsentry/sentry-cocoa/releases/download/9.24.0/Sentry.xcframework.zip",
+      "sha256": "c530edd27b20f7c151e73d84a34ee03474e3d5ddab65ffe9d30366f80149668a"
+    },
+    "sparkle": {
+      "version": "2.9.4",
+      "url": "https://github.com/sparkle-project/Sparkle/releases/download/2.9.4/Sparkle-2.9.4.tar.xz",
+      "sha256": "ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9"
+    }
+  },
+  "tools": {
+    "xcodegen": {
+      "version": "2.46.0",
+      "url": "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip",
+      "sha256": "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+    },
+    "sentry-cli": {
+      "version": "3.6.2",
+      "url": "https://github.com/getsentry/sentry-cli/releases/download/3.6.2/sentry-cli-Darwin-universal",
+      "sha256": "d1339bc39b2c681496d70fc0cb5263a6f4ff93939de21b1f34cffb310643ef1c"
+    }
+  }
+}

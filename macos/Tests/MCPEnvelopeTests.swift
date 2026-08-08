@@ -19,7 +19,10 @@ final class MCPEnvelopeTests: XCTestCase {
         tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("burrow-envelope-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        server = MCPServer(db: try DB(at: tempDir.appendingPathComponent("burrow.db")))
+        server = MCPServer(
+            db: try DB(at: tempDir.appendingPathComponent("burrow.db")),
+            serverVersion: "9.8.7"
+        )
     }
 
     override func tearDown() {
@@ -60,6 +63,7 @@ final class MCPEnvelopeTests: XCTestCase {
         XCTAssertNotNil(result["protocolVersion"] as? String)
         let info = try XCTUnwrap(result["serverInfo"] as? [String: Any])
         XCTAssertEqual(info["name"] as? String, "burrow")
+        XCTAssertEqual(info["version"] as? String, "9.8.7")
     }
 
     func testToolsList_returnsTheCatalog() throws {

@@ -30,4 +30,19 @@ final class TuneUpTests: XCTestCase {
     func testReclaimable_sumsAllBytes() {
         XCTAssertEqual(TuneUp.reclaimable(recs), 3_500_000_000)
     }
+
+    func testConfirmationCopyMatchesPermanentCleanupAndRequiresSeparateConsent() {
+        let policy = TuneUp.ConfirmationPolicy(includesClean: true)
+        XCTAssertTrue(policy.notice.contains("permanently deletes"))
+        XCTAssertTrue(policy.notice.contains("do not go to the Trash"))
+        XCTAssertTrue(policy.notice.contains("cannot be recovered"))
+        XCTAssertFalse(policy.permitsRun(irreversibleConsent: false))
+        XCTAssertTrue(policy.permitsRun(irreversibleConsent: true))
+    }
+
+    func testMaintenanceOnlyDoesNotRequireIrreversibleConsent() {
+        let policy = TuneUp.ConfirmationPolicy(includesClean: false)
+        XCTAssertFalse(policy.requiresIrreversibleConsent)
+        XCTAssertTrue(policy.permitsRun(irreversibleConsent: false))
+    }
 }

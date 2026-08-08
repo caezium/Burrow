@@ -536,6 +536,27 @@ final class SoftwareModel: ObservableObject {
     @Published var previewLoading: Set<String> = []
     @Published var pathSelections: [String: Set<String>] = [:]
     private var started = false
+    private let appsLoader: () -> [InstalledApp]
+    private let recentDateLoader: (String) -> Date?
+    private let previewLoader: (String) -> UninstallPreview
+    private var loadGeneration = 0
+    private var recentGeneration = 0
+
+    init(
+        loadApps: (() -> [InstalledApp])? = nil,
+        lastUsedDate: ((String) -> Date?)? = nil,
+        loadPreview: ((String) -> UninstallPreview)? = nil
+    ) {
+        appsLoader = loadApps ?? { Self.fetch() }
+        recentDateLoader = lastUsedDate ?? { Self.lastUsedDate($0) }
+        previewLoader = loadPreview ?? { name in
+            let result = try? MoEngine.shared.capture(
+                MoCommand(target: .mo, args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120)
+            )
+            let text = Ansi.strip((result?.stdout ?? "") + "\n" + (result?.stderr ?? ""))
+            return UninstallPreview.parse(text.components(separatedBy: "\n"))
+        }
+    }
 
     /// `id` → lowercased name, rebuilt once per `apps` load. The search field
     /// filters on every keystroke, so doing the ICU case-folding
@@ -637,14 +658,15 @@ final class SoftwareModel: ObservableObject {
         guard previews[app.id] == nil, !previewLoading.contains(app.id) else { return }
         previewLoading.insert(app.id)
         let name = app.uninstallName
+        let path = app.path
+        let generation = loadGeneration
+        let loader = previewLoader
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            // EOF after the prompt makes --dry-run print the enumeration and exit.
-            let res = try? MoEngine.shared.capture(
-                MoCommand(target: .mo, args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120))
-            let text = Ansi.strip((res?.stdout ?? "") + "\n" + (res?.stderr ?? ""))
-            let preview = UninstallPreview.parse(text.components(separatedBy: "\n"))
+            let preview = loader(name)
             Task { @MainActor in
-                guard let self else { return }
+                guard let self,
+                      generation == self.loadGeneration,
+                      self.apps.contains(where: { $0.id == app.id && $0.path == path }) else { return }
                 self.previewLoading.remove(app.id)
                 self.previews[app.id] = preview
                 // Default ticks: the auto-selected kinds.
@@ -663,34 +685,55 @@ final class SoftwareModel: ObservableObject {
         guard !recentLoaded, !apps.isEmpty else { return }
         recentLoaded = true
         let snapshot = apps
+        recentGeneration &+= 1
+        let generation = recentGeneration
+        let inventoryGeneration = loadGeneration
+        let dateLoader = recentDateLoader
         DispatchQueue.global(qos: .userInitiated).async {
-            let dated = snapshot.map { a in
-                InstalledApp(id: a.id, name: a.name, bundleId: a.bundleId, source: a.source,
-                             uninstallName: a.uninstallName, path: a.path, sizeStr: a.sizeStr,
-                             sizeBytes: a.sizeBytes, lastUsed: Self.lastUsedDate(a.path))
+            let dates = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, dateLoader($0.path)) })
+            Task { @MainActor in
+                guard generation == self.recentGeneration,
+                      inventoryGeneration == self.loadGeneration else { return }
+                // The inventory may have refreshed metadata while dates were
+                // loading. Merge onto the live rows by stable app identity so
+                // a late date pass never resurrects an old snapshot.
+                self.apps = self.apps.map { app in
+                    guard let date = dates[app.id] else { return app }
+                    return InstalledApp(
+                        id: app.id, name: app.name, bundleId: app.bundleId, source: app.source,
+                        uninstallName: app.uninstallName, path: app.path, sizeStr: app.sizeStr,
+                        sizeBytes: app.sizeBytes, lastUsed: date
+                    )
+                }
             }
-            Task { @MainActor in self.apps = dated }
         }
     }
 
     func load() {
+        loadGeneration &+= 1
+        recentGeneration &+= 1
+        let generation = loadGeneration
+        let loader = appsLoader
         loading = true
         error = nil
         DispatchQueue.global(qos: .userInitiated).async {
-            let parsed = Self.fetch()
+            let parsed = loader()
             Task { @MainActor in
+                guard generation == self.loadGeneration else { return }
                 self.apps = parsed
                 self.loading = false
                 self.recentLoaded = false
                 self.previews = [:]
+                self.previewLoading = []
                 self.pathSelections = [:]
                 self.expandedAppID = nil
+                self.selected.formIntersection(parsed.map(\.id))
                 if self.sort == .recent { self.ensureRecentDates() }
             }
         }
     }
 
-    private static func fetch() -> [InstalledApp] {
+    private nonisolated static func fetch() -> [InstalledApp] {
         // `mo uninstall --list` computes a size for every installed app, which can
         // take a while on a full /Applications — the client gives it room.
         let apps = MoleClient.listApps()
@@ -707,7 +750,7 @@ final class SoftwareModel: ObservableObject {
     /// querying metadata for every installed app woke `mds`/`mdworker` and spiked
     /// CPU/energy. Filesystem dates are close enough for the Recent sort and cost
     /// nothing — no metadata server, no indexing.
-    private static func lastUsedDate(_ path: String) -> Date? {
+    private nonisolated static func lastUsedDate(_ path: String) -> Date? {
         let url = URL(fileURLWithPath: path)
         if let vals = try? url.resourceValues(forKeys: [.contentAccessDateKey, .contentModificationDateKey]) {
             return vals.contentAccessDate ?? vals.contentModificationDate

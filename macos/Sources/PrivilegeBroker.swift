@@ -76,14 +76,21 @@ protocol PrivilegeBroker: Sendable {
 /// body — only the result classification is new (auth-cancel is now named,
 /// not folded into a bare nonzero exit).
 struct SystemPrivilegeBroker: PrivilegeBroker {
-    /// osascript's exit status when the user dismisses the auth dialog: it
-    /// surfaces AppleScript's `userCanceledErr` (-128) as a process exit of
-    /// 1, but the canonical signal is the error number. We classify on
-    /// "produced no output" the way the streaming path does, so a genuine
-    /// command failure (which DID run and print) is never mistaken for a
-    /// cancel.
     func openElevated(executable: String, args: [String]) -> ElevatedOutcome {
-        let script = MoleCLI.elevatedScript(executable: executable, args: args)
+        let command: ValidatedElevatedCommand
+        do {
+            let user = try InvokingUserIdentity.current()
+            let bundle = InvokingUserIdentity.canonicalPath(Bundle.main.bundleURL.path)
+            let canonicalExecutable = InvokingUserIdentity.canonicalPath(executable)
+            let isBundled = bundle.flatMap { root in
+                canonicalExecutable.map { $0.hasPrefix(root + "/") }
+            } ?? false
+            command = try ValidatedElevatedCommand.prepare(
+                executable: executable, invokingUser: user, requireCurrentBundle: isBundled)
+        } catch {
+            return .launchFailed
+        }
+        let script = MoleCLI.elevatedScript(command: command, args: args)
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         task.arguments = ["-e", script]
@@ -94,12 +101,12 @@ struct SystemPrivilegeBroker: PrivilegeBroker {
             try task.run()
             // Drain both pipes to EOF before reaping so neither can fill and
             // wedge osascript; small output, so a blocking read is fine.
-            let out = outPipe.fileHandleForReading.readDataToEndOfFile()
+            _ = outPipe.fileHandleForReading.readDataToEndOfFile()
             let err = errPipe.fileHandleForReading.readDataToEndOfFile()
             task.waitUntilExit()
             let code = task.terminationStatus
-            let sawOutput = !out.isEmpty || !err.isEmpty
-            return AuthCancel.outcome(exitCode: code, sawOutput: sawOutput)
+            let stderr = String(decoding: err, as: UTF8.self)
+            return AuthCancel.outcome(exitCode: code, appleScriptStderr: stderr)
         } catch {
             return .launchFailed
         }
@@ -108,10 +115,10 @@ struct SystemPrivilegeBroker: PrivilegeBroker {
 
 // MARK: - Auth-cancel classification (the one engine rule)
 
-/// The single auth-cancel rule, shared by every elevated path (issue #48's
-/// "one error taxonomy"). An elevated run that exits nonzero having produced
-/// NOTHING is a dismissed auth prompt, not a command failure — output proves
-/// the command actually ran under root. Pure → exhaustively table-tested.
+/// The single auth-cancel rule, shared by every elevated path.  osascript's
+/// process status is only `1`; the canonical AppleScript signal is the
+/// `userCanceledErr` number -128 in its diagnostic.  Silence is not evidence
+/// of cancellation: a root command can fail without printing anything.
 ///
 /// `SystemProcessPort.finalEvent` (the streaming runner) and
 /// `SystemPrivilegeBroker.openElevated` (the one-shot runner) both route
@@ -121,13 +128,21 @@ enum AuthCancel {
     /// `elevated` is always true at the one-shot call site (every run here is
     /// elevated) but kept as a parameter so the streaming path — which spawns
     /// plain runs too — shares the exact same predicate.
-    static func isAuthCancelled(elevated: Bool, exitCode: Int32, sawOutput: Bool) -> Bool {
-        elevated && exitCode != 0 && !sawOutput
+    static func isAuthCancelled(elevated: Bool, exitCode: Int32,
+                                appleScriptStderr: String) -> Bool {
+        guard elevated, exitCode != 0 else { return false }
+        return appleScriptStderr
+            .components(separatedBy: .newlines)
+            .contains { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return trimmed.hasSuffix("(-128)")
+            }
     }
 
     /// Classify a one-shot elevated result (always elevated here).
-    static func outcome(exitCode: Int32, sawOutput: Bool) -> ElevatedOutcome {
-        if isAuthCancelled(elevated: true, exitCode: exitCode, sawOutput: sawOutput) {
+    static func outcome(exitCode: Int32, appleScriptStderr: String) -> ElevatedOutcome {
+        if isAuthCancelled(elevated: true, exitCode: exitCode,
+                           appleScriptStderr: appleScriptStderr) {
             return .authCancelled
         }
         return .exited(exitCode)

@@ -35,7 +35,7 @@ struct TuneUpView: View {
     var isActive: Bool = true
 
     private enum Phase { case scanning, results, running, done }
-    private enum SafeStep { case clean, optimize }
+    private enum SafeStep { case clean(CleanupExecutionPlan), optimize }
 
     @State private var phase: Phase = .scanning
     @State private var includeClean = true
@@ -44,6 +44,8 @@ struct TuneUpView: View {
     @State private var runIndex = 0
     @State private var stepSummaries: [String] = []
     @State private var showPlan = false
+    @State private var irreversibleConsent = false
+    @State private var pendingCleanupPlan: CleanupExecutionPlan?
 
     private var accent: Color { Tool.tuneup.accent }
 
@@ -187,7 +189,7 @@ struct TuneUpView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 Eyebrow(text: "Run the safe set", glyph: "wand.and.stars", color: accent)
-                Text(NSLocalizedString("Reclaim space and refresh maintenance in a single pass — everything here is reversible.", comment: ""))
+                Text(NSLocalizedString("Reclaim space and refresh maintenance in a single pass. Cache cleaning permanently deletes the reviewed cache files; maintenance runs separately.", comment: ""))
                     .font(Brand.sans(12.5)).foregroundStyle(Brand.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -201,7 +203,7 @@ struct TuneUpView: View {
                                 : String(format: NSLocalizedString("%d areas", comment: ""), snap.optimizeAreas.count))
 
                 HStack(spacing: 12) {
-                    PillButton(title: "Run the safe set") { showPlan = true }
+                    PillButton(title: "Review run") { prepareRunReview() }
                         .disabled(!canRun(snap))
                         .opacity(canRun(snap) ? 1 : 0.4)
                     Text(NSLocalizedString("Each step asks for your password.", comment: ""))
@@ -376,7 +378,7 @@ struct TuneUpView: View {
             guard runIndex < runSteps.count else { return NSLocalizedString("Working…", comment: "") }
             let pos = runIndex + 1, n = runSteps.count
             switch runSteps[runIndex] {
-            case .clean:    return String(format: NSLocalizedString("Cleaning… (%d of %d)", comment: ""), pos, n)
+            case .clean(_): return String(format: NSLocalizedString("Cleaning… (%d of %d)", comment: ""), pos, n)
             case .optimize: return String(format: NSLocalizedString("Running maintenance… (%d of %d)", comment: ""), pos, n)
             }
         case .done:
@@ -405,7 +407,10 @@ struct TuneUpView: View {
     private func runSafeSet() {
         guard let snap = model.snapshot else { return }
         var steps: [SafeStep] = []
-        if includeClean, !snap.cleanableText.isEmpty { steps.append(.clean) }
+        if includeClean, !snap.cleanableText.isEmpty {
+            guard let pendingCleanupPlan, pendingCleanupPlan.validateForLaunch() else { return }
+            steps.append(.clean(pendingCleanupPlan))
+        }
         if includeOptimize, !snap.optimizeAreas.isEmpty { steps.append(.optimize) }
         guard !steps.isEmpty else { return }
         runSteps = steps
@@ -417,10 +422,11 @@ struct TuneUpView: View {
 
     private func startStep(_ step: SafeStep) {
         switch step {
-        case .clean:
-            flow.start(.moleStream(["clean"], elevated: true,
-                                   label: NSLocalizedString("Tune-Up: cleaning", comment: ""),
-                                   notifyOnEnd: true))
+        case .clean(let plan):
+            flow.start(ToolOperation(
+                label: NSLocalizedString("Tune-Up: cleaning reviewed caches", comment: ""),
+                executable: .path("/usr/bin/find"), arguments: [], elevated: true,
+                cleanupPlan: plan, reduce: { parseTaskReport($0) }, notifyOnEnd: true))
         case .optimize:
             flow.start(.moleStream(["optimize"], elevated: true,
                                    label: NSLocalizedString("Tune-Up: optimizing", comment: ""),
@@ -494,6 +500,7 @@ struct TuneUpView: View {
         let snap = model.snapshot
         let willClean = includeClean && !(snap?.cleanableText.isEmpty ?? true)
         let willOptimize = includeOptimize && !(snap?.optimizeAreas.isEmpty ?? true)
+        let policy = TuneUp.ConfirmationPolicy(includesClean: willClean)
         return VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(NSLocalizedString("Tune-up plan", comment: ""))
@@ -505,26 +512,78 @@ struct TuneUpView: View {
                 if willClean {
                     planRow(glyph: "sparkles", title: NSLocalizedString("Clean caches & junk", comment: ""),
                             value: snap?.cleanableText ?? "")
+                    if let plan = pendingCleanupPlan {
+                        VStack(alignment: .leading, spacing: 3) {
+                            ForEach(plan.items.prefix(6), id: \.identity.path) { item in
+                                Text(item.identity.path)
+                                    .font(Brand.mono(9)).foregroundStyle(Brand.textTertiary)
+                                    .lineLimit(1).truncationMode(.middle)
+                            }
+                            if plan.items.count > 6 {
+                                Text(String(format: NSLocalizedString("and %d more reviewed paths", comment: ""), plan.items.count - 6))
+                                    .font(Brand.mono(9)).foregroundStyle(Brand.textTertiary)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                    }
                 }
                 if willOptimize {
                     planRow(glyph: "wand.and.stars", title: NSLocalizedString("Run maintenance", comment: ""),
                             value: String(format: NSLocalizedString("%d areas", comment: ""), snap?.optimizeAreas.count ?? 0))
                 }
             }
-            Text(NSLocalizedString("Files go to the Trash, not deleted. Each elevated step asks for your password separately.", comment: ""))
+            Text(NSLocalizedString(policy.notice, comment: ""))
                 .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
+            if policy.requiresIrreversibleConsent {
+                Toggle(isOn: $irreversibleConsent) {
+                    Text(NSLocalizedString("I understand the clean step permanently deletes these cache files.", comment: ""))
+                        .font(Brand.sans(12)).foregroundStyle(Brand.textSecondary)
+                }
+                .toggleStyle(.checkbox)
+            }
             HStack(spacing: 12) {
                 Spacer()
                 Button(NSLocalizedString("Cancel", comment: "")) { showPlan = false }
                     .buttonStyle(.plain).foregroundStyle(Brand.textSecondary)
-                PillButton(title: "Run") { showPlan = false; runSafeSet() }
+                PillButton(title: willClean ? "Permanently clean and run" : "Run") {
+                    showPlan = false
+                    runSafeSet()
+                }
+                .disabled(!policy.permitsRun(irreversibleConsent: irreversibleConsent))
+                .opacity(policy.permitsRun(irreversibleConsent: irreversibleConsent) ? 1 : 0.4)
             }
         }
         .padding(24)
         .frame(width: 420)
         .background(Brand.nearBlack)
         .environment(\.colorScheme, .dark)
+    }
+
+    private func prepareRunReview() {
+        irreversibleConsent = false
+        pendingCleanupPlan = nil
+        if includeClean, !(model.snapshot?.cleanableText.isEmpty ?? true) {
+            do {
+                guard let list = CleanList.loadLive() else {
+                    throw NSError(domain: "dev.caezium.burrow.cleanup", code: 1,
+                                  userInfo: [NSLocalizedDescriptionKey: "The engine did not produce a valid itemized cleanup preview."])
+                }
+                let user = try InvokingUserIdentity.current()
+                let snapshot = try CleanupSnapshot.capture(
+                    list: list, approvedRootURLs: CleanupSnapshot.approvedRoots(for: user))
+                let paths = snapshot.items.map(\.identity.path)
+                pendingCleanupPlan = try snapshot.plan(selectedPaths: paths)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = NSLocalizedString("The cleanup preview can't be authorized", comment: "")
+                alert.informativeText = String(format: NSLocalizedString("Nothing will run until you rescan. (%@)", comment: ""), error.localizedDescription)
+                alert.alertStyle = .warning
+                alert.runModalQuiet()
+                return
+            }
+        }
+        showPlan = true
     }
 
     private func planRow(glyph: String, title: String, value: String) -> some View {
