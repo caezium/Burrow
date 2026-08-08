@@ -85,6 +85,7 @@ struct SettingsView: View {
     /// The compatibility guard suppresses the menu-bar item on some macOS
     /// builds. Without this the toggle read as on while doing nothing (#319).
     @State private var menuBarSuppressed: Bool = false
+    @State private var menuBarSuppressionReason: LaunchRecoveryReason? = nil
     @State private var menuBarItems: [MenuBarItem] = Store.menuBarItems
     /// Which widget's options panel is expanded in the editor (one at a time).
     @State private var expandedMenuBarItem: UUID?
@@ -166,6 +167,7 @@ struct SettingsView: View {
             loadHelperStatus()
             whitelistPatterns = MoleWhitelist.live.patterns()
             menuBarSuppressed = AppDelegate.shared?.menuBarSuppressedByCompatibilityGuard ?? false
+            menuBarSuppressionReason = AppDelegate.shared?.menuBarSuppressionReason
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             fdaGranted = Privacy.hasFullDiskAccess()
@@ -459,6 +461,28 @@ struct SettingsView: View {
     /// Shown in place of a toggle that cannot act. The recovery alert fires
     /// once per macOS build, so without this the only lasting explanation for
     /// a missing menu-bar icon was a checked switch that did nothing (#319).
+    /// Only the macOS-build guard is about macOS. The other reason is "a
+    /// previous launch of Burrow ended badly while the item was being
+    /// created", and telling that user to update macOS sends them to do
+    /// something that cannot help.
+    private var menuBarNoticeTitle: String {
+        switch menuBarSuppressionReason {
+        case .macOS27Beta4:
+            return NSLocalizedString("Menu bar item paused on this macOS build", comment: "")
+        default:
+            return NSLocalizedString("Menu bar item paused after a failed start", comment: "")
+        }
+    }
+
+    private var menuBarNoticeBody: String {
+        switch menuBarSuppressionReason {
+        case .macOS27Beta4:
+            return NSLocalizedString("Creating it could freeze system input on this build, so Burrow runs from the Dock instead. It returns automatically once you update macOS.", comment: "")
+        default:
+            return NSLocalizedString("Burrow stopped unexpectedly while creating the menu bar item last time, so it started from the Dock instead. It returns on its own the next time Burrow runs normally.", comment: "")
+        }
+    }
+
     private var menuBarCompatibilityNotice: some View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -466,9 +490,9 @@ struct SettingsView: View {
                 .foregroundStyle(Brand.amber)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(NSLocalizedString("Menu bar item paused on this macOS build", comment: ""))
+                Text(menuBarNoticeTitle)
                     .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.textPrimary)
-                Text(NSLocalizedString("Creating it could freeze system input on this build, so Burrow runs from the Dock instead. It returns automatically once you update macOS.", comment: ""))
+                Text(menuBarNoticeBody)
                     .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
