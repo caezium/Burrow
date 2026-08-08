@@ -332,6 +332,11 @@ final class QueryServer {
         let path = request.target.split(separator: "?", maxSplits: 1).first.map(String.init) ?? ""
         guard path == "/events" else { return false }
 
+        guard self.rateLimiter.allow() else {
+            self.send(Self.errorResponse(429, "rate limit exceeded",
+                                         headers: ["Retry-After: 60"]), on: conn)
+            return true
+        }
         let rejection: Response?
         switch Self.authorize(header, token: self.authToken, port: self.port) {
         case .allowed: rejection = nil
@@ -356,11 +361,6 @@ final class QueryServer {
             self.send(Self.errorResponse(400, "GET requests cannot include a body"), on: conn)
             return true
         }
-        guard self.rateLimiter.allow() else {
-            self.send(Self.errorResponse(429, "rate limit exceeded",
-                                         headers: ["Retry-After: 60"]), on: conn)
-            return true
-        }
         let head = "HTTP/1.1 200 OK\r\n"
             + "Content-Type: text/event-stream; charset=utf-8\r\n"
             + "Cache-Control: no-store\r\nConnection: keep-alive\r\n\r\n"
@@ -378,6 +378,14 @@ final class QueryServer {
             Response(statusCode: status, body: s, contentType: Self.jsonContentType)
         }
 
+        // Counted BEFORE authorization, not after. Limiting only the requests
+        // that already presented the right credential leaves rejected ones
+        // unbounded — so an attacker gets unlimited guesses at the token and
+        // unlimited parse work out of the same socket, which is the load this
+        // limiter exists to cap.
+        guard self.rateLimiter.allow() else {
+            return Self.errorResponse(429, "rate limit exceeded", headers: ["Retry-After: 60"])
+        }
         let authorization = Self.authorize(raw, token: self.authToken, port: self.port)
         switch authorization {
         case .unauthorized:
@@ -398,9 +406,6 @@ final class QueryServer {
         }
         guard Self.requestBodyIsAllowed(request) else {
             return Self.errorResponse(400, "GET requests cannot include a body")
-        }
-        guard self.rateLimiter.allow() else {
-            return Self.errorResponse(429, "rate limit exceeded", headers: ["Retry-After: 60"])
         }
         let target = request.target
         let split = target.split(separator: "?", maxSplits: 1)

@@ -266,7 +266,11 @@ public sealed class LocalMcpServerService : BackgroundService
             context.Request.HttpMethod,
             context.Request.ContentType,
             context.Request.ContentLength64);
-        if (decision == LocalRequestDecision.Allowed && !_requestRateLimiter.Allow())
+        // Counted for EVERY request that reaches the handler, not only the ones
+        // that already authenticated. Limiting after the credential check
+        // leaves rejected requests unbounded, which hands an attacker unlimited
+        // guesses at the token out of the same loopback socket.
+        if (!_requestRateLimiter.Allow())
         {
             decision = LocalRequestDecision.RateLimited;
         }

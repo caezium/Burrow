@@ -613,20 +613,38 @@ struct HelperResponse: Codable, Equatable, Sendable {
 /// authorization buys exactly one root operation.
 ///
 /// Bounded on purpose: a daemon can stay resident for weeks, and an unbounded
-/// set would grow with every request a client cared to send. Eviction is
-/// oldest-first, which only ever forgets ancient IDs — the practical replay
-/// window (seconds, between authenticating and executing) is always covered.
+/// set would grow with every request a client cared to send.
+///
+/// Eviction is by AGE, not by count. A count-bounded FIFO looks equivalent but
+/// isn't: a caller could send `capacity` fresh IDs to push an older one out of
+/// the set and then replay that older payload, turning the bound itself into
+/// the bypass. Age-based eviction cannot be driven that way — an ID is only
+/// forgotten once it is far older than any authorization could still be valid
+/// for, so the practical replay window is always covered no matter how much
+/// traffic arrives. The count cap remains as a memory backstop, but it only
+/// discards entries that are ALREADY expired.
 final class HelperReplayGuard: @unchecked Sendable {
+    /// Comfortably longer than the gap between authenticating and executing,
+    /// and longer than the authorization credential's own ten-second life, so
+    /// nothing still-usable is ever forgotten.
+    static let retention: TimeInterval = 3600
+
     private let capacity: Int
-    private var order: [String] = []
+    private let retention: TimeInterval
+    private let now: () -> Date
+    private var order: [(id: String, at: Date)] = []
     private var seen: Set<String> = []
     private let lock = NSLock()
 
-    init(capacity: Int = 512) {
+    init(capacity: Int = 8192,
+         retention: TimeInterval = HelperReplayGuard.retention,
+         now: @escaping () -> Date = Date.init) {
         self.capacity = max(1, capacity)
+        self.retention = max(1, retention)
+        self.now = now
     }
 
-    /// Number of IDs currently remembered. Never exceeds `capacity`.
+    /// Number of IDs currently remembered.
     var count: Int {
         lock.lock(); defer { lock.unlock() }
         return seen.count
@@ -635,13 +653,26 @@ final class HelperReplayGuard: @unchecked Sendable {
     /// `true` the first time an ID is presented, `false` for every repeat.
     func admit(_ operationID: String) -> Bool {
         lock.lock(); defer { lock.unlock() }
+        let moment = now()
+        evictExpired(before: moment.addingTimeInterval(-retention))
         guard !seen.contains(operationID) else { return false }
         seen.insert(operationID)
-        order.append(operationID)
-        while order.count > capacity {
-            seen.remove(order.removeFirst())
-        }
+        order.append((operationID, moment))
         return true
+    }
+
+    /// Drop only entries older than the retention window. If a flood pushes
+    /// past `capacity` while every entry is still fresh, the guard keeps them
+    /// — refusing to forget a replayable ID matters more than the memory,
+    /// and the entries are short strings.
+    private func evictExpired(before cutoff: Date) {
+        guard let first = order.first, first.at <= cutoff || order.count > capacity else { return }
+        var index = 0
+        while index < order.count, order[index].at <= cutoff {
+            seen.remove(order[index].id)
+            index += 1
+        }
+        if index > 0 { order.removeFirst(index) }
     }
 }
 
