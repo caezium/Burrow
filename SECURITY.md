@@ -19,11 +19,11 @@ the ZIP again, matches its SHA and dSYM UUIDs, and repeats strict signing,
 notarization-ticket, designated-requirement, Gatekeeper, and Sparkle checks
 before publication. An existing public release is immutable. The external
 Homebrew cask is updated only after that verified artifact exists, and its live
-0.11.2 definition preserves quarantine so Gatekeeper can verify the stapled
+0.12.0 definition preserves quarantine so Gatekeeper can verify the stapled
 ticket. Maintainer setup and release verification are in the [macOS signing
 runbook](docs/macos-signing.md).
 
-The published 0.11.2 app was independently checked after download: its bundle
+The published 0.12.0 app was independently checked after download: its bundle
 identifier is `dev.caezium.Burrow`, its Developer ID Team ID is `YGSM2722TZ`,
 the hardened runtime and secure timestamp are present, `stapler validate`
 succeeds, and Gatekeeper reports `source=Notarized Developer ID`.
@@ -48,7 +48,7 @@ copies still use an ad-hoc signature so macOS can bind Full Disk Access to a
 coherent development identity, but that is not a substitute for Developer ID
 or notarization and changes between builds.
 
-## Privileged (admin) operations — no background helper
+## Privileged (admin) operations
 
 This is the part people rightly scrutinize in cleaners. Burrow's model:
 
