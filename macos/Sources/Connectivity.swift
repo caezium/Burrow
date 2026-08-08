@@ -215,18 +215,47 @@ enum Connectivity {
     /// Run a fix with a single admin prompt. Blocks on the auth dialog — call
     /// off the main thread. Returns a user-facing result.
     static func run(_ fix: Fix, interface: String?) -> (ok: Bool, message: String) {
-        let broker = SystemPrivilegeBroker()
+        let iface = interface ?? "en0"
         switch fix {
         case .flushDNS:
-            let r = broker.openElevated(executable: "/bin/sh",
-                                        args: ["-c", "dscacheutil -flushcache; killall -HUP mDNSResponder"])
-            return classify(r, ok: NSLocalizedString("DNS cache flushed.", comment: ""),
+            return classify(elevate(.flushDNS),
+                            ok: NSLocalizedString("DNS cache flushed.", comment: ""),
                             fail: NSLocalizedString("Couldn't flush the DNS cache.", comment: ""))
         case .renewDHCP:
-            let iface = interface ?? "en0"
-            let r = broker.openElevated(executable: "/usr/sbin/ipconfig", args: ["set", iface, "DHCP"])
-            return classify(r, ok: String(format: NSLocalizedString("Renewed the DHCP lease on %@.", comment: ""), iface),
+            return classify(elevate(.renewDHCP, interface: iface),
+                            ok: String(format: NSLocalizedString("Renewed the DHCP lease on %@.", comment: ""), iface),
                             fail: NSLocalizedString("Couldn't renew the DHCP lease.", comment: ""))
+        }
+    }
+
+    /// Prefer the privileged helper, fall back to the osascript broker.
+    ///
+    /// Through the helper these are TYPED operations: the daemon holds the
+    /// argv and the interface name is validated against the machine's real
+    /// interfaces before it reaches a process. That removes the root shell
+    /// this path used to need — flushing DNS was previously
+    /// `/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"`
+    /// running as root, with a command string for the shell to parse.
+    ///
+    /// The fallback keeps that older shape, unchanged, for anyone who hasn't
+    /// installed the helper.
+    private static func elevate(_ operation: HelperOperation,
+                                interface: String? = nil) -> ElevatedOutcome {
+        let client = PrivilegedHelperClient.shared
+        if client.registrationStatus == .enabled, client.versionSkew() == .matched {
+            return client.run(operation: operation, interface: interface) { _ in }
+        }
+
+        let broker = SystemPrivilegeBroker()
+        switch operation {
+        case .flushDNS:
+            return broker.openElevated(executable: "/bin/sh",
+                                       args: ["-c", "dscacheutil -flushcache; killall -HUP mDNSResponder"])
+        case .renewDHCP:
+            return broker.openElevated(executable: "/usr/sbin/ipconfig",
+                                       args: ["set", interface ?? "en0", "DHCP"])
+        default:
+            return .launchFailed
         }
     }
 

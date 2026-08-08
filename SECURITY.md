@@ -73,11 +73,21 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
     other processes, `allow-root: false` stops the root helper satisfying it
     by itself), and each operation ID is served at most once so a captured
     request cannot be replayed.
-  - **It cannot be asked to run anything else.** The helper accepts three
-    typed operations — scan, clean, optimize — and derives the command line
-    itself. There is no field in its API for a path, an argument, a shell
-    string, or an executable, so a caller that fully controls the message
-    still cannot express "run this".
+  - **It cannot be asked to run anything else.** The helper accepts six typed
+    operations — scan, clean, optimize, the optimize preview, flush DNS, and
+    renew DHCP — and derives every command line itself. There is no field in
+    its API for a path, a shell string, or an executable, so a caller that
+    fully controls the message still cannot express "run this".
+  - **The only value a caller supplies** is the network interface name for
+    renew DHCP. It is checked twice: against a strict `en0`-shaped pattern,
+    and against the interfaces that actually exist on the machine. A
+    well-formed name for an interface that isn't there is refused.
+  - **No shell.** The helper runs the bundled engine, plus exactly three
+    system tools by absolute path (`/usr/bin/dscacheutil`, `/usr/bin/killall`,
+    `/usr/sbin/ipconfig`), each as a separate process with fixed arguments.
+    This is stricter than the path it replaces: flushing DNS previously
+    elevated `/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"`,
+    handing a command string to a root shell.
   - **Only Burrow can talk to it.** The daemon pins its callers to Burrow's
     bundle identifier and signing team via the XPC connection's code-signing
     requirement, so another local process cannot reach it or use it to raise

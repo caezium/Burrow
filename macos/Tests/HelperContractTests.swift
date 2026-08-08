@@ -32,10 +32,121 @@ final class HelperContractTests: XCTestCase {
     // args". A new case here is a deliberate security decision, so the count
     // is pinned — adding one without updating this test is a failing build.
 
-    func testOperationSet_isExactlyScanCleanOptimize() {
+    func testOperationSet_isPinned() {
         XCTAssertEqual(Set(HelperOperation.allCases.map(\.rawValue)),
-                       ["scan", "clean", "optimize"],
+                       ["scan", "clean", "optimize", "optimizeScan", "flushDNS", "renewDHCP"],
                        "the helper's operation set is closed; widening it is a security decision")
+    }
+
+    // MARK: - The closed executable set
+    //
+    // Most operations drive the bundled engine. Two drive system tools, and
+    // those are the only non-engine binaries the daemon may ever run.
+
+    func testSystemTools_areAbsolutePathsInSystemDirectories() {
+        for tool in HelperSystemTool.all {
+            XCTAssertTrue(tool.hasPrefix("/usr/bin/") || tool.hasPrefix("/usr/sbin/"),
+                          "\(tool) must be an absolute path in a system directory")
+            XCTAssertFalse(tool.contains(".."), "no traversal in a root-executed path")
+        }
+    }
+
+    func testSystemTools_setIsExactlyTheThreeNeeded() {
+        XCTAssertEqual(HelperSystemTool.all,
+                       ["/usr/bin/dscacheutil", "/usr/bin/killall", "/usr/sbin/ipconfig"])
+    }
+
+    /// No step may ever name a shell. The path this replaces elevated
+    /// `/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"`,
+    /// which put a command string in front of a root shell parser.
+    func testSteps_neverInvokeAShell() {
+        let shells = ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/env"]
+        for operation in HelperOperation.allCases {
+            for step in operation.steps(interface: "en0") {
+                if case .system(let path) = step.executable {
+                    XCTAssertFalse(shells.contains(path), "\(operation) must not run a shell")
+                    XCTAssertTrue(HelperSystemTool.all.contains(path),
+                                  "\(path) is outside the permitted executable set")
+                }
+            }
+        }
+    }
+
+    func testSteps_flushDNSIsTwoSeparateProcesses() {
+        let steps = HelperOperation.flushDNS.steps(interface: nil)
+        XCTAssertEqual(steps, [
+            HelperStep(executable: .system("/usr/bin/dscacheutil"), arguments: ["-flushcache"]),
+            HelperStep(executable: .system("/usr/bin/killall"), arguments: ["-HUP", "mDNSResponder"]),
+        ])
+    }
+
+    func testSteps_renewDHCPCarriesOnlyTheInterface() {
+        XCTAssertEqual(HelperOperation.renewDHCP.steps(interface: "en1"),
+                       [HelperStep(executable: .system("/usr/sbin/ipconfig"),
+                                   arguments: ["set", "en1", "DHCP"])])
+    }
+
+    /// Without an interface there is nothing safe to run, so the operation
+    /// produces no steps at all rather than guessing a default.
+    func testSteps_renewDHCPWithoutAnInterfaceRunsNothing() {
+        XCTAssertTrue(HelperOperation.renewDHCP.steps(interface: nil).isEmpty)
+    }
+
+    func testSteps_engineOperationsUseTheBundledEngine() {
+        for operation in [HelperOperation.scan, .clean, .optimize, .optimizeScan] {
+            let steps = operation.steps(interface: nil)
+            XCTAssertEqual(steps.count, 1)
+            XCTAssertEqual(steps.first?.executable, .bundledEngine)
+        }
+    }
+
+    // MARK: - Interface names (the only caller value that reaches argv)
+
+    func testInterfaceName_acceptsRealBSDNames() {
+        for name in ["en0", "en1", "utun3", "bridge0", "awdl0", "llw0", "anpi11"] {
+            XCTAssertTrue(HelperRequest.isPlausibleInterfaceName(name), "\(name) is a real interface shape")
+        }
+    }
+
+    /// Everything that isn't a bare BSD interface name is refused rather than
+    /// escaped — there is no legitimate interface containing a path, a flag,
+    /// a space, or a shell metacharacter, so rejecting removes the question.
+    func testInterfaceName_rejectsAnythingElse() {
+        for hostile in ["", "e", "en", "0", "/usr/sbin/ipconfig", "en0 DHCP", "en0;rm -rf /",
+                        "en0\n", "en0\u{0}", "--flag", "en0/../../x", "EN0", "en0.1",
+                        "e0n1", String(repeating: "en", count: 20) + "0"] {
+            XCTAssertFalse(HelperRequest.isPlausibleInterfaceName(hostile),
+                           "must reject \(hostile.debugDescription)")
+        }
+    }
+
+    func testValidate_renewDHCPRequiresARealInterface() {
+        func request(_ name: String?) -> HelperRequest {
+            HelperRequest(operation: .renewDHCP, operationID: UUID().uuidString,
+                          clientBuild: "23", networkInterface: name)
+        }
+        // Well-formed AND present on the machine.
+        XCTAssertNil(request("en0").validate(expectedBuild: "23", liveInterfaces: ["en0", "lo0"]))
+        // Well-formed but not a real interface here — still refused.
+        XCTAssertEqual(request("en9").validate(expectedBuild: "23", liveInterfaces: ["en0"]),
+                       .invalidInterface)
+        // Malformed.
+        XCTAssertEqual(request("en0;id").validate(expectedBuild: "23", liveInterfaces: ["en0"]),
+                       .invalidInterface)
+        // Missing entirely.
+        XCTAssertEqual(request(nil).validate(expectedBuild: "23", liveInterfaces: ["en0"]),
+                       .invalidInterface)
+    }
+
+    /// An interface on an operation that takes none means the caller and the
+    /// contract disagree. Refused, not ignored.
+    func testValidate_rejectsAnInterfaceOnOperationsThatTakeNone() {
+        for operation in [HelperOperation.clean, .optimize, .scan, .optimizeScan, .flushDNS] {
+            let request = HelperRequest(operation: operation, operationID: UUID().uuidString,
+                                        clientBuild: "23", networkInterface: "en0")
+            XCTAssertEqual(request.validate(expectedBuild: "23", liveInterfaces: ["en0"]),
+                           .invalidInterface, "\(operation) takes no interface")
+        }
     }
 
     // MARK: - Fixed argv (the client contributes nothing)
@@ -49,14 +160,20 @@ final class HelperContractTests: XCTestCase {
         XCTAssertEqual(HelperOperation.scan.engineArguments, ["clean", "--dry-run"])
         XCTAssertEqual(HelperOperation.clean.engineArguments, ["clean"])
         XCTAssertEqual(HelperOperation.optimize.engineArguments, ["optimize"])
+        XCTAssertEqual(HelperOperation.optimizeScan.engineArguments, ["optimize", "--dry-run"])
+        // The network fixes don't drive the engine at all.
+        XCTAssertNil(HelperOperation.flushDNS.engineArguments)
+        XCTAssertNil(HelperOperation.renewDHCP.engineArguments)
     }
 
-    func testEngineArguments_neverEmptyAndNeverShellMetacharacters() {
-        // argv goes to posix_spawn, never a shell — but a stray metacharacter
-        // would still signal that someone started templating strings in here.
+    /// argv goes to posix_spawn, never a shell — but a stray metacharacter
+    /// anywhere in here would signal that someone started templating strings
+    /// into a command that runs as root.
+    func testArguments_neverEmptyAndNeverShellMetacharacters() {
         for op in HelperOperation.allCases {
-            XCTAssertFalse(op.engineArguments.isEmpty, "\(op) must resolve to a real command")
-            for token in op.engineArguments {
+            let steps = op.steps(interface: "en0")
+            XCTAssertFalse(steps.isEmpty, "\(op) must resolve to at least one command")
+            for token in steps.flatMap(\.arguments) {
                 XCTAssertFalse(token.contains(where: { ";|&`$<>\n\0".contains($0) }),
                                "\(op) argv token \(token) carries shell/NUL metacharacters")
             }

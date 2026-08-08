@@ -185,16 +185,52 @@ final class HelperOperationRunner: @unchecked Sendable {
     private let lock = NSLock()
     private var running: [String: Process] = [:]
 
-    /// Run `operation`'s fixed argv and block until it exits, forwarding whole
-    /// lines to `emit` as they arrive.
+    /// Run every step of `operation` in order, stopping at the first failure,
+    /// and return the exit status of the last step attempted.
+    ///
+    /// Multi-step exists because flushing DNS is genuinely two commands
+    /// (`dscacheutil -flushcache` then `killall -HUP mDNSResponder`). Running
+    /// them as two spawns rather than one `/bin/sh -c` string is the point:
+    /// no root shell, nothing to parse, nothing to inject into.
     func run(operation: HelperOperation,
              operationID: String,
+             interface: String?,
              enginePath: String,
              emit: @escaping (String) -> Void) -> Int32 {
+        var last: Int32 = 0
+        for step in operation.steps(interface: interface) {
+            let path: String
+            switch step.executable {
+            case .bundledEngine:
+                path = enginePath
+            case .system(let systemPath):
+                // Re-check against the closed set at the moment of use, not
+                // only where the step was built. A future edit that
+                // constructs a step elsewhere still cannot introduce a new
+                // binary for root to run.
+                guard HelperSystemTool.all.contains(systemPath) else {
+                    helperTrace("refused: step names an executable outside the permitted set")
+                    return 126
+                }
+                path = systemPath
+            }
+            last = runOne(path: path, arguments: step.arguments,
+                          operationID: operationID, emit: emit)
+            guard last == 0 else { break }
+        }
+        return last
+    }
+
+    private func runOne(path: String,
+                        arguments: [String],
+                        operationID: String,
+                        emit: @escaping (String) -> Void) -> Int32 {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: enginePath)
-        // Fixed argv, built from the enum. No caller input reaches this array.
-        process.arguments = operation.engineArguments
+        process.executableURL = URL(fileURLWithPath: path)
+        // Fixed argv from the typed step. The only caller-derived value that
+        // can appear here is an interface name already validated against the
+        // machine's real interface list.
+        process.arguments = arguments
 
         // A deliberately minimal environment. The child is root, so anything
         // inherited from the launchd context that could redirect a lookup
@@ -299,6 +335,26 @@ final class HelperService: NSObject, BurrowHelperProtocol {
 
     var isIdle: Bool { !runner.hasWork }
 
+    /// Every network interface that actually exists on this machine.
+    ///
+    /// `renewDHCP` carries the only caller-supplied value that reaches argv,
+    /// so a plausible-looking name is not enough — it must name a real
+    /// interface. `getifaddrs` is the kernel's own list, so there is nothing
+    /// for a caller to influence.
+    static func liveInterfaceNames() -> Set<String> {
+        var addresses: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&addresses) == 0, let first = addresses else { return [] }
+        defer { freeifaddrs(addresses) }
+
+        var names: Set<String> = []
+        var cursor: UnsafeMutablePointer<ifaddrs>? = first
+        while let current = cursor {
+            names.insert(String(cString: current.pointee.ifa_name))
+            cursor = current.pointee.ifa_next
+        }
+        return names
+    }
+
     /// This helper's own build, baked into the binary's embedded Info.plist
     /// section at compile time — so it reports what it IS, not what the app
     /// bundle around it currently claims to be.
@@ -331,7 +387,11 @@ final class HelperService: NSObject, BurrowHelperProtocol {
             return respond(.rejected(.malformedPayload))
         }
 
-        if let rejection = request.validate(expectedBuild: Self.build) {
+        // The interface name is checked against the machine's REAL interfaces,
+        // not just a character shape — a well-formed name for an interface
+        // that doesn't exist is still refused.
+        if let rejection = request.validate(expectedBuild: Self.build,
+                                            liveInterfaces: HelperService.liveInterfaceNames()) {
             helperTrace("request refused: \(rejection.rawValue)")
             return respond(.rejected(rejection))
         }
@@ -356,7 +416,8 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         }
         helperTrace("authorized: \(decision.diagnostic)")
 
-        // Gate 5 — execution. Our own signed engine, fixed argv.
+        // Gate 5 — execution. Our own signed engine, or a system tool from the
+        // closed set; fixed argv either way.
         guard let enginePath = HelperEngine.bundledEnginePath() else {
             helperTrace("engine unavailable: no bundled engine at Contents/Resources/engine/mole")
             return respond(.engineUnavailable)
@@ -372,6 +433,7 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         let operationID = request.operationID
         let code = runner.run(operation: request.operation,
                               operationID: operationID,
+                              interface: request.networkInterface,
                               enginePath: enginePath) { line in
             client?.helperDidEmit(line: line, operationID: operationID)
         }

@@ -232,6 +232,7 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     /// Blocking — call off the main thread. It blocks for as long as the user
     /// takes at the authentication prompt plus as long as the operation runs.
     func run(operation: HelperOperation,
+             interface: String? = nil,
              onLine: @escaping (String) -> Void) -> ElevatedOutcome {
         // Ask the user to authenticate. This is the prompt — raised here, in a
         // real session, so SecurityAgent can offer Touch ID. The daemon then
@@ -256,7 +257,8 @@ final class PrivilegedHelperClient: @unchecked Sendable {
         // guarantees the optimizer can't drop it early; ordinary scoping is
         // not a guarantee.
         return withExtendedLifetime(granted) {
-            send(payload: granted.externalForm, operation: operation, onLine: onLine)
+            send(payload: granted.externalForm, operation: operation,
+                 interface: interface, onLine: onLine)
         }
     }
 
@@ -265,10 +267,12 @@ final class PrivilegedHelperClient: @unchecked Sendable {
     /// where the local happens to go out of scope.
     private func send(payload authorization: Data,
                       operation: HelperOperation,
+                      interface: String?,
                       onLine: @escaping (String) -> Void) -> ElevatedOutcome {
         let request = HelperRequest(operation: operation,
                                     operationID: UUID().uuidString,
-                                    clientBuild: Self.appBuild)
+                                    clientBuild: Self.appBuild,
+                                    networkInterface: interface)
         guard let payload = try? JSONEncoder().encode(request) else { return .launchFailed }
 
         let connection = makeConnection()
