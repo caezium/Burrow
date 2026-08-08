@@ -434,9 +434,16 @@ struct SystemProcessPort: ProcessPort {
             // silently drop lines — an intermittent CI failure that surfaced as
             // [] or ["a"] instead of ["a","b"].)
             let streamQ = DispatchQueue(label: "dev.caezium.burrow.opflow.stream")
-            var tailTimer: Timer?
-            var logHandle: FileHandle?
+            var tailTimer: DispatchSourceTimer?
             var killTimer: DispatchSourceTimer?
+            // Both of these belong to streamQ ALONE. The tail timer fires on
+            // the main run loop, so if it opened, read, or closed the handle
+            // itself it would be racing the termination handler doing the same
+            // three things — including a read against a descriptor the other
+            // side had already closed. The timer therefore only schedules work
+            // onto streamQ; ownership never leaves it.
+            var logHandle: FileHandle?      // streamQ only
+            var tailFinished = false        // streamQ only
 
             func emit(_ s: String) {                       // streamQ only
                 for line in splitter.ingest(Ansi.strip(s)) { cont.yield(.line(line)) }
@@ -498,23 +505,49 @@ struct SystemProcessPort: ProcessPort {
                 t.standardOutput = outPipe
                 t.standardError = errPipe
 
-                let timer = Timer(timeInterval: 0.05, repeats: true) { _ in
+                // The tail poll runs on streamQ, NOT the main run loop.
+                //
+                // The root shell unlinks its sink from a trap on exit and only
+                // gives the app a short fixed window to get a descriptor first.
+                // Polling from the main run loop meant a busy or modal UI could
+                // miss that window entirely and lose the whole transcript — and
+                // a clean whose output vanished used to render as a successful
+                // run that freed nothing. A background queue cannot be starved
+                // by the UI, and it puts every access to `logHandle` on the one
+                // queue that owns it.
+                let tail = DispatchSource.makeTimerSource(queue: streamQ)
+                tail.schedule(deadline: .now(), repeating: .milliseconds(50))
+                tail.setEventHandler {
+                    // A tick can still be in flight after the final tail has
+                    // been read and the handle closed; serving it would read a
+                    // closed descriptor.
+                    guard !tailFinished else { return }
                     if logHandle == nil { logHandle = logSink.openForReading() }
                     guard let h = logHandle else { return }
                     let data = h.readDataToEndOfFile()
-                    guard !data.isEmpty, let s = String(data: data, encoding: .utf8) else { return }
-                    streamQ.async { emit(s) }
+                    guard !data.isEmpty else { return }
+                    // Lossy decode, never the failable initializer: a read can
+                    // end mid-UTF-8-sequence, and `String(data:encoding:)`
+                    // returning nil there used to discard the whole chunk —
+                    // losing entire lines of a privileged run's transcript.
+                    emit(String(decoding: data, as: UTF8.self))
                 }
-                RunLoop.main.add(timer, forMode: .common)
-                tailTimer = timer
+                tail.resume()
+                tailTimer = tail
 
                 t.terminationHandler = { proc in
                     killTimer?.cancel()
                     streamQ.async {
+                        tail.cancel()
+                        // Claim the handle before the final read so a timer
+                        // tick queued behind this block cannot touch it.
+                        tailFinished = true
+                        if logHandle == nil { logHandle = logSink.openForReading() }
                         if let h = logHandle {                  // last tail of the log
                             let data = h.readDataToEndOfFile()
-                            if !data.isEmpty, let s = String(data: data, encoding: .utf8) { emit(s) }
+                            if !data.isEmpty { emit(String(decoding: data, as: UTF8.self)) }
                             try? h.close()
+                            logHandle = nil
                         }
                         let stderr = String(
                             decoding: errPipe.fileHandleForReading.readDataToEndOfFile(),
@@ -537,7 +570,7 @@ struct SystemProcessPort: ProcessPort {
             }
 
             cont.onTermination = { @Sendable _ in
-                DispatchQueue.main.async { tailTimer?.invalidate() }
+                tailTimer?.cancel()
                 if t.isRunning { t.terminate() }
             }
 
@@ -573,7 +606,8 @@ struct SystemProcessPort: ProcessPort {
                         group.enter()
                         DispatchQueue.global(qos: .utility).async {
                             while case let d = fh.availableData, !d.isEmpty {
-                                if let s = String(data: d, encoding: .utf8) { streamQ.sync { emit(s) } }
+                                let s = String(decoding: d, as: UTF8.self)
+                                streamQ.sync { emit(s) }
                             }
                             group.leave()
                         }

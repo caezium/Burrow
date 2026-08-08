@@ -347,6 +347,25 @@ struct BundleUpdateIdentity: Equatable, Sendable {
         return nil
     }
 
+    /// Anchored at Apple, so a certificate chain we do not control cannot
+    /// satisfy the check.
+    ///
+    /// Without this, validity is judged against the code's OWN designated
+    /// requirement, which a self-signed bundle satisfies trivially — and the
+    /// only other thing pinned here is the team identifier, a plain string in
+    /// the certificate's subject OU that a self-signed certificate is free to
+    /// claim. `anchor apple generic` is what makes that string mean something,
+    /// because only Apple issues chains that satisfy it. `HelperCodeRequirement`
+    /// already pins its nested engine this way; the updater has to match, or
+    /// the SHA-512 from the feed is the only thing standing between a swapped
+    /// app and an install.
+    static let appleAnchoredRequirement: SecRequirement? = {
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString("anchor apple generic" as CFString,
+                                             [], &requirement) == errSecSuccess else { return nil }
+        return requirement
+    }()
+
     static func read(appURL: URL) -> BundleUpdateIdentity? {
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode) == errSecSuccess,
@@ -354,7 +373,11 @@ struct BundleUpdateIdentity: Equatable, Sendable {
         // Validate every architecture in a universal app. Checking only the
         // host architecture could otherwise admit a tampered alternate slice.
         let checkAllArchitectures = SecCSFlags(rawValue: 1 << 0)
-        let valid = SecStaticCodeCheckValidity(staticCode, checkAllArchitectures, nil) == errSecSuccess
+        // A requirement we could not build is treated as "refuse", never as
+        // "skip the check" — the nil-requirement call is the weak one.
+        let valid = appleAnchoredRequirement.map {
+            SecStaticCodeCheckValidity(staticCode, checkAllArchitectures, $0) == errSecSuccess
+        } ?? false
         var information: CFDictionary?
         let signingInformation: UInt32 = 0x2
         guard SecCodeCopySigningInformation(

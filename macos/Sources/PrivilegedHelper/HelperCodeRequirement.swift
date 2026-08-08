@@ -30,12 +30,19 @@
 //  the evaluation happens in the kernel against the real peer, with no window
 //  between check and use.
 //
-//  ── Nothing personal is hardcoded ───────────────────────────────────────
+//  ── The team is discovered, not compiled in ─────────────────────────────
 //  The requirement is assembled at RUNTIME from the daemon's own signing
 //  information: the helper asks what team signed IT, and demands the caller be
-//  the Burrow app signed by that same team. No team ID, certificate, or
-//  developer name appears in this repository, and the check keeps working
-//  across certificate renewals.
+//  the Burrow app signed by that same team. Nothing here is baked in, so the
+//  check keeps working across certificate renewals and an ad-hoc local build
+//  needs no special case.
+//
+//  The release workflow does pin the expected team as `EXPECTED_TEAM_ID` so a
+//  misconfigured signing identity fails the build rather than shipping. That is
+//  a build-time assertion about which certificate we meant to use; a team ID is
+//  public (it is in every signature we ship) and is not a secret. This file
+//  still learns it at runtime, and must keep doing so — hardcoding it here
+//  would break the ad-hoc development path and add a second place to update.
 //
 
 import Foundation

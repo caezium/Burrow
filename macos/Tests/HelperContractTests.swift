@@ -418,18 +418,37 @@ final class HelperContractTests: XCTestCase {
         }
     }
 
-    /// The guard is bounded so a long-lived daemon can't be grown without
-    /// limit by a client that just keeps sending fresh IDs. Eviction is
-    /// oldest-first, and the CURRENT id is always remembered — so the replay
-    /// window can only ever shrink for ancient ids, never for a live one.
-    func testReplayGuard_isBoundedAndEvictsOldestFirst() {
+    /// A flood of fresh IDs must NOT be able to push an older one back out of
+    /// the set. Count-bounded FIFO eviction looks equivalent to age-based
+    /// eviction until you notice that the attacker chooses the traffic: send
+    /// `capacity` fresh IDs and the ID you wanted to replay is forgotten, which
+    /// turns the memory bound into the replay bypass it was meant to prevent.
+    func testReplayGuard_floodOfFreshIDsCannotEvictAStillReplayableID() {
         let guardian = HelperReplayGuard(capacity: 3)
-        let ids = (0..<4).map { _ in UUID().uuidString }
-        for id in ids { XCTAssertTrue(guardian.admit(id)) }
+        let victim = UUID().uuidString
+        XCTAssertTrue(guardian.admit(victim))
+        for _ in 0..<64 { XCTAssertTrue(guardian.admit(UUID().uuidString)) }
 
-        XCTAssertTrue(guardian.admit(ids[0]), "the oldest ID was evicted once capacity was exceeded")
-        XCTAssertFalse(guardian.admit(ids[3]), "the newest ID is still remembered")
-        XCTAssertEqual(guardian.count, 3, "the guard never grows past its capacity")
+        XCTAssertFalse(guardian.admit(victim),
+                       "an ID inside the retention window must never become replayable")
+    }
+
+    /// Memory is still bounded, just by time rather than by count: entries are
+    /// forgotten once they are far older than any authorization could still be
+    /// valid for, so nothing usable is ever discarded.
+    func testReplayGuard_forgetsOnlyEntriesPastTheRetentionWindow() {
+        var now = Date(timeIntervalSince1970: 1_000_000)
+        let guardian = HelperReplayGuard(capacity: 8, retention: 60, now: { now })
+        let old = UUID().uuidString
+        let recent = UUID().uuidString
+        XCTAssertTrue(guardian.admit(old))
+        now = now.addingTimeInterval(59)
+        XCTAssertTrue(guardian.admit(recent))
+
+        // Cross the window for `old` but not for `recent`.
+        now = now.addingTimeInterval(2)
+        XCTAssertFalse(guardian.admit(recent), "a still-fresh ID stays remembered")
+        XCTAssertTrue(guardian.admit(old), "an expired ID is forgotten and its slot reclaimed")
     }
 
     // MARK: - Response encoding
