@@ -15,8 +15,8 @@
 //  holds the `any ProcessPort` to drive its own reduce/notify/auth-cancel loop,
 //  so the facade hands it the production port rather than the stream. The
 //  one-shot ELEVATED path is NOT on the facade — it stays in
-//  `MoleCLI.runElevatedClassified` (trusted-location resolution + the shared
-//  `PrivilegeBroker`), the path production has always used.
+//  `SystemPrivilegeBroker.openElevated` (see `Connectivity.run`), the path
+//  production has always used.
 //
 //  Behavior is preserved exactly: a `capture(_:)` call produces the same argv,
 //  stdin, environment, timeout, and result fields that `MoleCLI.run` did, and
@@ -129,7 +129,11 @@ final class MoEngine {
 
     init(processPort: MoleProcessPort = SystemMoleProcess(),
          locator: MoLocator = SystemMoLocator(),
-         streamPort: ProcessPort = SystemProcessPort(),
+         // Elevated streaming runs prefer the privileged helper when it is
+         // registered, approved, and build-matched; everything else — and any
+         // elevated run the helper doesn't recognise — falls through to the
+         // osascript port unchanged. See `PrivilegeRoute`.
+         streamPort: ProcessPort = HelperAwareProcessPort(),
          makePTY: @escaping @Sendable () -> PTYPort = { PTYTask() }) {
         self.processPort = processPort
         self.locator = locator

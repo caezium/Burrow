@@ -186,6 +186,34 @@ final class MoleCLITests: XCTestCase {
         XCTAssertEqual(MoleCLI.parseMoBanner("mole version 2.0.10 (build 7)")?.name, "mole")
     }
 
+    func testEngineUpdatePolicy_keepsSignedBundleImmutable() {
+        let bundled = "/Applications/Burrow.app/Contents/Resources/burrow"
+        XCTAssertEqual(
+            MoleCLI.engineUpdatePolicy(executable: bundled, bundledExecutable: bundled),
+            .bundledWithApp
+        )
+        XCTAssertEqual(
+            MoleCLI.engineUpdatePolicy(executable: "/opt/homebrew/bin/mo", bundledExecutable: nil),
+            .external
+        )
+        XCTAssertEqual(
+            MoleCLI.engineUpdatePolicy(executable: nil, bundledExecutable: nil),
+            .unavailable
+        )
+        XCTAssertEqual(
+            MoleCLI.engineUpdateInstruction(for: .bundledWithApp),
+            "Update Burrow to get the current bundled engine."
+        )
+        XCTAssertEqual(
+            MoleCLI.engineUpdateInstruction(for: .external),
+            "Use Settings › Engine › Update external engine, then try again."
+        )
+        XCTAssertEqual(
+            MoleCLI.engineUpdateInstruction(for: .unavailable),
+            "Reinstall Burrow to restore the bundled engine."
+        )
+    }
+
     // MARK: - Capture runner (MoleCLI.run)
     //
     // The subprocess boundary is exercised with real tiny system binaries
@@ -266,12 +294,33 @@ final class MoleCLITests: XCTestCase {
         XCTAssertTrue(s.contains("> '/tmp/my log.txt' 2>&1"))
     }
 
+    /// The invariant: an elevated run resolves its binary from the app bundle
+    /// or from a fixed absolute location, NEVER from a PATH lookup a
+    /// user-writable directory could shadow.
+    ///
+    /// The old version of this test listed only the three `mo` paths, so it
+    /// passed purely because CI and dev checkouts had no bundled engine. With
+    /// the engine actually bundled — which is what every release ships —
+    /// `trustedExecutable()` correctly returns the in-bundle copy first and
+    /// the assertion failed. It was checking a stale list, not the invariant.
     func testTrustedExecutable_onlyEverReturnsKnownLocations() {
-        if let p = MoleCLI.trustedExecutable() {
-            XCTAssertTrue(["/opt/homebrew/bin/mo", "/usr/local/bin/mo", "/usr/bin/mo"].contains(p),
-                          "trusted lookup must never come from PATH")
+        guard let resolved = MoleCLI.trustedExecutable() else {
+            return  // nothing installed in a trusted spot is a valid outcome
         }
-        // nil (mo not installed in a trusted spot) is also a valid outcome.
+
+        let fixedLocations = [
+            "/opt/homebrew/bin/burrow-engine", "/usr/local/bin/burrow-engine",
+            "/opt/homebrew/bin/mo", "/usr/local/bin/mo", "/usr/bin/mo",
+        ]
+        if fixedLocations.contains(resolved) { return }
+
+        // Otherwise it must be the engine sealed inside our own app bundle. The path is
+        // Resources/burrow, not the pre-repoint Resources/engine/mole — one binary now does
+        // the digging AND speaks the envelope, staged by bundle-burrow.sh.
+        XCTAssertEqual(resolved, MoleCLI.bundledExecutable(),
+                       "trusted lookup must be the bundled engine or a fixed absolute path, never PATH")
+        XCTAssertTrue(resolved.contains("/Burrow.app/Contents/Resources/burrow"),
+                      "the bundled engine must live inside the signed app bundle")
     }
 
     func testRun_timesOutInsteadOfHanging() throws {

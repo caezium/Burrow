@@ -54,14 +54,6 @@ final class StatusBarController: NSObject, NSMenuDelegate, NSPopoverDelegate {
     /// Latest metric-row image, cached so the runner timer can composite
     /// `frame + row` without re-rendering the row every frame (prepend mode).
     private var cachedRowImage: NSImage?
-    /// A small accent dot shown over the glyph when a Burrow self-update is
-    /// available (driven by AppUpdate via .burrowUpdateAvailability).
-    private let updateDot = NSView()
-    private var updateObserver: NSObjectProtocol?
-    /// Driven by the .burrowUpdateAvailability payload — avoids reading the
-    /// @MainActor AppUpdate singleton from this (nonisolated) controller.
-    private var updateAvailable = false
-
     init(db: DB, producer: SnapshotProducer, delegate: AppDelegate) {
         self.db = db
         self.producer = producer
@@ -95,28 +87,8 @@ final class StatusBarController: NSObject, NSMenuDelegate, NSPopoverDelegate {
             button.target = self
             // Right-click gets the quick menu; left-click keeps the HUD.
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-
-            updateDot.wantsLayer = true
-            updateDot.layer?.backgroundColor = NSColor(Tool.status.accent).cgColor
-            updateDot.layer?.cornerRadius = 3
-            updateDot.frame = NSRect(x: 0, y: 0, width: 6, height: 6)
-            button.addSubview(updateDot)
         }
         applyDisplayMode()
-        refreshUpdateDot()
-        updateObserver = NotificationCenter.default.addObserver(
-            forName: .burrowUpdateAvailability, object: nil, queue: .main) { [weak self] note in
-            self?.updateAvailable = (note.object as? Bool) ?? false
-            self?.refreshUpdateDot()
-        }
-    }
-
-    /// Show/hide + reposition the update dot at the glyph's top-right.
-    func refreshUpdateDot() {
-        updateDot.isHidden = !updateAvailable
-        if let b = item.button?.bounds {
-            updateDot.frame.origin = CGPoint(x: max(2, b.maxX - 8), y: b.maxY - 8)
-        }
     }
 
     /// Icon vs Metrics (Settings ▸ Menu Bar). Metrics renders the user's
@@ -150,7 +122,6 @@ final class StatusBarController: NSObject, NSMenuDelegate, NSPopoverDelegate {
             menuBarHistory.removeAll()
             startRunner()
         }
-        refreshUpdateDot()
     }
 
     /// Snapshot tick: extend the cpu/mem/gpu sparkline rings (only the snapshot
@@ -187,7 +158,6 @@ final class StatusBarController: NSObject, NSMenuDelegate, NSPopoverDelegate {
             button.imagePosition = .imageOnly
             button.title = ""
         }
-        refreshUpdateDot()
     }
 
     /// Snapshot of every metric the row might draw, read on the main thread
@@ -323,7 +293,6 @@ final class StatusBarController: NSObject, NSMenuDelegate, NSPopoverDelegate {
     }
 
     deinit {
-        if let o = updateObserver { NotificationCenter.default.removeObserver(o) }
         if let o = screenParamsObserver { NotificationCenter.default.removeObserver(o) }
         anchorWindow?.orderOut(nil)
         runnerTimer?.cancel()
@@ -479,5 +448,5 @@ final class StatusBarController: NSObject, NSMenuDelegate, NSPopoverDelegate {
     @objc private func stopAwake() { Awake.shared.stop() }
     @objc private func cleanScreen() { CleanScreen.shared.toggle() }
     @objc private func showAbout() { delegate?.showAboutPanel() }
-    @objc private func checkUpdates() { UpdateCheck.checkNow() }
+    @MainActor @objc private func checkUpdates() { UpdateCheck.checkNow() }
 }

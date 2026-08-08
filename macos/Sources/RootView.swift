@@ -22,6 +22,40 @@ extension Notification.Name {
     static let burrowWindowVisibility = Notification.Name("dev.caezium.burrow.windowVisibility")
 }
 
+struct ScreenTelemetryDeduper {
+    private var isVisible = true
+    private var presentation = 0
+    private var lastEmittedPresentation = -1
+    private var lastEmittedPane: Pane?
+
+    mutating func appeared(on pane: Pane) -> Bool {
+        isVisible = true
+        return shouldEmit(pane)
+    }
+
+    mutating func paneChanged(to pane: Pane) -> Bool {
+        guard isVisible else { return false }
+        return shouldEmit(pane)
+    }
+
+    mutating func visibilityChanged(to visible: Bool, pane: Pane) -> Bool {
+        let wasVisible = isVisible
+        isVisible = visible
+        guard visible, !wasVisible else { return false }
+        presentation += 1
+        return shouldEmit(pane)
+    }
+
+    private mutating func shouldEmit(_ pane: Pane) -> Bool {
+        guard lastEmittedPresentation != presentation || lastEmittedPane != pane else {
+            return false
+        }
+        lastEmittedPresentation = presentation
+        lastEmittedPane = pane
+        return true
+    }
+}
+
 struct RootView: View {
     let db: DB
     let producer: SnapshotProducer
@@ -33,6 +67,7 @@ struct RootView: View {
     /// for an installed-but-hidden hierarchy, so Home/Settings would keep
     /// polling forever behind a closed window without this flag.
     @State private var windowVisible = true
+    @State private var screenTelemetry = ScreenTelemetryDeduper()
     /// The ambient Full Disk Access state (issue #3, demoted from blocking
     /// gates). Probed at mount and on every app activation, so granting
     /// access in System Settings dismisses the banner by itself.
@@ -51,8 +86,6 @@ struct RootView: View {
     /// made window layout passes take 2s+ on memory-pressed Macs (BURROW-8T).
     @State private var visitedTools: Set<Tool>
 
-    /// Burrow's own self-update state — drives the top banner.
-    @ObservedObject private var appUpdate = AppUpdate.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(db: DB, producer: SnapshotProducer, feeds: FeedHub, delegate: AppDelegate?, initialPane: Pane = .home) {
@@ -91,22 +124,10 @@ struct RootView: View {
                 // Content sits under the floating rail, inset on the left to
                 // clear it. The rail is drawn last so its hover labels fly out
                 // above the pane instead of behind it.
-                VStack(spacing: 0) {
-                    if let release = appUpdate.available {
-                        UpdateBanner(release: release,
-                                     onDownload: {
-                                         if UpdateCheck.installedViaHomebrew() { UpdateCheck.homebrewUpgrade() }
-                                         else { NSWorkspace.shared.open(release.url) }
-                                     },
-                                     onDismiss: { appUpdate.dismiss() })
-                            .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 4)
-                            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-                    }
-                    content
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .padding(.leading, 88)
-                .padding(.top, 12)
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.leading, 88)
+                    .padding(.top, 12)
 
                 // Floating left rail — a detached, rounded rail of icon buttons
                 // in place of a top tab bar. Padded clear of the traffic lights
@@ -120,9 +141,13 @@ struct RootView: View {
         .frame(minWidth: 940, minHeight: 640)
         .animation(.easeInOut(duration: 0.22), value: pane)
         // Sample fast only while a live metrics pane is on screen.
-        .onAppear { producer.setForeground(Self.isMetricsPane(pane)) }
+        .onAppear {
+            producer.setForeground(Self.isMetricsPane(pane))
+            if screenTelemetry.appeared(on: pane) { Telemetry.screen(pane) }
+        }
         .onChange(of: pane) { _, p in
-            producer.setForeground(Self.isMetricsPane(p))
+            producer.setForeground(windowVisible && Self.isMetricsPane(p))
+            if screenTelemetry.paneChanged(to: p) { Telemetry.screen(p) }
             if p != .settings { lastNonSettingsPane = p }
             if case .tool(let t) = p { visitedTools.insert(t) }
         }
@@ -131,8 +156,12 @@ struct RootView: View {
             if let p = note.object as? Pane { pane = Self.normalize(p) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .burrowWindowVisibility)) { note in
-            if let visible = note.object as? Bool { windowVisible = visible }
+            guard let visible = note.object as? Bool else { return }
+            windowVisible = visible
             producer.setForeground(windowVisible && Self.isMetricsPane(pane))
+            if screenTelemetry.visibilityChanged(to: visible, pane: pane) {
+                Telemetry.screen(pane)
+            }
         }
         // Re-probe FDA whenever the user comes back from System Settings —
         // the banner auto-dismisses the moment access is granted.
@@ -153,7 +182,6 @@ struct RootView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: fdaGranted)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: appUpdate.available?.version)
     }
 
     /// Panes whose charts want live, high-cadence data. Home's Overview /
@@ -225,45 +253,5 @@ private extension View {
     func tabVisible(_ visible: Bool) -> some View {
         self.opacity(visible ? 1 : 0)
             .allowsHitTesting(visible)
-    }
-}
-
-/// A slim top strip shown when a newer Burrow release is found (self-update
-/// is opt-in, default on). Download opens the release page; dismiss suppresses
-/// this version. Never auto-installs.
-private struct UpdateBanner: View {
-    let release: UpdateCheck.Release
-    let onDownload: () -> Void
-    let onDismiss: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 16)).foregroundStyle(Tool.status.accent)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(String(format: NSLocalizedString("Burrow %@ is available", comment: ""), release.version))
-                    .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
-                Text(UpdateCheck.installedViaHomebrew()
-                     ? NSLocalizedString("One-click update + relaunch via Homebrew.", comment: "")
-                     : NSLocalizedString("Download it from the release page.", comment: ""))
-                    .font(Brand.mono(10)).foregroundStyle(Brand.textSecondary)
-            }
-            Spacer()
-            Button(action: onDownload) {
-                Text(UpdateCheck.installedViaHomebrew()
-                     ? NSLocalizedString("Update", comment: "")
-                     : NSLocalizedString("Download", comment: ""))
-                    .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
-                    .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(Capsule().fill(.white))
-            }.buttonStyle(.plain)
-            Button(action: onDismiss) {
-                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(Brand.textSecondary)
-                    .padding(6)
-            }.buttonStyle(.plain).accessibilityLabel(NSLocalizedString("Dismiss", comment: ""))
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Tool.status.accent.opacity(0.12)))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Tool.status.accent.opacity(0.35), lineWidth: 1))
     }
 }

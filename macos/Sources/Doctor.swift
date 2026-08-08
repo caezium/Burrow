@@ -24,6 +24,10 @@ enum Doctor {
 
     struct Input {
         var fullDiskAccess: Bool
+        /// False when every probe location was missing rather than refused,
+        /// so "off" would be a guess. Defaults true to keep existing callers
+        /// and tests reading the same as before.
+        var fullDiskAccessConclusive: Bool = true
         var moInstalled: Bool
         var pressure: MemoryPressure
         var diskFreeBytes: Int64
@@ -111,9 +115,18 @@ enum Doctor {
     }
 
     private static func permissions(_ i: Input) -> Check {
-        i.fullDiskAccess
-            ? Check(name: "Full Disk Access", level: .ok, detail: "granted")
-            : Check(name: "Full Disk Access", level: .warn, detail: "off — some scans and cleanups are limited")
+        if i.fullDiskAccess {
+            return Check(name: "Full Disk Access", level: .ok, detail: "granted")
+        }
+        // Nothing was refused and nothing opened — every gated location this
+        // build knows about is absent. Saying "off" here is what sent users
+        // round the grant/relaunch loop for nothing (#177, #181, #319).
+        guard i.fullDiskAccessConclusive else {
+            return Check(name: "Full Disk Access", level: .warn,
+                         detail: "could not be determined on this macOS build — grant it and rerun if scans stay limited")
+        }
+        return Check(name: "Full Disk Access", level: .warn,
+                     detail: "off — some scans and cleanups are limited")
     }
 
     private static func memory(_ i: Input) -> Check {

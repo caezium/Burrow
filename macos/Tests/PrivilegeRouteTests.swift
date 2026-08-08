@@ -1,0 +1,134 @@
+//
+//  PrivilegeRouteTests.swift
+//  BurrowTests
+//
+//  Which elevation route an operation takes, and — more importantly — which
+//  ones it must NOT take.
+//
+//  The helper and the osascript path both end in an administrator prompt and
+//  both run the same trusted engine, so falling back is safe. What would not
+//  be safe is the reverse: quietly widening what the helper accepts, or
+//  routing to a root daemon whose build no longer matches the app driving it.
+//  Every guard below is one of those.
+//
+//  Pure decisions, no daemon, no registration, no XPC.
+//
+
+import XCTest
+@testable import Burrow
+
+final class PrivilegeRouteTests: XCTestCase {
+
+    // MARK: - argv → typed operation
+    //
+    // The migration seam. `OperationFlow` still describes elevated work as
+    // argv, and this is the ONLY place that argv is allowed to become a typed
+    // operation. Anything it doesn't recognise keeps the old route rather than
+    // being forwarded as an approximate match.
+
+    func testRecognition_mapsTheThreeKnownCallSites() {
+        // Exactly what CleanView, OptimizeView, and the preview path pass today.
+        XCTAssertEqual(HelperOperation(engineArguments: ["clean"]), .clean)
+        XCTAssertEqual(HelperOperation(engineArguments: ["optimize"]), .optimize)
+        XCTAssertEqual(HelperOperation(engineArguments: ["clean", "--dry-run"]), .scan)
+    }
+
+    func testRecognition_isExactAndOrderSensitive() {
+        // A near-miss is not a match. Extra flags, reordering, or a different
+        // verb all fall through to osascript rather than being coerced into
+        // the closest typed operation.
+        XCTAssertNil(HelperOperation(engineArguments: ["--dry-run", "clean"]))
+        XCTAssertNil(HelperOperation(engineArguments: ["clean", "--yes"]))
+        XCTAssertNil(HelperOperation(engineArguments: ["clean", "--dry-run", "--verbose"]))
+        XCTAssertNil(HelperOperation(engineArguments: ["uninstall", "Safari"]))
+        XCTAssertNil(HelperOperation(engineArguments: []))
+    }
+
+    /// The one that matters: an attacker-shaped argv must never resolve to an
+    /// operation. It can't, because recognition is equality against three
+    /// fixed arrays — but this is the assertion that says so out loud.
+    func testRecognition_neverAcceptsInjectedArgv() {
+        for hostile in [["clean", "; rm -rf /"],
+                        ["clean", "--dry-run", "&&", "curl", "evil"],
+                        ["/bin/sh"],
+                        ["clean\0"],
+                        ["clean\n--force"]] {
+            XCTAssertNil(HelperOperation(engineArguments: hostile),
+                         "\(hostile) must not resolve to a privileged operation")
+        }
+    }
+
+    // MARK: - The routing rule
+
+    func testRoute_usesTheHelperWhenEverythingLinesUp() {
+        XCTAssertEqual(PrivilegeRoute.decide(arguments: ["clean"],
+                                             registration: .enabled,
+                                             skew: .matched),
+                       .helper(.clean))
+    }
+
+    func testRoute_unrecognisedArgvKeepsTheLegacyPath() {
+        XCTAssertEqual(PrivilegeRoute.decide(arguments: ["uninstall", "Safari"],
+                                             registration: .enabled,
+                                             skew: .matched),
+                       .osascript)
+    }
+
+    /// A daemon that isn't registered, or that the user hasn't approved, is
+    /// not a daemon we may use. Registration is the user's decision, and
+    /// declining it must leave Burrow working exactly as before.
+    func testRoute_unregisteredOrUnapprovedKeepsTheLegacyPath() {
+        for registration: HelperRegistrationStatus in [.notRegistered, .requiresApproval] {
+            XCTAssertEqual(PrivilegeRoute.decide(arguments: ["clean"],
+                                                 registration: registration,
+                                                 skew: .matched),
+                           .osascript,
+                           "registration \(registration) must not reach the helper")
+        }
+    }
+
+    /// The sharp one. A registered daemon OUTLIVES the app that installed it —
+    /// Sparkle can replace Burrow.app underneath it — so a helper from an
+    /// older build could be running as root with an older idea of what `clean`
+    /// does. Skew routes away from the helper entirely.
+    func testRoute_versionSkewKeepsTheLegacyPath() {
+        XCTAssertEqual(PrivilegeRoute.decide(arguments: ["clean"],
+                                             registration: .enabled,
+                                             skew: .mismatched),
+                       .osascript)
+    }
+
+    /// Every combination, so no future edit can produce a `.helper` route from
+    /// a state that isn't fully green.
+    func testRoute_helperRequiresEveryConditionSimultaneously() {
+        let registrations: [HelperRegistrationStatus] = [.enabled, .notRegistered, .requiresApproval]
+        let skews: [HelperVersionSkew.Skew] = [.matched, .mismatched]
+        let argvs = [["clean"], ["optimize"], ["clean", "--dry-run"], ["uninstall"], []]
+
+        for registration in registrations {
+            for skew in skews {
+                for argv in argvs {
+                    let route = PrivilegeRoute.decide(arguments: argv, registration: registration, skew: skew)
+                    let allGreen = registration == .enabled
+                        && skew == .matched
+                        && HelperOperation(engineArguments: argv) != nil
+                    if allGreen {
+                        XCTAssertNotEqual(route, .osascript)
+                    } else {
+                        XCTAssertEqual(route, .osascript,
+                                       "argv \(argv), registration \(registration), skew \(skew)")
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Registration status mapping
+
+    func testRegistrationStatus_needsUserActionOnlyWhenApprovalIsPending() {
+        XCTAssertTrue(HelperRegistrationStatus.requiresApproval.needsUserAction)
+        XCTAssertFalse(HelperRegistrationStatus.enabled.needsUserAction)
+        XCTAssertFalse(HelperRegistrationStatus.notRegistered.needsUserAction,
+                       "never registered is the default state, not a pending decision")
+    }
+}

@@ -46,6 +46,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private var installWC: NSWindowController?
     private var onboardingWC: NSWindowController?
+    private let launchJournal = LaunchJournal.live
+    private let runtimeEnvironment = RuntimeEnvironment.current
+    private var lastLaunch: LaunchRecord?
+    private var previousIncompleteLaunch: LaunchRecord?
+    private var recoveryReason: LaunchRecoveryReason?
+    private var updaterRecoveryReason: LaunchRecoveryReason?
+    private var safeModeActive = false
+    /// True while the compatibility guard is suppressing the menu-bar item on
+    /// this macOS build. Settings reads it so the "Show menu bar icon" toggle
+    /// can say what is actually happening rather than flipping on and quietly
+    /// doing nothing (#319).
+    var menuBarSuppressedByCompatibilityGuard: Bool { recoveryReason != nil }
+    private var recoveryNoticePresented = false
+    private var launchCompleted = false
+    private var initialStatusItemCreationTask: Task<Void, Never>?
+    private var statusItemStabilityTask: Task<Void, Never>?
+    private var statusItemStabilityGeneration = 0
+    private var statusItemStabilitySpan: DiagnosticSpan?
+    private var automaticUpdaterStartTask: Task<Void, Never>?
+    private var automaticUpdaterSchedulingArmed = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -58,10 +78,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
+        lastLaunch = launchJournal.lastRecord()
+        previousIncompleteLaunch = launchJournal.begin(environment: runtimeEnvironment)
+        recoveryReason = LaunchRecovery.reason(environment: runtimeEnvironment, previous: lastLaunch)
+
+        // Move 0.10.5's update settings before Sparkle's controller is ever
+        // constructed, so it sees both the opt-out and last-check timestamp
+        // on its first 0.11 launch.
+        _ = Store.migrateLegacyUpdatePreferences()
+        if Store.autoCheckForUpdates {
+            updaterRecoveryReason = AutomaticUpdateRecovery.reason(
+                environment: runtimeEnvironment,
+                previous: lastLaunch
+            )
+        }
+
+        // (BURROW_ENGINE_DIR used to be exported here, pointing the bundled conductor at a
+        // separate bundled engine. The repoint collapsed those two binaries into one, so
+        // there is no second directory to point at and `BurrowConductor.engineDir()` is gone.)
+
         // Product analytics + crash reporting (PostHog + Sentry). Opt-out, on
         // by default, and inert without release-injected keys. Started before
         // the `mo` gate so a launch with the engine missing still counts.
         Telemetry.start()
+        CrashReporter.startLaunchTrace()
+        CrashReporter.setLaunchPhase(.launchStarted)
+        CrashReporter.setStatusItemState(.notRequested)
+        markLaunch(.telemetryStarted)
+        recordPriorLaunchDiagnostics()
 
         // No engine yet → guided install instead of a dead-end quit. The
         // window's Recheck calls startServices() once `mo` is found.
@@ -73,10 +117,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // back on the main thread. The brief window with no UI is fine; the
         // status item / install window appear a beat later instead of after a
         // freeze.
+        markLaunch(.engineProbeStarted)
+        let engineProbeSpan = CrashReporter.startLaunchSpan("engine_probe")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let found = MoleCLI.findExecutable() != nil
+            engineProbeSpan?.finish()
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.markLaunch(.engineProbeFinished)
                 if found {
                     self.startServices()
                 } else {
@@ -109,25 +157,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.installWC = wc
         wc.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+        markLaunch(.installWindowReady)
+        CrashReporter.finishLaunchTrace()
+        Telemetry.capture("install_window_ready")
     }
 
     /// The `mo`-dependent startup: open the DB, start the server/sampler/
     /// maintenance, and install the status item. Called either directly at
     /// launch or after the guided install finds `mo`.
     private func startServices() {
+        markLaunch(.databaseOpening)
+        let databaseSpan = CrashReporter.startLaunchSpan("database_open")
         let db: DB
         do {
             db = try DB.openDefault()
         } catch {
+            databaseSpan?.finish()
+            CrashReporter.logError("database_open_failed", data: [
+                "error_domain": (error as NSError).domain,
+                "error_code": (error as NSError).code,
+            ])
+            CrashReporter.captureDiagnostic("database_open_failed", error: error)
             let alert = NSAlert()
             alert.messageText = NSLocalizedString("Couldn't open Burrow's history database", comment: "")
             alert.informativeText = String(format: NSLocalizedString("%@\n\nThe app will quit.", comment: ""),
                                            error.localizedDescription)
             alert.alertStyle = .critical
             alert.runModalQuiet()
+            CrashReporter.finishLaunchTrace()
             NSApp.terminate(nil)
             return
         }
+        databaseSpan?.finish()
+        markLaunch(.databaseReady)
         self.db = db
 
         if Store.queryServerEnabled {
@@ -146,6 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let maintenance = Maintenance(db: db)
         self.maintenance = maintenance
         maintenance.start()
+        markLaunch(.servicesStarted)
 
         // Completion notices + opt-in smart reminders. The delegate must
         // be set before any notification is delivered or clicked.
@@ -158,15 +221,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             BurrowNotifier.shared.startReminders()
         }
 
-        if Store.showMenuBarIcon {
-            self.statusBar = StatusBarController(db: db, producer: producer, delegate: self)
+        safeModeActive = Store.showMenuBarIcon && recoveryReason != nil
+        if StatusItemStartupPolicy.shouldScheduleInitialCreation(
+            showMenuBarIcon: Store.showMenuBarIcon,
+            recoveryReason: recoveryReason
+        ) {
+            scheduleInitialStatusItemCreation(db: db, producer: producer)
+        } else if safeModeActive, let recoveryReason {
+            CrashReporter.setStatusItemState(.compatibilityMode)
+            NSApp.setActivationPolicy(.regular)
+            let properties: [String: Any] = [
+                "reason": recoveryReason.rawValue,
+                "os_build": runtimeEnvironment.osBuild,
+                "menu_bar_mode": Store.menuBarDisplayMode.rawValue,
+            ]
+            Telemetry.capture("compatibility_fallback_activated", properties)
+            CrashReporter.logWarning("compatibility_fallback_activated", data: properties)
+        } else {
+            CrashReporter.setStatusItemState(.notRequested)
         }
         self.setupMainMenu()
 
-        // Background self-update: opt-in (default on), surfaces a found
-        // Burrow release as the in-window banner + a menu-bar dot. Never
-        // installs; the menu/Settings "Check for Updates" stays the manual path.
-        Task { @MainActor in AppUpdate.shared.begin() }
+        // Sparkle is the only new launch-time component in 0.11. Its automatic
+        // start is armed here but cannot run until the status item has survived
+        // its full 30-second responsive window. That separation lets the local
+        // journal identify which component preceded a freeze and suppress only
+        // the automatic updater after an updater-specific failure. Manual
+        // checks remain available; downloads and installs remain user-driven.
+        armAutomaticUpdaterIfNeeded()
 
         // Crash safety for the Clean review's whitelist session: a fenced
         // block left by a previous run must never outlive it.
@@ -196,13 +278,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if (devLaunchTab == nil && !Store.onboardingCompleted) || devLaunchTab == "onboarding",
            #available(macOS 14, *) {
             self.showOnboardingWindow()
+            completeLaunch(presentRecoveryNotice: false)
             return
         }
 
         // Without the menu-bar icon there's no agent entry point (the app is
         // LSUIElement, so no Dock icon either). Run as a regular Dock app and
         // open the window on launch so it stays reachable (issue #4).
-        if !Store.showMenuBarIcon, #available(macOS 14, *) {
+        if (!Store.showMenuBarIcon || safeModeActive), #available(macOS 14, *) {
             NSApp.setActivationPolicy(.regular)
             self.openMainWindow(initial: .home)
         }
@@ -235,6 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self.openMainWindow(initial: pane)
             }
         }
+        completeLaunch(presentRecoveryNotice: safeModeActive || updaterRecoveryReason != nil)
     }
 
     /// Settings ▸ General ▸ "Replay onboarding": clear the seen flag and
@@ -288,6 +372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self?.onboardingWC?.close()
             self?.onboardingWC = nil
             self?.openMainWindow(initial: .home)
+            self?.presentRecoveryNoticeIfNeeded()
         })
         window.contentViewController = NSHostingController(rootView: view)
         let wc = NSWindowController(window: window)
@@ -297,6 +382,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        initialStatusItemCreationTask?.cancel()
+        initialStatusItemCreationTask = nil
+        statusItemStabilityTask?.cancel()
+        statusItemStabilityTask = nil
+        statusItemStabilitySpan?.finish()
+        statusItemStabilitySpan = nil
+        automaticUpdaterStartTask?.cancel()
+        automaticUpdaterStartTask = nil
         self.producer?.stop()
         self.queryServer?.stop()
         self.maintenance?.stop()
@@ -304,6 +397,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         CleanScreen.shared.hide()
         Telemetry.capture("app_terminated")
         Telemetry.flush()
+        CrashReporter.finishLaunchTrace()
+        launchJournal.mark(.terminatedNormally)
+        CrashReporter.setLaunchPhase(.terminatedNormally)
         // Final flush so any just-changed setting survives an app replacement
         // during an update.
         UserDefaults.standard.synchronize()
@@ -435,12 +531,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applyMenuBarVisibility(_ show: Bool) {
         guard let db = db, let producer = producer else { return }
         if show {
-            if statusBar == nil {
-                statusBar = StatusBarController(db: db, producer: producer, delegate: self)
+            if recoveryReason != nil {
+                safeModeActive = true
+                CrashReporter.setStatusItemState(.compatibilityMode)
+                NSApp.setActivationPolicy(.regular)
+                if #available(macOS 14, *), mainWC?.window?.isVisible != true {
+                    openMainWindow(initial: .home)
+                }
+                Telemetry.capture("compatibility_fallback_reaffirmed", [
+                    "reason": recoveryReason?.rawValue ?? "unknown",
+                    "os_build": runtimeEnvironment.osBuild,
+                    "menu_bar_mode": Store.menuBarDisplayMode.rawValue,
+                ])
+                presentRecoveryNoticeIfNeeded()
+                return
+            }
+            if statusBar == nil, initialStatusItemCreationTask == nil {
+                createStatusItem(db: db, producer: producer, source: "settings")
             } else {
                 statusBar?.applyDisplayMode()   // Icon ↔ Metrics flip
             }
         } else {
+            cancelStatusItemStabilityMarker(state: .disabled)
             statusBar = nil   // StatusBarController.deinit removes the item
             if #available(macOS 14, *) {
                 NSApp.setActivationPolicy(.regular)
@@ -449,6 +561,248 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 // so hiding the menu bar always leaves a visible window.
                 if mainWC?.window?.isVisible != true { openMainWindow(initial: .home) }
             }
+        }
+    }
+
+    // MARK: - Launch recovery
+
+    private func markLaunch(_ phase: LaunchPhase) {
+        launchJournal.mark(phase)
+        CrashReporter.setLaunchPhase(phase)
+    }
+
+    private func scheduleInitialStatusItemCreation(db: DB, producer: SnapshotProducer) {
+        initialStatusItemCreationTask?.cancel()
+        CrashReporter.setStatusItemState(.scheduled)
+        Telemetry.capture("status_item_creation_scheduled", ["source": "launch"])
+        initialStatusItemCreationTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(
+                    nanoseconds: StatusItemStartupPolicy.initialDelayNanoseconds
+                )
+            } catch {
+                return
+            }
+            guard let self else { return }
+            self.initialStatusItemCreationTask = nil
+            guard Store.showMenuBarIcon,
+                  self.recoveryReason == nil,
+                  self.statusBar == nil else {
+                if self.launchCompleted { CrashReporter.finishLaunchTrace() }
+                return
+            }
+            self.createStatusItem(db: db, producer: producer, source: "launch")
+        }
+    }
+
+    private func createStatusItem(
+        db: DB,
+        producer: SnapshotProducer,
+        source: String
+    ) {
+        markLaunch(.statusItemCreating)
+        let statusItemSpan = CrashReporter.startLaunchSpan("status_item_create")
+        statusBar = StatusBarController(db: db, producer: producer, delegate: self)
+        statusItemSpan?.finish()
+        markLaunch(.statusItemReady)
+        scheduleStatusItemStabilityMarker(source: source)
+    }
+
+    private func scheduleStatusItemStabilityMarker(source: String) {
+        statusItemStabilityTask?.cancel()
+        statusItemStabilitySpan?.finish()
+        if automaticUpdaterSchedulingArmed {
+            // A new AppKit stability window supersedes the menu-bar-disabled
+            // quiet period. Sparkle must wait until this item proves stable.
+            automaticUpdaterStartTask?.cancel()
+            automaticUpdaterStartTask = nil
+        }
+        statusItemStabilityGeneration += 1
+        let generation = statusItemStabilityGeneration
+        statusItemStabilitySpan = CrashReporter.startLaunchSpan("status_item_stabilizing")
+        CrashReporter.setStatusItemState(.stabilizing)
+        Telemetry.capture("status_item_stability_started", ["source": source])
+
+        statusItemStabilityTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            guard let self,
+                  self.statusItemStabilityGeneration == generation,
+                  self.statusBar != nil,
+                  self.recoveryReason == nil,
+                  !Task.isCancelled else { return }
+            self.statusItemStabilityTask = nil
+            self.launchJournal.markStatusItemStable()
+            self.statusItemStabilitySpan?.finish()
+            self.statusItemStabilitySpan = nil
+            CrashReporter.setStatusItemState(.stable)
+            CrashReporter.breadcrumb("status_item_stable", category: "launch")
+            Telemetry.capture("status_item_stabilized", ["source": source])
+            if self.launchCompleted { CrashReporter.finishLaunchTrace() }
+            if self.automaticUpdaterSchedulingArmed {
+                self.scheduleAutomaticUpdaterStart(afterNanoseconds: 0)
+            }
+        }
+    }
+
+    private func cancelStatusItemStabilityMarker(state: StatusItemDiagnosticState) {
+        initialStatusItemCreationTask?.cancel()
+        initialStatusItemCreationTask = nil
+        statusItemStabilityGeneration += 1
+        statusItemStabilityTask?.cancel()
+        statusItemStabilityTask = nil
+        statusItemStabilitySpan?.finish()
+        statusItemStabilitySpan = nil
+        if state == .disabled { launchJournal.markStatusItemDisabled() }
+        CrashReporter.setStatusItemState(state)
+        if launchCompleted { CrashReporter.finishLaunchTrace() }
+        if automaticUpdaterSchedulingArmed {
+            // A user removing the item during its guard window is not proof of
+            // stability. Give the updater its own fresh quiet window instead
+            // of starting it on the same run-loop turn.
+            scheduleAutomaticUpdaterStart(afterNanoseconds: 30_000_000_000)
+        }
+    }
+
+    private func armAutomaticUpdaterIfNeeded() {
+        guard Store.autoCheckForUpdates else { return }
+        if let reason = recoveryReason ?? updaterRecoveryReason {
+            let properties: [String: Any] = [
+                "reason": reason.rawValue,
+                "os_build": runtimeEnvironment.osBuild,
+                "app_build": runtimeEnvironment.appBuild,
+            ]
+            Telemetry.capture("automatic_updater_suppressed", properties)
+            CrashReporter.logWarning("automatic_updater_suppressed", data: properties)
+            return
+        }
+
+        automaticUpdaterSchedulingArmed = true
+        if statusItemStabilityTask == nil {
+            // Menu-bar-disabled launches have no AppKit marker to release the
+            // gate, so give the rest of startup the same 30-second quiet window.
+            scheduleAutomaticUpdaterStart(afterNanoseconds: 30_000_000_000)
+        }
+    }
+
+    private func scheduleAutomaticUpdaterStart(afterNanoseconds delay: UInt64) {
+        guard automaticUpdaterSchedulingArmed else { return }
+        automaticUpdaterStartTask?.cancel()
+        automaticUpdaterStartTask = Task { @MainActor [weak self] in
+            if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
+            guard let self, !Task.isCancelled else { return }
+            self.automaticUpdaterStartTask = nil
+            guard self.automaticUpdaterSchedulingArmed, Store.autoCheckForUpdates else {
+                self.automaticUpdaterSchedulingArmed = false
+                return
+            }
+            self.automaticUpdaterSchedulingArmed = false
+
+            AppUpdate.shared.begin()
+        }
+    }
+
+    private func completeLaunch(presentRecoveryNotice: Bool) {
+        guard !launchCompleted else { return }
+        launchCompleted = true
+        markLaunch(.appReady)
+        // A menu-bar launch is not considered healthy until AppKit's status
+        // item has survived 30 responsive seconds. Its child span and separate
+        // status_item_state tag remain live across this app_ready phase.
+        if statusItemStabilityTask == nil, initialStatusItemCreationTask == nil {
+            CrashReporter.finishLaunchTrace()
+        }
+        let statusItemState: String
+        if safeModeActive {
+            statusItemState = StatusItemDiagnosticState.compatibilityMode.rawValue
+        } else if initialStatusItemCreationTask != nil {
+            statusItemState = StatusItemDiagnosticState.scheduled.rawValue
+        } else if statusBar == nil {
+            statusItemState = StatusItemDiagnosticState.notRequested.rawValue
+        } else {
+            statusItemState = StatusItemDiagnosticState.stabilizing.rawValue
+        }
+        Telemetry.capture("app_ready", [
+            "menu_bar_available": statusBar != nil,
+            "compatibility_mode": safeModeActive,
+            "status_item_state": statusItemState,
+        ])
+        if presentRecoveryNotice {
+            DispatchQueue.main.async { [weak self] in self?.presentRecoveryNoticeIfNeeded() }
+        }
+    }
+
+    private func recordPriorLaunchDiagnostics() {
+        if let previousIncompleteLaunch {
+            let properties: [String: Any] = [
+                "last_phase": previousIncompleteLaunch.phase.rawValue,
+                "elapsed_bucket": DiagnosticPrivacy.elapsedBucket(for: previousIncompleteLaunch),
+                "previous_app_version": previousIncompleteLaunch.environment.appVersion,
+                "previous_app_build": previousIncompleteLaunch.environment.appBuild,
+                "previous_os_build": previousIncompleteLaunch.environment.osBuild,
+            ]
+            Telemetry.capture("previous_launch_incomplete", properties)
+            CrashReporter.logWarning("previous_launch_incomplete", data: properties)
+        }
+
+        if let lastLaunch,
+           lastLaunch.environment.appVersion != runtimeEnvironment.appVersion
+            || lastLaunch.environment.appBuild != runtimeEnvironment.appBuild {
+            Telemetry.capture("app_updated", [
+                "from_version": lastLaunch.environment.appVersion,
+                "from_build": lastLaunch.environment.appBuild,
+                "to_version": runtimeEnvironment.appVersion,
+                "to_build": runtimeEnvironment.appBuild,
+            ])
+        }
+    }
+
+    private func presentRecoveryNoticeIfNeeded() {
+        guard !recoveryNoticePresented,
+              let activeReason = recoveryReason ?? updaterRecoveryReason else { return }
+        let noticeKey: String
+        if recoveryReason != nil {
+            noticeKey = "\(runtimeEnvironment.osBuild)|status_item"
+        } else {
+            noticeKey = "\(runtimeEnvironment.osBuild)|\(runtimeEnvironment.appBuild)|updater"
+        }
+        guard Store.lastCompatibilityNoticeBuild != noticeKey else { return }
+        recoveryNoticePresented = true
+        Store.lastCompatibilityNoticeBuild = noticeKey
+
+        let alert = NSAlert()
+        if recoveryReason != nil {
+            alert.messageText = NSLocalizedString("Burrow started in compatibility mode", comment: "")
+            if Store.autoCheckForUpdates {
+                alert.informativeText = NSLocalizedString(
+                    "Burrow detected that creating its menu bar item could freeze this macOS build. The menu bar item and automatic update checks are paused on this build, and Burrow will stay available in the Dock. Manual update checks remain available. Updating macOS will automatically retry the normal mode.",
+                    comment: ""
+                )
+            } else {
+                alert.informativeText = NSLocalizedString(
+                    "Burrow detected that creating its menu bar item could freeze this macOS build. The menu bar item is disabled on this build, and Burrow will stay available in the Dock. Updating macOS will automatically retry the normal menu bar mode.",
+                    comment: ""
+                )
+            }
+        } else {
+            alert.messageText = NSLocalizedString("Burrow paused automatic update checks", comment: "")
+            alert.informativeText = NSLocalizedString(
+                "Burrow detected that its automatic updater did not reach a stable state on the previous launch. Automatic checks are paused for this app and macOS build so the same startup problem cannot repeat. You can still check manually; updating Burrow or macOS will retry automatic checks.",
+                comment: ""
+            )
+        }
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: NSLocalizedString("Copy Diagnostics", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Continue", comment: ""))
+        if alert.runModalQuiet() == .alertFirstButtonReturn {
+            let report = LaunchDiagnosticReport.make(
+                reason: activeReason,
+                previous: previousIncompleteLaunch ?? lastLaunch,
+                current: runtimeEnvironment,
+                menuBarMode: Store.menuBarDisplayMode.rawValue
+            )
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(report, forType: .string)
+            Telemetry.capture("diagnostic_report_copied", ["reason": activeReason.rawValue])
         }
     }
 
@@ -512,7 +866,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func showAboutFromMenu() { showAboutPanel() }
-    @objc private func checkForUpdatesFromMenu() { UpdateCheck.checkNow() }
+    @MainActor @objc private func checkForUpdatesFromMenu() { UpdateCheck.checkNow() }
 
     // MARK: - About
 

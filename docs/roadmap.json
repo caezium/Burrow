@@ -1,68 +1,125 @@
 {
-  "_comment": "Source of truth for the site roadmap (docs/roadmap.html) and the README '## Roadmap' block. Edit this, then run `python3 scripts/site-release.py`. Columns render top to bottom; empty columns are skipped. Item fields: title (req), type (feat|fix|infra), issue (GitHub #, links to vote), note, version (for shipped — links to the changelog). Voting happens on GitHub issues (upvote) — keep this curated and honest; it's a guide, not a promise.",
-  "updated": "2026-06-30",
-  "columns": [
+ "_comment": "Source of truth for the site roadmap (docs/roadmap.html) and the README '## Roadmap' block. Edit this, then run `python3 scripts/site-release.py`. Columns render top to bottom; empty columns are skipped. Item fields: title (req), type (feat|fix|infra), issue (GitHub #, links to vote), note, version (for shipped, links to the changelog). Voting happens on GitHub issues (upvote), keep this curated and honest; it's a guide, not a promise.",
+ "updated": "2026-08-07",
+ "columns": [
+  {
+   "key": "building",
+   "title": "Building",
+   "blurb": "In progress now.",
+   "items": [
     {
-      "key": "building",
-      "title": "Building",
-      "blurb": "In progress now.",
-      "items": []
-    },
-    {
-      "key": "planned",
-      "title": "Planned",
-      "blurb": "Decided — not started yet.",
-      "items": [
-        {
-          "title": "Signed & notarized macOS builds",
-          "type": "infra",
-          "note": "A Developer ID signature so Gatekeeper trusts Burrow without the right-click → Open dance."
-        },
-        {
-          "title": "In-app auto-update",
-          "type": "feat",
-          "note": "Once builds are signed, silent background update checks with a one-click install (Sparkle)."
-        },
-        {
-          "title": "Windows preview → first stable",
-          "type": "feat",
-          "issue": 93,
-          "note": "Data-loss and supply-chain hardening, parity, and test coverage before it loses the “preview” label."
-        }
-      ]
-    },
-    {
-      "key": "considering",
-      "title": "Considering",
-      "blurb": "Weighing it — upvote to push it up.",
-      "items": [
-        {
-          "title": "Persistent one-tap “run all” Tune-Up",
-          "type": "feat",
-          "issue": 77,
-          "note": "A saved Smart-Care routine you trigger in one tap from the dashboard."
-        }
-      ]
-    },
-    {
-      "key": "shipped",
-      "title": "Recently shipped",
-      "blurb": "Landed in the latest releases.",
-      "items": [
-        { "title": "Bundled MIT engine — no separate `mo` install", "version": "0.9.0" },
-        { "title": "Process inspector + CPU watchdog", "version": "0.9.0" },
-        { "title": "Get Online connectivity companion", "version": "0.9.0" },
-        { "title": "Security-aware Doctor", "version": "0.9.0" },
-        { "title": "No-freeze live dashboard", "version": "0.8.1" },
-        { "title": "Streaming live status (`mo status --watch`)", "version": "0.8.1" },
-        { "title": "One-click Update with Homebrew", "version": "0.8.1" },
-        { "title": "A warm visual redesign", "version": "0.8.0" },
-        { "title": "Ports & Get Online", "version": "0.8.0" },
-        { "title": "Smart-Care Tune-Up", "version": "0.8.0" },
-        { "title": "Homebrew Services & Brewfile", "version": "0.8.0" },
-        { "title": "Deeper MCP agent surface (`/events`, `burrow_diff`)", "version": "0.8.0" },
-        { "title": "Windows preview", "version": "0.8.0" }
-      ]
+     "title": "A single interface for machine care and agent work",
+     "type": "feat",
+     "note": "Burrow grew tool by tool. The next pass designs it as one product: one navigation model, one task hierarchy, and a clear place for the agent surfaces that arrived late."
     }
-  ]
+   ]
+  },
+  {
+   "key": "planned",
+   "title": "Planned",
+   "blurb": "Decided, not started yet.",
+   "items": [
+    {
+     "title": "Windows preview → first stable",
+     "type": "feat",
+     "issue": 93,
+     "note": "Data-loss and supply-chain hardening, parity, and test coverage before it loses the “preview” label."
+    },
+    {
+     "title": "Uninstall that never quietly does nothing",
+     "type": "fix",
+     "note": "A handful of Homebrew apps use a cask token that differs from the display name, so a name-based lookup resolves most apps and misses the exceptions. Uninstall gets exact resolution and a visible result either way."
+    }
+   ]
+  },
+  {
+   "key": "considering",
+   "title": "Considering",
+   "blurb": "Weighing it, upvote to push it up.",
+   "items": [
+    {
+     "title": "Persistent one-tap “run all” Tune-Up",
+     "type": "feat",
+     "issue": 77,
+     "note": "A saved Smart-Care routine you trigger in one tap from the dashboard."
+    },
+    {
+     "title": "Faster, deeper Analyze",
+     "type": "feat",
+     "note": "Better navigation through very large trees, quicker re-render on drill-down, and caching so a second scan of the same volume is close to instant."
+    }
+   ]
+  },
+  {
+   "key": "shipped",
+   "title": "Recently shipped",
+   "blurb": "Landed in the latest releases.",
+   "items": [
+    {
+     "title": "Developer ID signed & Apple-notarized macOS releases",
+     "version": "0.11.0"
+    },
+    {
+     "title": "Signed Sparkle feed + updater foundation",
+     "version": "0.11.0"
+    },
+    {
+     "title": "Stable Full Disk Access identity across updates",
+     "version": "0.11.0"
+    },
+    {
+     "title": "Bundled MIT engine, no separate `mo` install",
+     "version": "0.9.0"
+    },
+    {
+     "title": "Process inspector + CPU watchdog",
+     "version": "0.9.0"
+    },
+    {
+     "title": "Get Online connectivity companion",
+     "version": "0.9.0"
+    },
+    {
+     "title": "Security-aware Doctor",
+     "version": "0.9.0"
+    },
+    {
+     "title": "No-freeze live dashboard",
+     "version": "0.8.1"
+    },
+    {
+     "title": "Streaming live status (`mo status --watch`)",
+     "version": "0.8.1"
+    },
+    {
+     "title": "One-click Update with Homebrew",
+     "version": "0.8.1"
+    },
+    {
+     "title": "A warm visual redesign",
+     "version": "0.8.0"
+    },
+    {
+     "title": "Ports & Get Online",
+     "version": "0.8.0"
+    },
+    {
+     "title": "Smart-Care Tune-Up",
+     "version": "0.8.0"
+    },
+    {
+     "title": "Homebrew Services & Brewfile",
+     "version": "0.8.0"
+    },
+    {
+     "title": "Deeper MCP agent surface (`/events`, `burrow_diff`)",
+     "version": "0.8.0"
+    },
+    {
+     "title": "Windows preview",
+     "version": "0.8.0"
+    }
+   ]
+  }
+ ]
 }

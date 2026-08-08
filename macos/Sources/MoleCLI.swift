@@ -2,8 +2,8 @@
 //  MoleCLI.swift
 //  Burrow
 //
-//  Wrapper around the `mo` command. Burrow doesn't ship Mole — it depends
-//  on a system-installed copy (`brew install mole`), found via PATH.
+//  Wrapper around Burrow's bundled engine, with a system-installed `mo` as
+//  the development/source-build fallback when the bundle has no engine.
 //
 //  Three commands matter to Burrow today:
 //    * `mo status --json` — periodic sampling (SnapshotProducer uses this).
@@ -23,6 +23,16 @@ import AppKit  // NSAlert
 import os
 
 enum MoleCLI {
+    enum EngineUpdatePolicy: Equatable {
+        /// The engine is inside Burrow.app and must stay immutable so the
+        /// Developer ID resource seal remains valid. It updates with Burrow.
+        case bundledWithApp
+        /// Source/development build using an external executable. The engine
+        /// can keep using its own updater because it is outside Burrow.app.
+        case external
+        case unavailable
+    }
+
     /// Test seam: when set, discovery checks ONLY these paths (no trusted
     /// list, no `which` fallback) so cache semantics are deterministic.
     internal static var discoveryCandidates: [String]?
@@ -146,10 +156,38 @@ enum MoleCLI {
 
     // MARK: - Install / version
 
+    static func engineUpdatePolicy(executable: String?, bundledExecutable: String?) -> EngineUpdatePolicy {
+        guard let executable else { return .unavailable }
+        guard let bundledExecutable else { return .external }
+        let selected = URL(fileURLWithPath: executable).resolvingSymlinksInPath().standardizedFileURL
+        let bundled = URL(fileURLWithPath: bundledExecutable).resolvingSymlinksInPath().standardizedFileURL
+        return selected == bundled ? .bundledWithApp : .external
+    }
+
+    static var currentEngineUpdatePolicy: EngineUpdatePolicy {
+        let bundled = bundledExecutable()
+        return engineUpdatePolicy(executable: findExecutable(), bundledExecutable: bundled)
+    }
+
+    static func engineUpdateInstruction(for policy: EngineUpdatePolicy) -> String {
+        switch policy {
+        case .bundledWithApp:
+            return "Update Burrow to get the current bundled engine."
+        case .external:
+            return "Use Settings › Engine › Update external engine, then try again."
+        case .unavailable:
+            return "Reinstall Burrow to restore the bundled engine."
+        }
+    }
+
+    static var currentEngineUpdateInstruction: String {
+        engineUpdateInstruction(for: currentEngineUpdatePolicy)
+    }
+
     /// The MIT engine normally ships BUNDLED inside the app (zero install). This is only the
     /// fallback hint shown if the bundled copy is somehow unavailable — reinstalling the app
     /// restores it.
-    static let installCommand = "brew install --cask caezium/tap/burrow"
+    static let installCommand = "brew reinstall --cask caezium/tap/burrow"
     /// The engine fork (the MIT engine is bundled with the app, pinned at mo's last MIT
     /// release before upstream relicensed to GPL-3.0).
     static let repoURL = URL(string: "https://github.com/caezium/burrow-digger")!
@@ -377,12 +415,6 @@ enum MoleCLI {
     /// a fake (reset in `tearDown`). Test-only seam — not a configuration point.
     internal static var processPort: MoleProcessPort = SystemMoleProcess()
 
-    /// The one-shot elevated runner (issue #48). Production spawns real
-    /// osascript via `SystemPrivilegeBroker`; tests inject a fake so the
-    /// build-the-osascript-spec quoting + auth-cancel classification run in
-    /// memory with no auth dialog. Test-only seam — reset in `tearDown`.
-    internal static var privilegeBroker: PrivilegeBroker = SystemPrivilegeBroker()
-
     /// Run an executable with the given args, capturing stdout + stderr.
     /// Blocks until the process exits — callers are responsible for
     /// running this on a background queue. Times out after `timeout`
@@ -415,30 +447,15 @@ enum MoleCLI {
         )
     }
 
-    /// Run `mo <args>` ONCE with administrator rights via the macOS auth
-    /// dialog. That dialog is PASSWORD-ONLY: the `system.privilege.admin`
-    /// right authenticates through SecurityAgent's classic mechanism, which
-    /// never offers Touch ID — pam_tid (`mo touchid`) covers terminal
-    /// `sudo`, not this path. Blocking — call off the main thread. For
-    /// one-shot privileged config like `touchid enable/disable`, not for
-    /// streamed jobs (OperationFlow does those).
-    ///
-    /// The spawn now goes through `PrivilegeBroker` so the osascript quoting
-    /// and auth-cancel classification are testable in memory (issue #48); the
-    /// `Int32` return is preserved for existing callers that only branch on
-    /// "did it work" (a dismissed prompt collapses to a nonzero code, exactly
-    /// as before). New callers that want the named outcome use
-    /// `runElevatedClassified`.
-    static func runElevated(args: [String]) -> Int32 {
-        runElevatedClassified(args: args).exitCode
-    }
-
-    /// As `runElevated`, but returns the classified outcome — `.authCancelled`
-    /// for a dismissed prompt is distinguished from a command that ran and
-    /// failed, so callers can show the right message without re-deriving the
-    /// "nonzero might mean cancel" heuristic themselves.
-    static func runElevatedClassified(args: [String]) -> ElevatedOutcome {
-        guard let mo = trustedExecutable() else { return .launchFailed }
-        return privilegeBroker.openElevated(executable: mo, args: args)
-    }
+    // NOTE: `runElevated` / `runElevatedClassified` used to live here — a
+    // one-shot "run `mo` as root with these args" entry point. Their only
+    // caller was the `mo touchid enable/disable` setting, and they were
+    // deleted with it: an unused function that takes arbitrary argv and runs
+    // it as root is exactly the kind of thing that shouldn't sit around
+    // waiting for a caller.
+    //
+    // The elevation machinery itself is still very much alive — the streaming
+    // path (`OperationFlow.SystemProcessPort`) uses `elevatedScript` above,
+    // and Connectivity's flush-DNS / renew-DHCP fixes call
+    // `SystemPrivilegeBroker.openElevated` directly.
 }

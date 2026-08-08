@@ -1,32 +1,56 @@
-<!-- Latest release ONLY. This file is the GitHub release body (release.yml --notes-file), so it must contain just the newest version. OVERWRITE it each release; do not accumulate. Full prose history lives in docs/releases.json → docs/releases.html (the site Releases page). -->
+# Burrow 0.12.0
 
-# Burrow 0.10.5
+Burrow's admin operations can now authenticate with **Touch ID**.
 
-Burrow's MCP tools, tuned against real agent transcripts. We audited how AI
-agents actually used the tools in the wild — what they called, where they
-stalled, and when they gave up and fell back to raw `du`/`df` — and fixed what
-tripped them up ([#302](https://github.com/caezium/Burrow/issues/302)).
+Until now every elevated action went through macOS's classic authorization
+dialog, which is password-only by construction — it never offers Touch ID, and
+it can't be cancelled safely. This release adds an optional signed helper that
+replaces that path.
 
-## Improved
-- **One `burrow_analyze` call now maps disk hotspots.** The engine reports one
-  directory level per run, which forced agents into a call per directory (a
-  real session made 15 in a row). `analyze` gains `depth` (descend into the
-  largest subdirectories), `limit`, and `min_size`, emits compact JSON instead
-  of 35–60 KB pretty-printed blobs, and always reports what it pruned
-  (`entries_omitted` / `omitted_bytes`, `partial: true` when the descent hits
-  its time budget). ([#303](https://github.com/caezium/Burrow/pull/303))
-- **The slow tools now say they're slow.** `analyze`, `clean`, `purge`, and
-  `installer` descriptions warn that big scans take minutes, so agents scope to
-  a specific folder instead of hanging past their client's patience and falling
-  back to shell commands. The agent docs and the `burrow-system-tools` skill
-  now lead with the low-disk emergency playbook — the pattern that actually
-  fires in practice. ([#303](https://github.com/caezium/Burrow/pull/303))
+## Added
+- **Touch ID for admin operations.** Install the helper in **Settings ▸
+  Advanced ▸ Privileged helper** and Clean, Optimize, the admin scan previews,
+  Flush DNS, Renew DHCP, and the Login Items list all authenticate through the
+  system's normal prompt — which offers Touch ID where the hardware has it, and
+  falls back to your password everywhere else.
+- **The Login Items list is now complete.** Reading it needs root, so
+  previously macOS raised its own unexplained "sfltool wants to make changes"
+  prompt and still returned only a partial list. Through the helper it's one
+  prompt you recognise, and the full list.
+
+## What the helper can and cannot do
+
+It is strictly opt-in, takes its own one-time macOS approval, and grants no
+standing access — you authenticate for each operation you start.
+
+It accepts seven fixed operations and builds every command line itself. There
+is no field in its API for a path, a shell string, or an executable, so it
+cannot be asked to run anything else. It runs the engine sealed inside the
+signed app plus four Apple tools by absolute path, each as a separate process
+with no shell involved. Only Burrow can talk to it: callers are pinned to the
+app's bundle identifier and signing team by the system.
+
+One honest caveat: the credential from your authentication stays valid for ten
+seconds, because it has to survive the hop from the app to the helper. A second
+operation begun inside that window won't prompt again. Full detail in
+[SECURITY.md](https://github.com/caezium/Burrow/blob/main/SECURITY.md).
+
+Not installing it changes nothing — every operation keeps working exactly as it
+does today, through the existing password prompt. You can remove the helper at
+any time from Settings, or from System Settings ▸ General ▸ Login Items &
+Extensions.
+
+## Changed
+- **Flush DNS no longer runs a root shell.** It previously elevated
+  `/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"`, handing a
+  command string to a shell running as root. It's now two separate processes
+  with fixed arguments.
+- **Removed the "Touch ID for sudo" setting.** It configured `pam_tid` for
+  terminal `sudo` and never affected Burrow's own admin prompts, which is what
+  people expected it to do. Those prompts are what the privileged helper now
+  covers. Nothing already configured on your Mac is changed by removing it; to
+  undo it yourself, run `mo touchid disable`.
 
 ## Fixed
-- **Killed runs no longer fail silently.** A `burrow_clean` that hit its time
-  limit rendered as `{"exit_code": 9, "output": ""}` — nothing an agent could
-  act on. Timed-out actions (and analyze) now return `timed_out: true` plus a
-  hint. ([#303](https://github.com/caezium/Burrow/pull/303))
-- **`burrow_cleanup_history` explains itself.** When engine history is
-  unavailable, the error now points at `burrow_info` to check whether Burrow is
-  recording at all. ([#303](https://github.com/caezium/Burrow/pull/303))
+- A failed elevated run could report "Done — caches cleared" when nothing had
+  actually run. Failures now say so.

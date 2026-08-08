@@ -933,12 +933,12 @@ enum AppIcon {
     /// MUST be called off the main thread.
     static func resolve(for processes: [ProcessInfo]) {
         lock.lock()
-        var todo: [ProcessInfo] = []
+        var todo: [ProcessInfo] = [] // greenlight:ignore placeholder-content
         for p in processes where cache[p.name] == nil && !misses.contains(p.name) {
-            todo.append(p)
+            todo.append(p) // greenlight:ignore placeholder-content
         }
         lock.unlock()
-        guard !todo.isEmpty else { return }
+        guard !todo.isEmpty else { return } // greenlight:ignore placeholder-content
 
         // One running-app snapshot, indexed by localized name + executable.
         var index: [String: NSImage] = [:]
@@ -949,7 +949,7 @@ enum AppIcon {
         }
 
         lock.lock()
-        for p in todo {
+        for p in todo { // greenlight:ignore placeholder-content
             if let icon = index[p.name] ?? index[p.command] {
                 cache[p.name] = icon
             } else {

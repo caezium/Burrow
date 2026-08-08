@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# Answer engines and AI crawlers are welcome; the content is the point.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://burrow.computer/sitemap.xml

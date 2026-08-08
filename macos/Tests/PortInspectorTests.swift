@@ -48,26 +48,30 @@ final class PortInspectorTests: XCTestCase {
     }
 
     func testConflicts_ignoresSamePidAndEstablished() {
+        let remoteA = "1.2.3.4" // greenlight:ignore hardcoded-ipv4 — port-inspector fixture
+        let remoteB = "5.6.7.8" // greenlight:ignore hardcoded-ipv4 — port-inspector fixture
         let ports = [
             mk(3000, pid: 10), mk(3000, pid: 10),                       // one owner, listed twice
-            mk(443, pid: 20, .established, remote: "1.2.3.4", rport: 443),
-            mk(443, pid: 21, .established, remote: "5.6.7.8", rport: 443),  // established ≠ conflict
+            mk(443, pid: 20, .established, remote: remoteA, rport: 443),
+            mk(443, pid: 21, .established, remote: remoteB, rport: 443),  // established ≠ conflict
         ]
         XCTAssertTrue(PortInspector.conflicts(ports).isEmpty)
     }
 
     func testFilter_byState() {
-        let ports = [mk(3000, pid: 1), mk(443, pid: 2, .established, remote: "1.1.1.1", rport: 443)]
+        let remote = "1.1.1.1" // greenlight:ignore hardcoded-ipv4 — port-inspector fixture
+        let ports = [mk(3000, pid: 1), mk(443, pid: 2, .established, remote: remote, rport: 443)]
         XCTAssertEqual(PortInspector.filter(ports, .listening, query: "").count, 1)
         XCTAssertEqual(PortInspector.filter(ports, .established, query: "").first?.port, 443)
         XCTAssertEqual(PortInspector.filter(ports, .all, query: "").count, 2)
     }
 
     func testFilter_byQuery_matchesPortProcessServiceAndRemote() {
+        let remote = "93.184.216.34" // greenlight:ignore hardcoded-ipv4 — port-inspector fixture
         let ports = [
             mk(5432, pid: 1, proc: "postgres"),
             mk(8080, pid: 2, proc: "node"),
-            mk(443, pid: 3, .established, proc: "curl", remote: "93.184.216.34", rport: 443),
+            mk(443, pid: 3, .established, proc: "curl", remote: remote, rport: 443),
         ]
         XCTAssertEqual(PortInspector.filter(ports, .all, query: "node").map(\.port), [8080])
         XCTAssertEqual(PortInspector.filter(ports, .all, query: "5432").map(\.port), [5432])

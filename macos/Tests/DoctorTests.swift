@@ -47,7 +47,31 @@ final class DoctorTests: XCTestCase {
 
     func testReport_noFullDiskAccess_warns() {
         var i = healthy(); i.fullDiskAccess = false
-        XCTAssertEqual(check(Doctor.report(i), "Full Disk Access")?.level, .warn)
+        let c = check(Doctor.report(i), "Full Disk Access")
+        XCTAssertEqual(c?.level, .warn)
+        XCTAssertTrue(c?.detail.hasPrefix("off") == true)
+    }
+
+    // When no probe location existed to refuse us, Doctor must not assert the
+    // permission is off — that false negative is what kept users re-granting
+    // it to no effect on macOS 27 betas (#177, #181, #319).
+    func testReport_inconclusiveFullDiskAccess_warnsWithoutClaimingOff() {
+        var i = healthy()
+        i.fullDiskAccess = false
+        i.fullDiskAccessConclusive = false
+        let c = check(Doctor.report(i), "Full Disk Access")
+        XCTAssertEqual(c?.level, .warn)
+        XCTAssertFalse(c?.detail.hasPrefix("off") == true,
+                       "an undetermined probe must not be reported as a denial")
+        XCTAssertTrue(c?.detail.contains("could not be determined") == true)
+    }
+
+    // A live grant is reported the same way regardless of the conclusive bit.
+    func testReport_grantedFullDiskAccess_ignoresConclusiveFlag() {
+        var i = healthy()
+        i.fullDiskAccess = true
+        i.fullDiskAccessConclusive = false
+        XCTAssertEqual(check(Doctor.report(i), "Full Disk Access")?.level, .ok)
     }
 
     func testReport_criticalPressure_fails() {

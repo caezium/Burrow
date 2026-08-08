@@ -16,7 +16,6 @@
 
 import SwiftUI
 import AppKit
-import LocalAuthentication
 import ServiceManagement
 import UniformTypeIdentifiers
 
@@ -83,6 +82,9 @@ struct SettingsView: View {
     // Menu bar
     @State private var showMenuBarIcon: Bool = Store.showMenuBarIcon
     @State private var displayMode: MenuBarDisplayMode = Store.menuBarDisplayMode
+    /// The compatibility guard suppresses the menu-bar item on some macOS
+    /// builds. Without this the toggle read as on while doing nothing (#319).
+    @State private var menuBarSuppressed: Bool = false
     @State private var menuBarItems: [MenuBarItem] = Store.menuBarItems
     /// Which widget's options panel is expanded in the editor (one at a time).
     @State private var expandedMenuBarItem: UUID?
@@ -105,17 +107,17 @@ struct SettingsView: View {
     @State private var aiOpenAIModel: String = Store.aiOpenAIModel
     @State private var aiOpenAIKey: String = Store.aiOpenAIKey
     @State private var moleVersion: String = "—"
+    @State private var moleUpdating = false
+    @State private var engineUpdatePolicy: MoleCLI.EngineUpdatePolicy = .unavailable
     @State private var copiedConfig = false
-    @State private var touchIDStatus = "—"
-    @State private var touchIDEnabled = false
-    @State private var touchIDBusy = false
-    @State private var touchIDAvailable = false
-    /// Separate from `touchIDAvailable` (hardware presence): whether the bundled engine itself
-    /// answers `touchid status` at all. The post-repoint engine has no `touchid` subcommand yet
-    /// (it answers "unknown command"), so this starts true and flips false the first time
-    /// `loadTouchIDStatus` sees that response — gates the Enable/Disable button so a Mac WITH a
-    /// sensor doesn't get told a false "Disabled" for a query the tool couldn't actually make.
-    @State private var touchIDEngineSupported = true
+    // The "Touch ID for sudo" row this branch was hardening against the repointed engine
+    // ("unknown command: touchid" must not read as a false "Disabled") is gone entirely on
+    // main — #346 replaced the whole section with the privileged helper below, which asks
+    // macOS for authorization rather than shelling out to `mo touchid`. The engine-support
+    // guard has nothing left to guard, so it retires with the feature.
+    @State private var helperStatus: HelperRegistrationStatus = .notRegistered
+    @State private var helperBusy = false
+    @State private var helperError: String?
 
     /// Drop-in MCP config for Claude Code / Cursor / Codex / Cline — they
     /// all share the same `{command, args}` stdio shape, so one snippet
@@ -165,12 +167,18 @@ struct SettingsView: View {
             .frame(width: 460, height: 440)
         }
         .onAppear {
-            refreshStatusLabels(); loadMoleVersion(); loadTouchIDStatus(); loadLaunchAtLogin()
+            refreshStatusLabels(); loadMoleVersion(); loadLaunchAtLogin()
+            loadHelperStatus()
             whitelistPatterns = MoleWhitelist.live.patterns()
+            menuBarSuppressed = AppDelegate.shared?.menuBarSuppressedByCompatibilityGuard ?? false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             fdaGranted = Privacy.hasFullDiskAccess()
             axTrusted = CleanScreen.inputLockPermitted()
+            // Approving the helper happens in System Settings, outside this
+            // app, so the row would otherwise still read "waiting for your
+            // approval" after the user came back having already granted it.
+            loadHelperStatus()
         }
     }
 
@@ -321,10 +329,9 @@ struct SettingsView: View {
             section("About", "info.circle") {
                 infoRow("Version", appVersionText)
                 toggleRow("Check for updates automatically", isOn: $autoCheckUpdates) { on in
-                    Store.autoCheckForUpdates = on
-                    if on { AppUpdate.shared.checkNow() }
+                    AppUpdate.shared.setAutomaticChecks(on)
                 }
-                Text("Burrow checks GitHub for new releases on launch and about once a day, and shows a banner if one is found. It never installs anything on its own.")
+                Text("Sparkle checks Burrow's signed update feed after startup settles and about once a day. It asks before downloading or installing anything.")
                     .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
@@ -454,14 +461,43 @@ struct SettingsView: View {
 
     // MARK: - Menu bar
 
+    /// Shown in place of a toggle that cannot act. The recovery alert fires
+    /// once per macOS build, so without this the only lasting explanation for
+    /// a missing menu-bar icon was a checked switch that did nothing (#319).
+    private var menuBarCompatibilityNotice: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Brand.amber)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(NSLocalizedString("Menu bar item paused on this macOS build", comment: ""))
+                    .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.textPrimary)
+                Text(NSLocalizedString("Creating it could freeze system input on this build, so Burrow runs from the Dock instead. It returns automatically once you update macOS.", comment: ""))
+                    .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Brand.amber.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.amber.opacity(0.25), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+    }
+
     private var menuBarTab: some View {
         Group {
             section("Menu bar", "menubar.rectangle") {
+                if menuBarSuppressed { menuBarCompatibilityNotice }
                 toggleRow("Show menu bar icon", isOn: $showMenuBarIcon) { on in
                     Store.showMenuBarIcon = on
                     AppDelegate.shared?.applyMenuBarVisibility(on)
                 }
-                footnote("Applies immediately. When off, Burrow shows a Dock icon instead so it stays reachable — a Dock click reopens the window.")
+                .disabled(menuBarSuppressed)
+                .opacity(menuBarSuppressed ? 0.5 : 1)
+                footnote(menuBarSuppressed
+                    ? "Paused on this macOS build. The setting is kept and applies again as soon as Burrow can create the menu bar item safely."
+                    : "Applies immediately. When off, Burrow shows a Dock icon instead so it stays reachable — a Dock click reopens the window.")
                 HStack {
                     Text(NSLocalizedString("Display", comment: "")).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary)
                     Spacer()
@@ -476,6 +512,8 @@ struct SettingsView: View {
                         AppDelegate.shared?.applyMenuBarVisibility(Store.showMenuBarIcon)
                     }
                 }
+                .disabled(menuBarSuppressed)
+                .opacity(menuBarSuppressed ? 0.5 : 1)
                 footnote("Choose which metrics appear in the menu bar and how each is shown — refreshed with the sampler. Each metric has its own text size in its options (⚙︎).")
                 if displayMode == .metrics { menuBarMetricsEditor }
                 toggleRow("Show camera & mic in-use indicator", isOn: $cameraMicIndicator) {
@@ -596,33 +634,45 @@ struct SettingsView: View {
             }
 
             section("Anonymous usage", "chart.bar") {
-                toggleRow("Share anonymous usage & crash reports", isOn: $telemetryEnabled) { on in
+                toggleRow("Share anonymous usage & diagnostics", isOn: $telemetryEnabled) { on in
                     Telemetry.setEnabled(on)
                 }
-                footnote("Sends anonymous product analytics (PostHog) and crash reports (Sentry): a random install id (not tied to you or your hardware), the app + macOS version, CPU type, and which features you use — with sizes and counts bucketed. Never file names, contents, paths, or your metrics. It helps gauge retention and catch crashes. On by default; turn it off and both stop. Full list in TELEMETRY.md.")
+                footnote("Sends anonymous product analytics (PostHog) plus crash, hang, startup, update, and sampled performance diagnostics (Sentry): random install IDs, app and exact macOS build, CPU type, screens and features used, and fixed-name diagnostic milestones. Never screenshots, screen recordings, your file names, contents, user paths, URLs, or metrics. On by default; turn it off and both stop. Full list in TELEMETRY.md.")
             }
 
-            section("Touch ID for sudo", "touchid") {
-                infoRow("Status", touchIDStatus)
-                if touchIDAvailable, touchIDEngineSupported {
-                    HStack {
-                        Spacer()
-                        if touchIDBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }
-                        PillButton(title: touchIDEnabled ? "Disable" : "Enable", filled: false) { toggleTouchID() }
-                    }
+            section("Privileged helper", "lock.shield") {
+                infoRow("Status", helperStatusLabel)
+                HStack {
+                    Spacer()
+                    if helperBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }
+                    PillButton(title: helperInstalled ? "Remove" : "Install", filled: false) { toggleHelper() }
                 }
-                footnote(touchIDEngineSupported
-                    ? "Lets `sudo` in a terminal accept your fingerprint instead of a password — including `mo` commands you run yourself. It does NOT change Burrow's own admin prompts: those go through macOS authorization, which asks for your password regardless. Configured via `mo touchid` (pam_tid); turning it on or off needs your password once."
-                    : "The bundled engine doesn't have a `touchid` command yet, so Burrow can't check or change this for you. Configure it directly with `sudo mo touchid enable` in a terminal if you have Mole installed separately.")
+                if let helperError {
+                    footnote(helperError)
+                }
+                footnote("Runs Burrow's admin operations — scan, clean, optimize — through a small signed helper instead of a password-only prompt, so macOS can offer Touch ID. Installing it needs your approval once and grants no standing access: you're asked to authenticate for each operation you start. The helper can only perform those three operations — it cannot be asked to run anything else.")
             }
 
             section("Engine", "shippingbox") {
                 infoRow("Version", moleVersion)
-                HStack {
-                    Spacer()
-                    PillButton(title: "Update Mole", filled: false) { updateMole() }
+                // This branch had hidden the update button outright, because the bundled
+                // engine has no `update` arm and pressing it could only ever fail. Main's
+                // policy gate says the same thing more precisely: `.bundledWithApp` shows
+                // no button at all (the case the branch was fixing), and `.external` keeps
+                // it for a source build pointed at an engine outside the app bundle, which
+                // really can update itself.
+                if engineUpdatePolicy == .external {
+                    HStack {
+                        Spacer()
+                        if moleUpdating { ProgressView().controlSize(.small).padding(.trailing, 4) }
+                        PillButton(title: moleUpdating ? "Updating…" : "Update external engine", filled: false) { updateMole() }
+                    }
+                    footnote("This source build is using an engine outside Burrow.app, so its own updater remains available.")
+                } else if engineUpdatePolicy == .bundledWithApp {
+                    footnote("Included with Burrow. Engine updates arrive through signed Burrow releases so the app's Developer ID seal stays valid.")
+                } else {
+                    footnote("The bundled engine is missing. Reinstall Burrow to restore the signed app bundle.")
                 }
-                footnote("Burrow bundles its own engine (Contents/Resources/burrow) — it updates automatically whenever Burrow does, so there's no separate `mo update` step anymore.")
             }
         }
     }
@@ -637,7 +687,11 @@ struct SettingsView: View {
     private func loadMoleVersion() {
         DispatchQueue.global(qos: .userInitiated).async {
             let engine = MoleCLI.versionReport()
-            DispatchQueue.main.async { moleVersion = engine?.display ?? "not found" }
+            let policy = MoleCLI.currentEngineUpdatePolicy
+            DispatchQueue.main.async {
+                moleVersion = engine?.display ?? "not found"
+                engineUpdatePolicy = policy
+            }
         }
     }
 
@@ -651,75 +705,122 @@ struct SettingsView: View {
         }
     }
 
-    /// The bundled engine (post-repoint) has no self-update command at all — `burrow-engine`'s
-    /// `cli.rs` dispatch table has no `update` arm, so it always answers "unknown command:
-    /// update". Spawning it and reporting THAT as "Update didn't complete, try running it in a
-    /// terminal" would be actively misleading (a terminal run hits the exact same bundled
-    /// binary and fails the exact same way) — so instead of running a command that can only
-    /// ever fail, say the true thing directly: Resources/burrow only changes when Burrow itself
-    /// does (bundle-burrow.sh stages a fresh one on every release), so there's nothing left for
-    /// this button to run.
+    /// ONLY reachable for `.external` — the caller gates the button on the update policy, and
+    /// that gate is load-bearing rather than cosmetic. The bundled engine (post-repoint) has no
+    /// self-update command at all: `burrow-engine`'s `cli.rs` dispatch table has no `update`
+    /// arm, so it answers "unknown command: update". Running it there and reporting that as
+    /// "Update didn't complete, try running it in a terminal" would be actively misleading — a
+    /// terminal run hits the exact same bundled binary and fails the exact same way — and the
+    /// bundled copy can only change when Burrow itself does anyway (bundle-burrow.sh stages a
+    /// fresh one on every release). An external engine is a different animal: it lives outside
+    /// the app bundle, nothing about Burrow's Developer ID seal depends on it, and if it's a
+    /// separately installed mo then `mo update` is exactly the right thing to run.
     private func updateMole() {
-        let alert = NSAlert()
-        alert.messageText = "No separate update needed"
-        alert.informativeText = "Burrow bundles its engine — it updates automatically whenever Burrow does. There's no separate `mo update` step to run."
-        alert.runModalQuiet()
-    }
-
-    // MARK: - Touch ID for sudo
-
-    /// Whether this Mac actually has a Touch ID sensor. `mo touchid status`
-    /// only reports configured-vs-not (never hardware presence), so we ask
-    /// LocalAuthentication directly — biometryType is .touchID only on Macs
-    /// with the sensor (set after a canEvaluatePolicy probe, even if no
-    /// finger is enrolled yet).
-    private func touchIDHardwarePresent() -> Bool {
-        let ctx = LAContext()
-        var err: NSError?
-        _ = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
-        return ctx.biometryType == .touchID
-    }
-
-    private func loadTouchIDStatus() {
-        let available = touchIDHardwarePresent()
+        guard !moleUpdating else { return }
+        moleUpdating = true
         DispatchQueue.global(qos: .userInitiated).async {
-            let res = try? MoleCLI.run(args: ["touchid", "status"], timeout: 15)
-            let raw = res?.stdout ?? ""
-            // The bundled engine (post-repoint) has no `touchid` subcommand at all —
-            // `burrow-engine`'s cli.rs answers every unrecognized command with the literal
-            // "unknown command: <name>". That must read as "can't ask," never as a false
-            // "Disabled": telling someone Touch ID for sudo is off when the tool actually
-            // couldn't ask is a materially wrong, actionable-looking answer.
-            let supported = !raw.contains("unknown command")
-            // Strip ANSI colour codes Mole wraps the status line in before matching.
-            let out = Ansi.strip(raw).lowercased()
-            let enabled = out.contains("is enabled")
+            let res = try? MoleCLI.run(args: ["update"], timeout: 600)
+            let newVersion = MoleCLI.versionReport()
             DispatchQueue.main.async {
-                touchIDAvailable = available
-                touchIDEngineSupported = supported
-                touchIDEnabled = enabled
-                touchIDStatus = !available ? "Not available on this Mac"
-                    : !supported ? "Not supported by this build of the engine yet"
-                    : (out.isEmpty ? "Unknown" : (enabled ? "Enabled" : "Disabled"))
+                moleUpdating = false
+                if let newVersion { moleVersion = newVersion.display }
+                let ok = (res?.exitCode ?? 1) == 0
+                let alert = NSAlert()
+                alert.messageText = NSLocalizedString(
+                    ok ? "External engine is up to date" : "Update didn't complete",
+                    comment: ""
+                )
+                alert.informativeText = ok
+                    ? String(format: NSLocalizedString("Now on %@.", comment: ""), moleVersion)
+                    : (res?.stderr.isEmpty == false ? String(res!.stderr.prefix(300))
+                                                    : NSLocalizedString("The external engine updater exited non-zero. Try running `mo update` in a terminal.", comment: ""))
+                alert.runModalQuiet()
             }
         }
     }
 
-    private func toggleTouchID() {
-        guard !touchIDBusy, touchIDEngineSupported else { return }
-        touchIDBusy = true
-        let cmd = touchIDEnabled ? "disable" : "enable"
+    // MARK: - Privileged helper
+
+    private var helperInstalled: Bool { helperStatus != .notRegistered }
+
+    private var helperStatusLabel: String {
+        switch helperStatus {
+        case .enabled: return "Installed"
+        case .requiresApproval: return "Waiting for your approval in Login Items & Extensions"
+        case .notRegistered: return "Not installed"
+        }
+    }
+
+    private func loadHelperStatus() {
+        let status = PrivilegedHelperClient.shared.registrationStatus
+        DispatchQueue.main.async { helperStatus = status }
+    }
+
+    /// Watch for the approval landing.
+    ///
+    /// `register()` returns as soon as the request is filed, but the daemon
+    /// stays in `.requiresApproval` until the user allows it in System
+    /// Settings ▸ General ▸ Login Items & Extensions. That approval is
+    /// asynchronous and happens in another process, with no notification back
+    /// to us, so a one-shot read right after `register()` almost always
+    /// reports the pre-approval state and then never corrects itself.
+    ///
+    /// Polling for a bounded window is the whole fix. It stops as soon as the
+    /// status settles, and gives up rather than running forever if the user
+    /// walks away or dismisses the prompt.
+    private func pollHelperApproval(deadline: Date = Date().addingTimeInterval(90)) {
+        guard Date() < deadline else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            let status = PrivilegedHelperClient.shared.registrationStatus
+            helperStatus = status
+            guard status == .requiresApproval else { return }
+            pollHelperApproval(deadline: deadline)
+        }
+    }
+
+    /// Install or remove the daemon. Both directions can throw — macOS refuses
+    /// registration if the user declines, and we surface that rather than
+    /// leaving the row silently unchanged.
+    private func toggleHelper() {
+        guard !helperBusy else { return }
+        helperBusy = true
+        helperError = nil
+        let install = !helperInstalled
         DispatchQueue.global(qos: .userInitiated).async {
-            let code = MoleCLI.runElevated(args: ["touchid", cmd])
-            DispatchQueue.main.async {
-                touchIDBusy = false
-                loadTouchIDStatus()
-                if code != 0 {
-                    let alert = NSAlert()
-                    alert.messageText = NSLocalizedString("Couldn't update Touch ID for sudo", comment: "")
-                    alert.informativeText = String(format: NSLocalizedString("`mo touchid %@` didn't complete (the password prompt may have been cancelled). You can also run it in a terminal.", comment: ""), cmd)
-                    alert.runModalQuiet()
+            var failure: String?
+            do {
+                if install {
+                    try PrivilegedHelperClient.shared.register()
+                } else {
+                    try PrivilegedHelperClient.shared.unregister()
                 }
+            } catch {
+                // Show the real reason, not a shrug. The interesting failures
+                // here are all indistinguishable from each other in a generic
+                // message — a stale registration left by a previous build of
+                // the app, a signature the system won't accept, or the user
+                // declining — and the underlying code is what tells them
+                // apart. `kSMErrorAlreadyRegistered` in particular is
+                // actionable: the launchd job survives, bound to the old app
+                // identity, and has to be removed before a new install works.
+                let ns = error as NSError
+                let detail = "\(ns.domain) \(ns.code): \(ns.localizedDescription)"
+                if install {
+                    let stale = ns.domain == "SMAppServiceErrorDomain" && ns.code == 134
+                    failure = stale
+                        ? "A helper from an earlier build of Burrow is still registered. Remove Burrow under System Settings ▸ General ▸ Login Items & Extensions, then install again. (\(detail))"
+                        : "Couldn't install the helper — Burrow keeps using the password prompt. (\(detail))"
+                } else {
+                    failure = "Couldn't remove the helper. You can also turn it off in System Settings ▸ General ▸ Login Items & Extensions. (\(detail))"
+                }
+            }
+            let status = PrivilegedHelperClient.shared.registrationStatus
+            DispatchQueue.main.async {
+                helperBusy = false
+                helperError = failure
+                helperStatus = status
+                // Installing files the request; the user approves it elsewhere.
+                if install, status == .requiresApproval { pollHelperApproval() }
             }
         }
     }

@@ -17,9 +17,11 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.10.5</string>
+	<string>0.12.0</string>
 	<key>CFBundleVersion</key>
-	<string>20</string>
+	<string>24</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSDesktopFolderUsageDescription</key>
@@ -29,13 +31,31 @@
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>Burrow scans your Downloads for leftover installer files (.dmg, .pkg).</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>MIT License. Mole CLI © tw93. Independent, not affiliated with mole.fit.</string>
+	<string>MIT License. © 2026 Henry Zhang.</string>
 	<key>NSRemovableVolumesUsageDescription</key>
 	<string>Burrow analyzes external drives when you point it at them.</string>
 	<key>PHPostHogApiKey</key>
 	<string>$(POSTHOG_API_KEY)</string>
 	<key>PHPostHogHost</key>
 	<string>$(POSTHOG_HOST)</string>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableSystemProfiling</key>
+	<false/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/caezium/Burrow/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>f1LoqtxmfTxFgz2S5KlTQzZzhmOB8J8r5UdTRH48hvU=</string>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 	<key>SentryDSN</key>
 	<string>$(SENTRY_DSN)</string>
 </dict>

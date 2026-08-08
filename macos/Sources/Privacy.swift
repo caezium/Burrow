@@ -29,25 +29,102 @@ enum Privacy {
         return !hasAccess && !dismissed
     }
 
-    /// Probe whether Burrow has Full Disk Access by attempting to open an
-    /// FDA-gated file. `TCC.db` exists on every Mac and is readable only
-    /// with Full Disk Access, so a successful open is the canonical
-    /// signal. We open and immediately close — the bytes are never read;
-    /// this is a capability probe, not data access. A read that lacks
-    /// access fails silently (no prompt), so probing can't itself flood
-    /// the user.
-    static func hasFullDiskAccess() -> Bool {
-        let probes = [
-            "Library/Application Support/com.apple.TCC/TCC.db",
-            "Library/Safari/Bookmarks.plist",
-        ].map { (NSHomeDirectory() as NSString).appendingPathComponent($0) }
-        for path in probes {
-            if let fh = FileHandle(forReadingAtPath: path) {
-                try? fh.close()
-                return true
-            }
+    /// What one probe location told us. The distinction that matters is
+    /// `denied` vs `unavailable`: the old two-path probe collapsed both into
+    /// "no access", so a Mac where neither path existed reported Full Disk
+    /// Access as off however many times the user granted it (#177, #181, #319).
+    enum ProbeOutcome: String, Equatable {
+        /// Opened — the grant is live for this process.
+        case granted
+        /// The file is there and the kernel refused the read: access is off.
+        case denied
+        /// Nothing at this path on this Mac, so it says nothing either way.
+        case unavailable
+        /// Some other errno. Treated like `unavailable` — never as proof.
+        case inconclusive
+    }
+
+    /// An FDA-gated location to try. `authoritative` marks the paths that
+    /// exist on every Mac and are gated by Full Disk Access *specifically*,
+    /// so a refusal there really does mean the grant is missing. The rest
+    /// are positive-only: Safari and Messages data can be absent or gated
+    /// under a different service, so their refusal proves nothing.
+    struct Probe: Equatable {
+        let id: String
+        let path: String
+        let authoritative: Bool
+    }
+
+    static let fullDiskAccessProbes: [Probe] = {
+        let home = NSHomeDirectory() as NSString
+        return [
+            Probe(id: "user_tcc_db",
+                  path: home.appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db"),
+                  authoritative: true),
+            Probe(id: "system_tcc_db",
+                  path: "/Library/Application Support/com.apple.TCC/TCC.db",
+                  authoritative: true),
+            Probe(id: "safari_bookmarks",
+                  path: home.appendingPathComponent("Library/Safari/Bookmarks.plist"),
+                  authoritative: false),
+            Probe(id: "messages_db",
+                  path: home.appendingPathComponent("Library/Messages/chat.db"),
+                  authoritative: false),
+        ]
+    }()
+
+    /// The full picture behind `hasFullDiskAccess()`. `conclusive` is the
+    /// point of it: when nothing opened *and* no authoritative probe was
+    /// refused, Burrow has learned nothing and must not tell the user the
+    /// permission is off.
+    struct Diagnosis: Equatable {
+        var outcomes: [String: ProbeOutcome]
+        var hasAccess: Bool
+        var conclusive: Bool
+    }
+
+    /// Classify a single probe from the errno an `open(2)` left behind.
+    /// Pure and separately testable — the errno mapping is the part most
+    /// likely to need revisiting on a future macOS.
+    static func classify(openSucceeded: Bool, errnoValue: Int32) -> ProbeOutcome {
+        if openSucceeded { return .granted }
+        switch errnoValue {
+        case EPERM, EACCES: return .denied
+        case ENOENT, ENOTDIR: return .unavailable
+        default: return .inconclusive
         }
-        return false
+    }
+
+    /// Fold per-probe outcomes into a verdict. Any single `granted` wins;
+    /// otherwise only an authoritative `denied` earns the right to say "off".
+    static func summarize(_ outcomes: [String: ProbeOutcome], probes: [Probe]) -> Diagnosis {
+        let hasAccess = outcomes.values.contains(.granted)
+        let authoritativeDenial = probes.contains {
+            $0.authoritative && outcomes[$0.id] == .denied
+        }
+        return Diagnosis(outcomes: outcomes,
+                         hasAccess: hasAccess,
+                         conclusive: hasAccess || authoritativeDenial)
+    }
+
+    /// Run every probe. We open and immediately close — the bytes are never
+    /// read; this is a capability probe, not data access. A read that lacks
+    /// access fails silently (no prompt), so probing can't itself flood the
+    /// user with consent dialogs.
+    static func diagnoseFullDiskAccess(probes: [Probe] = fullDiskAccessProbes) -> Diagnosis {
+        var outcomes: [String: ProbeOutcome] = [:]
+        for probe in probes {
+            let fd = open(probe.path, O_RDONLY)
+            let outcome = classify(openSucceeded: fd >= 0, errnoValue: errno)
+            if fd >= 0 { close(fd) }
+            outcomes[probe.id] = outcome
+        }
+        return summarize(outcomes, probes: probes)
+    }
+
+    /// Whether Burrow can reach FDA-gated files right now.
+    static func hasFullDiskAccess() -> Bool {
+        diagnoseFullDiskAccess().hasAccess
     }
 
     /// Deep-link to System Settings ▸ Privacy & Security ▸ Full Disk Access.

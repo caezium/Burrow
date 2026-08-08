@@ -4,21 +4,24 @@ name: release
 #
 #   git tag v0.5.0 && git push origin v0.5.0
 #
-# This builds a Release app, code-signs + notarizes it (when the signing
-# secrets are configured — otherwise it ships unsigned, as today),
-# publishes a GitHub release with the zip, and bumps the Homebrew cask in
-# caezium/homebrew-tap so `brew upgrade --cask caezium/tap/burrow` picks it
-# up. Pushing ordinary commits to main does NOT touch the tap — only a tag.
+# This builds a Release app, code-signs every executable with Developer ID,
+# notarizes + staples it, signs the ZIP and appcast with Sparkle Ed25519,
+# publishes both, and bumps
+# the Homebrew cask in caezium/homebrew-tap so `brew upgrade --cask
+# caezium/tap/burrow` picks it up. Pushing ordinary commits to main does NOT
+# touch the tap — only a tag. Releases fail closed when any signing or
+# notarization credential is absent, or when the external-tap token cannot
+# write its target repository.
 #
-# Optional secrets for a signed + notarized build:
+# Required secrets:
 #   MACOS_CERT_P12        base64 of a "Developer ID Application" .p12
 #   MACOS_CERT_PASSWORD   password for that .p12
 #   MACOS_SIGN_IDENTITY   e.g. "Developer ID Application: Name (TEAMID)"
 #   AC_API_KEY_ID         App Store Connect API key id
 #   AC_API_ISSUER_ID      App Store Connect issuer id
 #   AC_API_KEY_P8         base64 of the AuthKey_XXXX.p8
-# Without the cert secrets the build is unsigned (current behaviour); with
-# the cert but no AC_* keys it's signed but not notarized.
+#   SPARKLE_ED_PRIVATE_KEY private Sparkle seed exported by generate_keys -x
+#   TAP_PAT               fine-grained token for caezium/homebrew-tap
 #
 # Optional telemetry secrets — release.sh reads these from the environment
 # (locally it sources the gitignored scripts/release.env instead). Without
@@ -44,17 +47,59 @@ concurrency:
 jobs:
   release:
     runs-on: macos-15
-    timeout-minutes: 40
+    # The build is capped at 38 minutes and Apple's synchronous notarization
+    # wait at 60 minutes. Keep bounded headroom for setup, signing, stapling,
+    # packaging, publication, and the external tap update.
+    timeout-minutes: 120
     steps:
       # Pinned to a commit SHA, not a floating tag: this job holds
       # contents:write, the signing cert, and TAP_PAT, so a moved tag must
       # not be able to run new code here. Comment keeps the version legible.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Require release credentials
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          AC_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+          AC_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
+          SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          TAP_TOKEN: ${{ secrets.TAP_PAT }}
+        run: |
+          missing=()
+          [ -n "$CERT_P12" ] || missing+=(MACOS_CERT_P12)
+          [ -n "$CERT_PASSWORD" ] || missing+=(MACOS_CERT_PASSWORD)
+          [ -n "$SIGN_IDENTITY" ] || missing+=(MACOS_SIGN_IDENTITY)
+          [ -n "$AC_KEY_ID" ] || missing+=(AC_API_KEY_ID)
+          [ -n "$AC_ISSUER_ID" ] || missing+=(AC_API_ISSUER_ID)
+          [ -n "$AC_KEY_P8" ] || missing+=(AC_API_KEY_P8)
+          [ -n "$SPARKLE_KEY" ] || missing+=(SPARKLE_ED_PRIVATE_KEY)
+          [ -n "$TAP_TOKEN" ] || missing+=(TAP_PAT)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Release blocked: missing required secret(s): ${missing[*]}"
+            exit 1
+          fi
+          case "$SIGN_IDENTITY" in
+            "Developer ID Application:"*) ;;
+            *)
+              echo "::error::MACOS_SIGN_IDENTITY must name a Developer ID Application certificate."
+              exit 1
+              ;;
+          esac
+
+      - name: Verify Homebrew tap write access
+        env:
+          GH_TOKEN: ${{ secrets.TAP_PAT }}
+        run: bash scripts/verify-homebrew-tap-access.sh
 
       # Fetch the bundled `burrow-engine` (FSL-1.1) OUTSIDE the work tree (RUNNER_TEMP), at its
-      # pinned submodule commit. (This once looked like it hung SPM — the real cause was Sentry's
-      # SPM binary-artifact download, now vendored via scripts/fetch-sentry.sh so SPM never
-      # touches Sentry.)
+      # pinned submodule commit. (This once looked like it hung SPM — the real cause was
+      # binary-artifact resolution. Sentry and Sparkle are both fetched directly now, with
+      # pinned checksums via scripts/fetch-{sentry,sparkle}.sh, so SPM downloads nothing.)
       #
       # There is exactly ONE bundled binary after the repoint (no separate digger + conductor,
       # see macos/scripts/bundle-burrow.sh's header for the full naming story) and NO fallback —
@@ -95,7 +140,14 @@ jobs:
       # Use the newest Xcode on the runner so xcodebuild can read the project
       # format xcodegen emits (Homebrew's xcodegen targets the latest Xcode).
       - name: Select newest Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
+        run: |
+          shopt -s nullglob
+          XCODE_APPS=(/Applications/Xcode_*.app)
+          [ "${#XCODE_APPS[@]}" -gt 0 ] \
+            || { echo "::error::No versioned Xcode app found on the runner."; exit 1; }
+          XCODE="$(printf '%s\n' "${XCODE_APPS[@]}" | sort -V | tail -1)"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
 
       # Cache the built universal fclones across releases so it builds only once (heavy —
       # two full dep-tree builds). Keyed on the pinned version.
@@ -123,17 +175,25 @@ jobs:
           # the already-fetched checkout in place. burrow-engine's own Cargo.toml has exactly one
           # dependency (crates.io `image`) and no git dependencies, so — unlike the old
           # burrow-cli-depends-on-burrow-engine-over-git arrangement this replaces — no further
-          # GitHub auth is needed here; ENGINE_PAT's job ended at the fetch step above.
+          # GitHub auth is needed here; ENGINE_PAT's job ended at the fetch step above. That is
+          # also why the GIT_CONFIG_COUNT URL rewrite main added here is gone rather than kept:
+          # it existed only so cargo could reach the private burrow-engine crate during the
+          # conductor build, and there is no conductor build left to do it for. Nothing in this
+          # step authenticates to GitHub now, so it cannot shadow TAP_PAT later either.
           #
-          # Sentry is vendored as a local framework (scripts/fetch-sentry.sh),
-          # not an SPM package, so the SPM binary-download hang is gone — this is
-          # a plain build now. The step timeout-minutes above is the hard cap.
+          # Sentry and Sparkle are vendored as checksum-pinned local frameworks
+          # (scripts/fetch-{sentry,sparkle}.sh), so SwiftPM has no binary artifacts left to
+          # download. The step timeout-minutes above is the hard cap.
           bash scripts/release.sh
           APP="build_dist/Build/Products/Release/Burrow.app"
           [ -d "$APP" ] || { echo "::error::build produced no app at $APP"; exit 1; }
           VERSION=$(defaults read "$PWD/$APP/Contents/Info" CFBundleShortVersionString)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          BUILD_NUMBER=$(defaults read "$PWD/$APP/Contents/Info" CFBundleVersion)
+          {
+            echo "version=$VERSION"
+            echo "build_number=$BUILD_NUMBER"
+            echo "app=$APP"
+          } >> "$GITHUB_OUTPUT"
 
       # The bundle phase is non-fatal by design in dev builds (falls back to a system engine) —
       # but a RELEASE without the bundled engine ships with every headline feature dead while the
@@ -171,12 +231,46 @@ jobs:
             exit 1
           fi
 
+      - name: Require Sparkle release configuration and matching keys
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          APP="${{ steps.build.outputs.app }}"
+          INFO="$APP/Contents/Info.plist"
+          require_plist_value() {
+            local key="$1" expected="$2" actual
+            actual="$(/usr/libexec/PlistBuddy -c "Print :$key" "$INFO")"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::$key is '$actual' in the release app; expected '$expected'."
+              exit 1
+            fi
+          }
+          require_plist_value SURequireSignedFeed true
+          require_plist_value SUVerifyUpdateBeforeExtraction true
+          require_plist_value SUAllowsAutomaticUpdates false
+          require_plist_value SUAutomaticallyUpdate false
+          require_plist_value SUEnableSystemProfiling false
+          require_plist_value ITSAppUsesNonExemptEncryption false
+          require_plist_value SUFeedURL \
+            'https://github.com/caezium/Burrow/releases/latest/download/appcast.xml'
+          PUBLIC_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$INFO")"
+          DERIVED_PUBLIC="$(swift -e 'import Foundation; import CryptoKit; guard let encoded = ProcessInfo.processInfo.environment["SPARKLE_PRIVATE_KEY"], let seed = Data(base64Encoded: encoded, options: .ignoreUnknownCharacters), seed.count == 32 else { FileHandle.standardError.write(Data("SPARKLE_ED_PRIVATE_KEY must be the base64 32-byte seed exported by generate_keys -x\n".utf8)); exit(1) }; do { let key = try Curve25519.Signing.PrivateKey(rawRepresentation: seed); print(key.publicKey.rawRepresentation.base64EncodedString()) } catch { FileHandle.standardError.write(Data("Invalid Sparkle private key\n".utf8)); exit(1) }')"
+          if [ "$PUBLIC_KEY" = "SPARKLE_PUBLIC_KEY_REQUIRED" ] || [ -z "$PUBLIC_KEY" ]; then
+            echo "::error::SUPublicEDKey is not configured in macos/project.yml."
+            exit 1
+          fi
+          if [ "$DERIVED_PUBLIC" != "$PUBLIC_KEY" ]; then
+            echo "::error::SPARKLE_ED_PRIVATE_KEY does not match the SUPublicEDKey embedded in Burrow.app."
+            exit 1
+          fi
+          echo "Sparkle Ed25519 keypair matches the app's embedded public key."
+
       # Symbolicate Sentry crash/hang reports. Without the dSYM, every event's
       # Burrow frames arrive as <unknown> ("debug information file was
       # missing") — exactly what made the 0.6.7 "App Hanging" reports show only
       # system frames. Runs after the tag/version check so only a real
-      # release's symbols ship; skipped (with a warning) when no token is set,
-      # matching the sign/notarize steps.
+      # release's symbols ship; skipped (with a warning) when no token is set.
+      # Signing and notarization remain mandatory and fail closed independently.
       - name: Upload dSYMs to Sentry — skipped if no token
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -200,96 +294,121 @@ jobs:
           # source files are ever shipped to Sentry.
           sentry-cli debug-files upload "$DSYM"
 
-      - name: Code-sign (Developer ID) — skipped if no cert
-        id: sign
+      - name: Code-sign every executable (Developer ID)
         env:
           CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: |
           APP="${{ steps.build.outputs.app }}"
-          if [ -z "$CERT_P12" ] || [ -z "$SIGN_IDENTITY" ]; then
-            # No Developer ID cert: re-sign AD-HOC rather than ship whatever
-            # xcodebuild left behind. Its SPM frameworks carry a CodeResources
-            # manifest that doesn't match the embedded bundle, so
-            # `codesign --verify --strict` fails ("code has no resources but
-            # signature indicates they must be present" on Sentry.framework) —
-            # macOS then can't validate the app's identity, so a Full Disk
-            # Access grant is never honoured (#177). An inside-out ad-hoc
-            # re-sign regenerates each framework's CodeResources and gives the
-            # app one coherent, strictly-valid identity, so TCC can validate it
-            # and FDA holds within a version. (A stable identity ACROSS updates
-            # still needs a Developer ID — set the MACOS_CERT_* secrets.)
-            echo "::warning::No Developer ID cert — re-signing AD-HOC (valid, but a per-build identity: FDA must be re-granted after each update until a cert is configured)."
-            if [ -d "$APP/Contents/Frameworks" ]; then
-              find "$APP/Contents/Frameworks" \( -name "*.framework" -o -name "*.dylib" \) -print0 \
-                | while IFS= read -r -d '' f; do codesign --force --sign - "$f"; done
-            fi
-            # Resources/burrow (the bundled burrow-engine binary — the app's only nested Mach-O
-            # since the repoint retired the separate Resources/engine runtime dir) needs re-signing
-            # inside-out too, or the app's resource seal goes stale (#177). (bundle-burrow.sh
-            # ad-hoc signs it at build time, but best-effort; this makes it authoritative and is
-            # what the Developer ID path below relies on.)
-            if [ -f "$APP/Contents/Resources/burrow" ]; then codesign --force --sign - "$APP/Contents/Resources/burrow"; fi
-            codesign --force --sign - --entitlements macos/Resources/Burrow.entitlements "$APP"
-            codesign --verify --strict --verbose=2 "$APP"
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          # The ad-hoc fallback that used to live here is gone: "Require release
+          # credentials" above already fails the run when MACOS_CERT_P12 or
+          # MACOS_SIGN_IDENTITY is missing, so an unsigned release can no longer be
+          # produced at all. Re-signing Resources/burrow (the bundled burrow-engine, the
+          # app's only nested Mach-O outside Frameworks since the repoint retired
+          # Resources/engine) is still done — sign-macos-app.sh walks every Mach-O under
+          # Contents/, so it is covered by rule rather than by an explicit path check.
           KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
           KPW="$(uuidgen)"
+          if ! ORIGINAL_KEYCHAIN_OUTPUT="$(security list-keychains -d user)"; then
+            echo "::error::Could not read the runner's original keychain search list"
+            exit 1
+          fi
+          if ! PARSED_KEYCHAIN_OUTPUT="$(
+            sed -e 's/^[[:space:]]*"//' -e 's/"[[:space:]]*$//' \
+              <<< "$ORIGINAL_KEYCHAIN_OUTPUT"
+          )"; then
+            echo "::error::Could not parse the runner's original keychain search list"
+            exit 1
+          fi
+          ORIGINAL_KEYCHAINS=()
+          while IFS= read -r existing_keychain; do
+            [ -n "$existing_keychain" ] && ORIGINAL_KEYCHAINS+=("$existing_keychain")
+          done <<< "$PARSED_KEYCHAIN_OUTPUT"
+          cleanup_signing_keychain() {
+            rm -f "$RUNNER_TEMP/cert.p12"
+            security list-keychains -d user -s "${ORIGINAL_KEYCHAINS[@]}" \
+              >/dev/null 2>&1 || true
+            security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true
+          }
+          trap cleanup_signing_keychain EXIT
           echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security create-keychain -p "$KPW" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KPW" "$KEYCHAIN"
           security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KPW" "$KEYCHAIN" >/dev/null
-          # Put our keychain first in the search list so codesign finds the identity.
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed s/\"//g)
           rm -f "$RUNNER_TEMP/cert.p12"
-          # Sign nested code inside-out FIRST. Notarization requires every
-          # embedded Mach-O (the Sentry + PostHog frameworks, any bundled
-          # dylibs) to carry Developer ID + hardened runtime + secure
-          # timestamp; signing only the outer bundle leaves them ad-hoc /
-          # linker-signed and the submission is rejected.
-          if [ -d "$APP/Contents/Frameworks" ]; then
-            find "$APP/Contents/Frameworks" \( -name "*.framework" -o -name "*.dylib" \) -print0 \
-              | while IFS= read -r -d '' f; do
-                  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$f"
-                done
-          fi
-          # Resources/burrow (the bundled burrow-engine binary) is a nested Mach-O — it needs
-          # Developer ID + hardened runtime + secure timestamp too, or notarization rejects it.
-          if [ -f "$APP/Contents/Resources/burrow" ]; then
-            codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/Resources/burrow"
-          fi
-          # Hardened runtime + secure timestamp are required for notarization.
-          codesign --force --options runtime --timestamp \
-            --entitlements macos/Resources/Burrow.entitlements \
-            --sign "$SIGN_IDENTITY" "$APP"
-          codesign --verify --strict --verbose=2 "$APP"
-          echo "signed=true" >> "$GITHUB_OUTPUT"
+          # codesign --keychain restricts lookup to that single file, which
+          # hides Apple's Developer ID intermediate certificates in the
+          # runner's existing keychains. Add our temporary keychain to the
+          # normal search list instead, then prove the exact identity resolves
+          # through the same search path codesign will use.
+          security list-keychains -d user -s "$KEYCHAIN" "${ORIGINAL_KEYCHAINS[@]}"
+          security find-identity -v -p codesigning | grep -F "\"$SIGN_IDENTITY\"" \
+            || { echo "::error::Imported keychain does not contain $SIGN_IDENTITY"; exit 1; }
+          bash scripts/sign-macos-app.sh \
+            "$APP" "$SIGN_IDENTITY" developer-id macos/Resources/Burrow.entitlements
+          codesign -d --verbose=4 "$APP" 2>&1 \
+            | grep -E '^(Authority=Developer ID Application:|TeamIdentifier=|Timestamp=|Runtime Version=)'
 
-      - name: Notarize + staple — skipped if no API key
-        if: steps.sign.outputs.signed == 'true'
+      - name: Notarize + staple + Gatekeeper assessment
         env:
           AC_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
           AC_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
           AC_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
         run: |
           APP="${{ steps.build.outputs.app }}"
-          if [ -z "$AC_KEY_P8" ] || [ -z "$AC_KEY_ID" ] || [ -z "$AC_ISSUER_ID" ]; then
-            echo "::warning::Signed but no notarization key (AC_API_*) — Gatekeeper may still warn on first launch."
-            exit 0
-          fi
+          trap 'rm -f "$RUNNER_TEMP/ac_key.p8"' EXIT
           echo "$AC_KEY_P8" | base64 --decode > "$RUNNER_TEMP/ac_key.p8"
           ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
+          set +e
           xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
             --key "$RUNNER_TEMP/ac_key.p8" --key-id "$AC_KEY_ID" --issuer "$AC_ISSUER_ID" \
-            --wait --timeout 30m
+            --wait --timeout 60m --output-format json \
+            > "$RUNNER_TEMP/notary-result.json" 2>&1
+          NOTARY_EXIT=$?
+          set -e
+          cat "$RUNNER_TEMP/notary-result.json"
+          # notarytool writes its timeout JSON to stderr, so capture both
+          # streams above. A timeout response still carries the submission ID;
+          # retain it and make one authoritative status query to cover a race
+          # where Apple accepts just as the local wait expires.
+          SUBMISSION_ID="$(
+            jq -r '.id // empty' "$RUNNER_TEMP/notary-result.json" 2>/dev/null || true
+          )"
+          STATUS="$(
+            jq -r '.status // empty' "$RUNNER_TEMP/notary-result.json" 2>/dev/null || true
+          )"
+          if [ -n "$SUBMISSION_ID" ] && [ "$STATUS" != "Accepted" ]; then
+            set +e
+            xcrun notarytool info "$SUBMISSION_ID" \
+              --key "$RUNNER_TEMP/ac_key.p8" --key-id "$AC_KEY_ID" --issuer "$AC_ISSUER_ID" \
+              --output-format json > "$RUNNER_TEMP/notary-info.json" 2>&1
+            INFO_EXIT=$?
+            set -e
+            cat "$RUNNER_TEMP/notary-info.json"
+            if [ "$INFO_EXIT" -eq 0 ]; then
+              INFO_STATUS="$(
+                jq -r '.status // empty' "$RUNNER_TEMP/notary-info.json" 2>/dev/null || true
+              )"
+              [ -n "$INFO_STATUS" ] && STATUS="$INFO_STATUS"
+            fi
+          fi
+          if [ -z "$SUBMISSION_ID" ] || [ "$STATUS" != "Accepted" ]; then
+            if [ -n "$SUBMISSION_ID" ] && [ "$STATUS" != "In Progress" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --key "$RUNNER_TEMP/ac_key.p8" --key-id "$AC_KEY_ID" --issuer "$AC_ISSUER_ID" \
+                "$RUNNER_TEMP/notary-log.json" || true
+              [ -f "$RUNNER_TEMP/notary-log.json" ] && cat "$RUNNER_TEMP/notary-log.json"
+            fi
+            echo "::error::Notarization blocked (status=${STATUS:-unknown}, submission=${SUBMISSION_ID:-unknown}, command_exit=$NOTARY_EXIT)."
+            exit 1
+          fi
           xcrun stapler staple "$APP"
           xcrun stapler validate "$APP"
-          rm -f "$RUNNER_TEMP/ac_key.p8"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          spctl --assess --type execute --verbose=4 "$APP"
 
       - name: Package (zip + sha256)
         id: pkg
@@ -303,22 +422,70 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
           SHA=$(shasum -a 256 "$ZIP" | awk '{print $1}')
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "Built Burrow ${{ steps.build.outputs.version }} (signed=${{ steps.sign.outputs.signed }}) sha256=$SHA"
+          echo "Built Burrow ${{ steps.build.outputs.version }} (Developer ID signed + notarized) sha256=$SHA"
+
+      - name: Install pinned Sparkle release tools
+        run: |
+          TOOLS="$RUNNER_TEMP/sparkle-release-tools"
+          bash scripts/fetch-sparkle.sh --tools "$TOOLS"
+          echo "SPARKLE_TOOLS=$TOOLS/bin" >> "$GITHUB_ENV"
+
+      - name: Generate and verify signed Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          VERSION="${{ steps.build.outputs.version }}"
+          BUILD_NUMBER="${{ steps.build.outputs.build_number }}"
+          ZIP="$PWD/dist/Burrow-${VERSION}.zip"
+          APPCAST="$PWD/dist/appcast.xml"
+          ARCHIVE_URL="https://github.com/caezium/Burrow/releases/download/${GITHUB_REF_NAME}/Burrow-${VERSION}.zip"
+          python3 scripts/validate-release-notes.py RELEASES.md --version "$VERSION"
+          cp RELEASES.md "dist/Burrow-${VERSION}.md"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SPARKLE_TOOLS/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/caezium/Burrow/releases/download/${GITHUB_REF_NAME}/" \
+            --embed-release-notes \
+            --maximum-deltas 0 \
+            --versions "$BUILD_NUMBER" \
+            --link "https://github.com/caezium/Burrow" \
+            -o "$APPCAST" "$PWD/dist"
+          python3 scripts/verify-sparkle-appcast.py "$APPCAST" \
+            --archive "$ZIP" \
+            --version "$VERSION" \
+            --build "$BUILD_NUMBER" \
+            --url "$ARCHIVE_URL" \
+            --release-notes RELEASES.md \
+            --signature-output "$RUNNER_TEMP/sparkle-archive-signature.txt"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - \
+            "$ZIP" "$(< "$RUNNER_TEMP/sparkle-archive-signature.txt")"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - "$APPCAST"
+          echo "Signed Sparkle archive + feed verified; release publication is now allowed."
 
       - name: Publish GitHub release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ZIP="dist/Burrow-${{ steps.build.outputs.version }}.zip"
+          APPCAST="dist/appcast.xml"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             # Release already exists (e.g. re-run after adding TAP_PAT) —
-            # refresh the asset instead of failing.
+            # replace the archive first and the signed feed last. During that
+            # narrow window, a mismatch fails signature validation closed.
             gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
+            gh release upload "$GITHUB_REF_NAME" "$APPCAST" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$ZIP" \
+            # Keep the release draft until both assets have uploaded; a
+            # partial upload must never become Sparkle's latest feed.
+            gh release create "$GITHUB_REF_NAME" "$ZIP" "$APPCAST" \
               --title "Burrow ${{ steps.build.outputs.version }}" \
-              --notes-file RELEASES.md
+              --notes-file RELEASES.md \
+              --draft
           fi
+          # Also publish a draft left by a previously interrupted attempt.
+          # Reaching this line means both freshly verified assets now exist.
+          gh release edit "$GITHUB_REF_NAME" --draft=false
 
       - name: Bump Homebrew cask in caezium/homebrew-tap
         env:
@@ -327,27 +494,23 @@ jobs:
           # Add it under Settings ▸ Secrets and variables ▸ Actions ▸ TAP_PAT.
           GH_TOKEN: ${{ secrets.TAP_PAT }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::warning::TAP_PAT secret is not set — the GitHub release IS published, but the Homebrew cask was NOT bumped. Add the secret to automate it, or bump Casks/burrow.rb by hand. Not failing the release for this."
-            exit 0
-          fi
           VERSION="${{ steps.build.outputs.version }}"
           SHA="${{ steps.pkg.outputs.sha }}"
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/caezium/homebrew-tap.git" tap
-          CASK="tap/Casks/burrow.rb"
-          /usr/bin/sed -i '' -E \
-            -e "s/version \"[^\"]+\"/version \"${VERSION}\"/" \
-            -e "s/sha256 \"[^\"]+\"/sha256 \"${SHA}\"/" \
-            "$CASK"
-          # Guard against a silent no-op: if the cask's format ever drifts so
-          # the sed matches nothing, the version/sha won't be present and the
-          # `git diff --quiet` below would otherwise report success while the
-          # tap stays stale. Fail loudly instead.
-          if ! grep -q "version \"${VERSION}\"" "$CASK" || ! grep -q "sha256 \"${SHA}\"" "$CASK"; then
-            echo "::error::cask edit didn't take — $CASK is missing version \"${VERSION}\" or the new sha256 after sed. Its format may have drifted; bump it by hand."
-            exit 1
-          fi
-          cd tap
+          SOURCE_ROOT="$PWD"
+          TAP_DIR="$RUNNER_TEMP/homebrew-tap"
+          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/burrow-tap-gitconfig"
+          touch "$GIT_CONFIG_GLOBAL"
+          gh auth setup-git
+          (cd "$RUNNER_TEMP" && git clone \
+            "https://github.com/caezium/homebrew-tap.git" "$TAP_DIR")
+          # This runs only after signing, notarization, stapling, Gatekeeper,
+          # and Sparkle verification. The helper also normalizes
+          # auto_updates beside the homepage stanza and fails closed if the
+          # cask or its security copy has drifted.
+          python3 "$SOURCE_ROOT/scripts/update-homebrew-tap.py" "$TAP_DIR" \
+            --version "$VERSION" \
+            --sha256 "$SHA"
+          cd "$TAP_DIR"
           if git diff --quiet; then
             echo "cask already at ${VERSION}; nothing to do"
             exit 0

@@ -14,32 +14,29 @@ settings:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     ENABLE_HARDENED_RUNTIME: YES
-    # Unsigned dev builds. Distribution config gets added later.
+    # Xcode leaves signing off for reproducible builds. Local scripts apply a
+    # coherent ad-hoc signature; the tag workflow applies Developer ID after
+    # every nested executable has been staged.
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: ""
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGNING_ALLOWED: NO
     DEAD_CODE_STRIPPING: YES
 
-# Telemetry SDKs. Product analytics (PostHog) + crash reporting (Sentry).
-# Both are inert unless a release injects keys (see the per-target settings
-# below): a plain `xcodegen + xcodebuild` dev build ships with empty keys and
-# never touches either network.
-# Pinned EXACTLY (not `from:`): the .xcodeproj — and with it the only
-# Package.resolved — is gitignored, so a range would let every CI release
-# resolve whatever the latest compatible SDK is at build time. Exact pins
-# keep releases reproducible from a tag; bump deliberately.
-packages:
-  PostHog:
-    url: https://github.com/PostHog/posthog-ios
-    exactVersion: 3.59.3
+# Telemetry. PostHog analytics use Burrow's small background HTTPS transport;
+# Sentry is the only telemetry SDK. Both paths are inert unless a release
+# injects keys below, so a plain dev build never touches either network.
 # Sentry is NOT an SPM package: SPM eagerly downloads ALL of sentry-cocoa's
 # binary xcframework variants during resolution (Sentry, -Dynamic, -WithARM64e,
 # …, ~500 MB), and on the release runner that download hard-hangs xcodebuild
 # (curl pulls the same artifact in <1s — it's an SPM-downloader problem). So we
 # vendor only the one static Sentry.xcframework we actually use, fetched by
-# scripts/fetch-sentry.sh (curl), and link it directly. Pin matches the old SPM
-# exactVersion. Crash reporting (CrashReporter.swift) is unchanged.
+# scripts/fetch-sentry.sh (curl), and link it directly. The version is pinned;
+# CrashReporter.swift owns the explicit privacy, hang, trace, and profile policy.
+# Sparkle is also a local framework: its Swift package wraps a binary artifact,
+# and that artifact-resolution step hard-hung both v0.11.0 release attempts.
+# scripts/fetch-sparkle.sh downloads the official 2.9.4 release archive with a
+# pinned checksum and validates the universal framework before xcodegen runs.
 
 targets:
   Burrow:
@@ -48,15 +45,39 @@ targets:
     sources:
       - path: Sources
       - path: Resources
-        excludes: ["Info.plist", "Burrow.entitlements"]
+        # LaunchDaemons is excluded from the plain resource copy and staged by
+        # the dedicated phase below instead: a stray second copy under
+        # Resources/ would be dead weight inside the signed bundle.
+        excludes: ["Info.plist", "Burrow.entitlements", "LaunchDaemons"]
+      # SMAppService.daemon(plistName:) resolves the daemon from exactly this
+      # path and nowhere else.
+      - path: Resources/LaunchDaemons/dev.caezium.Burrow.privileged-helper.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
     info:
       path: Resources/Info.plist
       properties:
         LSUIElement: true   # menu-bar agent, no Dock icon
         CFBundleDisplayName: Burrow
-        CFBundleShortVersionString: "0.10.5"
-        CFBundleVersion: "20"
-        NSHumanReadableCopyright: "MIT License. Mole CLI © tw93. Independent, not affiliated with mole.fit."
+        CFBundleShortVersionString: "0.12.0"
+        CFBundleVersion: "24"
+        NSHumanReadableCopyright: "MIT License. © 2026 Henry Zhang."
+        # Burrow uses only exempt encryption supplied by macOS (for example,
+        # URLSession HTTPS); it contains no proprietary or non-exempt crypto.
+        ITSAppUsesNonExemptEncryption: false
+        # Stable latest-release asset. The appcast and every archive are
+        # Ed25519 signed; release.yml rejects a missing/invalid key or feed.
+        SUFeedURL: "https://github.com/caezium/Burrow/releases/latest/download/appcast.xml"
+        SUPublicEDKey: "f1LoqtxmfTxFgz2S5KlTQzZzhmOB8J8r5UdTRH48hvU="
+        SURequireSignedFeed: true
+        SUVerifyUpdateBeforeExtraction: true
+        SUEnableAutomaticChecks: true
+        SUEnableSystemProfiling: false
+        SUScheduledCheckInterval: 86400
+        SUAllowsAutomaticUpdates: false
+        SUAutomaticallyUpdate: false
         # Friendly, one-time prompts for the standard folders Mole scans
         # (purge/installer touch these). Full Disk Access still covers the
         # cache/container locations — see the in-app FDA gate.
@@ -87,9 +108,19 @@ targets:
         POSTHOG_HOST: "https://us.i.posthog.com"
         SENTRY_DSN: ""
     dependencies:
-      - package: PostHog
+      - framework: vendor/Sparkle.framework
+        embed: true
       - framework: vendor/Sentry.xcframework
         embed: false
+      # The privileged helper ships INSIDE the app. It is never installed to
+      # /Library/PrivilegedHelperTools, so it cannot drift from, or outlive,
+      # the app that vouches for it — SMAppService resolves it through the
+      # bundle via the BundleProgram key in the launchd plist.
+      # Copied into Contents/MacOS, beside the app's own executable, which is
+      # where BundleProgram in the launchd plist points.
+      - target: BurrowHelper
+        copy:
+          destination: executables
     postBuildScripts:
       - name: Bundle burrow-engine (MIT)
         basedOnDependencyAnalysis: false
@@ -137,6 +168,38 @@ targets:
           "$SRCROOT/scripts/bundle-fclones.sh" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH" \
             || echo "warning: fclones bundling skipped — Duplicates falls back to a system/\$BURROW_FCLONES fclones."
 
+  # The privileged helper: a bare launchd daemon that runs as root.
+  #
+  # Deliberately minimal. It compiles ONLY the shared contract in
+  # Sources/PrivilegedHelper plus its own HelperSources — no SwiftUI, no
+  # Sparkle, no Sentry, no telemetry. Nothing that could pull UI, networking,
+  # or crash-reporting code into a root process, and nothing that could grow a
+  # dependency without that showing up as a change to this list.
+  BurrowHelper:
+    type: tool
+    platform: macOS
+    sources:
+      # Shared with the app so the two can never disagree about what a request
+      # means. Same files, both targets.
+      - path: Sources/PrivilegedHelper
+      - path: HelperSources
+    settings:
+      base:
+        PRODUCT_NAME: BurrowHelper
+        PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.Burrow.privileged-helper
+        # The helper reports its OWN build over XPC, and the client refuses a
+        # helper whose build doesn't match the app's. Baking the plist into the
+        # binary means it reports what it IS, rather than reading whatever
+        # bundle happens to surround it after an update.
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        GENERATE_INFOPLIST_FILE: YES
+        # Must track the app's CFBundleVersion above — a mismatch is exactly
+        # what HelperVersionSkew refuses, so a stale value here disables the
+        # helper rather than shipping a subtly wrong one.
+        CURRENT_PROJECT_VERSION: "24"
+        MARKETING_VERSION: "0.12.0"
+        SKIP_INSTALL: YES
+
   BurrowTests:
     type: bundle.unit-test
     platform: macOS
@@ -144,11 +207,19 @@ targets:
       - path: Tests
     info:
       path: Tests/Info.plist
+      properties:
+        ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.caezium.BurrowTests
     dependencies:
       - target: Burrow
+      # The tests import Burrow's compiled Swift module, which records Sparkle
+      # as a module dependency. Local frameworks are not propagated through a
+      # target dependency the way Swift package products are, so expose its
+      # module to the test compiler without embedding another copy.
+      - framework: vendor/Sparkle.framework
+        embed: false
 
 # Shared scheme so `xcodebuild test` works headlessly (CI and CLI runs)
 # instead of depending on Xcode auto-creating a local scheme on first open.

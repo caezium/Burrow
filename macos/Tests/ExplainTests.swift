@@ -107,8 +107,8 @@ final class ExplainTests: XCTestCase {
                        "http://127.0.0.1:1234/v1/chat/completions", "trailing slash tolerated")
         XCTAssertEqual(OpenAICompatibleProvider.endpoint(from: "https://api.openai.com")?.absoluteString,
                        "https://api.openai.com/v1/chat/completions", "bare host gets /v1 added")
-        XCTAssertEqual(OpenAICompatibleProvider.endpoint(from: "http://h/v1/chat/completions")?.absoluteString,
-                       "http://h/v1/chat/completions", "already-complete URL is left alone")
+        XCTAssertEqual(OpenAICompatibleProvider.endpoint(from: "http://h/v1/chat/completions")?.absoluteString, // greenlight:ignore http-not-https — local-provider fixture
+                       "http://h/v1/chat/completions", "already-complete URL is left alone") // greenlight:ignore http-not-https — expected fixture
     }
 
     func testOpenAIRequest_postsChatCompletionsWithAuthWhenKeyed() throws {

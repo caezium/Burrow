@@ -135,6 +135,8 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
     private var task: Task<Void, Never>?
     private var currentElevated = false
     private var currentLabel: String?
+    private var telemetryFeature: String?
+    private var telemetryStartedAt: Date?
     private var cancelRequested = false
     /// One-shot per run: Burrow has already reclaimed focus from the auth
     /// dialog, don't keep stealing it.
@@ -228,9 +230,18 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         rawLog = ""
         currentElevated = op.elevated
         currentLabel = op.label
+        telemetryFeature = Self.telemetryFeature(for: op)
+        telemetryStartedAt = Date()
         cancelRequested = false
         reactivated = false
         if let label = op.label { center.begin(opID, label: label, notifiesOnEnd: op.notifyOnEnd) }
+        if let telemetryFeature {
+            Telemetry.capture("feature_operation_started", [
+                "feature": telemetryFeature,
+                "dry_run": op.arguments.contains("--dry-run"),
+                "elevated": op.elevated,
+            ])
+        }
 
         let stream = process.events(spec)
         let id = opID
@@ -271,6 +282,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                         let detail = self.report.map { op.finalDetail?($0) ?? "" } ?? ""
                         self.center.end(id, success: code == 0, detail: detail)
                     }
+                    self.captureTelemetryCompletion(result: code == 0 ? "succeeded" : "failed")
                 case .authCancelled:
                     // Auth-cancel is classified by the runner now (#48 taxonomy),
                     // not by a view-level "elevated + nonzero + no output" guess.
@@ -280,6 +292,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                     self.rawLog = lines.joined(separator: "\n")
                     self.state = .finished(.failed(NSLocalizedString("authorization cancelled", comment: "")))
                     if op.label != nil { self.center.end(id, success: false) }
+                    self.captureTelemetryCompletion(result: "authorization_cancelled")
                 }
             }
         }
@@ -291,6 +304,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         task?.cancel()            // stream onTermination terminates the child
         state = .finished(.cancelled)
         if currentLabel != nil { center.end(opID, success: false) }
+        captureTelemetryCompletion(result: "cancelled")
     }
 
     /// Back to the idle hero — the report screen's "Back" button.
@@ -298,6 +312,25 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         state = .idle
         report = nil
         rawLog = ""
+    }
+
+    private static func telemetryFeature(for operation: ToolOperation<Report>) -> String? {
+        guard case .mo = operation.executable,
+              let command = operation.arguments.first,
+              ["clean", "optimize"].contains(command) else { return nil }
+        return command
+    }
+
+    private func captureTelemetryCompletion(result: String) {
+        guard let telemetryFeature else { return }
+        let duration = telemetryStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+        Telemetry.capture("feature_operation_completed", [
+            "feature": telemetryFeature,
+            "result": result,
+            "duration_bucket": Telemetry.secondsBucket(duration),
+        ])
+        self.telemetryFeature = nil
+        telemetryStartedAt = nil
     }
 }
 
@@ -420,6 +453,15 @@ struct SystemProcessPort: ProcessPort {
 
             do {
                 try t.run()
+                if !spec.elevated {
+                    // Process inherits duplicated write descriptors during
+                    // spawn; the parent must close its copies so the readers
+                    // observe EOF after the child exits. Keeping these handles
+                    // open can strand the stream forever after a timeout even
+                    // though terminate() successfully killed the child.
+                    try? outPipe.fileHandleForWriting.close()
+                    try? errPipe.fileHandleForWriting.close()
+                }
                 // Armed only after a successful spawn (a suspended source
                 // must never be cancelled/deallocated).
                 if let timeout = spec.timeout {

@@ -33,6 +33,10 @@ DerivedData/
 # macOS junk
 .DS_Store
 
+# Python test caches
+__pycache__/
+*.py[cod]
+
 # Agent worktrees and session state
 .claude/
 
@@ -51,8 +55,11 @@ scripts/release.env
 # local build output (this session's DerivedData)
 build_dd/
 
-# Vendored Sentry framework — fetched by scripts/fetch-sentry.sh, not committed.
-# Sentry is a local framework, not an SPM package (SPM's binary-artifact
-# download hangs xcodebuild on CI; see that script).
+# Vendored binary frameworks — fetched and checksum-verified, not committed.
+# SwiftPM's binary-artifact downloader hangs xcodebuild on release runners;
+# see scripts/fetch-sentry.sh and scripts/fetch-sparkle.sh.
 macos/vendor/Sentry.xcframework/
 macos/vendor/.sentry-*.ok
+macos/vendor/Sparkle.framework/
+macos/vendor/.sparkle-cache/
+.site-deploy/

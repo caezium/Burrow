@@ -382,7 +382,7 @@
 "Run a Clean or Optimize and it'll show up here." = "執行一次清理或最佳化，紀錄就會顯示在這裡。";
 
 /* Settings — AI / MCP / server */
-"Mole engine required" = "需要 Mole 引擎";
+"Burrow engine missing" = "Burrow 引擎遺失";
 "Touch ID for sudo" = "以 Touch ID 進行 sudo";
 "Explain (AI) — experimental" = "解讀（AI）— 實驗性功能";
 "Ask your AI about your Mac (MCP)" = "用 AI 了解你的 Mac（MCP）";
@@ -411,16 +411,31 @@
 "OFF by default. Agents can always read metrics and run dry-run previews. With this on, an agent can run a real `mo clean` / `optimize` / `uninstall` — but ONLY when it also passes an explicit confirm flag, so a deletion is never one stray sentence away. Turn it off and agents are read-only again. Data stays on this Mac." = "預設為關閉。AI 代理永遠可以讀取指標並執行模擬預覽。開啟後，代理可以真正執行 `mo clean` / `optimize` / `uninstall` — 但必須同時傳入明確的確認旗標，因此絕不會因一句話就誤刪。關閉後代理即恢復唯讀。資料始終留在這台 Mac 上。";
 "Runs against a local Ollama model — nothing leaves this Mac. Start it with `ollama run <model>`." = "在本機的 Ollama 模型上執行 — 資料不會離開這台 Mac。用 `ollama run <model>` 啟動。";
 "Any OpenAI-compatible server. For LM Studio: load a model, open Developer ▸ Start Server, and leave the key blank — the default URL is already LM Studio's. A hosted endpoint (e.g. OpenAI) needs a key and sends the metrics summary off-device (never file contents)." = "任何相容 OpenAI 的伺服器。LM Studio：載入模型，開啟 Developer ▸ Start Server，金鑰留空 — 預設 URL 就是 LM Studio 的。託管端點（例如 OpenAI）需要金鑰，且會將指標摘要送出裝置（絕不會傳送檔案內容）。";
-"Runs `mo update` to update the Mole CLI engine Burrow drives. This is separate from Burrow's own app updates. If it needs a password or a confirmation it can't show here, run `mo update` in a terminal instead." = "執行 `mo update` 來更新 Burrow 所驅動的 Mole CLI 引擎。這與 Burrow 本身的 App 更新無關。如果它需要密碼或此處無法顯示的確認，請改在終端機執行 `mo update`。";
+"Sparkle checks Burrow's signed update feed after startup settles and about once a day. It asks before downloading or installing anything." = "Sparkle 會在啟動穩定後及大約每天一次檢查 Burrow 的簽名更新來源。下載或安裝前都會先詢問。";
+"Check for updates automatically" = "自動檢查更新";
+"Check for Updates" = "檢查更新";
+"About Burrow" = "關於 Burrow";
+"Update didn't complete" = "更新未完成";
+"Update external engine" = "更新外部引擎";
+"This source build is using an engine outside Burrow.app, so its own updater remains available." = "此原始碼版本正在使用 Burrow.app 外部的引擎，因此仍可使用該引擎自己的更新程式。";
+"Included with Burrow. Engine updates arrive through signed Burrow releases so the app's Developer ID seal stays valid." = "引擎已包含在 Burrow 中。引擎更新會隨簽名的 Burrow 版本發布，以保持 App 的 Developer ID 封印有效。";
+"The bundled engine is missing. Reinstall Burrow to restore the signed app bundle." = "內建引擎遺失。請重新安裝 Burrow 以還原簽名 App 套件。";
+"External engine is up to date" = "外部引擎已是最新版本";
+"Now on %@." = "目前版本為 %@。";
+"The external engine updater exited non-zero. Try running `mo update` in a terminal." = "外部引擎更新程式以非零狀態結束。請嘗試在終端機中執行 `mo update`。";
+"Disk analysis needs Mole %@ or newer (you have %@). %@" = "磁碟分析需要 Mole %@ 或更新版本（目前為 %@）。%@";
+"Update Burrow to get the current bundled engine." = "更新 Burrow 以取得目前的內建引擎。";
+"Use Settings › Engine › Update external engine, then try again." = "前往「設定 › 引擎 › 更新外引擎」，然後再試一次。";
+"Reinstall Burrow to restore the bundled engine." = "重新安裝 Burrow 以還原內建引擎。";
 "Lets `sudo` and admin prompts accept your fingerprint instead of a password, where macOS supports it. Configured via `mo touchid`; turning it on or off needs your password once." = "在 macOS 支援的情況下，讓 `sudo` 與管理者提示可以使用指紋代替密碼。透過 `mo touchid` 設定；開啟或關閉需要輸入一次密碼。";
 "Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch." = "供儀表板或 curl 使用的選用 REST 介面：在 localhost 提供 /health、/info、/snapshot、/metrics。與上方的 MCP stdio 伺服器各自獨立；開關與連接埠變更會在重新啟動後生效。";
 "Applies immediately. When off, Burrow shows a Dock icon instead so it stays reachable — a Dock click reopens the window." = "立即生效。關閉後，Burrow 會改為顯示 Dock 圖示以便隨時開啟 — 點一下 Dock 圖示即可重新打開視窗。";
 
 /* Onboarding / Full Disk Access */
-"Burrow is a GUI for the Mole CLI (`mo`) — it does the scanning and cleanup. Install it, then Recheck." = "Burrow 是 Mole CLI（`mo`）的圖形介面 — 掃描與清理都由它執行。請先安裝，然後重新檢查。";
-"WITH HOMEBREW" = "使用 HOMEBREW";
-"No Homebrew? Other install options →" = "沒有 Homebrew？其他安裝方式 →";
-"Still not finding `mo` on PATH. If you just installed it, open a new terminal first, or relaunch Burrow." = "仍然在 PATH 中找不到 `mo`。如果你剛安裝完成，請先開啟新的終端機視窗，或重新啟動 Burrow。";
+"Official builds include the engine inside the signed app. Reinstall Burrow to restore it; source builds can also provide an external `mo` on PATH." = "正式版本已在簽名 App 內包含引擎。請重新安裝 Burrow 以還原；原始碼版本也可以使用 PATH 中的外部 `mo`。";
+"REINSTALL SIGNED APP" = "重新安裝簽名 APP";
+"View the bundled engine source →" = "查看內建引擎原始碼 →";
+"The engine is still missing. Finish reinstalling Burrow, then recheck or relaunch the app." = "引擎仍然遺失。請完成 Burrow 的重新安裝，然後重新檢查或重新啟動 App。";
 "Grant Full Disk Access to scan" = "授予完整磁碟取用權限以進行掃描";
 "Skip the macOS permission prompts" = "略過 macOS 的權限提示";
 "Open Full Disk Access settings" = "打開完整磁碟取用權限設定";
@@ -428,14 +443,24 @@
 "Scan anyway" = "仍要掃描";
 "Scanning system & app caches makes macOS ask once per protected folder. Grant Burrow Full Disk Access to scan smoothly — it only reads sizes through Mole and never opens that data itself." = "掃描系統與 App 快取時，macOS 會針對每個受保護的資料夾各詢問一次。授予 Burrow 完整磁碟取用權限即可順暢掃描 — 它只透過 Mole 讀取大小，絕不會自行開啟那些資料。";
 "Still blocked? macOS only applies Full Disk Access the next time Burrow launches. Quit and reopen, then scan." = "仍被阻擋？macOS 要等 Burrow 下次啟動才會套用完整磁碟取用權限。請結束並重新開啟 Burrow，再進行掃描。";
-"Burrow uses the Mole CLI (`mo`) for system metrics and cleanup. Install it with:\n\n    brew install mole\n\nThen relaunch Burrow." = "Burrow 使用 Mole CLI（`mo`）取得系統指標並執行清理。請安裝：\n\n    brew install mole\n\n然後重新啟動 Burrow。";
 "Quit" = "結束";
 
 /* ===== parity backfill (2026-06): audit/consent/installer strings (zh-Hant, Taiwan) ===== */
 "Anonymous usage" = "匿名使用情況";
 "Share anonymous usage & crash reports" = "分享匿名使用情況與當機報告";
+"Share anonymous usage & diagnostics" = "分享匿名使用情況與診斷資料";
 "Share anonymous usage & crash reports?" = "分享匿名使用情況與當機報告？";
 "Sends anonymous product analytics (PostHog) and crash reports (Sentry): a random install id (not tied to you or your hardware), the app + macOS version, CPU type, and which features you use — with sizes and counts bucketed. Never file names, contents, paths, or your metrics. It helps gauge retention and catch crashes. On by default; turn it off and both stop. Full list in TELEMETRY.md." = "傳送匿名產品分析（PostHog）與當機報告（Sentry）：一個隨機安裝 ID（與你本人和硬體無關）、應用程式與 macOS 版本、CPU 類型，以及你使用了哪些功能 — 大小與數量都按區間歸檔。絕不包含檔案名稱、檔案內容、路徑或你的指標資料。它用於了解留存並發現當機。預設開啟；關閉後兩者都會停止。完整列表見 TELEMETRY.md。";
+"Sends anonymous product analytics (PostHog) plus crash, hang, startup, update, and sampled performance diagnostics (Sentry): random install IDs, app and exact macOS build, CPU type, screens and features used, and fixed-name diagnostic milestones. Never screenshots, screen recordings, your file names, contents, user paths, URLs, or metrics. On by default; turn it off and both stop. Full list in TELEMETRY.md." = "傳送匿名產品分析（PostHog），以及當機、卡住、啟動、更新與抽樣效能診斷（Sentry）：包括隨機安裝 ID、App 與精確的 macOS 組建版本、CPU 類型、使用的畫面和功能，以及固定名稱的診斷節點。絕不包含螢幕截圖、螢幕錄影、你的檔案名稱、檔案內容、使用者路徑、URL 或指標資料。預設開啟；關閉後兩者都會停止。完整列表見 TELEMETRY.md。";
+"Burrow started in compatibility mode" = "Burrow 已以相容模式啟動";
+"Burrow detected that creating its menu bar item could freeze this macOS build. The menu bar item is disabled on this build, and Burrow will stay available in the Dock. Updating macOS will automatically retry the normal menu bar mode." = "Burrow 偵測到在此 macOS 組建版本中建立選單列項目可能導致系統卡住。此組建版本已停用選單列項目，Burrow 仍可從 Dock 使用。更新 macOS 後，Burrow 會自動重試正常的選單列模式。";
+"Burrow detected that creating its menu bar item could freeze this macOS build. The menu bar item and automatic update checks are paused on this build, and Burrow will stay available in the Dock. Manual update checks remain available. Updating macOS will automatically retry the normal mode." = "Burrow 偵測到在此 macOS 版本上建立選單列項目可能導致系統卡住。此版本上的選單列項目與自動更新檢查已暫停，Burrow 將繼續顯示在 Dock 中。你仍可手動檢查更新。更新 macOS 後將自動重試正常模式。";
+"Burrow paused automatic update checks" = "Burrow 已暫停自動更新檢查";
+"Burrow detected that its automatic updater did not reach a stable state on the previous launch. Automatic checks are paused for this app and macOS build so the same startup problem cannot repeat. You can still check manually; updating Burrow or macOS will retry automatic checks." = "Burrow 偵測到自動更新程式在上次啟動時未能達到穩定狀態。為避免相同的啟動問題再次發生，目前 App 與 macOS 版本的自動檢查已暫停。你仍可手動檢查；更新 Burrow 或 macOS 後將重試自動檢查。";
+"Menu bar item paused on this macOS build" = "此 macOS 組建版本已暫停選單列項目";
+"Creating it could freeze system input on this build, so Burrow runs from the Dock instead. It returns automatically once you update macOS." = "在此組建版本上建立選單列項目可能導致系統輸入卡住，因此 Burrow 改從 Dock 執行。更新 macOS 後會自動恢復。";
+"Paused on this macOS build. The setting is kept and applies again as soon as Burrow can create the menu bar item safely." = "在此 macOS 組建版本上已暫停。該設定會被保留，一旦 Burrow 能夠安全建立選單列項目就會重新生效。";
+"Copy Diagnostics" = "複製診斷資訊";
 "Helps prioritize fixes: app/OS version, coarse bucketed feature counts, and crash traces. Never files, paths, file contents, or your metrics — the exact list is in TELEMETRY.md. You can change this anytime in Settings → Anonymous usage." = "協助確定修復優先順序：應用程式/系統版本、按區間歸檔的功能使用次數與當機記錄。絕不包含檔案、路徑、檔案內容或你的指標資料 — 完整列表見 TELEMETRY.md。可隨時在「設定 → 匿名使用情況」中變更。";
 "Share" = "分享";
 "Don't Share" = "不分享";

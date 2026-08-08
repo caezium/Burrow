@@ -15,8 +15,13 @@
 //  and the auth-cancel classification IN MEMORY — no auth dialog, no sudo.
 //
 //  Streamed elevated runs stay in OperationFlow's SystemProcessPort (output
-//  tailed from a temp log); this seam covers the one-shot config commands
-//  (`mo touchid enable/disable`) where the only signal is the exit status.
+//  tailed from a temp log); this seam covers one-shot commands where the only
+//  signal is the exit status.
+//
+//  Live caller: `Connectivity.run` (flush DNS / renew DHCP), which constructs
+//  `SystemPrivilegeBroker` directly. The `MoleCLI.runElevated` wrapper that
+//  used to sit in front of this was deleted along with the `mo touchid`
+//  setting, its only user.
 //
 
 import Foundation

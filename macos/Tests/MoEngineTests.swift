@@ -5,8 +5,8 @@
 //  Boundary tests for the unified runner facade (issue #48). The capture +
 //  discovery entry points delegate to injected ports, so they're driven here
 //  with scripted fakes — same seam style as MoleProcessTests (capture port).
-//  (The one-shot elevated path is NOT on the facade; its wiring is covered by
-//  PrivilegeBrokerTests against `MoleCLI.runElevatedClassified`.)
+//  (The one-shot elevated path is NOT on the facade; its pure pieces are
+//  covered by PrivilegeBrokerTests.)
 //
 //  The point of these tests is the WIRING: that a `MoCommand` lands on the
 //  capture runner as the exact argv/stdin/env/timeout it described, and that a

@@ -11,8 +11,8 @@
 //      switch covers both PostHog and Sentry).
 //    * Inert without a DSN. The Sentry DSN is injected at release time
 //      (Info.plist `SentryDSN`); dev builds ship it empty → no reporting.
-//    * No PII: `sendDefaultPii` off, no screenshots, no performance tracing —
-//      just crash/error events.
+//    * No PII: `sendDefaultPii` off, no screenshots, no network/file tracing,
+//      and only fixed-name manual breadcrumbs/logs with sanitized attributes.
 //
 //  Runtime toggle is start/stop: Sentry has no live "mute" flag, so opting out
 //  calls `SentrySDK.close()` and opting back in re-`start`s it.
@@ -22,10 +22,84 @@ import Foundation
 import AppKit
 import Sentry
 
+struct AppHangRateLimiter {
+    let minimumInterval: TimeInterval
+    private(set) var lastKeptAtByGroup: [String: Date] = [:]
+
+    init(minimumInterval: TimeInterval = 60) {
+        self.minimumInterval = minimumInterval
+    }
+
+    mutating func shouldKeep(group: String, at date: Date = Date()) -> Bool {
+        // Keep only fingerprints active inside the current rate-limit window,
+        // so a long-running process cannot grow this map without bound.
+        lastKeptAtByGroup = lastKeptAtByGroup.filter {
+            let elapsed = date.timeIntervalSince($0.value)
+            return elapsed >= 0 && elapsed < minimumInterval
+        }
+        if let lastKeptAt = lastKeptAtByGroup[group],
+           date.timeIntervalSince(lastKeptAt) < minimumInterval {
+            return false
+        }
+        lastKeptAtByGroup[group] = date
+        return true
+    }
+}
+
+enum StatusItemDiagnosticState: String {
+    case notRequested = "not_requested"
+    case compatibilityMode = "compatibility_mode"
+    case scheduled
+    case stabilizing
+    case stable
+    case disabled
+}
+
+enum LaunchTraceEndReason: Equatable {
+    case completed
+    case telemetryDisabled
+
+    var shouldFinish: Bool { self == .completed }
+}
+
+final class DiagnosticSpan {
+    private let span: any Span
+    private let lock = NSLock()
+    private var didFinish = false
+
+    init(_ span: any Span) {
+        self.span = span
+    }
+
+    func finish() {
+        lock.lock()
+        guard !didFinish else {
+            lock.unlock()
+            return
+        }
+        didFinish = true
+        lock.unlock()
+        span.finish()
+    }
+}
+
 enum CrashReporter {
 
     /// Whether the SDK is currently running (started and not closed).
     private static var running = false
+    private static let stateLock = NSLock()
+    private static var appHangLimiter = AppHangRateLimiter()
+    private static var launchPhase = LaunchPhase.launchStarted.rawValue
+    private static var launchTransaction: (any Span)?
+
+    /// Bounded updater and launch fields that may leave the Mac in a Sentry
+    /// diagnostic context. Free-form descriptions and URLs remain excluded.
+    static let diagnosticContextFields: Set<String> = [
+        "attempt", "elapsed_bucket", "error_code", "error_domain",
+        "failure_category", "phase", "reason", "recovery", "source", "state",
+        "status", "target_version", "underlying_error_code",
+        "underlying_error_domain", "update_found", "update_source",
+    ]
 
     /// Run a synchronous, USER-PACED block (a modal confirm, an auth prompt)
     /// without Sentry's app-hang monitor flagging the expected main-thread
@@ -56,6 +130,7 @@ enum CrashReporter {
         if enabled, !running {
             startSDK()
         } else if !enabled, running {
+            endLaunchTrace(reason: .telemetryDisabled)
             SentrySDK.close()
             running = false
         }
@@ -63,26 +138,57 @@ enum CrashReporter {
 
     private static func startSDK() {
         let dsn = self.dsn
-        let release = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        let info = Bundle.main.infoDictionary
+        let bundleID = Bundle.main.bundleIdentifier ?? "dev.caezium.Burrow"
+        let version = (info?["CFBundleShortVersionString"] as? String) ?? "unknown"
+        let build = (info?["CFBundleVersion"] as? String) ?? "unknown"
+        let release = "\(bundleID)@\(version)+\(build)"
+        let profilingPathIsSafe = isProfilingPathSafe(Bundle.main.bundleURL)
+        stateLock.lock()
+        appHangLimiter = AppHangRateLimiter()
+        let phase = launchPhase
+        stateLock.unlock()
         SentrySDK.start { options in
             options.dsn = dsn
             options.environment = "production"
             options.releaseName = release
-            options.tracesSampleRate = 0.0   // crashes/errors only, no perf tracing
+            // Custom, fixed-name startup/update spans only. Automatic network,
+            // file, Core Data, and UI tracing remains disabled so URLs and
+            // local paths cannot enter performance events.
+            options.tracesSampleRate = 0.10
+            options.enableAutoPerformanceTracing = false
             options.sendDefaultPii = false   // never attach IP/user identifiers
-            // Session tracking would add a per-launch "release health"
-            // beacon — a network ping carrying a persistent install id on
-            // every run with zero crashes. TELEMETRY.md promises crash/error
-            // events only; keep that promise.
-            options.enableAutoSessionTracking = false
-            // Crashes/errors only. Turn off auto-instrumentation that could
+            options.enableAutoSessionTracking = true
+            options.enableLogs = true
+            options.maxBreadcrumbs = 50
+            if profilingPathIsSafe {
+                options.configureProfiling = { profile in
+                    profile.lifecycle = .trace
+                    // Trace profiling is a two-stage sample: 10% of launches
+                    // trace, then 10% of those traces profile, for ~1% overall.
+                    profile.sessionSampleRate = 0.10
+                    // Pre-main profiles can begin before Burrow can verify its
+                    // current bundle path, so they stay disabled permanently.
+                    profile.profileAppStarts = false
+                }
+            }
+            // Turn off auto-instrumentation that could
             // attach request URLs, network activity, or UI breadcrumbs to an
             // event — upholds the "no PII, no URLs" promise in TELEMETRY.md.
             options.enableNetworkTracking = false
             options.enableNetworkBreadcrumbs = false
             options.enableCaptureFailedRequests = false
             options.enableAutoBreadcrumbTracking = false
+            options.enableFileIOTracing = false
+            options.enableDataSwizzling = false
+            options.enableFileManagerSwizzling = false
+            options.enableCoreDataTracing = false
             options.enableMetrics = false
+            options.beforeCaptureScreenshot = { _ in false }
+            options.beforeCaptureViewHierarchy = { _ in false }
+            options.beforeSendLog = { log in
+                isSafeLogBody(log.body) ? log : nil
+            }
             // App-hang (ANR) detection stays ON (SDK default). For a
             // disk-I/O- and render-heavy app a ≥2 s main-thread freeze is a
             // real defect, not noise — it's how we caught a genuine SwiftUI
@@ -93,40 +199,165 @@ enum CrashReporter {
             // trip one, wrap that call site in
             // SentrySDK.pauseAppHangTracking()/resumeAppHangTracking() rather
             // than disabling detection app-wide.
-            // Binary-image and frame paths embed /Users/<name>/… whenever
-            // the app runs from Downloads or a home-dir checkout (the normal
-            // case for an unsigned zip). Scrub the username; the rest of the
-            // path is the diagnostic part.
+            // Keep the outbound event deliberately smaller than Sentry's
+            // defaults. Stack symbols, debug IDs, coarse tags, and Burrow's
+            // fixed contexts are sufficient to diagnose a crash or hang;
+            // exception prose, source snippets, requests, arbitrary extras,
+            // and path-bearing fields are removed before transmission.
             options.beforeSend = { event in
-                scrubUserPaths(event)
-                // App-hang (ANR) events fan out badly: one main-thread freeze
-                // gets fingerprinted by whatever frame the sampler caught
-                // (malloc/swift_retain/layout internals), exploding a single
-                // hang into dozens of distinct issues that drained the whole
-                // error quota (all 81 issues were "App hanging"). Collapse them
-                // into one issue and sample the volume down so a hang storm
-                // can't exhaust the quota again — we only need to know that
-                // hangs are happening, not to log every event of the same one.
                 if isAppHang(event) {
-                    event.fingerprint = ["burrow-app-hang"]
-                    if Double.random(in: 0..<1) >= appHangKeepRate { return nil }
+                    let phase = currentLaunchPhase()
+                    let frame = topBurrowFrame(event) ?? "unknown"
+                    let group = "\(phase)|\(frame)"
+                    event.fingerprint = ["burrow-app-hang", phase, frame]
+                    var tags = event.tags ?? [:]
+                    tags["launch_phase"] = phase
+                    tags["memory_pressure"] = memoryPressureBucket(event)
+                    event.tags = tags
+                    // Retain the first occurrence of every distinct phase/frame
+                    // group, then limit only identical repeats to one per minute.
+                    guard shouldKeepAppHang(group: group) else { return nil }
                 }
-                // Drop App-Hang (ANR) reports from acutely memory-starved
-                // machines: a ≥2 s main-thread stall when the system has only
-                // tens of MB free is the OS thrashing the render/display commit
-                // (these dominate the ANR feed from a few RAM-starved macOS 27
-                // betas), not a Burrow defect. Real hangs on healthy machines
-                // still report.
-                if isMemoryStarvedAppHang(event) { return nil }
+                scrubForTransport(event)
                 return event
             }
         }
         running = true
+
+        let environment = RuntimeEnvironment.current
+        SentrySDK.configureScope { scope in
+            scope.setTag(value: environment.osBuild, key: "os_build")
+            scope.setTag(value: environment.architecture, key: "architecture")
+            scope.setTag(value: environment.isPrereleaseOS ? "true" : "false", key: "os_prerelease")
+            scope.setTag(value: phase, key: "launch_phase")
+            scope.setAttribute(value: environment.osBuild, key: "burrow.os_build")
+            scope.setAttribute(value: environment.appVersion, key: "burrow.app_version")
+            scope.setAttribute(value: environment.appBuild, key: "burrow.app_build")
+            scope.setAttribute(value: phase, key: "burrow.launch_phase")
+            scope.setContext(value: [
+                "app_version": environment.appVersion,
+                "app_build": environment.appBuild,
+                "os_version": environment.osVersion,
+                "os_build": environment.osBuild,
+                "architecture": environment.architecture,
+            ], key: "burrow_runtime")
+        }
     }
 
-    /// Fraction of App Hang events kept after fingerprint-collapse. Enough to
-    /// confirm hangs are still happening without letting a burst drain quota.
-    private static let appHangKeepRate = 0.05
+    // MARK: - Privacy-safe diagnostics
+
+    static func setLaunchPhase(_ phase: LaunchPhase) {
+        stateLock.lock()
+        launchPhase = phase.rawValue
+        stateLock.unlock()
+        if running {
+            SentrySDK.configureScope { scope in
+                scope.setTag(value: phase.rawValue, key: "launch_phase")
+                scope.setAttribute(value: phase.rawValue, key: "burrow.launch_phase")
+            }
+        }
+        breadcrumb("launch_phase", category: "launch", data: ["phase": phase.rawValue])
+    }
+
+    static func setStatusItemState(_ state: StatusItemDiagnosticState) {
+        if running {
+            SentrySDK.configureScope { scope in
+                scope.setTag(value: state.rawValue, key: "status_item_state")
+                scope.setAttribute(value: state.rawValue, key: "burrow.status_item_state")
+            }
+        }
+        breadcrumb("status_item_state", category: "launch", data: ["state": state.rawValue])
+    }
+
+    static func startLaunchTrace() {
+        guard running else { return }
+        stateLock.lock()
+        guard launchTransaction == nil else {
+            stateLock.unlock()
+            return
+        }
+        launchTransaction = SentrySDK.startTransaction(
+            name: "Burrow launch",
+            operation: "app.launch",
+            bindToScope: true
+        )
+        stateLock.unlock()
+    }
+
+    static func startLaunchSpan(_ identifier: String) -> DiagnosticSpan? {
+        guard running, DiagnosticPrivacy.isSafeIdentifier(identifier) else { return nil }
+        stateLock.lock()
+        let transaction = launchTransaction
+        stateLock.unlock()
+        guard let transaction else { return nil }
+        return DiagnosticSpan(transaction.startChild(operation: "app.launch.\(identifier)"))
+    }
+
+    static func finishLaunchTrace() {
+        endLaunchTrace(reason: .completed)
+    }
+
+    private static func endLaunchTrace(reason: LaunchTraceEndReason) {
+        stateLock.lock()
+        let transaction = launchTransaction
+        launchTransaction = nil
+        stateLock.unlock()
+        if reason.shouldFinish {
+            transaction?.finish()
+        } else {
+            // Unbind before closing the SDK. Finishing a sampled launch trace
+            // here would enqueue it at the exact moment the user opts out.
+            SentrySDK.configureScope { $0.span = nil }
+        }
+    }
+
+    static func breadcrumb(
+        _ identifier: String,
+        category: String,
+        data: [String: Any] = [:],
+        level: SentryLevel = .info
+    ) {
+        guard running,
+              DiagnosticPrivacy.isSafeIdentifier(identifier),
+              DiagnosticPrivacy.isSafeIdentifier(category) else { return }
+        let crumb = Breadcrumb(level: level, category: "burrow.\(category)")
+        crumb.message = identifier
+        crumb.data = DiagnosticPrivacy.sanitize(data)
+        SentrySDK.addBreadcrumb(crumb)
+    }
+
+    static func logWarning(_ identifier: String, data: [String: Any] = [:]) {
+        guard running, DiagnosticPrivacy.isSafeIdentifier(identifier) else { return }
+        SentrySDK.logger.warn("burrow.\(identifier)", attributes: DiagnosticPrivacy.sanitize(data))
+    }
+
+    static func logError(_ identifier: String, data: [String: Any] = [:]) {
+        guard running, DiagnosticPrivacy.isSafeIdentifier(identifier) else { return }
+        SentrySDK.logger.error("burrow.\(identifier)", attributes: DiagnosticPrivacy.sanitize(data))
+    }
+
+    static func captureDiagnostic(
+        _ identifier: String,
+        error: Error? = nil,
+        data: [String: Any] = [:]
+    ) {
+        guard running, DiagnosticPrivacy.isSafeIdentifier(identifier) else { return }
+        let nsError = error as NSError?
+        var context = DiagnosticPrivacy.sanitize(data)
+        if let nsError {
+            context["error_domain"] = DiagnosticPrivacy.redact(nsError.domain)
+            context["error_code"] = nsError.code
+        }
+        let safeError = NSError(
+            domain: "dev.caezium.Burrow.diagnostic",
+            code: nsError?.code ?? 0,
+            userInfo: [NSLocalizedDescriptionKey: identifier]
+        )
+        SentrySDK.capture(error: safeError) { scope in
+            scope.setTag(value: identifier, key: "diagnostic")
+            scope.setContext(value: context, key: "diagnostic")
+        }
+    }
 
     /// True for Sentry app-hang (ANR) events. The Cocoa SDK tags them with an
     /// exception mechanism whose `type` begins with "AppHang" (V1 "AppHang",
@@ -139,39 +370,145 @@ enum CrashReporter {
         }
     }
 
-    /// Replace `/Users/<name>` with a placeholder in every path-bearing
-    /// field a crash event carries (loaded images + stack frames).
-    private static func scrubUserPaths(_ event: Event) {
-        func redact(_ s: String?) -> String? {
-            s?.replacingOccurrences(of: "/Users/[^/]+", with: "/Users/REDACTED",
-                                    options: .regularExpression)
+    private static func shouldKeepAppHang(group: String, at date: Date = Date()) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return appHangLimiter.shouldKeep(group: group, at: date)
+    }
+
+    private static func currentLaunchPhase() -> String {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return launchPhase
+    }
+
+    private static func topBurrowFrame(_ event: Event) -> String? {
+        let stacktraces = (event.exceptions?.compactMap { $0.stacktrace } ?? [])
+            + (event.threads?.compactMap { $0.stacktrace } ?? [])
+        let frames = stacktraces.flatMap(\.frames).reversed()
+        guard let function = frames.first(where: { frame in
+            frame.inApp?.boolValue == true
+                || frame.module?.localizedCaseInsensitiveContains("Burrow") == true
+                || frame.package?.localizedCaseInsensitiveContains("Burrow.app") == true
+        })?.function else { return nil }
+        let allowed = function.unicodeScalars.filter {
+            CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_.$:<>-")).contains($0)
         }
-        event.debugMeta?.forEach { $0.codeFile = redact($0.codeFile) }
+        let sanitized = String(String.UnicodeScalarView(allowed)).prefix(120).description
+        return sanitized.isEmpty ? nil : sanitized
+    }
+
+    private static func memoryPressureBucket(_ event: Event) -> String {
+        guard let free = (event.context?["device"]?["free_memory"] as? NSNumber)?.int64Value
+        else { return "unknown" }
+        switch free {
+        case ..<(150 * 1024 * 1024): return "critical"
+        case ..<(500 * 1024 * 1024): return "low"
+        default: return "normal"
+        }
+    }
+
+    private static func isSafeLogBody(_ value: String) -> Bool {
+        guard value.hasPrefix("burrow.") else { return false }
+        return DiagnosticPrivacy.isSafeIdentifier(String(value.dropFirst("burrow.".count)))
+    }
+
+    /// Fail closed on free-form Sentry fields. Sentry still receives debug IDs,
+    /// module names, symbols, addresses, and line numbers, which are enough to
+    /// symbolicate Burrow without transmitting exception prose, source text,
+    /// request data, or where its bundle lived on the user's Mac.
+    private static func scrubForTransport(_ event: Event) {
+        event.message = nil
+        event.error = nil
+        event.request = nil
+        event.user = nil
+        event.extra = nil
+        event.modules = nil
+        event.serverName = nil
+        event.logger = nil
+        event.transaction = nil
+        if event.fingerprint?.first != "burrow-app-hang" {
+            event.fingerprint = nil
+        }
+
+        let allowedTagKeys: Set<String> = [
+            "architecture", "diagnostic", "launch_phase", "memory_pressure",
+            "os_build", "os_prerelease", "status_item_state",
+        ]
+        event.tags = event.tags?.filter { allowedTagKeys.contains($0.key) }
+
+        let allowedContextFields: [String: Set<String>] = [
+            "burrow_runtime": [
+                "app_build", "app_version", "architecture", "os_build", "os_version",
+            ],
+            "diagnostic": diagnosticContextFields,
+            // Preserve only the identifiers needed to connect a captured
+            // error to Burrow's fixed-name custom launch trace.
+            "trace": [
+                "op", "origin", "parent_span_id", "sampled", "span_id", "status", "trace_id",
+            ],
+        ]
+        var safeContexts: [String: [String: Any]] = [:]
+        for (name, fields) in allowedContextFields {
+            guard let source = event.context?[name] else { continue }
+            let selected = source.filter { fields.contains($0.key) }
+            let sanitized = DiagnosticPrivacy.sanitize(selected)
+            if !sanitized.isEmpty {
+                safeContexts[name] = sanitized
+            }
+        }
+        event.context = safeContexts
+
+        event.exceptions?.forEach { exception in
+            // Exception values are free-form (NSError descriptions, assertion
+            // text, and uncaught exception reasons). The exception type and
+            // symbolicated stack retain the actionable diagnosis.
+            exception.value = "<redacted>"
+            exception.module = exception.module.map(DiagnosticPrivacy.redact)
+            exception.mechanism?.desc = nil
+            exception.mechanism?.helpLink = nil
+            if let data = exception.mechanism?.data {
+                exception.mechanism?.data = DiagnosticPrivacy.sanitize(data)
+            }
+        }
+
+        event.breadcrumbs = event.breadcrumbs?.filter { breadcrumb in
+            guard breadcrumb.category.hasPrefix("burrow.") else { return false }
+            let category = String(breadcrumb.category.dropFirst("burrow.".count))
+            guard DiagnosticPrivacy.isSafeIdentifier(category),
+                  let message = breadcrumb.message,
+                  DiagnosticPrivacy.isSafeIdentifier(message) else { return false }
+            breadcrumb.type = nil
+            breadcrumb.origin = nil
+            breadcrumb.data = DiagnosticPrivacy.sanitize(breadcrumb.data ?? [:])
+            return true
+        }
+
+        event.debugMeta?.forEach { $0.codeFile = nil }
         let stacktraces = (event.exceptions?.compactMap { $0.stacktrace } ?? [])
             + (event.threads?.compactMap { $0.stacktrace } ?? [])
         for st in stacktraces {
             for frame in st.frames {
-                frame.package = redact(frame.package)
-                frame.fileName = redact(frame.fileName)
+                frame.package = nil
+                frame.fileName = nil
+                frame.contextLine = nil
+                frame.preContext = nil
+                frame.postContext = nil
+                frame.vars = nil
             }
         }
+        event.threads?.forEach { $0.name = nil }
     }
 
-    /// True for an App-Hang event whose device reports critically low free
-    /// memory (< 150 MB). At that point a ≥2 s main-thread freeze is the system
-    /// thrashing the render/display commit under memory pressure — not a Burrow
-    /// defect — and these dominate the ANR feed from a handful of RAM-starved
-    /// machines (notably macOS 27 betas). Healthy machines still report hangs.
-    /// Conservative: if free memory can't be read, the event is kept.
-    private static func isMemoryStarvedAppHang(_ event: Event) -> Bool {
-        let isAppHang = event.exceptions?.contains {
-            ($0.mechanism?.type ?? "").hasPrefix("AppHang")
-        } ?? false
-        guard isAppHang else { return false }
-        guard let free = (event.context?["device"]?["free_memory"] as? NSNumber)?.int64Value
-        else { return false }
-        return free < 150 * 1024 * 1024
+    /// Profiles carry their own binary-image envelope, which bypasses
+    /// `beforeSend`. Restrict post-SDK profiling to canonical app installs so
+    /// those image paths cannot reveal a home, Downloads, or mounted-volume
+    /// location. Pre-main profiling remains disabled separately above.
+    static func isProfilingPathSafe(_ bundleURL: URL) -> Bool {
+        let path = bundleURL.resolvingSymlinksInPath().standardizedFileURL.path
+        return path == "/Applications" || path.hasPrefix("/Applications/")
     }
+
 }
 
 extension NSAlert {

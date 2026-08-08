@@ -1,13 +1,27 @@
-// Cloudflare Worker (static assets only) serving the landing site in docs/
-// at https://burrow.henryzh.dev. Deploy: npx wrangler deploy
+// Cloudflare Worker serving the landing site in docs/ at https://burrow.computer.
+// The script exists only to 301 the previous hostname; everything else is served
+// straight from static assets. Deploy only through the GitHub workflow or
+// scripts/deploy-site.sh so the PostHog project key is validated and injected.
 {
   "name": "burrow-site",
   "compatibility_date": "2026-06-11",
+  "main": "worker/index.js",
   "account_id": "55b0640db6ae7f14ca61ec105d27925c",
   "assets": {
-    "directory": "./docs"
+    // Intentionally absent from a checkout: raw `npx wrangler deploy` fails
+    // closed instead of publishing docs/ with an inert analytics placeholder.
+    "directory": "./.site-deploy",
+    // The redirect handler needs to fall through to the assets itself.
+    "binding": "ASSETS",
+    // Without this, Cloudflare serves a matching asset and never invokes the
+    // script, so the legacy-host redirect in worker/index.js never runs for
+    // any real page. With it, every request enters the worker, which either
+    // 301s the old hostname or falls through to env.ASSETS.
+    "run_worker_first": true
   },
   "routes": [
+    { "pattern": "burrow.computer", "custom_domain": true },
+    // Kept attached so every inbound link to the old host keeps working.
     { "pattern": "burrow.henryzh.dev", "custom_domain": true }
   ],
   // The custom domain is the only public URL; don't also expose *.workers.dev.

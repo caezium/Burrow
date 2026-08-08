@@ -18,6 +18,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  compliance:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Install Greenlight
+        run: brew install revylai/tap/greenlight
+      - name: App distribution preflight
+        run: greenlight preflight macos --exit-code
+      - name: Test release safety helpers
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+      - name: Test website analytics boundaries
+        run: node --test scripts/tests/test_site_analytics.mjs
+
   test:
     runs-on: macos-15
     timeout-minutes: 30
@@ -33,7 +47,14 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Select newest Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)" && xcodebuild -version
+        run: |
+          shopt -s nullglob
+          XCODE_APPS=(/Applications/Xcode_*.app)
+          [ "${#XCODE_APPS[@]}" -gt 0 ] \
+            || { echo "::error::No versioned Xcode app found on the runner."; exit 1; }
+          XCODE="$(printf '%s\n' "${XCODE_APPS[@]}" | sort -V | tail -1)"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
 
       - name: Install xcodegen
         run: brew install xcodegen
@@ -44,10 +65,53 @@ jobs:
       - name: Fetch vendored Sentry framework
         run: bash ../scripts/fetch-sentry.sh
 
+      # Sparkle's Swift package wraps a binary artifact, and that artifact
+      # downloader hard-hung both v0.11.0 release attempts. Fetch the official
+      # checksum-pinned universal framework directly instead.
+      - name: Fetch vendored Sparkle framework
+        run: bash ../scripts/fetch-sparkle.sh
+
       - name: Generate project
         run: xcodegen generate
 
       - name: Test
+        run: |
+          xcodebuild test -project Burrow.xcodeproj -scheme Burrow \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+  # GitHub's Xcode 27 public-preview image currently runs macOS 26.5.2, so
+  # this catches compiler and macOS 27 SDK incompatibilities rather than the
+  # macOS 27 MenuBarAgent runtime regression. Keep the stable macOS 15 job as
+  # the release gate until GitHub offers a macOS 27 host image.
+  xcode-27-compatibility:
+    runs-on: xcode-27
+    continue-on-error: true
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Show preview environment
+        run: |
+          sw_vers
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Fetch vendored Sentry framework
+        run: bash ../scripts/fetch-sentry.sh
+
+      - name: Fetch vendored Sparkle framework
+        run: bash ../scripts/fetch-sparkle.sh
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Test against Xcode 27 and the macOS 27 SDK
         run: |
           xcodebuild test -project Burrow.xcodeproj -scheme Burrow \
             -destination 'platform=macOS' \
@@ -70,6 +134,9 @@ jobs:
       - name: Assert it is universal
         run: |
           F="$HOME/.cache/burrow-fclones/fclones-universal-0.35.0"
-          lipo -archs "$F" | grep -q arm64 && lipo -archs "$F" | grep -q x86_64 \
-            || { echo "::error::fclones not universal: $(lipo -archs "$F")"; exit 1; }
+          ARCHES="$(lipo -archs "$F")"
+          if ! grep -q arm64 <<< "$ARCHES" || ! grep -q x86_64 <<< "$ARCHES"; then
+            echo "::error::fclones not universal: $ARCHES"
+            exit 1
+          fi
           "$F" --version

@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
-# Build a Release Burrow.app and package it as a distributable .zip, then
-# print the sha256 for the Homebrew cask. The build carries no Developer ID
-# and isn't notarized — but it IS ad-hoc signed (see below), which is what
-# lets macOS Full Disk Access grants actually take effect. For a fully
-# Gatekeeper-clean release, sign + notarize with a Developer ID on top (the
-# CI release workflow does this when the signing secrets are present).
+# Build a local Release Burrow.app and package it as a test-only .zip. The
+# build carries no Developer ID and is not notarized, but it is coherently
+# ad-hoc signed so macOS Full Disk Access grants can take effect. Never publish
+# this artifact: official releases go only through the tag workflow, which
+# requires Developer ID signing and Apple notarization before publication.
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -16,6 +15,11 @@ echo "==> fetching vendored Sentry.xcframework"
 # Sentry is a local framework, not an SPM package (SPM's binary-artifact
 # download hard-hangs the release runner — see scripts/fetch-sentry.sh).
 bash scripts/fetch-sentry.sh
+
+echo "==> fetching vendored Sparkle.framework"
+# Sparkle's package also wraps a binary artifact. Fetch the official framework
+# with curl so xcodebuild never enters SwiftPM's hanging artifact downloader.
+bash scripts/fetch-sparkle.sh
 
 echo "==> xcodegen generate"
 # The macOS app lives under macos/ (monorepo: macos/ + windows/). Generate the
@@ -44,19 +48,15 @@ xcodebuild -project macos/Burrow.xcodeproj -scheme Burrow \
 APP="build_dist/Build/Products/Release/Burrow.app"
 [ -d "$APP" ] || { echo "build failed: $APP missing"; exit 1; }
 
-# Ad-hoc sign the bundle. CODE_SIGNING_ALLOWED=NO above leaves only the
-# linker's automatic signature (codesign flags: adhoc,linker-signed), which
-# `codesign --verify` rejects as "not signed at all". macOS TCC won't bind a
-# Full Disk Access grant to a code identity it considers invalid, so on the
-# unsigned build, granting FDA silently does nothing — the app keeps asking.
-# An explicit `codesign --sign -` gives the bundle a real, stable cdhash that
-# the FDA grant attaches to. (The cdhash still changes every rebuild, so each
-# new version must be re-granted — only a Developer ID identity avoids that.)
-echo "==> ad-hoc signing (stable code identity so Full Disk Access grants stick)"
-codesign --force --sign - \
-  --entitlements macos/Resources/Burrow.entitlements \
-  "$APP"
-codesign --verify --strict --verbose=2 "$APP"
+# CODE_SIGNING_ALLOWED=NO above leaves linker/ad-hoc signatures on individual
+# binaries, but the app contains several nested Mach-O executables (the
+# conductor, fclones, and engine helpers). Sign every executable inside-out,
+# then seal the outer app so the resource envelope is coherent and Full Disk
+# Access can bind to a valid identity. A Developer ID identity is still needed
+# for that identity to remain stable across updates.
+echo "==> ad-hoc signing nested code + app (Full Disk Access identity)"
+bash scripts/sign-macos-app.sh \
+  "$APP" - adhoc macos/Resources/Burrow.entitlements
 
 VERSION=$(defaults read "$PWD/$APP/Contents/Info" CFBundleShortVersionString)
 mkdir -p dist
@@ -68,10 +68,9 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 
 SHA=$(shasum -a 256 "$ZIP" | awk '{print $1}')
 echo
-echo "Built Burrow $VERSION"
+echo "Built local-only Burrow $VERSION (ad-hoc signed; not notarized)"
 echo "  artifact : $ZIP"
 echo "  sha256   : $SHA"
 echo
-echo "Publish:"
-echo "  gh release create v$VERSION \"$ZIP\" --title \"Burrow $VERSION\" --notes-file RELEASES.md"
-echo "  then set version=$VERSION + sha256=$SHA in packaging/burrow.rb (your tap)."
+echo "Do not publish this artifact."
+echo "Official releases are created only by pushing a version tag after CI credentials are configured."

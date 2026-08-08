@@ -853,8 +853,10 @@ struct ToolCatalog {
             total = Int64(d.total)
             free = Int64(d.total > d.used ? d.total - d.used : 0)
         }
+        let fdaDiagnosis = Privacy.diagnoseFullDiskAccess()
         let input = Doctor.Input(
-            fullDiskAccess: Privacy.hasFullDiskAccess(),
+            fullDiskAccess: fdaDiagnosis.hasAccess,
+            fullDiskAccessConclusive: fdaDiagnosis.conclusive,
             moInstalled: moInstalled,
             pressure: Self.mapPressure(latest?.memory.pressure),
             diskFreeBytes: free, diskTotalBytes: total,
@@ -1160,8 +1162,9 @@ struct ToolCatalog {
             if BurrowEnvelope.inOutput(res.stdout) == nil,
                DiskScanner.indicatesMissingJSONSupport(stderr: res.stderr) {
                 return Self.jsonString([
-                    "error": "installed mole is too old for `analyze --json` " +
-                             "(needs >= \(MoleCLI.minimumAnalyzeJSONVersion)); run `brew upgrade mole`",
+                    "error": "the active engine is too old for `analyze --json` " +
+                             "(needs >= \(MoleCLI.minimumAnalyzeJSONVersion)); " +
+                             MoleCLI.currentEngineUpdateInstruction,
                     "path": path])
             }
             return Self.analyzeFailure(path: path, stdout: res.stdout, stderr: res.stderr)

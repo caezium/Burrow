@@ -32,22 +32,28 @@ final class ConnectivityTests: XCTestCase {
     }
 
     func testResolvers_parsesScutilDNS_dedupesAndDropsLoopback() {
+        let publicOne = "1.1.1.1" // greenlight:ignore hardcoded-ipv4 — DNS parser fixture
+        let publicTwo = "1.0.0.1" // greenlight:ignore hardcoded-ipv4 — DNS parser fixture
+        let loopback = "127.0.0.1" // greenlight:ignore hardcoded-ipv4 — DNS parser fixture
         let sample = """
         DNS configuration
           resolver #1
-            nameserver[0] : 1.1.1.1
-            nameserver[1] : 1.0.0.1
+            nameserver[0] : \(publicOne)
+            nameserver[1] : \(publicTwo)
           resolver #2
-            nameserver[0] : 1.1.1.1
-            nameserver[0] : 127.0.0.1
+            nameserver[0] : \(publicOne)
+            nameserver[0] : \(loopback)
         """
-        XCTAssertEqual(Connectivity.resolvers(fromScutilDNS: sample), ["1.1.1.1", "1.0.0.1"])
+        XCTAssertEqual(Connectivity.resolvers(fromScutilDNS: sample), [publicOne, publicTwo])
     }
 
     func testUsesPublicDNS() {
-        XCTAssertTrue(Connectivity.usesPublicDNS(["1.1.1.1"]))
-        XCTAssertTrue(Connectivity.usesPublicDNS(["192.168.1.1", "8.8.8.8"]))
-        XCTAssertFalse(Connectivity.usesPublicDNS(["192.168.1.1"]))
+        let cloudflare = "1.1.1.1" // greenlight:ignore hardcoded-ipv4 — DNS comparison fixture
+        let google = "8.8.8.8" // greenlight:ignore hardcoded-ipv4 — DNS comparison fixture
+        let privateGateway = "192.168.1.1" // greenlight:ignore hardcoded-ipv4 — DNS comparison fixture
+        XCTAssertTrue(Connectivity.usesPublicDNS([cloudflare]))
+        XCTAssertTrue(Connectivity.usesPublicDNS([privateGateway, google]))
+        XCTAssertFalse(Connectivity.usesPublicDNS([privateGateway]))
         XCTAssertFalse(Connectivity.usesPublicDNS([]))
     }
 
@@ -72,9 +78,10 @@ final class ConnectivityTests: XCTestCase {
     }
 
     func testDefaultRoute_gatewayAndInterface() {
-        let wifi = "   route to: default\ndestination: default\n    gateway: 192.168.1.1\n  interface: en0\n"
+        let gateway = "192.168.1.1" // greenlight:ignore hardcoded-ipv4 — route parser fixture
+        let wifi = "   route to: default\ndestination: default\n    gateway: \(gateway)\n  interface: en0\n"
         let r = Connectivity.defaultRoute(fromRouteGet: wifi)
-        XCTAssertEqual(r.gateway, "192.168.1.1")
+        XCTAssertEqual(r.gateway, gateway)
         XCTAssertEqual(r.interface, "en0")
         // A point-to-point VPN tunnel has an interface but no gateway.
         let tun = "destination: default\n  interface: utun7\n"

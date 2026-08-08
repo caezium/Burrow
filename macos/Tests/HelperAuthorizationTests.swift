@@ -1,0 +1,180 @@
+//
+//  HelperAuthorizationTests.swift
+//  BurrowTests
+//
+//  The authorization policy behind every root operation. The decision the
+//  product made is narrow and unusually strict, so it is pinned here rather
+//  than left to a comment:
+//
+//    every operation that actually runs as root requires a FRESH user
+//    authentication — no grace period, no cached approval, no
+//    "authenticate once for this launch", and registering the helper does
+//    not itself authorize anything.
+//
+//  Two of those words are literally keys in the right's definition (`timeout`
+//  and `shared`), so a regression that reintroduces a credential cache is a
+//  one-line diff that these tests catch.
+//
+//  Nothing here prompts, authenticates, or touches the policy database: the
+//  right definition is a dictionary and the OSStatus mapping is a pure
+//  function, so both are checkable with no root and no UI.
+//
+
+import XCTest
+import Security
+@testable import Burrow
+
+final class HelperAuthorizationTests: XCTestCase {
+
+    // MARK: - The right's identity
+
+    /// The right is namespaced under the app's bundle identifier so it can
+    /// never collide with, or be satisfied by, a system right a user may have
+    /// already been granted for something else.
+    func testRightName_isNamespacedUnderTheBundleIdentifier() {
+        XCTAssertTrue(HelperAuthorization.rightName.hasPrefix("dev.caezium.Burrow."),
+                      "the right must live in Burrow's own namespace")
+        XCTAssertFalse(HelperAuthorization.rightName.hasPrefix("system."),
+                       "never reuse or shadow a system right")
+    }
+
+    // MARK: - No caching, ever (the decision, as policy keys)
+
+    /// The credential must survive exactly one XPC hop and no more.
+    ///
+    /// `timeout: 0` was the original design and is the ideal, but it kills the
+    /// credential before it reaches the daemon, so the daemon's check always
+    /// failed. The window is the smallest thing that works, and keeping it
+    /// small is the whole mitigation — so it is pinned rather than left to
+    /// drift upward the next time something feels slow.
+    func testRightDefinition_credentialWindowIsSmallAndBounded() {
+        let definition = HelperAuthorization.rightDefinition
+        let timeout = definition["timeout"] as? Int
+        XCTAssertNotNil(timeout)
+        XCTAssertGreaterThan(timeout ?? 0, 0, "0 kills the credential before the daemon can check it")
+        XCTAssertLessThanOrEqual(timeout ?? .max, 30,
+                                 "this covers an IPC round trip, not a user convenience grace period")
+        XCTAssertEqual(timeout, HelperAuthorization.credentialWindowSeconds)
+    }
+
+    func testRightDefinition_isNotSharedWithOtherProcessesOrRights() {
+        let definition = HelperAuthorization.rightDefinition
+        XCTAssertEqual(definition["shared"] as? Bool, false,
+                       "a shared credential would let one prompt satisfy a later, different request")
+    }
+
+    /// The daemon runs as root. If the right allowed root callers to skip
+    /// authentication, the daemon would authorize ITSELF and the prompt would
+    /// silently disappear — the single most dangerous misconfiguration
+    /// available here.
+    func testRightDefinition_doesNotLetTheRootDaemonAuthorizeItself() {
+        let definition = HelperAuthorization.rightDefinition
+        XCTAssertEqual(definition["allow-root"] as? Bool, false,
+                       "the root daemon must never satisfy this right by virtue of being root")
+    }
+
+    func testRightDefinition_requiresAnAdministratorToAuthenticate() {
+        let definition = HelperAuthorization.rightDefinition
+        XCTAssertEqual(definition["class"] as? String, "user")
+        XCTAssertEqual(definition["group"] as? String, "admin")
+        XCTAssertEqual(definition["authenticate-user"] as? Bool, true)
+    }
+
+    /// A human-readable reason ships with the right so the system prompt says
+    /// what Burrow is about to do rather than showing a bare app name.
+    func testRightDefinition_carriesAPromptDescription() {
+        let definition = HelperAuthorization.rightDefinition
+        let comment = definition["comment"] as? String ?? ""
+        XCTAssertFalse(comment.isEmpty, "the right documents itself in the policy database")
+    }
+
+    // MARK: - Flags (the CopyRights call shape)
+    //
+    // Two documented ways to get this wrong, both of which turn the check into
+    // a no-op:
+    //   * omitting kAuthorizationFlagExtendRights — rights are never actually
+    //     extended, and sloppy callers read the status as success;
+    //   * passing kAuthorizationFlagPreAuthorize in the DAEMON — that only
+    //     asks "could this be authorized later", which is not an authorization.
+
+    func testDaemonFlags_extendRights() {
+        XCTAssertTrue(HelperAuthorization.daemonFlags.contains(.extendRights),
+                      "without this no right is actually granted")
+    }
+
+    /// The daemon must never be able to prompt.
+    ///
+    /// Practically it cannot — a launchd system daemon has no session to draw
+    /// in, which is precisely what broke the first design. But the stronger
+    /// reason is that a daemon which CAN prompt is a daemon anything reaching
+    /// it can make prompt. Without the flag its check is a pure question, and
+    /// an unauthenticated reference simply fails.
+    func testDaemonFlags_neverAllowInteraction() {
+        XCTAssertFalse(HelperAuthorization.daemonFlags.contains(.interactionAllowed),
+                       "the root daemon verifies; it never asks")
+    }
+
+    /// The client is where the human is asked, so it needs interaction — and
+    /// `preAuthorize`, which is what makes the credential available to the
+    /// daemon's later check rather than only to this process.
+    func testClientFlags_promptAndPreAuthorize() {
+        let flags = HelperAuthorization.clientFlags
+        XCTAssertTrue(flags.contains(.interactionAllowed), "this is the call that shows the prompt")
+        XCTAssertTrue(flags.contains(.preAuthorize), "the daemon must be able to verify it afterwards")
+        XCTAssertTrue(flags.contains(.extendRights))
+    }
+
+    /// The two sides must not both prompt, and must not both merely verify.
+    /// Exactly one raises UI, and it is the one with a session.
+    func testFlags_exactlyOneSideCanPrompt() {
+        XCTAssertNotEqual(HelperAuthorization.clientFlags.contains(.interactionAllowed),
+                          HelperAuthorization.daemonFlags.contains(.interactionAllowed))
+    }
+
+    // MARK: - OSStatus → outcome (pure, exhaustive)
+
+    func testOutcome_successIsGranted() {
+        XCTAssertEqual(HelperAuthorization.outcome(from: errAuthorizationSuccess), .granted)
+    }
+
+    func testOutcome_dismissedPromptIsCancelled() {
+        XCTAssertEqual(HelperAuthorization.outcome(from: errAuthorizationCanceled), .cancelled)
+    }
+
+    func testOutcome_wrongPasswordOrRefusalIsDenied() {
+        XCTAssertEqual(HelperAuthorization.outcome(from: errAuthorizationDenied), .denied)
+        XCTAssertEqual(HelperAuthorization.outcome(from: OSStatus(errAuthorizationInteractionNotAllowed)), .denied)
+    }
+
+    /// Anything unrecognised fails CLOSED. A status this code has never seen
+    /// must never fall through to "probably fine" — the operation is refused
+    /// and the raw status is preserved for diagnosis.
+    func testOutcome_unknownStatusFailsClosed() {
+        XCTAssertEqual(HelperAuthorization.outcome(from: OSStatus(-60999)), .failed(-60999))
+        XCTAssertNotEqual(HelperAuthorization.outcome(from: OSStatus(-60999)), .granted)
+    }
+
+    func testOutcome_onlyGrantedPermitsExecution() {
+        // The single predicate the daemon branches on, so "granted" can't be
+        // accidentally widened to "not an outright failure".
+        XCTAssertTrue(HelperAuthorization.Outcome.granted.permitsExecution)
+        for refused: HelperAuthorization.Outcome in [.denied, .cancelled, .failed(-1)] {
+            XCTAssertFalse(refused.permitsExecution, "\(refused) must not run anything as root")
+        }
+    }
+
+    // MARK: - External form sizing
+    //
+    // The external form is a fixed-size C struct. A payload of any other size
+    // is malformed and is refused BEFORE it reaches
+    // AuthorizationCreateFromExternalForm, so a hostile client cannot feed the
+    // Security framework a short or oversized buffer.
+
+    func testExternalForm_rejectsWrongSizedPayloads() {
+        let correct = MemoryLayout<AuthorizationExternalForm>.size
+        XCTAssertTrue(HelperAuthorization.isPlausibleExternalForm(Data(count: correct)))
+        XCTAssertFalse(HelperAuthorization.isPlausibleExternalForm(Data()))
+        XCTAssertFalse(HelperAuthorization.isPlausibleExternalForm(Data(count: correct - 1)))
+        XCTAssertFalse(HelperAuthorization.isPlausibleExternalForm(Data(count: correct + 1)))
+    }
+}

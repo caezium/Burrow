@@ -1,5 +1,11 @@
 # UI follow-ups implementation plan — 2026-06-14
 
+> Historical plan. Its ad-hoc-signing blocker describes the 0.7.1 release
+> pipeline; the fail-closed Developer ID and notarization path landed in #312.
+> Its GitHub/Homebrew banner was superseded in 0.11 by Sparkle's signed native
+> updater; the implementation notes below remain as historical context.
+> A resident privileged helper remains a separate product and security decision.
+
 Branch: `feat/ui-followups-2026-06-14` (worktree `/Users/henry/Desktop/Burrow-work`, off `main` 0.7.1).
 Grounded in a per-area survey of the real 0.7.1 tree (the prior survey read a stale checkout 55
 commits behind — that checkout, `/Users/henry/Desktop/Burrow` on `fix/ci-streaming-apphang`,

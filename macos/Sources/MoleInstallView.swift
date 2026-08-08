@@ -2,18 +2,17 @@
 //  MoleInstallView.swift
 //  Burrow
 //
-//  Guided onboarding when the `mo` engine is missing. Burrow can't run
-//  without it, but rather than quit with a dead-end alert we show the
-//  exact install command (copyable) and a Recheck button — we never run
-//  an installer on the user's behalf. Once `mo` is found, `onReady` fires
-//  and the app continues its normal startup.
+//  Recovery UI when no engine can be found. Official builds bundle the engine,
+//  so reinstalling Burrow restores the signed bundle. Source builds may still
+//  provide an external `mo`; Recheck accepts either without installing for the
+//  user.
 //
 
 import SwiftUI
 import AppKit
 
 struct MoleInstallView: View {
-    /// Called when a Recheck finds `mo` on PATH — the app proceeds.
+    /// Called when a Recheck finds the bundled or an external engine.
     var onReady: () -> Void
 
     @State private var checking = false
@@ -24,15 +23,15 @@ struct MoleInstallView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Label("Mole engine required", systemImage: "shippingbox")
+                Label("Burrow engine missing", systemImage: "shippingbox")
                     .font(Brand.serif(20, .medium)).foregroundStyle(Brand.textPrimary)
-                Text("Burrow is a GUI for the Mole CLI (`mo`) — it does the scanning and cleanup. Install it and Burrow will pick it up automatically.")
+                Text("Official builds include the engine inside the signed app. Reinstall Burrow to restore it; source builds can also provide an external `mo` on PATH.")
                     .font(Brand.sans(13)).foregroundStyle(Brand.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("WITH HOMEBREW").font(Brand.mono(9, .bold)).tracking(0.6).foregroundStyle(Brand.textTertiary)
+                Text("REINSTALL SIGNED APP").font(Brand.mono(9, .bold)).tracking(0.6).foregroundStyle(Brand.textTertiary)
                 HStack {
                     Text(MoleCLI.installCommand).font(Brand.mono(12)).foregroundStyle(Brand.textPrimary)
                         .textSelection(.enabled)
@@ -51,13 +50,13 @@ struct MoleInstallView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Brand.hairline, lineWidth: 1))
 
                 Button { NSWorkspace.shared.open(MoleCLI.repoURL) } label: {
-                    Text("No Homebrew? Other install options →")
+                    Text("View the bundled engine source →")
                         .font(Brand.mono(10)).foregroundStyle(Brand.textSecondary)
                 }.buttonStyle(.plain)
             }
 
             if stillMissing {
-                Text("Still not finding `mo` on PATH. If you just installed it, open a new terminal first, or relaunch Burrow.")
+                Text("The engine is still missing. Finish reinstalling Burrow, then recheck or relaunch the app.")
                     .font(Brand.mono(10)).foregroundStyle(Brand.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -74,10 +73,8 @@ struct MoleInstallView: View {
         .padding(22)
         .frame(width: 460, height: 320)
         .background(Brand.base)
-        // Auto-detect `mo` appearing (e.g. right after `brew install mole`) and
-        // proceed on our own, so the user doesn't have to return and click
-        // Recheck — that manual step is the #1 onboarding drop-off
-        // (engine_missing). Polling stops as soon as the window closes.
+        // Auto-detect the restored bundle or an external source-build engine.
+        // Polling stops as soon as the window closes.
         .onAppear { startAutoDetect() }
         .onDisappear { pollTimer?.invalidate(); pollTimer = nil }
     }
@@ -93,10 +90,8 @@ struct MoleInstallView: View {
         }
     }
 
-    /// Poll for `mo` showing up while this window is open and proceed on our
-    /// own. Uses the trusted-locations check only (no per-tick subprocess) —
-    /// `brew install mole` lands in /opt/homebrew/bin, which it covers; the
-    /// manual Recheck still does the full PATH lookup for unusual installs.
+    /// Poll trusted locations without spawning a subprocess on every tick;
+    /// manual Recheck still performs the full PATH lookup for source builds.
     private func startAutoDetect() {
         pollTimer?.invalidate()
         let t = Timer(timeInterval: 2.0, repeats: true) { timer in

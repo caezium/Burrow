@@ -31,14 +31,20 @@ final class DiskScannerTests: XCTestCase {
     }
 
     func testTooOldError_namesFloorAndFix() throws {
-        let msg = try XCTUnwrap(DiskScanError.moTooOld(found: "1.28.1").errorDescription)
+        let msg = try XCTUnwrap(DiskScanError.moTooOld(
+            found: "1.28.1",
+            updatePolicy: .external
+        ).errorDescription)
         XCTAssertTrue(msg.contains(MoleCLI.minimumAnalyzeJSONVersion))
         XCTAssertTrue(msg.contains("1.28.1"))
-        XCTAssertTrue(msg.contains("brew upgrade mole"))
+        XCTAssertTrue(msg.contains("Update external engine"))
     }
 
     func testTooOldError_readableWithUnknownVersion() throws {
-        let msg = try XCTUnwrap(DiskScanError.moTooOld(found: nil).errorDescription)
+        let msg = try XCTUnwrap(DiskScanError.moTooOld(
+            found: nil,
+            updatePolicy: .bundledWithApp
+        ).errorDescription)
         XCTAssertTrue(msg.contains(MoleCLI.minimumAnalyzeJSONVersion))
         XCTAssertFalse(msg.contains("%@"), "format placeholders must be resolved")
     }

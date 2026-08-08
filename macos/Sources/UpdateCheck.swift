@@ -2,243 +2,405 @@
 //  UpdateCheck.swift
 //  Burrow
 //
-//  "Check for Updates": one GET to the GitHub Releases API, compare against
-//  the running version, then point the user at the release page (or
-//  `brew upgrade --cask burrow` when the cask receipt is present). Two
-//  callers share the fetch/parse/compare: the manual menu/Settings action
-//  (UpdateCheck.checkNow, an NSAlert) and the opt-in background check
-//  (AppUpdate, default on — a silent launch + ~daily GET that surfaces a
-//  banner + menu-bar dot). Neither installs anything; self-update waits for
-//  signed/notarized distribution. The background check is documented in
-//  SECURITY.md.
+//  Burrow's own updater is Sparkle's standard signed-update UI. The legacy
+//  GitHub/Homebrew banner remains only in 0.10.5 long enough to deliver the
+//  first signed release; 0.11+ installs signed ZIPs from the signed appcast.
 //
 
 import Foundation
-import AppKit
+import Sparkle
 
-extension Notification.Name {
-    /// Posted (object: Bool — whether an update is available) when the
-    /// background self-update state changes, so the menu-bar status item can
-    /// add/remove its dot without holding a Combine subscription.
-    static let burrowUpdateAvailability = Notification.Name("dev.caezium.burrow.updateAvailability")
+enum UpdateStartPolicy {
+    /// Disabling a delayed automatic check is a persistence-only operation;
+    /// enabling it is an explicit request that may initialize Sparkle now.
+    static func shouldStartForAutomaticChecks(enabled: Bool) -> Bool { enabled }
 }
 
-/// The background half of self-update: a silent, opt-in, ~daily GitHub check
-/// that publishes a found release for the in-window banner + menu-bar dot.
-/// The loud manual half (NSAlert) stays in `UpdateCheck.checkNow()`.
+enum UpdateFailureCategory: String, Equatable {
+    case appTranslocation = "app_translocation"
+    case transientDownload = "transient_download"
+    case noUpdate = "no_update"
+    case cancelled
+    case configuration
+    case signatureValidation = "signature_validation"
+    case installation
+    case other
+}
+
+enum UpdateFailureRecovery: String, Equatable {
+    case moveToApplications = "move_to_applications"
+    case sparkleScheduledRetry = "sparkle_scheduled_retry"
+    case none
+}
+
+struct UpdateFailureDisposition: Equatable {
+    let category: UpdateFailureCategory
+    let recovery: UpdateFailureRecovery
+    let shouldCaptureInSentry: Bool
+}
+
+enum UpdateFailurePolicy {
+    // Sparkle 2.9.4 SUErrors.h: SURunningTranslocated. Keep this explicit so
+    // the policy is testable even though Swift does not import SUError cases.
+    private static let runningTranslocatedCode = 1005
+    private static let runningFromDiskImageCode = 1003
+    private static let noUpdateCode = 1001
+    private static let downloadErrorCode = 2001
+    private static let installationCancelledCodes: Set<Int> = [4007, 4008]
+    private static let developerActionableURLCodes: Set<Int> = [
+        NSURLErrorBadURL,
+        NSURLErrorUnsupportedURL,
+        NSURLErrorRedirectToNonExistentLocation,
+        NSURLErrorBadServerResponse,
+        NSURLErrorUserAuthenticationRequired,
+        NSURLErrorZeroByteResource,
+        NSURLErrorCannotDecodeRawData,
+        NSURLErrorCannotDecodeContentData,
+        NSURLErrorCannotParseResponse,
+        NSURLErrorAppTransportSecurityRequiresSecureConnection,
+        NSURLErrorFileDoesNotExist,
+        NSURLErrorNoPermissionsToReadFile,
+        NSURLErrorSecureConnectionFailed,
+        NSURLErrorServerCertificateHasBadDate,
+        NSURLErrorServerCertificateUntrusted,
+        NSURLErrorServerCertificateHasUnknownRoot,
+        NSURLErrorServerCertificateNotYetValid,
+        NSURLErrorClientCertificateRejected,
+        NSURLErrorClientCertificateRequired,
+    ]
+
+    static func classify(_ error: NSError) -> UpdateFailureDisposition {
+        let underlying = deepestUnderlyingError(in: error)
+        let sparkleInstallationCancelled = error.domain == SUSparkleErrorDomain
+            && installationCancelledCodes.contains(error.code)
+        let underlyingRequestCancelled = underlying?.domain == NSURLErrorDomain
+            && underlying?.code == NSURLErrorCancelled
+        if sparkleInstallationCancelled || underlyingRequestCancelled {
+            return UpdateFailureDisposition(
+                category: .cancelled,
+                recovery: .none,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, error.code == noUpdateCode {
+            return UpdateFailureDisposition(
+                category: .noUpdate,
+                recovery: .none,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == SUSparkleErrorDomain,
+           error.code == runningTranslocatedCode || error.code == runningFromDiskImageCode {
+            return UpdateFailureDisposition(
+                category: .appTranslocation,
+                recovery: .moveToApplications,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, error.code == downloadErrorCode {
+            if let underlying,
+               underlying.domain == NSURLErrorDomain,
+               developerActionableURLCodes.contains(underlying.code) {
+                return UpdateFailureDisposition(
+                    category: .configuration,
+                    recovery: .none,
+                    shouldCaptureInSentry: true
+                )
+            }
+            return UpdateFailureDisposition(
+                category: .transientDownload,
+                recovery: .sparkleScheduledRetry,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == NSURLErrorDomain {
+            if developerActionableURLCodes.contains(error.code) {
+                return UpdateFailureDisposition(
+                    category: .configuration,
+                    recovery: .none,
+                    shouldCaptureInSentry: true
+                )
+            }
+            return UpdateFailureDisposition(
+                category: error.code == NSURLErrorCancelled ? .cancelled : .transientDownload,
+                recovery: error.code == NSURLErrorCancelled ? .none : .sparkleScheduledRetry,
+                shouldCaptureInSentry: false
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, (1...7).contains(error.code) {
+            return UpdateFailureDisposition(
+                category: .configuration,
+                recovery: .none,
+                shouldCaptureInSentry: true
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, (3001...3002).contains(error.code) {
+            return UpdateFailureDisposition(
+                category: .signatureValidation,
+                recovery: .none,
+                shouldCaptureInSentry: true
+            )
+        }
+        if error.domain == SUSparkleErrorDomain, (4000...4012).contains(error.code) {
+            return UpdateFailureDisposition(
+                category: .installation,
+                recovery: .none,
+                shouldCaptureInSentry: true
+            )
+        }
+        return UpdateFailureDisposition(
+            category: .other,
+            recovery: .none,
+            shouldCaptureInSentry: true
+        )
+    }
+
+    /// Sparkle wraps URLSession failures. Preserve only bounded domains/codes;
+    /// descriptions and failing URLs can contain private network information.
+    static func telemetryProperties(for error: NSError) -> [String: Any] {
+        let disposition = classify(error)
+        var properties: [String: Any] = [
+            "error_domain": error.domain,
+            "error_code": error.code,
+            "failure_category": disposition.category.rawValue,
+            "recovery": disposition.recovery.rawValue,
+        ]
+        if let underlying = deepestUnderlyingError(in: error),
+           underlying.domain != error.domain || underlying.code != error.code {
+            properties["underlying_error_domain"] = underlying.domain
+            properties["underlying_error_code"] = underlying.code
+        }
+        return properties
+    }
+
+    private static func deepestUnderlyingError(in error: NSError) -> NSError? {
+        var current = error
+        var visited = Set<ObjectIdentifier>()
+        while let next = current.userInfo[NSUnderlyingErrorKey] as? NSError {
+            let identity = ObjectIdentifier(next)
+            guard visited.insert(identity).inserted else { break }
+            current = next
+        }
+        return current === error ? nil : current
+    }
+}
+
 @MainActor
-final class AppUpdate: ObservableObject {
+final class AppUpdate: NSObject, SPUUpdaterDelegate {
     static let shared = AppUpdate()
 
-    /// The newest release when it's newer than this build and not dismissed;
-    /// nil otherwise. Drives the RootView banner + PopupView footer row.
-    @Published private(set) var available: UpdateCheck.Release?
+    private lazy var controller = SPUStandardUpdaterController(
+        startingUpdater: false,
+        updaterDelegate: self,
+        userDriverDelegate: nil
+    )
+    private var started = false
+    private var updateFoundInCycle = false
+    private var noUpdateInCycle = false
+    private var stabilityTask: Task<Void, Never>?
+    private var startSource = "automatic"
 
-    private var timer: Timer?
+    private override init() {
+        super.init()
+    }
 
-    /// Start the launch check + a ~daily repeating check. Safe to call once
-    /// from AppDelegate; honours the opt-in internally so toggling the
-    /// setting off stops surfacing (a running timer just no-ops).
-    func begin() {
-        checkIfDue()
-        // Re-check ~daily for long-running menu-bar sessions.
-        let t = Timer(timeInterval: 24 * 3600, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.checkIfDue() }
+    /// Starts Sparkle once and migrates Burrow's existing auto-check choice.
+    /// Info.plist disallows background downloads entirely. A missing
+    /// development key leaves local source builds usable; the tag workflow
+    /// rejects that configuration before building.
+    @discardableResult
+    func begin(source: String = "automatic") -> Bool {
+        guard !started, Self.hasValidPublicKey else { return false }
+        // Every start path (automatic, Settings, or manual) records the same
+        // durable boundary before constructing Sparkle. A synchronous wedge
+        // or an immediate AppKit callback therefore suppresses the next
+        // automatic start instead of repeating it on every launch.
+        LaunchJournal.live.mark(.updaterScheduled)
+        CrashReporter.setLaunchPhase(.updaterScheduled)
+        if let legacyChoice = Store.migrateLegacyUpdatePreferences() {
+            controller.updater.automaticallyChecksForUpdates = legacyChoice
         }
-        RunLoop.main.add(t, forMode: .common)
-        timer = t
+        controller.startUpdater()
+        started = true
+        startSource = source
+        Telemetry.capture("updater_started", ["source": source])
+        scheduleStabilityMarker()
+        return true
     }
 
-    /// Fetch if the opt-in is on and we haven't checked in ~a day.
-    func checkIfDue() {
-        guard Store.autoCheckForUpdates else { return }
-        if let last = Store.lastUpdateCheckAt, Date().timeIntervalSince(last) < 23 * 3600 { return }
-        fetch()
+    private func scheduleStabilityMarker() {
+        stabilityTask?.cancel()
+        stabilityTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.stabilityTask = nil
+            LaunchJournal.live.markAutomaticUpdaterStable()
+            LaunchJournal.live.mark(.updaterReady)
+            CrashReporter.setLaunchPhase(.updaterReady)
+            Telemetry.capture("updater_stabilized", ["source": self.startSource])
+        }
     }
 
-    /// Force a fetch now (the Settings "Check for Updates" path / turning
-    /// auto-check on). Ignores the throttle but still publishes silently.
-    func checkNow() { fetch() }
-
-    /// Drop the current banner and suppress this version until a newer one.
-    func dismiss() {
-        if let v = available?.version { Store.dismissedUpdateVersion = v }
-        setAvailable(nil)
+    func setAutomaticChecks(_ enabled: Bool) {
+        // Persisting "off" must not construct/start Sparkle during Burrow's
+        // guarded launch window. Turning checks on, or checking manually, is
+        // an explicit action and may start it immediately.
+        Store.autoCheckForUpdates = enabled
+        if UpdateStartPolicy.shouldStartForAutomaticChecks(enabled: enabled) {
+            begin(source: "settings")
+        }
+        if started {
+            controller.updater.automaticallyChecksForUpdates = enabled
+        }
     }
 
-    private func fetch() {
-        var request = URLRequest(url: UpdateCheck.latestReleaseURL)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        URLSession.shared.dataTask(with: request) { data, _, _ in
-            DispatchQueue.main.async {
-                Store.lastUpdateCheckAt = Date()
-                guard let data,
-                      let release = UpdateCheck.parseLatestRelease(data),
-                      UpdateCheck.isNewer(release.version, than: UpdateCheck.currentVersion),
-                      release.version != Store.dismissedUpdateVersion else {
-                    self.setAvailable(nil)
-                    return
+    /// A manual check always uses Sparkle's native progress/result/update UI.
+    func checkNow() {
+        begin(source: "manual")
+        guard started else { return }
+        updateFoundInCycle = false
+        noUpdateInCycle = false
+        Telemetry.capture("update_check_started", ["source": "manual"])
+        controller.checkForUpdates(nil)
+    }
+
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        updateFoundInCycle = true
+        noUpdateInCycle = false
+        Telemetry.capture("update_found", [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
+        noUpdateInCycle = true
+        let nsError = error as NSError
+        let userInitiated = nsError.userInfo[SPUNoUpdateFoundUserInitiatedKey] as? Bool ?? false
+        Telemetry.capture("update_not_found", [
+            "source": userInitiated ? "manual" : "automatic",
+        ])
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        willDownloadUpdate item: SUAppcastItem,
+        with request: NSMutableURLRequest
+    ) {
+        Telemetry.capture("update_download_started", [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
+        Telemetry.capture("update_download_completed", [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: Error) {
+        let nsError = error as NSError
+        var properties = UpdateFailurePolicy.telemetryProperties(for: nsError)
+        properties["target_version"] = item.displayVersionString
+        Telemetry.capture("update_download_failed", properties)
+        // Sentry receives only one actionable diagnostic at cycle completion.
+        // Expected network/translocation failures remain PostHog-only.
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        Telemetry.capture("update_install_started", [
+            "target_version": item.displayVersionString,
+        ])
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        userDidMake choice: SPUUserUpdateChoice,
+        forUpdate updateItem: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        let choiceName: String
+        switch choice.rawValue {
+        case 0: choiceName = "skip"
+        case 1: choiceName = "install"
+        default: choiceName = "dismiss"
+        }
+        Telemetry.capture("update_choice_made", [
+            "choice": choiceName,
+            "stage": state.stage.rawValue,
+            "target_version": updateItem.displayVersionString,
+        ])
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+        error: Error?
+    ) {
+        let source: String
+        switch updateCheck.rawValue {
+        case 0: source = "manual"
+        case 1: source = "automatic"
+        default: source = "information"
+        }
+        if let error, !noUpdateInCycle {
+            let nsError = error as NSError
+            let disposition = UpdateFailurePolicy.classify(nsError)
+            if disposition.category == .cancelled {
+                Telemetry.capture("update_cycle_completed", [
+                    "source": source,
+                    "result": "cancelled",
+                ])
+            } else {
+                var properties = UpdateFailurePolicy.telemetryProperties(for: nsError)
+                properties["source"] = source
+                properties["update_found"] = updateFoundInCycle
+                Telemetry.capture("update_cycle_failed", properties)
+                if disposition.shouldCaptureInSentry {
+                    CrashReporter.captureDiagnostic(
+                        "update_cycle_failed",
+                        error: error,
+                        data: properties
+                    )
                 }
-                self.setAvailable(release)
             }
-        }.resume()
+        } else {
+            Telemetry.capture("update_cycle_completed", [
+                "source": source,
+                "result": noUpdateInCycle ? "no_update" : (updateFoundInCycle ? "update_found" : "completed"),
+            ])
+        }
+        updateFoundInCycle = false
+        noUpdateInCycle = false
     }
 
-    private func setAvailable(_ release: UpdateCheck.Release?) {
-        available = release
-        NotificationCenter.default.post(name: .burrowUpdateAvailability, object: release != nil)
+    private static var hasValidPublicKey: Bool {
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
+              let data = Data(base64Encoded: key) else { return false }
+        return data.count == 32
     }
 }
 
 enum UpdateCheck {
-    static let latestReleaseURL = URL(string: "https://api.github.com/repos/caezium/Burrow/releases/latest")!
-    static let releasesPageURL  = URL(string: "https://github.com/caezium/Burrow/releases")!
-
-    struct Release {
-        let version: String
-        let url: URL
-    }
-
-    /// Numeric per-component compare; tolerates a leading "v" and ragged
-    /// lengths (missing components count as 0).
+    /// Numeric per-component compare used by the Updates inventory for other
+    /// apps. Burrow's own update selection and verification belong to Sparkle.
     static func isNewer(_ remote: String, than local: String) -> Bool {
         func parts(_ s: String) -> [Int] {
-            var t = s.trimmingCharacters(in: .whitespaces)
-            if t.hasPrefix("v") || t.hasPrefix("V") { t.removeFirst() }
-            return t.split(separator: ".").map { Int($0) ?? 0 }
+            var value = s.trimmingCharacters(in: .whitespaces)
+            if value.hasPrefix("v") || value.hasPrefix("V") { value.removeFirst() }
+            return value.split(separator: ".").map { Int($0) ?? 0 }
         }
-        let r = parts(remote), l = parts(local)
-        for i in 0..<max(r.count, l.count) {
-            let rv = i < r.count ? r[i] : 0
-            let lv = i < l.count ? l[i] : 0
-            if rv != lv { return rv > lv }
+        let remoteParts = parts(remote)
+        let localParts = parts(local)
+        for index in 0..<max(remoteParts.count, localParts.count) {
+            let remotePart = index < remoteParts.count ? remoteParts[index] : 0
+            let localPart = index < localParts.count ? localParts[index] : 0
+            if remotePart != localPart { return remotePart > localPart }
         }
         return false
     }
 
-    /// Pull tag + page URL out of a /releases/latest response.
-    static func parseLatestRelease(_ data: Data) -> Release? {
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tag = obj["tag_name"] as? String,
-              let urlString = obj["html_url"] as? String,
-              let url = URL(string: urlString) else { return nil }
-        var version = tag.trimmingCharacters(in: .whitespaces)
-        if version.hasPrefix("v") || version.hasPrefix("V") { version.removeFirst() }
-        guard !version.isEmpty else { return nil }
-        return Release(version: version, url: url)
-    }
-
-    /// The version this build is running.
-    static var currentVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
-    }
-
-    /// Whether this copy came from Homebrew (cask receipt present) — then
-    /// the honest update path is `brew upgrade --cask burrow`.
-    static func installedViaHomebrew() -> Bool {
-        let caskrooms = ["/opt/homebrew/Caskroom/burrow", "/usr/local/Caskroom/burrow"]
-        return caskrooms.contains { FileManager.default.fileExists(atPath: $0) }
-    }
-
-    /// The menu action: fetch, compare, and report via NSAlert. Stays
-    /// entirely off the network until the user asks.
+    @MainActor
     static func checkNow() {
-        var request = URLRequest(url: latestReleaseURL)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        URLSession.shared.dataTask(with: request) { data, _, error in
-            DispatchQueue.main.async {
-                guard let data, error == nil, let release = parseLatestRelease(data) else {
-                    presentResult(title: NSLocalizedString("Couldn't check for updates", comment: ""),
-                                  body: NSLocalizedString("GitHub didn't answer. Try again later, or open the releases page.", comment: ""),
-                                  link: releasesPageURL)
-                    return
-                }
-                if isNewer(release.version, than: currentVersion) {
-                    let brew = installedViaHomebrew()
-                    let body = brew
-                        ? String(format: NSLocalizedString("Burrow %@ is available (you have %@). Update and relaunch with Homebrew, or open the release page.", comment: ""), release.version, currentVersion)
-                        : String(format: NSLocalizedString("Burrow %@ is available (you have %@). Download it from the release page.", comment: ""), release.version, currentVersion)
-                    presentResult(title: NSLocalizedString("Update available", comment: ""), body: body, link: release.url, brewUpgrade: brew)
-                } else {
-                    presentResult(title: NSLocalizedString("You're up to date", comment: ""),
-                                  body: String(format: NSLocalizedString("Burrow %@ is the latest release.", comment: ""), currentVersion),
-                                  link: nil)
-                }
-            }
-        }.resume()
-    }
-
-    private static func presentResult(title: String, body: String, link: URL?, brewUpgrade: Bool = false) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = body
-        // Button order defines the response order: Update (default) · Release page · Close.
-        if brewUpgrade { alert.addButton(withTitle: NSLocalizedString("Update with Homebrew", comment: "")) }
-        if link != nil { alert.addButton(withTitle: NSLocalizedString("Open Release Page", comment: "")) }
-        alert.addButton(withTitle: NSLocalizedString("Close", comment: ""))
-        NSApp.activate(ignoringOtherApps: true)
-        let resp = alert.runModalQuiet()
-        if brewUpgrade {
-            if resp == .alertFirstButtonReturn { homebrewUpgrade() }
-            else if resp == .alertSecondButtonReturn, let link { NSWorkspace.shared.open(link) }
-        } else if resp == .alertFirstButtonReturn, let link {
-            NSWorkspace.shared.open(link)
-        }
-    }
-
-    /// The Homebrew update shell script (pure, so it's unit-tested). `brew upgrade --cask burrow`
-    /// prints "cannot be upgraded as-is" and EXITS 0 when the installed cask can't be upgraded in
-    /// place (the app self-modifies on launch — ad-hoc re-sign / receipt drift — so Homebrew
-    /// refuses and recommends a forced reinstall). Trusting that exit 0 made every update a silent
-    /// no-op: it claimed "Updated. Relaunching" and reopened the SAME build. So we capture the
-    /// output, detect the refusal, and run the `reinstall --force` Homebrew itself recommends.
-    static func homebrewUpdateScript(releasesURL: String) -> String {
-        """
-        #!/bin/bash
-        echo "Updating Burrow via Homebrew — it'll reopen when this finishes."
-        echo
-        for _ in $(seq 1 60); do pgrep -x Burrow >/dev/null 2>&1 || break; sleep 0.5; done
-        # Refresh the tap first: Homebrew's auto-update is throttled
-        # (HOMEBREW_AUTO_UPDATE_SECS, ~daily), so a plain `brew upgrade` can read a
-        # stale local tap and report "no new version" even when the app knows a
-        # release is out (the app checks GitHub directly). `brew update` bypasses
-        # the throttle so the cask is current. Its own exit status is ignored — a
-        # warning on some *other* tap must not abort our upgrade. (#243)
-        brew update || true
-        out=$(brew upgrade --cask burrow 2>&1); code=$?
-        printf '%s\\n' "$out"
-        # The refusal is a WARNING that exits 0, so fall back on the message, not $code.
-        if printf '%s' "$out" | grep -q "cannot be upgraded as-is"; then
-          echo
-          echo "Homebrew can't upgrade in place — reinstalling…"
-          brew reinstall --cask --force burrow
-          code=$?
-        fi
-        echo
-        if [ $code -eq 0 ]; then
-          echo "Updated. Relaunching Burrow…"
-          open -a Burrow
-        else
-          echo "Update failed (exit $code). Grab it from \(releasesURL)"
-        fi
-        """
-    }
-
-    /// User-initiated one-click update for Homebrew installs. Writes the script to a `.command`
-    /// file and opens it in Terminal (no Automation permission needed), then quits so the bundle
-    /// can be swapped and the new build relaunched.
-    static func homebrewUpgrade() {
-        let script = homebrewUpdateScript(releasesURL: releasesPageURL.absoluteString)
-        let path = (NSTemporaryDirectory() as NSString).appendingPathComponent("burrow-update.command")
-        do {
-            try script.write(toFile: path, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
-        } catch {
-            NSWorkspace.shared.open(releasesPageURL)
-            return
-        }
-        NSWorkspace.shared.open(URL(fileURLWithPath: path))
-        // Quit so the .command can replace the bundle and relaunch the new build.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { NSApp.terminate(nil) }
+        AppUpdate.shared.checkNow()
     }
 }

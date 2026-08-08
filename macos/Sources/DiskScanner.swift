@@ -48,7 +48,7 @@ struct DiskScanResult {
 
 enum DiskScanError: Error, LocalizedError {
     case moNotFound
-    case moTooOld(found: String?)
+    case moTooOld(found: String?, updatePolicy: MoleCLI.EngineUpdatePolicy)
     /// `reason` is what the run actually said, read from whichever channel the resolved binary
     /// says it on (`BurrowEnvelope.failureReason`) — NOT stderr, which the Rust engine leaves
     /// empty on every classified failure. nil means the run said nothing at all.
@@ -59,12 +59,13 @@ enum DiskScanError: Error, LocalizedError {
         switch self {
         case .moNotFound:
             return NSLocalizedString("Mole CLI (`mo`) not found on PATH.", comment: "")
-        case .moTooOld(let found):
+        case .moTooOld(let found, let updatePolicy):
             return String(format: NSLocalizedString(
-                "Disk analysis needs Mole %@ or newer (you have %@). Run `brew upgrade mole`, then try again.",
+                "Disk analysis needs Mole %@ or newer (you have %@). %@",
                 comment: ""),
                 MoleCLI.minimumAnalyzeJSONVersion,
-                found ?? NSLocalizedString("an unknown version", comment: ""))
+                found ?? NSLocalizedString("an unknown version", comment: ""),
+                NSLocalizedString(MoleCLI.engineUpdateInstruction(for: updatePolicy), comment: ""))
         case .moFailed(let code, let reason):
             // "mo analyze exited 2:" with nothing after the colon is what this printed for every
             // engine failure, because it was formatting stderr and the engine writes none. Say
@@ -98,9 +99,13 @@ enum DiskScanner {
         if BurrowConductor.isAvailable, let viaConductor = try? conductorScan(path, timeout: timeout) {
             return viaConductor
         }
-        guard case .installed = MoEngine.shared.availability() else {
+        guard case .installed(let executable) = MoEngine.shared.availability() else {
             throw DiskScanError.moNotFound
         }
+        let updatePolicy = MoleCLI.engineUpdatePolicy(
+            executable: executable,
+            bundledExecutable: MoleCLI.bundledExecutable()
+        )
         // 5-minute timeout — `mo analyze` on the home dir is usually a
         // few seconds, but a cold cache + large external volume + no
         // indexing can stretch it. Beyond 5 min something's wrong.
@@ -123,10 +128,18 @@ enum DiskScanner {
             // stderr is empty, so the string match already can't fire — but it states the rule
             // ("this diagnosis is only about a mo-family binary") in a form a test can pin, so
             // an engine that one day prints anything at all to stderr can't be mistaken for a
-            // 2023 mo and sent to `brew upgrade mole`.
+            // 2023 mo and told to upgrade a program the user doesn't have.
+            //
+            // `updatePolicy` then decides HOW to say "update it" — bundled engines update with
+            // the app, external ones through Settings — so the two guards compose: this one
+            // scopes WHICH binary the diagnosis can be about, that one scopes what to tell the
+            // user about the binary they actually resolved.
             if BurrowEnvelope.inOutput(result.stdout) == nil,
                indicatesMissingJSONSupport(stderr: result.stderr) {
-                throw DiskScanError.moTooOld(found: MoleCLI.versionReport()?.display)
+                throw DiskScanError.moTooOld(
+                    found: MoleCLI.versionReport()?.display,
+                    updatePolicy: updatePolicy
+                )
             }
             throw DiskScanError.moFailed(
                 exitCode: result.exitCode,

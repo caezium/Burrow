@@ -365,7 +365,7 @@ final class BurrowNotifier: NSObject {
     /// front: at launch when a notifying feature is on, and when a notifying
     /// operation STARTS, so the grant is settled before the first notice fires
     /// rather than mid-notification. A no-op once the user has answered. Logged
-    /// so a denial, or an unsigned-build registration failure, is visible in
+    /// so a denial or notification-registration failure is visible in
     /// Console (`log stream --predicate 'eventMessage CONTAINS "Burrow.notify"'`).
     func requestAuthorizationIfNeeded() {
         guard !inert else { return }

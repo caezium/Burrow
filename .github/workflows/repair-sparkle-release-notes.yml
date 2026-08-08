@@ -1,0 +1,243 @@
+name: repair Sparkle release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Latest published tag whose signed appcast notes need repair
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Validate the published release and notes source
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "::error::Run this repair from the default branch ($DEFAULT_BRANCH)."
+            exit 1
+          fi
+
+          TAG="$REQUESTED_TAG"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must be a stable semantic version such as v0.11.2."
+            exit 1
+          fi
+
+          LATEST="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          if [ "$TAG" != "$LATEST" ]; then
+            echo "::error::Only the latest published release may be repaired (latest is $LATEST)."
+            exit 1
+          fi
+
+          read -r IS_DRAFT IS_PRERELEASE <<< "$(
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft,isPrerelease --jq '[.isDraft, .isPrerelease] | @tsv'
+          )"
+          if [ "$IS_DRAFT" != "false" ] || [ "$IS_PRERELEASE" != "false" ]; then
+            echo "::error::The repair target must be a published stable release."
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          python3 scripts/validate-release-notes.py RELEASES.md --version "$VERSION"
+
+          ASSET_NAME="Burrow-${VERSION}.zip"
+          DIGEST="$(
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+              --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .digest"
+          )"
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Published $ASSET_NAME is missing a usable SHA-256 digest."
+            exit 1
+          fi
+
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "asset_name=$ASSET_NAME"
+            echo "asset_digest=$DIGEST"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify the unchanged notarized archive
+        id: archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.target.outputs.tag }}
+          VERSION: ${{ steps.target.outputs.version }}
+          ASSET_NAME: ${{ steps.target.outputs.asset_name }}
+          EXPECTED_DIGEST: ${{ steps.target.outputs.asset_digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist "$RUNNER_TEMP/unpacked"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$ASSET_NAME" --dir dist
+          ZIP="$PWD/dist/$ASSET_NAME"
+          ACTUAL_DIGEST="sha256:$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+          if [ "$ACTUAL_DIGEST" != "$EXPECTED_DIGEST" ]; then
+            echo "::error::Downloaded archive digest changed."
+            exit 1
+          fi
+
+          ditto -x -k "$ZIP" "$RUNNER_TEMP/unpacked"
+          APP="$RUNNER_TEMP/unpacked/Burrow.app"
+          INFO="$APP/Contents/Info.plist"
+          [ -d "$APP" ] || { echo "::error::Archive has no Burrow.app."; exit 1; }
+          ARTIFACT_VERSION="$(plutil -extract CFBundleShortVersionString raw "$INFO")"
+          BUILD_NUMBER="$(plutil -extract CFBundleVersion raw "$INFO")"
+          if [ "$ARTIFACT_VERSION" != "$VERSION" ] || [[ ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Archive version/build does not match the target release."
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          xcrun stapler validate "$APP"
+          spctl --assess --type execute --verbose=2 "$APP"
+
+          {
+            echo "build_number=$BUILD_NUMBER"
+            echo "info_plist=$INFO"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install checksum-pinned Sparkle release tools
+        run: |
+          TOOLS="$RUNNER_TEMP/sparkle-release-tools"
+          bash scripts/fetch-sparkle.sh --tools "$TOOLS"
+          echo "SPARKLE_TOOLS=$TOOLS/bin" >> "$GITHUB_ENV"
+
+      - name: Generate and verify the corrected signed feed
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          TAG: ${{ steps.target.outputs.tag }}
+          VERSION: ${{ steps.target.outputs.version }}
+          BUILD_NUMBER: ${{ steps.archive.outputs.build_number }}
+          INFO_PLIST: ${{ steps.archive.outputs.info_plist }}
+        run: |
+          set -euo pipefail
+          [ -n "$SPARKLE_PRIVATE_KEY" ] \
+            || { echo "::error::SPARKLE_ED_PRIVATE_KEY is required."; exit 1; }
+
+          PUBLIC_KEY="$(plutil -extract SUPublicEDKey raw "$INFO_PLIST")"
+          DERIVED_PUBLIC="$(swift -e 'import Foundation; import CryptoKit; guard let encoded = ProcessInfo.processInfo.environment["SPARKLE_PRIVATE_KEY"], let seed = Data(base64Encoded: encoded, options: .ignoreUnknownCharacters), seed.count == 32 else { exit(1) }; let key = try Curve25519.Signing.PrivateKey(rawRepresentation: seed); print(key.publicKey.rawRepresentation.base64EncodedString())')"
+          if [ "$DERIVED_PUBLIC" != "$PUBLIC_KEY" ]; then
+            echo "::error::Sparkle private key does not match the public key in the released app."
+            exit 1
+          fi
+
+          ZIP="$PWD/dist/Burrow-${VERSION}.zip"
+          APPCAST="$PWD/dist/appcast.xml"
+          ARCHIVE_URL="https://github.com/caezium/Burrow/releases/download/${TAG}/Burrow-${VERSION}.zip"
+          cp RELEASES.md "dist/Burrow-${VERSION}.md"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SPARKLE_TOOLS/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/caezium/Burrow/releases/download/${TAG}/" \
+            --embed-release-notes \
+            --maximum-deltas 0 \
+            --versions "$BUILD_NUMBER" \
+            --link "https://github.com/caezium/Burrow" \
+            -o "$APPCAST" "$PWD/dist"
+          python3 scripts/verify-sparkle-appcast.py "$APPCAST" \
+            --archive "$ZIP" \
+            --version "$VERSION" \
+            --build "$BUILD_NUMBER" \
+            --url "$ARCHIVE_URL" \
+            --release-notes RELEASES.md \
+            --signature-output "$RUNNER_TEMP/sparkle-archive-signature.txt"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - \
+            "$ZIP" "$(< "$RUNNER_TEMP/sparkle-archive-signature.txt")"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - "$APPCAST"
+
+      - name: Replace only the release body and signed appcast
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          APPCAST="$PWD/dist/appcast.xml"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file RELEASES.md
+          gh release upload "$TAG" "$APPCAST" --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Verify the published repair
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          TAG: ${{ steps.target.outputs.tag }}
+          VERSION: ${{ steps.target.outputs.version }}
+          BUILD_NUMBER: ${{ steps.archive.outputs.build_number }}
+          ASSET_NAME: ${{ steps.target.outputs.asset_name }}
+          EXPECTED_DIGEST: ${{ steps.target.outputs.asset_digest }}
+        run: |
+          set -euo pipefail
+          PUBLISHED="$RUNNER_TEMP/published"
+          mkdir -p "$PUBLISHED"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern appcast.xml --dir "$PUBLISHED"
+          cmp dist/appcast.xml "$PUBLISHED/appcast.xml"
+
+          ZIP="$PWD/dist/Burrow-${VERSION}.zip"
+          ARCHIVE_URL="https://github.com/caezium/Burrow/releases/download/${TAG}/Burrow-${VERSION}.zip"
+          python3 scripts/verify-sparkle-appcast.py "$PUBLISHED/appcast.xml" \
+            --archive "$ZIP" \
+            --version "$VERSION" \
+            --build "$BUILD_NUMBER" \
+            --url "$ARCHIVE_URL" \
+            --release-notes RELEASES.md
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - \
+            "$PUBLISHED/appcast.xml"
+
+          LATEST_URL="https://github.com/caezium/Burrow/releases/latest/download/appcast.xml"
+          for attempt in {1..12}; do
+            curl -fSL --retry 3 -o "$RUNNER_TEMP/latest-appcast.xml" "$LATEST_URL"
+            if cmp -s "$PUBLISHED/appcast.xml" "$RUNNER_TEMP/latest-appcast.xml"; then
+              break
+            fi
+            if [ "$attempt" -eq 12 ]; then
+              echo "::error::The latest-release URL did not serve the repaired appcast."
+              exit 1
+            fi
+            sleep 10
+          done
+
+          PUBLISHED_DIGEST="$(
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+              --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .digest"
+          )"
+          if [ "$PUBLISHED_DIGEST" != "$EXPECTED_DIGEST" ]; then
+            echo "::error::The published application archive changed during repair."
+            exit 1
+          fi
+
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body \
+            > "$RUNNER_TEMP/release.json"
+          python3 - "$RUNNER_TEMP/release.json" RELEASES.md <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          body = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["body"]
+          notes = Path(sys.argv[2]).read_text(encoding="utf-8")
+          if body.rstrip("\n") != notes.rstrip("\n"):
+              raise SystemExit("published GitHub release body does not match RELEASES.md")
+          PY
+          echo "Published Sparkle release notes repaired and verified for $TAG."

@@ -384,11 +384,12 @@ enum Store {
 
     // MARK: - Telemetry
 
-    /// Anonymous usage + crash-reporting opt-in (active-day counts + app/OS/arch
-    /// breakdown). ON by default and opt-out — flipping it off in Settings sends
-    /// one final opt-out event, then mutes both SDKs (PostHog + Sentry). Their
-    /// local files (random ids, queued events) stay on disk but nothing further
-    /// is sent. No account, no PII, no file contents; see `Telemetry.swift`.
+    /// Anonymous usage + diagnostics opt-in (product events, crash/hang reports,
+    /// release health, and sampled fixed-name performance spans). ON by default
+    /// and opt-out — flipping it off in Settings sends one final opt-out event,
+    /// then mutes the PostHog transport and closes Sentry. Their local random
+    /// ids and any Sentry cache stay on disk, but nothing further is sent. No
+    /// account, no PII, no file contents; see `Telemetry.swift`.
     static var telemetryEnabled: Bool {
         get { d.object(forKey: "telemetry_enabled") as? Bool ?? true }
         set { write(newValue, "telemetry_enabled") }
@@ -630,31 +631,68 @@ enum Store {
         set { write(newValue, "telemetry_notice_acknowledged") }
     }
 
+    /// The component/app/OS recovery key for which the explanation was shown.
+    /// A changed build can have a different AppKit or updater result, so it
+    /// gets its own notice while repeat launches on one build stay quiet.
+    static var lastCompatibilityNoticeBuild: String {
+        get { d.string(forKey: "last_compatibility_notice_build") ?? "" }
+        set { write(newValue, "last_compatibility_notice_build") }
+    }
+
     // MARK: - App updates (Burrow's own self-update)
 
-    /// Whether Burrow checks GitHub for its own new releases on launch and
-    /// ~daily while running. ON by default — one lightweight conditional GET;
-    /// a found update is surfaced as an in-window banner + a menu-bar dot,
-    /// never auto-installed. Off makes the check fully manual (the menu item
-    /// and the Settings button still work). The periodic GitHub request is
-    /// documented in SECURITY.md.
+    private static let legacyAutoCheckKey = "auto_check_for_updates"
+    private static let legacyLastCheckKey = "last_update_check_at"
+    private static let sparkleAutoCheckKey = "SUEnableAutomaticChecks"
+    private static let sparkleLastCheckKey = "SULastCheckTime"
+
+    /// Sparkle's own persisted preference is the source of truth. Until the
+    /// one-time migration runs, the getter still reflects Burrow's legacy key
+    /// so an existing opt-out never flashes back on in Settings.
     static var autoCheckForUpdates: Bool {
-        get { d.object(forKey: "auto_check_for_updates") as? Bool ?? true }
-        set { write(newValue, "auto_check_for_updates") }
+        get {
+            if let value = d.object(forKey: sparkleAutoCheckKey) as? Bool {
+                return value
+            }
+            return d.object(forKey: legacyAutoCheckKey) as? Bool ?? true
+        }
+        set {
+            write(newValue, sparkleAutoCheckKey)
+            if d.object(forKey: legacyAutoCheckKey) != nil {
+                d.removeObject(forKey: legacyAutoCheckKey)
+                d.synchronize()
+            }
+        }
     }
 
-    /// When the last background self-update check ran — throttles the
-    /// periodic check to ~daily.
-    static var lastUpdateCheckAt: Date? {
-        get { d.object(forKey: "last_update_check_at") as? Date }
-        set { write(newValue, "last_update_check_at") }
-    }
+    /// Move 0.10.5's update preferences into Sparkle once. Preserving the
+    /// last-check date avoids treating every upgrade as immediately overdue;
+    /// existing Sparkle values always win if it has already run.
+    ///
+    /// Returning the migrated automatic-check choice lets AppUpdate apply it
+    /// before starting the updater. Later launches leave Sparkle entirely in
+    /// charge of both values.
+    static func migrateLegacyUpdatePreferences() -> Bool? {
+        let legacyChoice = d.object(forKey: legacyAutoCheckKey) as? Bool
+        let legacyLastCheck = d.object(forKey: legacyLastCheckKey) as? Date
+        var migratedChoice: Bool?
 
-    /// A found-update version the user dismissed from the banner; suppressed
-    /// until a newer one appears.
-    static var dismissedUpdateVersion: String {
-        get { d.string(forKey: "dismissed_update_version") ?? "" }
-        set { write(newValue, "dismissed_update_version") }
+        if d.object(forKey: sparkleAutoCheckKey) == nil, let legacyChoice {
+            d.set(legacyChoice, forKey: sparkleAutoCheckKey)
+            migratedChoice = legacyChoice
+        }
+        if d.object(forKey: sparkleLastCheckKey) == nil, let legacyLastCheck {
+            d.set(legacyLastCheck, forKey: sparkleLastCheckKey)
+        }
+
+        let hasLegacyValues = d.object(forKey: legacyAutoCheckKey) != nil
+            || d.object(forKey: legacyLastCheckKey) != nil
+        if hasLegacyValues {
+            d.removeObject(forKey: legacyAutoCheckKey)
+            d.removeObject(forKey: legacyLastCheckKey)
+            d.synchronize()
+        }
+        return migratedChoice
     }
 
     // MARK: - History view
