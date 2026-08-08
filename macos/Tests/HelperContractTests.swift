@@ -25,6 +25,136 @@ import XCTest
 
 final class HelperContractTests: XCTestCase {
 
+    private var validInvokingUserClaim: HelperInvokingUserClaim {
+        HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/test")
+    }
+
+    // MARK: - Invoking identity
+
+    func testInvokingUserResolver_bindsTheClaimToThePeerUIDAndDaemonAccount() throws {
+        let claim = HelperInvokingUserClaim(uid: 502, canonicalHome: "/Users/Jane Doe")
+        let accounts = [
+            HelperInvokingUserAccount(uid: 501, username: "other", homeDirectory: "/Users/other"),
+            HelperInvokingUserAccount(uid: 502, username: "jane doe", homeDirectory: "/Users/Jane Doe"),
+        ]
+
+        let resolved = try HelperInvokingUserResolver.resolve(
+            peerUID: 502,
+            claim: claim,
+            accounts: accounts,
+            inspectHome: { path in
+                XCTAssertEqual(path, "/Users/Jane Doe")
+                return HelperHomeInspection(kind: .directory,
+                                            canonicalPath: "/Users/Jane Doe",
+                                            ownerUID: 502)
+            })
+
+        XCTAssertEqual(resolved.uid, 502)
+        XCTAssertEqual(resolved.username, "jane doe")
+        XCTAssertEqual(resolved.canonicalHome, "/Users/Jane Doe")
+        XCTAssertEqual(resolved.childEnvironment["HOME"], "/Users/Jane Doe")
+        XCTAssertEqual(resolved.childEnvironment["USER"], "jane doe")
+        XCTAssertEqual(resolved.childEnvironment["LOGNAME"], "jane doe")
+        XCTAssertEqual(resolved.childEnvironment["SUDO_USER"], "jane doe")
+        XCTAssertEqual(resolved.childEnvironment["SUDO_UID"], "502")
+        XCTAssertFalse(resolved.childEnvironment.values.contains("/var/root"))
+    }
+
+    func testRequestCarriesAnExplicitInvokingUserClaimAndRejectsItsAbsence() throws {
+        let claim = HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/henry")
+        let request = HelperRequest(operation: .clean,
+                                    operationID: UUID().uuidString,
+                                    clientBuild: "24",
+                                    invokingUser: claim)
+
+        let roundTripped = try JSONDecoder().decode(
+            HelperRequest.self, from: JSONEncoder().encode(request))
+        XCTAssertEqual(roundTripped.invokingUser, claim)
+
+        let missingClaim = #"{"operation":"clean","operationID":"00000000-0000-0000-0000-000000000001","clientBuild":"24"}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HelperRequest.self,
+                                                       from: Data(missingClaim.utf8)))
+    }
+
+    func testInvokingUserResolver_refusesRootAndAClaimForAnotherPeer() {
+        let account = HelperInvokingUserAccount(uid: 501, username: "user",
+                                                homeDirectory: "/Users/user")
+        let inspection = HelperHomeInspection(kind: .directory,
+                                              canonicalPath: "/Users/user", ownerUID: 501)
+
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 0,
+            claim: HelperInvokingUserClaim(uid: 0, canonicalHome: "/var/root"),
+            accounts: [], inspectHome: { _ in inspection })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .rootPeer)
+            }
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501,
+            claim: HelperInvokingUserClaim(uid: 502, canonicalHome: "/Users/user"),
+            accounts: [account], inspectHome: { _ in inspection })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .claimUIDMismatch)
+            }
+    }
+
+    func testInvokingUserResolver_refusesMissingOrSymlinkedHomes() {
+        let account = HelperInvokingUserAccount(uid: 501, username: "user",
+                                                homeDirectory: "/Users/user")
+        let claim = HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/user")
+
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [account],
+            inspectHome: { _ in HelperHomeInspection(kind: .missing,
+                                                      canonicalPath: nil, ownerUID: nil) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .missingHome)
+            }
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [account],
+            inspectHome: { _ in HelperHomeInspection(kind: .symbolicLink,
+                                                      canonicalPath: nil, ownerUID: 501) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .symbolicLinkHome)
+            }
+    }
+
+    func testInvokingUserResolver_refusesWrongOwnerAndCanonicalHomeMismatch() {
+        let account = HelperInvokingUserAccount(uid: 501, username: "user",
+                                                homeDirectory: "/Users/user")
+        let claim = HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/user")
+
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [account],
+            inspectHome: { _ in HelperHomeInspection(kind: .directory,
+                                                      canonicalPath: "/Users/user", ownerUID: 502) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .homeOwnerMismatch)
+            }
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [account],
+            inspectHome: { _ in HelperHomeInspection(kind: .directory,
+                                                      canonicalPath: "/Users/renamed", ownerUID: 501) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .canonicalHomeMismatch)
+            }
+    }
+
+    func testInvokingUserResolver_refusesMissingAccountAndRootHome() {
+        let claim = HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/user")
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [],
+            inspectHome: { _ in HelperHomeInspection(kind: .directory,
+                                                      canonicalPath: "/Users/user", ownerUID: 501) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .missingAccount)
+            }
+
+        let rootHomeAccount = HelperInvokingUserAccount(uid: 501, username: "user",
+                                                        homeDirectory: "/var/root")
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501,
+            claim: HelperInvokingUserClaim(uid: 501, canonicalHome: "/private/var/root"),
+            accounts: [rootHomeAccount],
+            inspectHome: { _ in HelperHomeInspection(kind: .directory,
+                                                      canonicalPath: "/private/var/root", ownerUID: 501) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .invalidAccountHome)
+            }
+    }
+
     // MARK: - The closed operation set
     //
     // The approved scope is exactly: privileged scan, clean, optimize. Not
@@ -124,7 +254,8 @@ final class HelperContractTests: XCTestCase {
     func testValidate_renewDHCPRequiresARealInterface() {
         func request(_ name: String?) -> HelperRequest {
             HelperRequest(operation: .renewDHCP, operationID: UUID().uuidString,
-                          clientBuild: "23", networkInterface: name)
+                          clientBuild: "23", invokingUser: validInvokingUserClaim,
+                          networkInterface: name)
         }
         // Well-formed AND present on the machine.
         XCTAssertNil(request("en0").validate(expectedBuild: "23", liveInterfaces: ["en0", "lo0"]))
@@ -145,7 +276,8 @@ final class HelperContractTests: XCTestCase {
         for operation in [HelperOperation.clean, .optimize, .scan, .optimizeScan,
                           .flushDNS, .readLoginItems] {
             let request = HelperRequest(operation: operation, operationID: UUID().uuidString,
-                                        clientBuild: "23", networkInterface: "en0")
+                                        clientBuild: "23", invokingUser: validInvokingUserClaim,
+                                        networkInterface: "en0")
             XCTAssertEqual(request.validate(expectedBuild: "23", liveInterfaces: ["en0"]),
                            .invalidInterface, "\(operation) takes no interface")
         }
@@ -193,7 +325,8 @@ final class HelperContractTests: XCTestCase {
 
     func testDecoding_roundTripsEveryOperation() throws {
         for op in HelperOperation.allCases {
-            let request = HelperRequest(operation: op, operationID: UUID().uuidString, clientBuild: "23")
+            let request = HelperRequest(operation: op, operationID: UUID().uuidString,
+                                        clientBuild: "23", invokingUser: validInvokingUserClaim)
             let data = try JSONEncoder().encode(request)
             XCTAssertEqual(try JSONDecoder().decode(HelperRequest.self, from: data), request)
         }
@@ -202,8 +335,25 @@ final class HelperContractTests: XCTestCase {
     // MARK: - Validation (named rejections, never a partial run)
 
     func testValidate_acceptsAWellFormedRequest() {
-        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString, clientBuild: "23")
+        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString,
+                                    clientBuild: "23", invokingUser: validInvokingUserClaim)
         XCTAssertNil(request.validate(expectedBuild: "23"))
+    }
+
+    func testValidate_rejectsMalformedInvokingUserClaims() {
+        let claims = [
+            HelperInvokingUserClaim(uid: 0, canonicalHome: "/var/root"),
+            HelperInvokingUserClaim(uid: 501, canonicalHome: "/private/var/root"),
+            HelperInvokingUserClaim(uid: 501, canonicalHome: "Users/test"),
+            HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/test\nother"),
+        ]
+        for claim in claims {
+            let request = HelperRequest(operation: .clean,
+                                        operationID: UUID().uuidString,
+                                        clientBuild: "23",
+                                        invokingUser: claim)
+            XCTAssertEqual(request.validate(expectedBuild: "23"), .invalidInvokingUser)
+        }
     }
 
     /// A non-UUID operation ID is rejected outright. The ID is the replay key,
@@ -211,7 +361,8 @@ final class HelperContractTests: XCTestCase {
     /// reused; requiring a UUID makes every request distinguishable.
     func testValidate_rejectsNonUUIDOperationID() {
         for bad in ["", "1", "not-a-uuid", String(repeating: "a", count: 400)] {
-            let request = HelperRequest(operation: .clean, operationID: bad, clientBuild: "23")
+            let request = HelperRequest(operation: .clean, operationID: bad,
+                                        clientBuild: "23", invokingUser: validInvokingUserClaim)
             XCTAssertEqual(request.validate(expectedBuild: "23"), .malformedOperationID,
                            "operation ID \(bad.prefix(12)) must be rejected")
         }
@@ -222,12 +373,14 @@ final class HelperContractTests: XCTestCase {
     /// runs as root — so the mismatch stops the operation and the GUI
     /// re-registers instead.
     func testValidate_rejectsBuildMismatch() {
-        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString, clientBuild: "22")
+        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString,
+                                    clientBuild: "22", invokingUser: validInvokingUserClaim)
         XCTAssertEqual(request.validate(expectedBuild: "23"), .buildMismatch)
     }
 
     func testValidate_rejectsEmptyBuild() {
-        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString, clientBuild: "")
+        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString,
+                                    clientBuild: "", invokingUser: validInvokingUserClaim)
         XCTAssertEqual(request.validate(expectedBuild: "23"), .buildMismatch)
     }
 
@@ -280,6 +433,7 @@ final class HelperContractTests: XCTestCase {
             .authorizationDenied,
             .rejected(.buildMismatch),
             .rejected(.replayedOperationID),
+            .rejected(.invalidInvokingUser),
             .engineUnavailable,
         ]
         for outcome in outcomes {

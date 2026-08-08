@@ -169,6 +169,130 @@ struct HelperStep: Equatable, Sendable {
     let arguments: [String]
 }
 
+// MARK: - Invoking user
+
+/// The non-privileged app's statement of who initiated the operation. This is
+/// a consistency claim, never authority: the daemon binds it to the XPC
+/// peer's effective uid and reconstructs the account from its own user
+/// database before using either value.
+struct HelperInvokingUserClaim: Codable, Equatable, Sendable {
+    let uid: UInt32
+    let canonicalHome: String
+}
+
+/// One account record from the daemon's user database. Kept as data so the
+/// selection rule can be tested with several signed-in/local accounts without
+/// consulting the test runner's real account.
+struct HelperInvokingUserAccount: Equatable, Sendable {
+    let uid: UInt32
+    let username: String
+    let homeDirectory: String
+}
+
+/// The daemon's descriptor-based inspection of the home named by getpwuid.
+/// A path supplied by the client never creates this value.
+struct HelperHomeInspection: Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
+        case directory
+        case symbolicLink
+        case other
+        case missing
+    }
+
+    let kind: Kind
+    let canonicalPath: String?
+    let ownerUID: UInt32?
+}
+
+struct HelperResolvedInvokingUser: Equatable, Sendable {
+    let uid: UInt32
+    let username: String
+    let canonicalHome: String
+
+    /// A complete, deterministic environment for every root child. Nothing is
+    /// inherited from launchd and no client-provided string is copied here.
+    var childEnvironment: [String: String] {
+        [
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "HOME": canonicalHome,
+            "USER": username,
+            "LOGNAME": username,
+            "SUDO_USER": username,
+            "SUDO_UID": String(uid),
+            "LC_ALL": "C",
+        ]
+    }
+}
+
+enum HelperInvokingUserResolutionError: Error, Equatable, Sendable {
+    case rootPeer
+    case claimUIDMismatch
+    case missingAccount
+    case invalidUsername
+    case invalidAccountHome
+    case missingHome
+    case symbolicLinkHome
+    case homeNotDirectory
+    case homeOwnerMismatch
+    case canonicalHomeMismatch
+}
+
+/// The fail-closed identity rule shared by the app tests and daemon. The
+/// daemon supplies getpwuid data and a no-follow filesystem inspection; this
+/// function decides whether those authoritative facts agree with the XPC peer
+/// and the app's pre-authorization claim.
+enum HelperInvokingUserResolver {
+    static func resolve(
+        peerUID: UInt32,
+        claim: HelperInvokingUserClaim,
+        accounts: [HelperInvokingUserAccount],
+        inspectHome: (String) -> HelperHomeInspection
+    ) throws -> HelperResolvedInvokingUser {
+        guard peerUID != 0 else { throw HelperInvokingUserResolutionError.rootPeer }
+        guard claim.uid == peerUID else { throw HelperInvokingUserResolutionError.claimUIDMismatch }
+        guard let account = accounts.first(where: { $0.uid == peerUID }) else {
+            throw HelperInvokingUserResolutionError.missingAccount
+        }
+        guard isSafeEnvironmentValue(account.username), account.username != "root" else {
+            throw HelperInvokingUserResolutionError.invalidUsername
+        }
+        guard account.homeDirectory.hasPrefix("/"),
+              isSafeEnvironmentValue(account.homeDirectory) else {
+            throw HelperInvokingUserResolutionError.invalidAccountHome
+        }
+
+        let home = inspectHome(account.homeDirectory)
+        switch home.kind {
+        case .missing: throw HelperInvokingUserResolutionError.missingHome
+        case .symbolicLink: throw HelperInvokingUserResolutionError.symbolicLinkHome
+        case .other: throw HelperInvokingUserResolutionError.homeNotDirectory
+        case .directory: break
+        }
+        guard let canonicalHome = home.canonicalPath,
+              canonicalHome.hasPrefix("/"), canonicalHome != "/",
+              canonicalHome != "/var/root", canonicalHome != "/private/var/root",
+              isSafeEnvironmentValue(canonicalHome) else {
+            throw HelperInvokingUserResolutionError.invalidAccountHome
+        }
+        guard home.ownerUID == peerUID else {
+            throw HelperInvokingUserResolutionError.homeOwnerMismatch
+        }
+        guard claim.canonicalHome == canonicalHome else {
+            throw HelperInvokingUserResolutionError.canonicalHomeMismatch
+        }
+
+        return HelperResolvedInvokingUser(uid: peerUID,
+                                         username: account.username,
+                                         canonicalHome: canonicalHome)
+    }
+
+    private static func isSafeEnvironmentValue(_ value: String) -> Bool {
+        !value.isEmpty && !value.unicodeScalars.contains {
+            CharacterSet.controlCharacters.contains($0)
+        }
+    }
+}
+
 // MARK: - Request
 
 /// Why a request never reached the authorization step. Named so the GUI can
@@ -186,10 +310,13 @@ enum HelperRequestRejection: String, Codable, Equatable, Sendable {
     /// The interface name was missing, malformed, or not a real interface on
     /// this machine — or was supplied for an operation that takes none.
     case invalidInterface
+    /// The invoking-user claim was malformed or did not match the XPC peer,
+    /// daemon account database, and inspected home directory.
+    case invalidInvokingUser
 }
 
-/// One privileged operation, fully described. Three fields, none of which can
-/// carry a command.
+/// One privileged operation, fully described. None of its fields can carry a
+/// command; the identity fields are consistency claims checked by the daemon.
 struct HelperRequest: Codable, Equatable, Sendable {
     let operation: HelperOperation
 
@@ -206,6 +333,11 @@ struct HelperRequest: Codable, Equatable, Sendable {
     /// of what `clean` does is exactly the drift worth refusing.
     let clientBuild: String
 
+    /// The uid and canonical home resolved by the app before authentication.
+    /// This is mandatory context for every privileged action, but only a
+    /// claim: the daemon independently resolves and verifies both values.
+    let invokingUser: HelperInvokingUserClaim
+
     /// The network interface for `renewDHCP`, and nil for everything else.
     ///
     /// This is the ONLY caller-supplied value that reaches a child process's
@@ -213,6 +345,18 @@ struct HelperRequest: Codable, Equatable, Sendable {
     /// shape, and against the interfaces that actually exist on this machine.
     /// A name that isn't a real interface is refused rather than passed on.
     var networkInterface: String? = nil
+
+    init(operation: HelperOperation,
+         operationID: String,
+         clientBuild: String,
+         invokingUser: HelperInvokingUserClaim,
+         networkInterface: String? = nil) {
+        self.operation = operation
+        self.operationID = operationID
+        self.clientBuild = clientBuild
+        self.invokingUser = invokingUser
+        self.networkInterface = networkInterface
+    }
 
     /// `nil` when the request is well formed. Runs on the PRIVILEGED side —
     /// the client's own validation is a courtesy, this one is the boundary.
@@ -225,6 +369,14 @@ struct HelperRequest: Codable, Equatable, Sendable {
         guard HelperVersionSkew.evaluate(appBuild: expectedBuild, helperBuild: clientBuild) == .matched else {
             return .buildMismatch
         }
+        guard invokingUser.uid != 0,
+              invokingUser.canonicalHome.hasPrefix("/"),
+              invokingUser.canonicalHome != "/",
+              invokingUser.canonicalHome != "/var/root",
+              invokingUser.canonicalHome != "/private/var/root",
+              !invokingUser.canonicalHome.unicodeScalars.contains(where: {
+                  CharacterSet.controlCharacters.contains($0)
+              }) else { return .invalidInvokingUser }
 
         if operation.needsInterface {
             guard let name = networkInterface,
