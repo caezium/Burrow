@@ -132,13 +132,53 @@
 <header class="hero page">
   <h1>Changelog</h1>
   <p>Every version at a glance, what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">23 releases · latest 0.11.2 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p class="count">24 releases · latest 0.12.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
 </header>
 
 <main class="page">
+    <article class="entry" id="v0.12.0">
+      <div class="ver-col">
+        <h2 class="ver">0.12.0<span class="latest">latest</span></h2>
+        <span class="date mono">Aug 8, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.12.0" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">Admin operations can authenticate with Touch ID, through an opt-in signed helper that runs a fixed set of operations and nothing else.</p>
+        <div class="sblock">
+          <div class="slabel mono">added</div>
+          <ul class="slist">
+            <li><b>Touch ID for admin operations.</b> Install the helper in <b>Settings ▸ Advanced ▸ Privileged helper</b> and Burrow's elevated work authenticates through the system's normal prompt instead of the password-only dialog. That older path is password-only by construction — the <code>system.privilege.admin</code> right authenticates through SecurityAgent's classic mechanism, which never offers Touch ID. (<a href="https://github.com/caezium/Burrow/pull/346" target="_blank" rel="noopener">#346</a>)</li>
+            <li><b>The Login Items list is now complete.</b> Reading the Background Task Management database needs root, so an unelevated read raised macOS's own “sfltool wants to make changes” prompt — attributed to sfltool rather than Burrow — and still returned only a partial list. Through the helper it is one authentication you recognise, and the whole list.</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">changed</div>
+          <ul class="slist">
+            <li><b>Flush DNS no longer runs a root shell.</b> It previously elevated <code>/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"</code>, handing a command string to a shell running as root. It is now two separate processes with fixed arguments and no shell involved.</li>
+            <li><b>Removed the “Touch ID for sudo” setting.</b> It configured <code>pam_tid</code> for terminal <code>sudo</code> and never affected Burrow's own admin prompts, which is what people expected it to do — and those prompts are exactly what the privileged helper now covers. Nothing already configured on your Mac changes by removing it; run <code>mo touchid disable</code> to undo it yourself.</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">fixed</div>
+          <ul class="slist">
+            <li><b>A failed elevated run could report success.</b> When an elevated operation could not start, the empty transcript was reduced to “Done — caches cleared”. Failures now say so.</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">security</div>
+          <ul class="slist">
+            <li>The helper is opt-in and takes its own one-time macOS approval. Installing it authorizes nothing: you authenticate for each operation you start.</li>
+            <li>Only Burrow can talk to it — callers are pinned to the app's bundle identifier, an Apple-issued chain, and the same signing team, evaluated by the system against the real peer rather than by a PID lookup.</li>
+            <li>It runs the engine sealed inside the signed app plus four Apple tools by absolute path, each as a separate process. The app bundle's signature is verified before anything runs as root, which covers the engine and every library it loads.</li>
+            <li>One honest caveat: the credential from your authentication stays valid for ten seconds, because it has to survive the hop from the app to the helper. A second operation begun inside that window will not prompt again. Detail in <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
     <article class="entry" id="v0.11.2">
       <div class="ver-col">
-        <h2 class="ver">0.11.2<span class="latest">latest</span></h2>
+        <h2 class="ver">0.11.2</h2>
         <span class="date mono">Aug 5, 2026</span>
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.2" target="_blank" rel="noopener">full notes ↗</a>
       </div>

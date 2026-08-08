@@ -2,6 +2,68 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.12.0",
+      "date": "2026-08-08",
+      "tag": "v0.12.0",
+      "tagline": "Admin operations can authenticate with Touch ID, through an opt-in signed helper that runs a fixed set of operations and nothing else.",
+      "highlights": [
+        {
+          "icon": "fingerprint",
+          "color": "accent",
+          "title": "Touch ID for admin operations",
+          "line": "Clean, Optimize, the admin scan previews, Flush DNS, Renew DHCP, and the Login Items list all authenticate through the system prompt, which offers Touch ID where the hardware has it and falls back to your password everywhere else."
+        },
+        {
+          "icon": "shield",
+          "color": "lilac",
+          "title": "A helper that cannot be asked to run anything else",
+          "line": "Seven fixed operations, with the command line built on the privileged side. No field for a path, a shell string, or an executable — and Flush DNS no longer hands a command string to a root shell."
+        },
+        {
+          "icon": "list",
+          "color": "teal",
+          "title": "The Login Items list is complete",
+          "line": "Reading it needs root, so macOS used to raise its own unexplained “sfltool wants to make changes” prompt and still return a partial list. Now it is one prompt you recognise, and the full list."
+        }
+      ],
+      "chips": [
+        "Strictly opt-in — decline it and every operation works exactly as before",
+        "No standing access: you authenticate for each operation you start",
+        "Removable from Settings, or System Settings ▸ General ▸ Login Items & Extensions"
+      ],
+      "sections": [
+        {
+          "label": "added",
+          "items": [
+            "**Touch ID for admin operations.** Install the helper in **Settings ▸ Advanced ▸ Privileged helper** and Burrow's elevated work authenticates through the system's normal prompt instead of the password-only dialog. That older path is password-only by construction — the `system.privilege.admin` right authenticates through SecurityAgent's classic mechanism, which never offers Touch ID. ([#346](https://github.com/caezium/Burrow/pull/346))",
+            "**The Login Items list is now complete.** Reading the Background Task Management database needs root, so an unelevated read raised macOS's own “sfltool wants to make changes” prompt — attributed to sfltool rather than Burrow — and still returned only a partial list. Through the helper it is one authentication you recognise, and the whole list."
+          ]
+        },
+        {
+          "label": "changed",
+          "items": [
+            "**Flush DNS no longer runs a root shell.** It previously elevated `/bin/sh -c \"dscacheutil -flushcache; killall -HUP mDNSResponder\"`, handing a command string to a shell running as root. It is now two separate processes with fixed arguments and no shell involved.",
+            "**Removed the “Touch ID for sudo” setting.** It configured `pam_tid` for terminal `sudo` and never affected Burrow's own admin prompts, which is what people expected it to do — and those prompts are exactly what the privileged helper now covers. Nothing already configured on your Mac changes by removing it; run `mo touchid disable` to undo it yourself."
+          ]
+        },
+        {
+          "label": "fixed",
+          "items": [
+            "**A failed elevated run could report success.** When an elevated operation could not start, the empty transcript was reduced to “Done — caches cleared”. Failures now say so."
+          ]
+        },
+        {
+          "label": "security",
+          "items": [
+            "The helper is opt-in and takes its own one-time macOS approval. Installing it authorizes nothing: you authenticate for each operation you start.",
+            "Only Burrow can talk to it — callers are pinned to the app's bundle identifier, an Apple-issued chain, and the same signing team, evaluated by the system against the real peer rather than by a PID lookup.",
+            "It runs the engine sealed inside the signed app plus four Apple tools by absolute path, each as a separate process. The app bundle's signature is verified before anything runs as root, which covers the engine and every library it loads.",
+            "One honest caveat: the credential from your authentication stays valid for ten seconds, because it has to survive the hop from the app to the helper. A second operation begun inside that window will not prompt again. Detail in [SECURITY.md](https://github.com/caezium/Burrow/blob/main/SECURITY.md)."
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.11.2",
       "date": "2026-08-05",
       "tag": "v0.11.2",
