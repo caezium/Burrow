@@ -61,8 +61,8 @@ targets:
       properties:
         LSUIElement: true   # menu-bar agent, no Dock icon
         CFBundleDisplayName: Burrow
-        CFBundleShortVersionString: "0.11.2"
-        CFBundleVersion: "23"
+        CFBundleShortVersionString: "0.12.0"
+        CFBundleVersion: "24"
         NSHumanReadableCopyright: "MIT License. © 2026 Henry Zhang."
         # Burrow uses only exempt encryption supplied by macOS (for example,
         # URLSession HTTPS); it contains no proprietary or non-exempt crypto.
@@ -202,8 +202,8 @@ targets:
         # Must track the app's CFBundleVersion above — a mismatch is exactly
         # what HelperVersionSkew refuses, so a stale value here disables the
         # helper rather than shipping a subtly wrong one.
-        CURRENT_PROJECT_VERSION: "23"
-        MARKETING_VERSION: "0.11.2"
+        CURRENT_PROJECT_VERSION: "24"
+        MARKETING_VERSION: "0.12.0"
         SKIP_INSTALL: YES
 
   BurrowTests:

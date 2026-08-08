@@ -1,57 +1,56 @@
-# Burrow 0.11.2
+# Burrow 0.12.0
 
-A system-metrics, updater, and launch-reliability patch. This release corrects
-CPU sampling, stops expected Sparkle conditions from looking like product
-defects, gives AppKit a settled launch turn before creating the menu-bar item,
-and makes sampled app hangs reliably reach the issue tracker.
+Burrow's admin operations can now authenticate with **Touch ID**.
 
-> **Affected macOS 27 beta users:** please install 0.11.2 and report the result
-> in [#319](https://github.com/caezium/Burrow/issues/319). The exact Beta 4
-> compatibility guard remains in place, and the issue stays open until a
-> notarized build is verified on a Mac that reproduced the freeze.
+Until now every elevated action went through macOS's classic authorization
+dialog, which is password-only by construction — it never offers Touch ID, and
+it can't be cancelled safely. This release adds an optional signed helper that
+replaces that path.
+
+## Added
+- **Touch ID for admin operations.** Install the helper in **Settings ▸
+  Advanced ▸ Privileged helper** and Clean, Optimize, the admin scan previews,
+  Flush DNS, Renew DHCP, and the Login Items list all authenticate through the
+  system's normal prompt — which offers Touch ID where the hardware has it, and
+  falls back to your password everywhere else.
+- **The Login Items list is now complete.** Reading it needs root, so
+  previously macOS raised its own unexplained "sfltool wants to make changes"
+  prompt and still returned only a partial list. Through the helper it's one
+  prompt you recognise, and the full list.
+
+## What the helper can and cannot do
+
+It is strictly opt-in, takes its own one-time macOS approval, and grants no
+standing access — you authenticate for each operation you start.
+
+It accepts seven fixed operations and builds every command line itself. There
+is no field in its API for a path, a shell string, or an executable, so it
+cannot be asked to run anything else. It runs the engine sealed inside the
+signed app plus four Apple tools by absolute path, each as a separate process
+with no shell involved. Only Burrow can talk to it: callers are pinned to the
+app's bundle identifier and signing team by the system.
+
+One honest caveat: the credential from your authentication stays valid for ten
+seconds, because it has to survive the hop from the app to the helper. A second
+operation begun inside that window won't prompt again. Full detail in
+[SECURITY.md](https://github.com/caezium/Burrow/blob/main/SECURITY.md).
+
+Not installing it changes nothing — every operation keeps working exactly as it
+does today, through the existing password prompt. You can remove the helper at
+any time from Settings, or from System Settings ▸ General ▸ Login Items &
+Extensions.
+
+## Changed
+- **Flush DNS no longer runs a root shell.** It previously elevated
+  `/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"`, handing a
+  command string to a shell running as root. It's now two separate processes
+  with fixed arguments.
+- **Removed the "Touch ID for sudo" setting.** It configured `pam_tid` for
+  terminal `sudo` and never affected Burrow's own admin prompts, which is what
+  people expected it to do. Those prompts are what the privileged helper now
+  covers. Nothing already configured on your Mac is changed by removing it; to
+  undo it yourself, run `mo touchid disable`.
 
 ## Fixed
-- **CPU usage now reflects a representative sampling interval.** The bundled
-  engine keeps a tick baseline across refreshes, samples before the other
-  collectors fan out, and derives total usage from summed tick deltas. This
-  removes the roughly doubled readings and coarse per-core fractions reported in
-  [#335](https://github.com/caezium/Burrow/issues/335). A cold one-shot status
-  command can take about 600 ms longer; ongoing GUI sampling reuses its existing
-  refresh interval and adds no wait. ([#340](https://github.com/caezium/Burrow/pull/340))
-- **Updater failures now mean what they say.** Running from a disk image or a
-  translocated location, ordinary network failures, and user cancellation remain
-  measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of
-  its native move-to-Applications and scheduled-retry UI. Configuration,
-  signature, installation, and unknown failures still create exactly one
-  scrubbed Sentry diagnostic per cycle. ([#339](https://github.com/caezium/Burrow/pull/339))
-- **The normal menu-bar path no longer races the first AppKit launch turn.**
-  Burrow waits one second before creating its status item, then retains the
-  existing 30-second stability window. The safeguard for macOS 27 Beta 4 build
-  `26A5388g` remains exact-build-only; a later macOS build returns to the normal
-  guarded path automatically. ([#339](https://github.com/caezium/Burrow/pull/339))
-
-## Improved
-- **App-hang evidence can no longer disappear at the Sentry bridge.** Sampled
-  hangs are collected into bounded weekly GitHub digests instead of being
-  silently skipped. Cursor pagination reaches older unseen groups, full digests
-  roll into numbered parts, and deferred groups remain eligible for the next
-  run. ([#339](https://github.com/caezium/Burrow/pull/339))
-- **Launch and updater health now have explicit lifecycle outcomes.** Fixed-name
-  scheduled, stabilizing, and stable milestones include bounded app release,
-  macOS build, launch phase, and status-item state, so future failures can be
-  separated without collecting free text or user data.
-
-## Privacy
-- **Telemetry remains optional, unlinked, and non-tracking.** One Settings
-  switch disables both PostHog analytics and Sentry diagnostics. Updater
-  diagnostics contain fixed categories and bounded error domains/codes—never
-  descriptions, URLs, response bodies, network names, paths, screen content, or
-  files. The privacy manifest remains unchanged and accurate.
-
-## Security
-- **Publishing still fails closed, including the external Homebrew tap.** Before
-  any release build begins, CI requires every signing, notarization, Sparkle,
-  and tap credential, then proves the tap token with a reversible Git
-  write. The tap credential is isolated from the engine checkout so a successful
-  notarized release cannot fail at the final cask push because the wrong token
-  was left in Git configuration.
+- A failed elevated run could report "Done — caches cleared" when nothing had
+  actually run. Failures now say so.

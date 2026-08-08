@@ -261,6 +261,59 @@ class PrivilegedHelperGateTests(SignMacOSAppTests):
 
             self.assertNotEqual(result.returncode, 0)
 
+    def test_main_executable_is_never_signed_on_its_own(self) -> None:
+        """The bundle's main executable must be signed only by the outer seal.
+
+        Signing it individually makes codesign treat it as the bundle and
+        validate the bundle's nested code. With a second executable in
+        Contents/MacOS that fails — "code object is not signed at all / In
+        subcomponent: …/BurrowHelper" — whenever `find` reaches the main
+        executable before the helper.
+
+        That ordering is filesystem-dependent, so the existing tests passed by
+        luck while a real Release build failed. This asserts the invariant
+        directly rather than relying on directory order.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app, entitlements = self.make_app(root, get_task_allow=False)
+
+            log = root / "codesign-calls.log"
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            fake_codesign = fake_bin / "codesign"
+            fake_codesign.write_text(
+                f"""#!/bin/bash
+# Record only real signing invocations (-s/--sign), not -d/--verify queries.
+for arg in "$@"; do
+  if [ "$arg" = "--sign" ] || [ "$arg" = "-s" ]; then
+    echo "${{@: -1}}" >> "{log}"
+    break
+  fi
+done
+exec /usr/bin/codesign "$@"
+""",
+                encoding="utf-8",
+            )
+            fake_codesign.chmod(0o755)
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+            result = self.run_signer(app, entitlements, env=env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            signed = log.read_text(encoding="utf-8").split() if log.exists() else []
+            main_executable = str(app / "Contents" / "MacOS" / "Burrow")
+            self.assertNotIn(
+                main_executable,
+                signed,
+                "the main executable must not be signed on its own; the outer "
+                "app seal covers it",
+            )
+            # The helper still must be signed individually, and the app sealed.
+            self.assertIn(str(app / "Contents" / "MacOS" / "BurrowHelper"), signed)
+            self.assertIn(str(app), signed)
+
     def test_wellformed_helper_passes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

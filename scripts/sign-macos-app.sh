@@ -111,9 +111,23 @@ required_plist_raw() {
   printf '%s' "$value"
 }
 
+# The bundle's own main executable is deliberately EXCLUDED from this loop.
+# Signing it on its own makes codesign treat it as the bundle and validate the
+# bundle's nested code — which, now that Contents/MacOS also holds
+# BurrowHelper, fails with "code object is not signed at all / In subcomponent:
+# …/BurrowHelper" whenever find happens to reach the main executable first.
+# The outer seal below signs it correctly as part of the bundle.
+MAIN_EXECUTABLE_NAME="$(
+  plutil -extract CFBundleExecutable raw -o - "$APP/Contents/Info.plist" 2>/dev/null || true
+)"
+[ -n "$MAIN_EXECUTABLE_NAME" ] \
+  || { echo "error: could not read CFBundleExecutable from $APP/Contents/Info.plist" >&2; exit 1; }
+MAIN_EXECUTABLE="$APP/Contents/MacOS/$MAIN_EXECUTABLE_NAME"
+
 echo "==> signing nested Mach-O files ($MODE)"
 SIGNED_MACHO=0
 while IFS= read -r -d '' candidate; do
+  [ "$candidate" = "$MAIN_EXECUTABLE" ] && continue
   if is_macho "$candidate"; then
     sign_one "$candidate"
     SIGNED_MACHO=$((SIGNED_MACHO + 1))
