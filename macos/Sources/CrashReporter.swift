@@ -152,6 +152,12 @@ enum CrashReporter {
             options.dsn = dsn
             options.environment = "production"
             options.releaseName = release
+            // Sentry 9.24+ can inspect stack-adjacent memory after a crash and
+            // promote discovered Objective-C/C strings into the event. Keep
+            // this explicit even though the SDK now defaults it off: those
+            // bytes can contain file contents, credentials, or user input and
+            // never belong in Burrow diagnostics.
+            options.enableMemoryIntrospection = false
             // Custom, fixed-name startup/update spans only. Automatic network,
             // file, Core Data, and UI tracing remains disabled so URLs and
             // local paths cannot enter performance events.
@@ -386,11 +392,13 @@ enum CrashReporter {
         let stacktraces = (event.exceptions?.compactMap { $0.stacktrace } ?? [])
             + (event.threads?.compactMap { $0.stacktrace } ?? [])
         let frames = stacktraces.flatMap(\.frames).reversed()
-        guard let function = frames.first(where: { frame in
+        guard let rawFunction = frames.first(where: { frame in
             frame.inApp?.boolValue == true
                 || frame.module?.localizedCaseInsensitiveContains("Burrow") == true
                 || frame.package?.localizedCaseInsensitiveContains("Burrow.app") == true
-        })?.function else { return nil }
+        })?.function,
+              let function = DiagnosticPrivacy.safeDiagnosticLabel(rawFunction)
+        else { return nil }
         let allowed = function.unicodeScalars.filter {
             CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_.$:<>-")).contains($0)
         }
@@ -417,7 +425,7 @@ enum CrashReporter {
     /// module names, symbols, addresses, and line numbers, which are enough to
     /// symbolicate Burrow without transmitting exception prose, source text,
     /// request data, or where its bundle lived on the user's Mac.
-    private static func scrubForTransport(_ event: Event) {
+    static func scrubForTransport(_ event: Event) {
         event.message = nil
         event.error = nil
         event.request = nil
@@ -427,7 +435,15 @@ enum CrashReporter {
         event.serverName = nil
         event.logger = nil
         event.transaction = nil
-        if event.fingerprint?.first != "burrow-app-hang" {
+        if let fingerprint = event.fingerprint,
+           fingerprint.count == 3,
+           fingerprint.first == "burrow-app-hang",
+           let phase = DiagnosticPrivacy.safeDiagnosticLabel(fingerprint[1]),
+           let frame = DiagnosticPrivacy.safeDiagnosticLabel(fingerprint[2]),
+           phase.utf8.count <= 80,
+           frame.utf8.count <= 120 {
+            event.fingerprint = ["burrow-app-hang", phase, frame]
+        } else {
             event.fingerprint = nil
         }
 
@@ -464,9 +480,14 @@ enum CrashReporter {
             // text, and uncaught exception reasons). The exception type and
             // symbolicated stack retain the actionable diagnosis.
             exception.value = "<redacted>"
-            exception.module = exception.module.map(DiagnosticPrivacy.redact)
+            exception.type = DiagnosticPrivacy.safeDiagnosticLabel(exception.type)
+            exception.module = DiagnosticPrivacy.safeDiagnosticLabel(exception.module)
             exception.mechanism?.desc = nil
             exception.mechanism?.helpLink = nil
+            exception.mechanism?.meta = nil
+            if let mechanism = exception.mechanism {
+                mechanism.type = DiagnosticPrivacy.safeDiagnosticLabel(mechanism.type) ?? "unknown"
+            }
             if let data = exception.mechanism?.data {
                 exception.mechanism?.data = DiagnosticPrivacy.sanitize(data)
             }
@@ -484,13 +505,30 @@ enum CrashReporter {
             return true
         }
 
-        event.debugMeta?.forEach { $0.codeFile = nil }
+        event.debugMeta?.forEach { meta in
+            meta.codeFile = nil
+            meta.debugID = DiagnosticPrivacy.safeDebugID(meta.debugID)
+            meta.type = ["apple", "macho"].contains(meta.type ?? "") ? meta.type : nil
+            meta.imageAddress = DiagnosticPrivacy.safeHexAddress(meta.imageAddress)
+            meta.imageVmAddress = DiagnosticPrivacy.safeHexAddress(meta.imageVmAddress)
+        }
         let stacktraces = (event.exceptions?.compactMap { $0.stacktrace } ?? [])
             + (event.threads?.compactMap { $0.stacktrace } ?? [])
+            + [event.stacktrace].compactMap { $0 }
         for st in stacktraces {
+            // Raw register contents are unnecessary once frame instruction and
+            // image addresses are retained, and can point into user memory.
+            st.registers = [:]
             for frame in st.frames {
                 frame.package = nil
                 frame.fileName = nil
+                frame.function = DiagnosticPrivacy.safeDiagnosticLabel(frame.function)
+                frame.module = DiagnosticPrivacy.safeDiagnosticLabel(frame.module)
+                frame.platform = ["cocoa", "native"].contains(frame.platform ?? "")
+                    ? frame.platform : nil
+                frame.symbolAddress = DiagnosticPrivacy.safeHexAddress(frame.symbolAddress)
+                frame.imageAddress = DiagnosticPrivacy.safeHexAddress(frame.imageAddress)
+                frame.instructionAddress = DiagnosticPrivacy.safeHexAddress(frame.instructionAddress)
                 frame.contextLine = nil
                 frame.preContext = nil
                 frame.postContext = nil

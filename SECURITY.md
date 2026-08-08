@@ -13,13 +13,17 @@ bundled engine (MIT, © tw93 for the original); audit it too.
 The tag-release workflow fails closed unless it can sign the app and every
 bundled executable with a **Developer ID Application** certificate, enable the
 hardened runtime, obtain secure timestamps, receive an accepted notarization
-result, staple the ticket, and pass Gatekeeper assessment. The external
+result, staple the ticket, preserve the designated requirement's bundle/Team
+identity, and pass Gatekeeper assessment. CI uploads only to a draft, downloads
+the ZIP again, matches its SHA and dSYM UUIDs, and repeats strict signing,
+notarization-ticket, designated-requirement, Gatekeeper, and Sparkle checks
+before publication. An existing public release is immutable. The external
 Homebrew cask is updated only after that verified artifact exists, and its live
-0.11.1 definition preserves quarantine so Gatekeeper can verify the stapled
+0.11.2 definition preserves quarantine so Gatekeeper can verify the stapled
 ticket. Maintainer setup and release verification are in the [macOS signing
 runbook](docs/macos-signing.md).
 
-The published 0.11.1 app was independently checked after download: its bundle
+The published 0.11.2 app was independently checked after download: its bundle
 identifier is `dev.caezium.Burrow`, its Developer ID Team ID is `YGSM2722TZ`,
 the hardened runtime and secure timestamp are present, `stapler validate`
 succeeds, and Gatekeeper reports `source=Notarized Developer ID`.
@@ -27,8 +31,8 @@ succeeds, and Gatekeeper reports `source=Notarized Developer ID`.
 The release also embeds Sparkle 2.9.4 with a checked-in Ed25519 public key.
 After notarization, CI signs the update ZIP and `appcast.xml`, verifies both
 signatures and the private/public key match, and keeps a new GitHub release in
-draft until both assets exist. Sparkle verifies the signed feed and archive
-again on the Mac before installing.
+draft until both downloaded assets pass the distribution checks. Sparkle
+verifies the signed feed and archive again on the Mac before installing.
 
 Version 0.11.0 was the first Sparkle-enabled release. The first real successor
 test then updated the installed signed app from 0.11.0 build 21 to 0.11.1 build
@@ -128,9 +132,16 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
   spans/profiles. PostHog sizes, counts, and durations are **bucketed into
   ranges**. **What's never sent:** screenshots, screen recordings, file names,
   file contents, user paths, URLs, your metrics/history, or any account
-  identity. Crash events remove path-bearing image/frame fields; profiling is
-  limited to apps under `/Applications` because profile envelopes bypass that
-  event scrubber. Automatic network/file tracing is disabled. **Your IP isn't
+  identity. Crash events explicitly disable Sentry stack-memory introspection;
+  remove exception values, raw registers, source/package/context/variable data,
+  and every path-bearing image/frame field; and retain only bounded diagnostic
+  labels, UUIDs, and addresses. Profiling is limited to apps under
+  `/Applications` because profile envelopes bypass that event scrubber.
+  Automatic network/file tracing is disabled. The public GitHub bridge exposes
+  only bounded release/OS/launch/count fields plus a restricted Sentry link;
+  titles, frames, paths, usernames, arguments, and event payloads remain in
+  Sentry until a maintainer writes a minimal privacy-reviewed diagnosis.
+  **Your IP isn't
   stored** — PostHog events carry `$ip = "0"` (and the project discards client
   IPs), and Sentry sets `sendDefaultPii = false`. It's **on by default**; turn
   it off in **Settings → Anonymous usage** and both pipelines stop. The exact
@@ -168,10 +179,13 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
   telemetry switch is on.
 - **Local-only surfaces:**
   - The MCP **HTTP query server** binds `127.0.0.1:9277` (loopback only; **on
-    by default**). It serves your local metrics to local MCP clients; it is not
-    reachable off-device, and it sends no CORS grant, so web pages in your
-    browser can't read it either. In the Windows preview, the Settings toggle
-    disables REST endpoints but keeps the loopback `/mcp` route bound so the
+    by default**). It serves local metrics only after a per-install bearer
+    credential, exact localhost `Host`, non-browser request check, method/body
+    policy, and bounded request-rate check all pass. The server sends no CORS
+    grant and rejects `Origin`, `Referer`, and browser fetch-metadata headers,
+    so DNS rebinding and hostile web callers fail closed even if they target
+    loopback. In the Windows preview, the Settings toggle disables REST
+    endpoints but keeps the authenticated loopback `/mcp` route bound so the
     stdio bridge can continue to work.
   - The **stdio MCP server** (`Burrow --mcp`) is a local subprocess.
   - History is a local **SQLite** file under

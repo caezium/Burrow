@@ -37,6 +37,7 @@ struct CleanView: View {
     @State private var screen: Screen = .hero
     /// Parsed clean-list.txt + locked map, loaded when entering review.
     @State private var reviewList: CleanList?
+    @State private var reviewSnapshot: CleanupSnapshot?
     @State private var reviewLocked: [String: CleanSelection.LockReason] = [:]
     /// When the dry-run finished — the review goes stale after a few
     /// minutes (TOCTOU: caches appear between preview and run).
@@ -129,7 +130,6 @@ struct CleanView: View {
     private var idleHero: some View {
         ToolHero(tool: .clean, title: "Clean", subtitle: Tool.clean.tagline) {
             PillButton(title: "Scan your Mac") { startDry() }
-            PillButton(title: "Clean Now", filled: false) { confirmDirectClean() }
         }
     }
 
@@ -179,10 +179,6 @@ struct CleanView: View {
                 HStack(spacing: 12) {
                     if reviewAvailable {
                         PillButton(title: "Review results") { enterReview() }
-                    } else if dryFlow.report?.summary != nil {
-                        // clean-list.txt didn't parse (format drift) — fail
-                        // soft to the direct path with the engine's total.
-                        PillButton(title: "Clean Now") { confirmDirectClean() }
                     }
                     PillButton(title: "Rescan", filled: false) { startDry() }
                     Button { dryFlow.reset(); screen = .hero } label: {
@@ -228,6 +224,18 @@ struct CleanView: View {
 
     private func enterReview() {
         guard let list = CleanList.loadLive() else { return }
+        do {
+            let user = try InvokingUserIdentity.current()
+            reviewSnapshot = try CleanupSnapshot.capture(
+                list: list, approvedRootURLs: CleanupSnapshot.approvedRoots(for: user))
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = NSLocalizedString("This preview can't be cleaned safely", comment: "")
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .warning
+            alert.runModalQuiet()
+            return
+        }
         reviewList = list
         reviewLocked = CleanLock.lockedPaths(in: list, running: CleanLock.runningApps())
         screen = .review
@@ -237,6 +245,7 @@ struct CleanView: View {
     /// caches that appeared after the scan would be cleaned unreviewed)
     /// force a rescan instead of a run.
     private func confirmClean(_ selection: CleanSelection) {
+        guard let snapshot = reviewSnapshot else { return }
         if let finished = scanFinishedAt, Date().timeIntervalSince(finished) > Self.reviewFreshSeconds {
             let alert = NSAlert()
             alert.messageText = NSLocalizedString("This preview is stale", comment: "")
@@ -247,9 +256,9 @@ struct CleanView: View {
             return
         }
         if Store.cacheRemovalMode == .trash {
-            trashTicked(selection)
+            trashTicked(selection, snapshot: snapshot)
         } else {
-            runRealClean(selection)
+            runRealClean(selection, snapshot: snapshot)
         }
     }
 
@@ -260,56 +269,25 @@ struct CleanView: View {
 
     // MARK: - The real run (permanent mode)
 
-    private func runRealClean(_ selection: CleanSelection) {
-        // Unticked paths ride a fenced whitelist session for exactly this
-        // run. All-ticked writes nothing — the engine's history stays
-        // canonical for the common case.
+    private func runRealClean(_ selection: CleanSelection, snapshot: CleanupSnapshot) {
+        let paths = selection.list.categories.flatMap(\.items).map(\.path)
+            .filter { selection.isTicked($0) }
+        let plan: CleanupExecutionPlan
         do {
-            try MoleWhitelist.live.beginSession(excluding: selection.excludedPaths)
+            plan = try snapshot.plan(selectedPaths: paths)
         } catch {
             let alert = NSAlert()
-            alert.messageText = NSLocalizedString("Couldn't protect deselected items", comment: "")
-            alert.informativeText = String(format: NSLocalizedString("Writing the whitelist failed (%@), so the engine would clean everything it found. Nothing was cleaned.", comment: ""), error.localizedDescription)
+            alert.messageText = NSLocalizedString("The reviewed files changed", comment: "")
+            alert.informativeText = String(format: NSLocalizedString("Nothing was cleaned. Rescan before trying again. (%@)", comment: ""), error.localizedDescription)
             alert.alertStyle = .warning
             alert.runModalQuiet()
             return
         }
         screen = .hero
-        realFlow.start(.moleStream(["clean"], elevated: true,
-                                   label: NSLocalizedString("Cleaning caches", comment: ""),
-                                   notifyOnEnd: true))
-        // Restore is owned by the RUN, not the view: this watcher ends the
-        // fenced session however the flow finishes, even if the user
-        // navigates away mid-clean (a view-attached onChange would never
-        // fire then, leaving the block to skip those paths until the next
-        // launch sweep). endSession is idempotent; the startup sweep still
-        // covers a crash.
-        let flow = realFlow
-        Task { @MainActor in
-            for await state in flow.$state.values {
-                if case .finished = state {
-                    try? MoleWhitelist.live.endSession()
-                    break
-                }
-            }
-        }
-    }
-
-    /// The pre-review direct path ("Clean Now" on the hero) — everything
-    /// the engine decides, no session. Kept because the review needs a
-    /// parseable clean-list and this path must survive format drift.
-    private func confirmDirectClean() {
-        let alert = NSAlert()
-        alert.messageText = NSLocalizedString("Clean caches for real?", comment: "")
-        alert.informativeText = NSLocalizedString("Burrow will run `mo clean` with administrator rights. Cache files are removed permanently; Mole's whitelist and safety rules still apply.", comment: "")
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: NSLocalizedString("Clean", comment: ""))
-        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
-        guard alert.runModalQuiet() == .alertFirstButtonReturn else { return }
-        screen = .hero
-        realFlow.start(.moleStream(["clean"], elevated: true,
-                                   label: NSLocalizedString("Cleaning caches", comment: ""),
-                                   notifyOnEnd: true))
+        realFlow.start(ToolOperation(
+            label: NSLocalizedString("Cleaning reviewed caches", comment: ""),
+            executable: .path("/usr/bin/find"), arguments: [], elevated: true,
+            cleanupPlan: plan, reduce: { parseTaskReport($0) }, notifyOnEnd: true))
     }
 
     // MARK: - Trash mode
@@ -319,7 +297,7 @@ struct CleanView: View {
     /// engine's own dry-run enumeration. Trade-off (stated in Settings):
     /// space frees when Trash empties, and the run isn't in `mo history`
     /// — it lands in Burrow's Activity log instead.
-    private func trashTicked(_ selection: CleanSelection) {
+    private func trashTicked(_ selection: CleanSelection, snapshot: CleanupSnapshot) {
         let paths = selection.list.categories.flatMap(\.items).map(\.path)
             .filter { selection.isTicked($0) }
         // Refuse anything that didn't come from the dry-run enumeration.
@@ -332,20 +310,25 @@ struct CleanView: View {
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         guard alert.runModalQuiet() == .alertFirstButtonReturn else { return }
 
+        let plan: CleanupExecutionPlan
+        do {
+            plan = try snapshot.plan(selectedPaths: paths)
+        } catch {
+            let changed = NSAlert()
+            changed.messageText = NSLocalizedString("The reviewed files changed", comment: "")
+            changed.informativeText = NSLocalizedString("Nothing was moved. Rescan before trying again.", comment: "")
+            changed.alertStyle = .warning
+            changed.runModalQuiet()
+            return
+        }
+
         screen = .hero
         let opID = UUID()
         OperationCenter.shared.begin(opID, label: NSLocalizedString("Moving caches to Trash", comment: ""),
                                      notifiesOnEnd: true)
         DispatchQueue.global(qos: .userInitiated).async {
-            var moved = 0, failed = 0
-            for path in paths {
-                do {
-                    try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
-                    moved += 1
-                } catch {
-                    failed += 1
-                }
-            }
+            let result = CleanupExecutor.moveToTrash(plan)
+            let moved = result.moved, failed = result.failed
             DispatchQueue.main.async {
                 OperationCenter.shared.end(opID, success: failed == 0,
                                            detail: String(format: NSLocalizedString("%d moved · %d failed", comment: ""), moved, failed))
@@ -421,6 +404,8 @@ struct CleanView: View {
 
     private func startDry() {
         trashResult = nil
+        reviewList = nil
+        reviewSnapshot = nil
         screen = .hero
         dryFlow.reset()
         dryFlow.start(dryOperation())

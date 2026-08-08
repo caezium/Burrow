@@ -22,6 +22,36 @@ import AppKit
 import Darwin
 
 enum ProcessActions {
+    struct Identity: Equatable, Sendable {
+        let pid: Int
+        let ownerUID: uid_t
+        let startSeconds: UInt64
+        let startMicroseconds: UInt64
+        let executablePath: String?
+    }
+
+    struct TerminationTarget: Equatable, Sendable {
+        let displayName: String
+        let identity: Identity
+
+        /// Text shown before confirmation comes from the captured snapshot,
+        /// not a mutable live row. PID + owner + process birth time identify
+        /// the process instance; the path also catches an in-place `exec`.
+        var confirmationDetails: String {
+            let started = String(format: "%llu.%06llu", identity.startSeconds, identity.startMicroseconds)
+            let path = identity.executablePath ?? NSLocalizedString("executable path unavailable", comment: "")
+            return "\(displayName) · PID \(identity.pid) · user \(identity.ownerUID) · started \(started)\n\(path)"
+        }
+    }
+
+    enum TerminationResult: Equatable {
+        case sent
+        case cancelled
+        case stale
+        case notOwned
+        case signalFailed
+    }
+
     /// Cumulative billed energy for a pid, in nanojoules. nil when the
     /// kernel won't say (permission, exited, or platform). Flavor 4 is
     /// the first rusage_info with ri_energy_billed — pinned numerically
@@ -48,11 +78,7 @@ enum ProcessActions {
     /// Whether this process belongs to the current user — the
     /// requirement for Quit / Force Kill. Root-owned rows are read-only.
     static func isOwnProcess(pid: Int) -> Bool {
-        var info = proc_bsdinfo()
-        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
-        let got = proc_pidinfo(Int32(pid), PROC_PIDTBSDINFO, 0, &info, size)
-        guard got == size else { return false }
-        return info.pbi_uid == getuid()
+        identity(pid: pid)?.ownerUID == getuid()
     }
 
     /// Executable path for reveal-in-Finder. nil for system stubs.
@@ -63,13 +89,151 @@ enum ProcessActions {
         return String(cString: buffer)
     }
 
+    /// Immutable process instance captured before a destructive confirmation.
+    /// A PID alone is unsafe because macOS can reuse it after the old process
+    /// exits while the alert is still open.
+    static func identity(pid: Int) -> Identity? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        let got = proc_pidinfo(Int32(pid), PROC_PIDTBSDINFO, 0, &info, size)
+        guard got == size else { return nil }
+        return Identity(
+            pid: pid,
+            ownerUID: info.pbi_uid,
+            startSeconds: info.pbi_start_tvsec,
+            startMicroseconds: info.pbi_start_tvusec,
+            executablePath: executablePath(pid: pid)
+        )
+    }
+
+    static func terminationTarget(pid: Int, displayName: String) -> TerminationTarget? {
+        guard let identity = identity(pid: pid), identity.ownerUID == getuid() else { return nil }
+        return TerminationTarget(displayName: displayName, identity: identity)
+    }
+
+    /// Re-read the owner and immutable identity immediately before signaling.
+    /// Any exit, PID reuse, owner change, or `exec` fails closed.
+    static func terminate(_ target: TerminationTarget, force: Bool) -> TerminationResult {
+        terminate(
+            target,
+            force: force,
+            currentUID: getuid(),
+            readIdentity: identity(pid:),
+            sendSignal: { Darwin.kill($0, $1) }
+        )
+    }
+
+    static func terminate(
+        _ target: TerminationTarget,
+        force: Bool,
+        currentUID: uid_t,
+        readIdentity: (Int) -> Identity?,
+        sendSignal: (Int32, Int32) -> Int32
+    ) -> TerminationResult {
+        guard target.identity.ownerUID == currentUID else { return .notOwned }
+        guard let current = readIdentity(target.identity.pid) else { return .stale }
+        guard current.ownerUID == currentUID else { return .notOwned }
+        guard current == target.identity else { return .stale }
+        let signal = force ? SIGKILL : SIGTERM
+        return sendSignal(Int32(target.identity.pid), signal) == 0 ? .sent : .signalFailed
+    }
+
+    static func terminateIfConfirmed(
+        _ target: TerminationTarget,
+        force: Bool,
+        confirmed: Bool,
+        currentUID: uid_t,
+        readIdentity: (Int) -> Identity?,
+        sendSignal: (Int32, Int32) -> Int32
+    ) -> TerminationResult {
+        guard confirmed else { return .cancelled }
+        return terminate(
+            target,
+            force: force,
+            currentUID: currentUID,
+            readIdentity: readIdentity,
+            sendSignal: sendSignal
+        )
+    }
+
+    /// One confirmation path for every visible Quit… / Force Kill… action.
+    /// `onRefresh` runs after a confirmed attempt, including stale failures,
+    /// so callers discard the row that led to the action.
+    @MainActor @discardableResult
+    static func confirmTermination(
+        pid: Int,
+        displayName: String,
+        force: Bool = false,
+        onRefresh: @escaping () -> Void = {}
+    ) -> TerminationResult? {
+        guard let target = terminationTarget(pid: pid, displayName: displayName) else {
+            presentTerminationFailure(.stale)
+            onRefresh()
+            return .stale
+        }
+
+        let alert = NSAlert()
+        alert.messageText = force
+            ? String(format: NSLocalizedString("Force kill %@?", comment: ""), displayName)
+            : String(format: NSLocalizedString("Quit %@?", comment: ""), displayName)
+        let consequence = force
+            ? NSLocalizedString("SIGKILL ends it immediately, so unsaved work in this process is lost.", comment: "")
+            : NSLocalizedString("SIGTERM asks the process to quit. It may save and exit, or ignore the request.", comment: "")
+        alert.informativeText = "\(target.confirmationDetails)\n\n\(consequence)"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: force
+            ? NSLocalizedString("Force Kill", comment: "")
+            : NSLocalizedString("Quit Process", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
+        guard alert.runModalQuiet() == .alertFirstButtonReturn else { return nil }
+
+        let result = terminate(target, force: force)
+        if result != .sent { presentTerminationFailure(result) }
+        onRefresh()
+        return result
+    }
+
+    @MainActor
+    private static func presentTerminationFailure(_ result: TerminationResult) {
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("Process wasn't quit", comment: "")
+        switch result {
+        case .stale:
+            alert.informativeText = NSLocalizedString(
+                "The process exited or its identity changed while the confirmation was open. The process list was refreshed and no signal was sent.",
+                comment: ""
+            )
+        case .notOwned:
+            alert.informativeText = NSLocalizedString(
+                "The process is no longer owned by your user account. The process list was refreshed and no signal was sent.",
+                comment: ""
+            )
+        case .signalFailed:
+            alert.informativeText = NSLocalizedString(
+                "macOS refused the signal or the process exited at the last moment. The process list was refreshed.",
+                comment: ""
+            )
+        case .sent, .cancelled:
+            return
+        }
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
+        alert.runModalQuiet()
+    }
+
     /// SIGTERM — the polite ask. Caller confirms first.
     @discardableResult
-    static func quit(pid: Int) -> Bool { kill(Int32(pid), SIGTERM) == 0 }
+    static func quit(pid: Int) -> Bool {
+        guard let target = terminationTarget(pid: pid, displayName: "pid \(pid)") else { return false }
+        return terminate(target, force: false) == .sent
+    }
 
     /// SIGKILL — the hammer. Caller double-confirms first.
     @discardableResult
-    static func forceKill(pid: Int) -> Bool { kill(Int32(pid), SIGKILL) == 0 }
+    static func forceKill(pid: Int) -> Bool {
+        guard let target = terminationTarget(pid: pid, displayName: "pid \(pid)") else { return false }
+        return terminate(target, force: true) == .sent
+    }
 
     /// SIGSTOP — pause a process (freeze it without killing). Reversible via
     /// `resume`; own-user processes only (PRD §α Process Inspector).

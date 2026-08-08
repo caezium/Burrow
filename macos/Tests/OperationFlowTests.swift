@@ -199,6 +199,18 @@ final class OperationFlowTests: XCTestCase {
         guard case .finished(.failed) = flow.state else { return XCTFail("expected failed") }
         XCTAssertTrue(port.specs.isEmpty)
     }
+
+    func testElevatedRunFailsBeforeSpawnWhenInvokingAccountCannotBeResolved() {
+        let port = FakeProcessPort(script: [.exited(0)])
+        let flow = OperationFlow<CleanReport>(
+            process: port, hasFullDiskAccess: { true }, resolveMo: { _ in "/usr/bin/true" },
+            resolveInvokingUser: {
+                throw InvokingUserIdentity.ResolutionError.missingAccount(501)
+            }, center: OperationCenter())
+        flow.start(Self.cleanOp(elevated: true))
+        guard case .finished(.failed) = flow.state else { return XCTFail("expected fail closed") }
+        XCTAssertTrue(port.specs.isEmpty, "identity targets are derived before elevation")
+    }
 }
 
 // MARK: - Production adapter against real (tiny) processes
@@ -249,27 +261,27 @@ final class SystemProcessPortTests: XCTestCase {
 
     // MARK: Auth-cancel classification — an engine rule, not view folklore
 
-    /// "osascript exits nonzero having produced nothing" used to be an
-    /// OperationFlow heuristic; the runner owns it now, as a pure rule.
+    /// Only AppleScript's canonical userCanceledErr is a cancellation.
     func testFinalEvent_classifiesAuthCancel() {
-        // The previously-untestable path: elevated, failed, silent.
         guard case .authCancelled = SystemProcessPort.finalEvent(
-            exitCode: 1, elevated: true, sawOutput: false) else {
-            return XCTFail("elevated + nonzero + no output = dismissed auth prompt")
+            exitCode: 1, elevated: true,
+            appleScriptStderr: "execution error: User canceled. (-128)") else {
+            return XCTFail("canonical -128 diagnostic = dismissed auth prompt")
         }
-        // Output means the run really happened — a real failure, not cancel.
         guard case .exited(1) = SystemProcessPort.finalEvent(
-            exitCode: 1, elevated: true, sawOutput: true) else {
-            return XCTFail("an elevated run that produced output failed on its own terms")
+            exitCode: 1, elevated: true, appleScriptStderr: "") else {
+            return XCTFail("silent root command failures remain failures")
         }
         // Un-elevated runs have no auth prompt to cancel.
         guard case .exited(2) = SystemProcessPort.finalEvent(
-            exitCode: 2, elevated: false, sawOutput: false) else {
+            exitCode: 2, elevated: false,
+            appleScriptStderr: "execution error: User canceled. (-128)") else {
             return XCTFail("no elevation, no auth-cancel")
         }
         // Success is success even when silent.
         guard case .exited(0) = SystemProcessPort.finalEvent(
-            exitCode: 0, elevated: true, sawOutput: false) else {
+            exitCode: 0, elevated: true,
+            appleScriptStderr: "execution error: User canceled. (-128)") else {
             return XCTFail("exit 0 is never a cancel")
         }
     }

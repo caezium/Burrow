@@ -1,0 +1,12 @@
+{
+  "id": "7639318005",
+  "shortId": "BURROW-WINDOWS-2",
+  "title": "sk-live-SECRET failed for alice in /Users/alice/customer.txt --token SECRET",
+  "culprit": "Burrow.run(args: [--upload, /Users/alice/customer.txt])",
+  "permalink": "https://evil.example/alice?token=SECRET",
+  "issueType": "error",
+  "level": "error",
+  "count": "3",
+  "firstSeen": "2026-07-29T02:45:36Z",
+  "lastSeen": "2026-07-29T03:03:34Z"
+}

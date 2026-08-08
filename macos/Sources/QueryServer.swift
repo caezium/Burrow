@@ -4,10 +4,10 @@
 //
 //  Localhost JSON HTTP server. The MCP server for Claude Code points
 //  at this and a curl-from-the-terminal user can hit the same endpoints.
-//  Bound to 127.0.0.1 only and double-checks the peer address at accept
-//  time — there's no scenario where Burrow should accept off-host
-//  traffic, so this is belt-and-braces against a future NWParameters
-//  default change.
+//  Bound to 127.0.0.1 only, double-checks the peer address at accept time,
+//  and requires a per-install bearer credential plus an exact local Host.
+//  Loopback is reachable by browsers and unrelated local processes, so it is
+//  transport scoping rather than an authentication boundary.
 //
 //  Endpoints:
 //    GET /health                    → { ok, app, port }
@@ -26,17 +26,50 @@
 import Foundation
 import Network
 
+/// A small global limiter for the loopback surface. Loopback does not mean
+/// trusted: every browser and local process can reach it, so bound accepted
+/// authenticated work before it reaches SQLite or snapshot decoding.
+final class QueryRateLimiter {
+    private let limit: Int
+    private let window: TimeInterval
+    private var acceptedAt: [TimeInterval] = []
+    private let lock = NSLock()
+
+    init(limit: Int = 120, window: TimeInterval = 60) {
+        self.limit = max(1, limit)
+        self.window = max(1, window)
+    }
+
+    func allow(at date: Date = Date()) -> Bool {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        let now = date.timeIntervalSince1970
+        let cutoff = now - self.window
+        self.acceptedAt.removeAll { $0 <= cutoff }
+        guard self.acceptedAt.count < self.limit else { return false }
+        self.acceptedAt.append(now)
+        return true
+    }
+}
+
 final class QueryServer {
     static let defaultPort: UInt16 = 9277  // Stats's MCP uses 9276; +1 to coexist
 
     private let db: DB
     private let port: UInt16
+    private let authToken: String
+    private let rateLimiter: QueryRateLimiter
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "dev.caezium.burrow.queryserver")
 
-    init(db: DB, port: UInt16 = QueryServer.defaultPort) {
+    init(db: DB,
+         port: UInt16 = QueryServer.defaultPort,
+         authToken: String = Store.queryAuthToken,
+         rateLimiter: QueryRateLimiter = QueryRateLimiter()) {
         self.db = db
         self.port = port
+        self.authToken = authToken
+        self.rateLimiter = rateLimiter
     }
 
     func start() {
@@ -130,6 +163,103 @@ final class QueryServer {
         return isComplete ? .drop : .keepReading
     }
 
+    enum AuthorizationResult: Equatable {
+        case allowed
+        case unauthorized
+        case forbidden
+        case malformed
+    }
+
+    struct Response {
+        let statusCode: Int
+        let body: String
+        let contentType: String
+        var headers: [String] = []
+    }
+
+    private struct Request {
+        let method: String
+        let target: String
+        let version: String
+        let headers: [String: String]
+        let body: String
+    }
+
+    /// Parse the intentionally tiny HTTP subset without accepting duplicate
+    /// headers or absolute-form targets. Rejecting ambiguous input avoids Host
+    /// and Authorization smuggling through this hand-rolled boundary.
+    private static func parseRequest(_ raw: String) -> Request? {
+        guard raw.utf8.count <= Self.maxRequestBytes else { return nil }
+        let sections = raw.components(separatedBy: "\r\n\r\n")
+        guard sections.count <= 2 else { return nil }
+        var lines = sections[0].components(separatedBy: "\r\n")
+        guard !lines.isEmpty else { return nil }
+        let requestLine = lines.removeFirst().split(separator: " ", omittingEmptySubsequences: true)
+        guard requestLine.count == 3 else { return nil }
+        let method = String(requestLine[0])
+        let target = String(requestLine[1])
+        let version = String(requestLine[2])
+        guard target.hasPrefix("/"), version == "HTTP/1.1" else { return nil }
+
+        var headers: [String: String] = [:]
+        for line in lines {
+            guard !line.isEmpty, let colon = line.firstIndex(of: ":") else { return nil }
+            let name = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty, headers[name] == nil else { return nil }
+            headers[name] = value
+        }
+        return Request(method: method,
+                       target: target,
+                       version: version,
+                       headers: headers,
+                       body: sections.count == 2 ? sections[1] : "")
+    }
+
+    private static func timingSafeEqual(_ lhs: String, _ rhs: String) -> Bool {
+        let a = Array(lhs.utf8)
+        let b = Array(rhs.utf8)
+        guard a.count == b.count, !a.isEmpty else { return false }
+        var difference: UInt8 = 0
+        for index in a.indices { difference |= a[index] ^ b[index] }
+        return difference == 0
+    }
+
+    /// Shared by REST and SSE. A credential in the URL is deliberately
+    /// ignored because URLs leak into shell history, browser history, and
+    /// diagnostics; callers must use `Authorization: Bearer …`.
+    static func authorize(_ raw: String, token: String, port: UInt16) -> AuthorizationResult {
+        guard let request = Self.parseRequest(raw) else { return .malformed }
+
+        let allowedHosts = ["127.0.0.1:\(port)", "localhost:\(port)"]
+        guard let host = request.headers["host"]?.lowercased(), allowedHosts.contains(host) else {
+            return .forbidden
+        }
+        if request.headers["origin"] != nil
+            || request.headers["referer"] != nil
+            || request.headers.keys.contains(where: { $0.hasPrefix("sec-fetch-") }) {
+            return .forbidden
+        }
+
+        guard let authorization = request.headers["authorization"] else { return .unauthorized }
+        let pieces = authorization.split(separator: " ", omittingEmptySubsequences: true)
+        guard pieces.count == 2,
+              pieces[0].lowercased() == "bearer",
+              Self.timingSafeEqual(String(pieces[1]), token)
+        else { return .unauthorized }
+        return .allowed
+    }
+
+    private static func requestBodyIsAllowed(_ request: Request) -> Bool {
+        guard request.headers["transfer-encoding"] == nil else { return false }
+        if let rawLength = request.headers["content-length"] {
+            guard let length = Int(rawLength), length >= 0,
+                  length == request.body.utf8.count else { return false }
+            return length == 0
+        }
+        return request.body.isEmpty
+    }
+
     private func receive(_ conn: NWConnection, accumulated: Data) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 16 * 1024) { [weak self] data, _, isComplete, err in
             guard let self else { conn.cancel(); return }
@@ -149,60 +279,86 @@ final class QueryServer {
         }
     }
 
-    /// Response head for the one shape we ever send (200 + JSON + close).
     /// Deliberately NO CORS header: the user's browser is also a loopback
-    /// client, and an allow-all grant would let any web page read /snapshot
-    /// (hostname, process command lines) cross-origin. The real clients —
-    /// curl and the stdio MCP bridge — don't need CORS at all.
+    /// client. Real callers authenticate out of band and don't need CORS.
     static let jsonContentType = "application/json; charset=utf-8"
     /// Prometheus text exposition format, version 0.0.4 — the de-facto scrape
     /// content type. Served only by `/metrics?format=prometheus`.
     static let prometheusContentType = "text/plain; version=0.0.4; charset=utf-8"
 
-    static func httpHead(contentLength: Int, contentType: String = jsonContentType) -> String {
-        return "HTTP/1.1 200 OK\r\n"
+    static func httpHead(contentLength: Int,
+                         contentType: String = jsonContentType,
+                         statusCode: Int = 200,
+                         extraHeaders: [String] = []) -> String {
+        let reason: String
+        switch statusCode {
+        case 200: reason = "OK"
+        case 400: reason = "Bad Request"
+        case 401: reason = "Unauthorized"
+        case 403: reason = "Forbidden"
+        case 404: reason = "Not Found"
+        case 405: reason = "Method Not Allowed"
+        case 415: reason = "Unsupported Media Type"
+        case 429: reason = "Too Many Requests"
+        default: reason = "Error"
+        }
+        var head = "HTTP/1.1 \(statusCode) \(reason)\r\n"
             + "Content-Type: \(contentType)\r\n"
             + "Content-Length: \(contentLength)\r\n"
             + "Cache-Control: no-store\r\n"
             + "Connection: close\r\n"
-            + "\r\n"
+        for header in extraHeaders { head += header + "\r\n" }
+        return head + "\r\n"
     }
 
-    private func send(_ response: (body: String, contentType: String), on conn: NWConnection) {
+    private func send(_ response: Response, on conn: NWConnection) {
         let body = Data(response.body.utf8)
-        var payload = Data(Self.httpHead(contentLength: body.count, contentType: response.contentType).utf8)
+        var payload = Data(Self.httpHead(contentLength: body.count,
+                                         contentType: response.contentType,
+                                         statusCode: response.statusCode,
+                                         extraHeaders: response.headers).utf8)
         payload.append(body)
         conn.send(content: payload, completion: .contentProcessed { _ in conn.cancel() })
     }
 
     // MARK: - SSE /events (B.6)
 
-    /// Parse the `token` query param from a request target. Static + pure so
-    /// the auth gate is unit-tested without a socket.
-    static func eventsToken(from target: String) -> String {
-        let parts = target.split(separator: "?", maxSplits: 1)
-        guard parts.count > 1 else { return "" }
-        for kv in parts[1].split(separator: "&") {
-            let p = kv.split(separator: "=", maxSplits: 1)
-            if p.count == 2, p[0] == "token" { return String(p[1]) }
-        }
-        return ""
-    }
-
-    /// Handle `GET /events`: a token-gated SSE stream. Returns true if it took
+    /// Handle `GET /events`: a bearer-gated SSE stream. Returns true if it took
     /// ownership of the connection (streaming, or 401'd it), false to fall
-    /// through to the normal one-shot router. The server binds loopback only,
-    /// so the token just keeps other local processes/pages from subscribing.
+    /// through to the normal one-shot router. It uses the same bearer, Host,
+    /// browser-origin, body, and rate policy as the one-shot routes.
     private func tryServeEvents(_ header: String, on conn: NWConnection) -> Bool {
-        let line = header.split(separator: "\r\n", maxSplits: 1).first.map(String.init) ?? ""
-        let parts = line.split(separator: " ")
-        guard parts.count >= 2, parts[0] == "GET" else { return false }
-        let target = String(parts[1])
-        guard target.split(separator: "?", maxSplits: 1).first.map(String.init) == "/events" else { return false }
+        guard let request = Self.parseRequest(header) else { return false }
+        let path = request.target.split(separator: "?", maxSplits: 1).first.map(String.init) ?? ""
+        guard path == "/events" else { return false }
 
-        guard !Store.queryAuthToken.isEmpty, Self.eventsToken(from: target) == Store.queryAuthToken else {
-            let resp = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-            conn.send(content: Data(resp.utf8), completion: .contentProcessed { _ in conn.cancel() })
+        let rejection: Response?
+        switch Self.authorize(header, token: self.authToken, port: self.port) {
+        case .allowed: rejection = nil
+        case .unauthorized:
+            rejection = Self.errorResponse(401, "valid bearer credential required",
+                                           headers: ["WWW-Authenticate: Bearer"])
+        case .forbidden:
+            rejection = Self.errorResponse(403, "request host or browser origin rejected")
+        case .malformed:
+            rejection = Self.errorResponse(400, "malformed request")
+        }
+        if let rejection {
+            self.send(rejection, on: conn)
+            return true
+        }
+        guard request.method == "GET" else {
+            self.send(Self.errorResponse(405, "only GET supported",
+                                         headers: ["Allow: GET"]), on: conn)
+            return true
+        }
+        guard Self.requestBodyIsAllowed(request) else {
+            self.send(Self.errorResponse(400, "GET requests cannot include a body"), on: conn)
+            return true
+        }
+        guard self.rateLimiter.allow() else {
+            self.send(Self.errorResponse(429, "rate limit exceeded",
+                                         headers: ["Retry-After: 60"]), on: conn)
             return true
         }
         let head = "HTTP/1.1 200 OK\r\n"
@@ -217,17 +373,36 @@ final class QueryServer {
 
     /// Returns the response body and its content type. Everything is JSON
     /// except `/metrics?format=prometheus`, which is text exposition.
-    func route(_ raw: String) -> (body: String, contentType: String) {
-        func json(_ s: String) -> (body: String, contentType: String) { (s, Self.jsonContentType) }
+    func route(_ raw: String) -> Response {
+        func json(_ s: String, status: Int = 200) -> Response {
+            Response(statusCode: status, body: s, contentType: Self.jsonContentType)
+        }
 
-        guard let first = raw.split(separator: "\r\n", maxSplits: 1).first else {
-            return json(Self.errorJSON("malformed request"))
+        let authorization = Self.authorize(raw, token: self.authToken, port: self.port)
+        switch authorization {
+        case .unauthorized:
+            return Self.errorResponse(401, "valid bearer credential required",
+                                      headers: ["WWW-Authenticate: Bearer"])
+        case .forbidden:
+            return Self.errorResponse(403, "request host or browser origin rejected")
+        case .malformed:
+            return Self.errorResponse(400, "malformed request")
+        case .allowed:
+            break
         }
-        let parts = first.split(separator: " ")
-        guard parts.count >= 2, parts[0] == "GET" else {
-            return json(Self.errorJSON("only GET supported"))
+        guard let request = Self.parseRequest(raw) else {
+            return Self.errorResponse(400, "malformed request")
         }
-        let target = String(parts[1])
+        guard request.method == "GET" else {
+            return Self.errorResponse(405, "only GET supported", headers: ["Allow: GET"])
+        }
+        guard Self.requestBodyIsAllowed(request) else {
+            return Self.errorResponse(400, "GET requests cannot include a body")
+        }
+        guard self.rateLimiter.allow() else {
+            return Self.errorResponse(429, "rate limit exceeded", headers: ["Retry-After: 60"])
+        }
+        let target = request.target
         let split = target.split(separator: "?", maxSplits: 1)
         let path = String(split[0])
         let query = QueryServer.parseQuery(split.count == 2 ? String(split[1]) : "")
@@ -244,12 +419,14 @@ final class QueryServer {
 
         case "/metrics":
             if query["format"] == "prometheus" {
-                return (self.routeMetricsPrometheus(), Self.prometheusContentType)
+                return Response(statusCode: 200,
+                                body: self.routeMetricsPrometheus(),
+                                contentType: Self.prometheusContentType)
             }
             return json(self.routeMetrics(query: query))
 
         default:
-            return json(Self.errorJSON("unknown route"))
+            return json(Self.errorJSON("unknown route"), status: 404)
         }
     }
 
@@ -342,6 +519,15 @@ final class QueryServer {
 
     private static func errorJSON(_ msg: String) -> String {
         return "{\"error\":\"\(msg.replacingOccurrences(of: "\"", with: "\\\""))\"}"
+    }
+
+    private static func errorResponse(_ statusCode: Int,
+                                      _ message: String,
+                                      headers: [String] = []) -> Response {
+        Response(statusCode: statusCode,
+                 body: Self.errorJSON(message),
+                 contentType: Self.jsonContentType,
+                 headers: headers)
     }
 
     private static func jsonString(_ object: Any) -> String {

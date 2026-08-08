@@ -625,7 +625,8 @@ struct SettingsView: View {
             section("Local HTTP query server", "antenna.radiowaves.left.and.right") {
                 toggleRow("Enable HTTP query server", isOn: $queryServerEnabled) { Store.queryServerEnabled = $0 }
                 infoRow("Endpoint", "127.0.0.1:\(Store.queryServerPort)")
-                footnote("Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch.")
+                infoRow("Authentication", "Bearer token required")
+                footnote("Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Every request needs the per-install token; retrieve it locally with `defaults read dev.caezium.Burrow query_auth_token`. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch.")
             }
 
             section("Explain (AI) — experimental", "sparkles") {

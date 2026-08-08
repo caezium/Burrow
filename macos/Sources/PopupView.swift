@@ -467,7 +467,8 @@ struct PopupView: View {
     private func topProcesses(_ s: MoleStatus) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Eyebrow(text: "Top processes", glyph: "list.bullet", color: Brand.textSecondary)
-            ForEach(Array((s.topProcesses ?? []).prefix(4).enumerated()), id: \.offset) { _, p in
+            ForEach(Array((s.topProcesses ?? []).filter { !model.invalidatedProcessIDs.contains($0.pid) }
+                .prefix(4).enumerated()), id: \.offset) { _, p in
                 HStack(spacing: 8) {
                     Image(nsImage: AppIcon.image(for: p) ?? PopupView.blankIcon)
                         .resizable().frame(width: 15, height: 15)
@@ -503,7 +504,11 @@ struct PopupView: View {
             if ProcessActions.isOwnProcess(pid: p.pid) {
                 Divider()
                 Button(NSLocalizedString("Quit…", comment: ""), role: .destructive) {
-                    if ProcessActions.quit(pid: p.pid) == false { NSSound.beep() }
+                    ProcessActions.confirmTermination(
+                        pid: p.pid,
+                        displayName: p.name,
+                        onRefresh: { model.invalidateProcess(pid: p.pid) }
+                    )
                 }
             }
         } label: {
@@ -669,6 +674,7 @@ final class HUDModel: ObservableObject {
     /// Camera/mic in-use (opt-in indicator). False unless the toggle is on.
     @Published var cameraActive = false
     @Published var micActive = false
+    @Published private(set) var invalidatedProcessIDs: Set<Int> = []
 
     private let db: DB
     private let live: LiveFeed
@@ -692,6 +698,7 @@ final class HUDModel: ObservableObject {
     /// Latest snapshot + freshness, off the 1 s `snapshot.live` pump.
     func subscribeSnapshot() async {
         for await v in feeds.liveSnapshot(live).subscribeValues() {
+            invalidatedProcessIDs.removeAll()
             snap = v.snap
             // Live 1 s sparklines for the cpu/mem/gpu tiles — appended each tick
             // so the popover charts actually move (the 15 s pump now only feeds
@@ -707,6 +714,10 @@ final class HUDModel: ObservableObject {
                 freshness = NSLocalizedString("no samples yet", comment: "")
             }
         }
+    }
+
+    func invalidateProcess(pid: Int) {
+        invalidatedProcessIDs.insert(pid)
     }
 
     /// Sparklines + top drain, off the 15 s `metrics.sparklines.30m` pump.

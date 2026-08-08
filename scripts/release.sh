@@ -9,7 +9,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-command -v xcodegen >/dev/null 2>&1 || { echo "need xcodegen — brew install xcodegen"; exit 1; }
+TOOLS_TMP="$(mktemp -d)"
+trap 'rm -rf "$TOOLS_TMP"' EXIT
+bash scripts/fetch-xcodegen.sh "$TOOLS_TMP/xcodegen"
+XCODEGEN="$TOOLS_TMP/xcodegen/bin/xcodegen"
 
 echo "==> fetching vendored Sentry.xcframework"
 # Sentry is a local framework, not an SPM package (SPM's binary-artifact
@@ -24,7 +27,7 @@ bash scripts/fetch-sparkle.sh
 echo "==> xcodegen generate"
 # The macOS app lives under macos/ (monorepo: macos/ + windows/). Generate the
 # project there; build artifacts still land at the repo root (build_dist/, dist/).
-( cd macos && xcodegen generate >/dev/null )
+( cd macos && "$XCODEGEN" generate >/dev/null )
 
 # Telemetry keys (optional). Sourced from the gitignored scripts/release.env so
 # secrets never hit the repo. Absent → an honest no-telemetry release: empty

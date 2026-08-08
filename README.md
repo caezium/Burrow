@@ -498,9 +498,19 @@ Windows also keeps `burrow_uninstall(action=...)` as a compatibility tool for
 list, leftover-preview, and confirmed vendor-uninstaller launch workflows.
 
 There's also an optional localhost REST API (`127.0.0.1:9277` — `/health`,
-`/info`, `/snapshot`, `/metrics`) for dashboards or curl. On Windows, disabling
-REST in Settings does not close the loopback listener because the stdio MCP
-bridge still posts to `/mcp`.
+`/info`, `/snapshot`, `/metrics`) for dashboards or curl. Loopback is a network
+boundary, not authentication: every request needs the random per-install bearer
+credential, an exact localhost `Host`, no browser `Origin`, and stays inside the
+request-size/rate limits. On macOS, read the credential locally with
+`defaults read dev.caezium.Burrow query_auth_token`; on Windows it lives in the
+current user's `%LOCALAPPDATA%\BurrowWin\settings.json`, and the stdio bridge
+adds it automatically. Disabling Windows REST does not close the listener
+because the authenticated stdio bridge still posts to `/mcp`.
+
+```bash
+BURROW_HTTP_TOKEN="$(defaults read dev.caezium.Burrow query_auth_token)"
+curl -H "Authorization: Bearer $BURROW_HTTP_TOKEN" http://127.0.0.1:9277/health
+```
 
 ## Develop & test
 

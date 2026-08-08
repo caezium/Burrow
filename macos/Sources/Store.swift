@@ -569,12 +569,19 @@ enum Store {
         set { write(min(100, max(50, newValue)), "mem_alert_threshold") }
     }
 
-    /// Bearer token for the query server's SSE /events stream (B.6). Generated
-    /// once and persisted; agents pass it as `?token=…`. The server is loopback-
-    /// only, so this just stops other local processes/pages from subscribing.
+    /// Per-install bearer credential for every HTTP query-server route,
+    /// including SSE. Two UUIDv4 payloads provide more than 256 random bits;
+    /// strip punctuation so the value is safe to paste into an HTTP header.
+    /// URLs are never accepted as credential transport because they leak into
+    /// browser history, shell history, and diagnostics.
     static var queryAuthToken: String {
-        if let t = d.string(forKey: "query_auth_token"), !t.isEmpty { return t }
-        let t = UUID().uuidString
+        if let t = d.string(forKey: "query_auth_token"),
+           t.utf8.count >= 43,
+           t.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_" }) {
+            return t
+        }
+        let t = (UUID().uuidString + UUID().uuidString)
+            .replacingOccurrences(of: "-", with: "")
         write(t, "query_auth_token")
         return t
     }

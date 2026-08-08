@@ -190,18 +190,26 @@ renders those comments as visible text. Full site history belongs in
 
 The workflow order is:
 
-1. Require all Apple, Sparkle, and external-tap secrets, then verify that
-   `TAP_PAT` can write `caezium/homebrew-tap`.
-2. Fetch and checksum-validate the official Sentry and Sparkle frameworks,
-   then build and confirm the bundled conductor, engine, and fclones sidecar.
-3. Require the Sparkle private seed to match the public key embedded in the app.
-4. Sign every executable and the outer app with Developer ID.
-5. Require Apple’s notarization result to be `Accepted`.
-6. Staple and validate the ticket, then require Gatekeeper acceptance.
-7. Package the exact verified app, generate the signed appcast, and
-   cryptographically verify the ZIP and feed before publishing either asset.
-8. Keep a new release draft until both assets exist, then publish it.
-9. Update `caezium/homebrew-tap`: normalize `auto_updates true` beside the
+1. Require all Apple, Sparkle, Sentry-symbol, and external-tap secrets, then
+   verify that `TAP_PAT` can write `caezium/homebrew-tap`.
+2. Fetch the checksum-locked release inputs and prove that XcodeGen produces
+   identical metadata twice from the checked-in version/build source.
+3. Require the triggering tag to name the checked-out SHA exactly, then run the
+   release-helper, website, and complete macOS unit suites on that commit.
+4. Build and confirm the bundled conductor, engine, and fclones sidecar.
+5. Require the app binary UUIDs to exactly match its dSYM, validate the dSYM,
+   and upload it without source files before release publication can continue.
+6. Require the Sparkle private seed to match the public key embedded in the app.
+7. Sign every executable and the outer app with Developer ID, preserving bundle
+   ID `dev.caezium.Burrow` and Team ID `YGSM2722TZ` in the designated requirement.
+8. Require Apple’s notarization result to be `Accepted`, staple the ticket, then
+   require strict code-signature, designated-requirement, and Gatekeeper checks.
+9. Package the exact verified app, generate the signed appcast, and
+   cryptographically verify the ZIP and feed before uploading either to a draft.
+10. Download both draft assets again, match the ZIP SHA and dSYM UUIDs, extract
+    the app, and repeat Developer ID, requirement, ticket, Gatekeeper, and
+    Sparkle checks before making the release public.
+11. Update `caezium/homebrew-tap`: normalize `auto_updates true` beside the
    homepage stanza and fail if the legacy quarantine bypass, unsigned warning,
    or stale security note ever reappears.
 
@@ -218,11 +226,16 @@ Download the release asset and verify the distributed copy:
 ditto -x -k Burrow-VERSION.zip verified-release
 codesign --verify --deep --strict --verbose=2 verified-release/Burrow.app
 codesign -d --verbose=4 verified-release/Burrow.app
+codesign -d -r- verified-release/Burrow.app
 xcrun stapler validate verified-release/Burrow.app
 spctl --assess --type execute --verbose=4 verified-release/Burrow.app
 ```
 
 The final `spctl` result must identify the source as `Notarized Developer ID`.
+The designated requirement must contain `identifier "dev.caezium.Burrow"`,
+`anchor apple generic`, and Team ID `YGSM2722TZ`; changing any of those values
+can break upgrade and Full Disk Access continuity even when a signature is
+otherwise valid.
 Check that Homebrew’s live `Casks/burrow.rb` no longer contains `postflight`,
 `xattr -cr`, or an unsigned-build caveat, and that it contains
 `auto_updates true`. Confirm the release has both `Burrow-VERSION.zip` and
@@ -230,7 +243,28 @@ Check that Homebrew’s live `Casks/burrow.rb` no longer contains `postflight`,
 `https://github.com/caezium/Burrow/releases/latest/download/appcast.xml`
 resolves to that feed.
 
-### 0.11.1 current trust-chain baseline
+### 0.11.2 current release and symbol baseline
+
+The current release was re-verified from its downloaded GitHub asset on August
+8, 2026. Tag `v0.11.2` points to
+`c08de9714d51b6f6aa580ce9e9b71bebf4fb86be`; the ZIP has SHA-256
+`2a51a87d541be50cd3b2ab9418dfcaf20927d16499a265298b53bbc100d4eca5`,
+and `appcast.xml` has SHA-256
+`04ac0ea7efcade3d0ea87455a1ab849ebd853c9a288c09b545d3d59bfc04feaa`.
+The extracted app reports version 0.11.2, build 23, bundle ID
+`dev.caezium.Burrow`, and Team ID `YGSM2722TZ`; strict nested-signature,
+designated-requirement, stapler, and Gatekeeper checks all pass.
+
+The distributed binary UUIDs are
+`324C0B80-A09E-346C-8153-7BDCCB37A24C` (arm64) and
+`B0DF1FAF-0575-3865-8C7F-E2CBFFD141CC` (x86_64). The
+[tag workflow log](https://github.com/caezium/Burrow/actions/runs/30934193823)
+records those exact two UUIDs as uploaded Sentry debug companions, proving that
+the 0.11.2 dSYM matches the public release binary. That evidence does not
+recover BURROW-9E by itself: the older event still needs restricted Sentry data
+and an actionable frame, so the trigger below remains in force.
+
+### 0.11.1 trust-chain baseline
 
 The current release was verified on August 3, 2026. Tag `v0.11.1` points to
 `d482544e415d10cf9cb0c606c8a8ce149ddad99d`; the published ZIP has SHA-256
@@ -275,6 +309,27 @@ already off on that test Mac, so this run does not prove preservation of an
 existing FDA grant. [#319](https://github.com/caezium/Burrow/issues/319)
 remains open until an affected macOS 27 Beta 4 user verifies the notarized
 compatibility build.
+
+The next signed successor test must start with Full Disk Access enabled for the
+currently installed release, update through Sparkle, and prove the relaunched
+copy retains protected-folder access without another grant. The release job now
+enforces the stable designated requirement on both its local app and the
+downloaded draft, but the 0.11.0 → 0.11.1 test cannot supply this external TCC
+evidence because Full Disk Access was off before that update.
+
+### Symbolication incident trigger
+
+The public report for BURROW-9E ([#306](https://github.com/caezium/Burrow/issues/306))
+contains only an unknown top frame, so it does not establish a failing function
+or reproduction path. The next actionable trigger is the first matching event
+from a tag produced after the mandatory UUID-verified dSYM upload gate above.
+In restricted Sentry, compare that event's debug ID with the UUIDs printed by
+`verify-dsym-uuids.sh`; if they match, record the first symbolicated in-app frame
+and the smallest reproducible launch/update condition. If the frame remains
+unknown, retain Sentry's processing error and mismatched/missing debug ID there
+and block the next tag until the upload is corrected. Public GitHub issues get
+only a minimal privacy-reviewed diagnosis and the restricted Sentry link, never
+the raw event, stack, local paths, arguments, or usernames.
 
 ### 0.11.0 historical first-signed baseline
 

@@ -17,16 +17,27 @@ internal static class Program
 
     private static async Task<int> Main()
     {
+        var stored = ReadConnectionSettings();
         var endpoint = Environment.GetEnvironmentVariable("BURROWWIN_MCP_ENDPOINT");
         if (string.IsNullOrWhiteSpace(endpoint))
         {
-            endpoint = ReadEndpointFromSettings() ?? DefaultEndpoint;
+            endpoint = stored.Endpoint ?? DefaultEndpoint;
+        }
+        var authToken = Environment.GetEnvironmentVariable("BURROWWIN_MCP_TOKEN");
+        if (string.IsNullOrWhiteSpace(authToken))
+        {
+            authToken = stored.AuthToken;
         }
 
         using var httpClient = new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(120)
         };
+        if (!string.IsNullOrWhiteSpace(authToken))
+        {
+            httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", authToken);
+        }
 
         string? line;
         while ((line = await Console.In.ReadLineAsync().ConfigureAwait(false)) is not null)
@@ -48,7 +59,7 @@ internal static class Program
         return 0;
     }
 
-    private static string? ReadEndpointFromSettings()
+    private static (string? Endpoint, string? AuthToken) ReadConnectionSettings()
     {
         var path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -57,7 +68,7 @@ internal static class Program
 
         if (!File.Exists(path))
         {
-            return null;
+            return (null, null);
         }
 
         try
@@ -65,11 +76,12 @@ internal static class Program
             var root = JsonNode.Parse(File.ReadAllText(path))?.AsObject();
             var port = root?["HttpServerPort"]?.GetValue<int>() ?? 9277;
             port = Math.Clamp(port, 1024, 65535);
-            return $"http://127.0.0.1:{port}/mcp";
+            var authToken = root?["HttpServerAuthToken"]?.GetValue<string>();
+            return ($"http://127.0.0.1:{port}/mcp", authToken);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         {
-            return null;
+            return (null, null);
         }
     }
 

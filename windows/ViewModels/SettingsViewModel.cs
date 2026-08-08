@@ -106,6 +106,7 @@ public partial class SettingsViewModel : ViewModelBase
             HistoryRetentionDays = ParseInt(HistoryRetentionDays, current.HistoryRetentionDays),
             HttpServerEnabled = HttpServerEnabled,
             HttpServerPort = ParseInt(HttpServerPort, current.HttpServerPort),
+            HttpServerAuthToken = current.HttpServerAuthToken,
             TrayIconEnabled = TrayIconEnabled,
             McpDestructiveActionsEnabled = McpDestructiveActionsEnabled,
             TelemetryEnabled = TelemetryEnabled
@@ -145,8 +146,8 @@ public partial class SettingsViewModel : ViewModelBase
         McpDestructiveActionsEnabled = settings.McpDestructiveActionsEnabled;
         TelemetryEnabled = settings.TelemetryEnabled;
         McpEndpoint = settings.HttpServerEnabled
-            ? $"REST + MCP on http://127.0.0.1:{settings.HttpServerPort}"
-            : $"REST disabled; local MCP bridge remains on http://127.0.0.1:{settings.HttpServerPort}/mcp";
+            ? $"Bearer-authenticated REST + MCP on http://127.0.0.1:{settings.HttpServerPort}"
+            : $"REST disabled; authenticated local MCP bridge remains on http://127.0.0.1:{settings.HttpServerPort}/mcp";
     }
 
     private static int ParseInt(string value, int fallback)
