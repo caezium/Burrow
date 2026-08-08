@@ -497,12 +497,24 @@ struct MoCLIStatusSource: StatusSource {
         }
         let result = try MoEngine.shared.capture(
             MoCommand(target: .mo, args: ["status", "--json"], timeout: 8))
-        guard result.exitCode == 0 else {
+        // `stderr=` was empty on every engine failure (the reason is in the `ok:false` envelope
+        // on stdout), so this NSError carried an exit code and nothing else into the log the one
+        // time anyone would want to read it.
+        guard result.exitCode == 0,
+              let json = BurrowEnvelope.payloadBytes(stdout: result.stdout)
+                  .map({ String(decoding: $0, as: UTF8.self) }) else {
+            let reason = BurrowEnvelope.failureReason(stdout: result.stdout, stderr: result.stderr)
+                .map { String($0.prefix(200)) } ?? "no error output"
             throw NSError(domain: "Burrow.MoStatus", code: Int(result.exitCode), userInfo: [
-                NSLocalizedDescriptionKey: "mo status exit=\(result.exitCode) stderr=\(result.stderr.prefix(200))",
+                NSLocalizedDescriptionKey: "mo status exit=\(result.exitCode): \(reason)",
             ])
         }
-        return result.stdout
+        // Unwrapped for the same reason the conductor branch above unwraps: `MoleStatus` is a
+        // STRICT decoder, and handing it the envelope instead of `data` throws on every required
+        // key. That failed loudly enough to skip the tick, so it was never a wrong dashboard —
+        // but it was also never a working one, and this branch is the fallback that runs when the
+        // conductor path is the one that broke. A legacy `mo` has no envelope and passes through.
+        return json
     }
 }
 

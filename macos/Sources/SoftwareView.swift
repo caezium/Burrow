@@ -1113,6 +1113,15 @@ final class SoftwareModel: ObservableObject {
             let dry = try? MoEngine.shared.capture(
                 MoCommand(target: .mo, args: pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120))
             let dryText = (dry?.stdout ?? "") + "\n" + (dry?.stderr ?? "")
+            // Read the dry run's OWN failure before deciding what to tell the user. The matcher
+            // below is unchanged and still fails closed on the engine's JSON; this only stops
+            // the alert from blaming the build when the engine actually said something specific
+            // (a bad bundle id, a permission denial) on the stdout channel nothing here read.
+            let dryFailed = (dry?.exitCode ?? 1) != 0
+                || BurrowEnvelope.reportsFailure(stdout: dry?.stdout ?? "")
+            let dryReason = dryFailed
+                ? BurrowEnvelope.failureReason(stdout: dry?.stdout ?? "", stderr: dry?.stderr ?? "")
+                : nil
             let matched = UninstallGuard.matchedApps(inDryRunOutput: dryText)
             let problem: String?
             if let matched {
@@ -1138,9 +1147,15 @@ final class SoftwareModel: ObservableObject {
                     // The nil-match case IS the whole story (a build limitation, not a specific
                     // disagreement) — state it directly rather than folding it into the
                     // "matcher didn't agree" template, which would misdescribe it.
-                    alert.informativeText = matched == nil ? problem : String(
+                    var informative = matched == nil ? problem : String(
                         format: NSLocalizedString("mo's matcher didn't agree with your selection, so nothing was removed.\n\n%@", comment: ""),
                         problem)
+                    if let dryReason {
+                        informative += "\n\n" + String(
+                            format: NSLocalizedString("The engine reported: %@", comment: ""),
+                            String(dryReason.prefix(300)))
+                    }
+                    alert.informativeText = informative
                     alert.alertStyle = .warning
                     alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
                     alert.runModalQuiet()
@@ -1154,18 +1169,28 @@ final class SoftwareModel: ObservableObject {
             let res = try? MoEngine.shared.capture(
                 MoCommand(target: .mo, args: ticket.command.args, stdin: ticket.command.stdin,
                           timeout: ticket.command.timeout ?? 600))
+            // A zero exit alone isn't removal: an `ok:false` envelope is the engine saying it
+            // refused or failed, so it counts as a failure here too. Narrowing only — a legacy
+            // `mo` emits no envelope, and a success envelope leaves this untouched, so no
+            // uninstall that really happened is re-labelled as failed.
             let ok = (res?.exitCode ?? 1) == 0
+                && !BurrowEnvelope.reportsFailure(stdout: res?.stdout ?? "")
 
             // FAILURE (#254): the apps are still installed, so there's nothing to re-scan —
             // keep the list AND the selection so the user can retry, and surface the
             // engine's actual error in an alert (the HUD alone can be invisible when the
             // menu-bar icon is off).
             guard ok else {
-                let engineError = [res?.stderr, res?.stdout]
-                    .compactMap { $0 }
-                    .joined(separator: "\n")
+                // This site already fell back from stderr to stdout, which is why it kept
+                // saying SOMETHING through the repoint — but what it said was the whole
+                // envelope JSON, wrapped to the last six lines. `failureReason` reads the
+                // classified `error.message` out of it and keeps the identical stderr→stdout
+                // fallback for a legacy `mo`; the line trimming still applies, since that
+                // fallback is where multi-line output comes from.
+                let engineError = (BurrowEnvelope.failureReason(stdout: res?.stdout ?? "",
+                                                                stderr: res?.stderr ?? "") ?? "")
                     .components(separatedBy: "\n")
-                    .map { Ansi.strip($0).trimmingCharacters(in: .whitespaces) }
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
                     .filter { !$0.isEmpty }
                     .suffix(6)
                     .joined(separator: "\n")

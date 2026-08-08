@@ -1016,11 +1016,23 @@ struct ToolCatalog {
         if case .verifyUninstallMatch(let expected) = ticket.preflight,
            let pre = ticket.action.preflightCommand {
             let dry = Self.runMo(pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120)
+            // `matchedApps` keeps parsing the LEGACY "Matched N app(s):" text and keeps failing
+            // closed against the engine's JSON — deliberately. It is a decision point, not a
+            // display string: teaching it to read the envelope would open a real uninstall on
+            // an engine that removes support files but never the .app (see
+            // UninstallGuard.unavailableReason). What changes is only that the abort now carries
+            // the engine's own error when the dry run FAILED, so an agent isn't told the build
+            // is limited when the actual problem was e.g. a permission denial.
+            let dryFailed = dry.exitCode != 0 || BurrowEnvelope.reportsFailure(stdout: dry.stdout)
+            let dryReason = dryFailed
+                ? BurrowEnvelope.failureReason(stdout: dry.stdout, stderr: dry.stderr)
+                : nil
             guard let matched = UninstallGuard.matchedApps(inDryRunOutput: dry.stdout + "\n" + dry.stderr) else {
-                return ActionWire.uninstallAbort(apps: expected, matched: nil)
+                return ActionWire.uninstallAbort(apps: expected, matched: nil, engineError: dryReason)
             }
             if let mismatch = UninstallGuard.mismatchDescription(confirmed: expected, matched: matched) {
-                return ActionWire.uninstallAbort(apps: expected, matched: matched, mismatch: mismatch)
+                return ActionWire.uninstallAbort(apps: expected, matched: matched,
+                                                 mismatch: mismatch, engineError: dryReason)
             }
         }
         let timeout = ticket.command.timeout ?? 600
@@ -1028,15 +1040,29 @@ struct ToolCatalog {
                              timeout: timeout)
         var permanent: Bool?
         if case .uninstall(_, let p) = ticket.action, ticket.mode == .real { permanent = p }
+        // `ran` is a CLAIM about the disk, so it narrows in one direction only: an `ok:false`
+        // envelope means the engine refused or failed, and a run that failed did not run — even
+        // if the process somehow exited 0. `reportsFailure` is false for a legacy `mo` (no
+        // envelope) and false for a success envelope, so no run that really happened can be
+        // demoted by this.
+        let failed = BurrowEnvelope.reportsFailure(stdout: res.stdout)
         return ActionWire.result(command: ticket.action.commandName,
                                  dryRun: ticket.mode == .preview,
-                                 ran: ticket.mode == .real && res.exitCode == 0,
+                                 ran: ticket.mode == .real && res.exitCode == 0 && !failed,
                                  exitCode: res.exitCode,
+                                 // `output` stays the raw transcript — `summaryObject` parses it
+                                 // and agents have always read it. The classified reason rides
+                                 // alongside instead, so nobody has to dig a message out of a
+                                 // JSON document embedded in a JSON string field.
                                  output: res.stdout.isEmpty ? res.stderr : res.stdout,
                                  apps: ticket.action.wireApps,
                                  permanent: permanent,
                                  note: ticket.note,
-                                 timedOutAfter: res.timedOut ? timeout : nil)
+                                 timedOutAfter: res.timedOut ? timeout : nil,
+                                 error: (failed || res.exitCode != 0)
+                                     ? BurrowEnvelope.failureReason(stdout: res.stdout, stderr: res.stderr)
+                                     : nil,
+                                 kind: BurrowEnvelope.failureKind(stdout: res.stdout))
     }
 
     /// `mo analyze --json <path>` — read-only disk-usage breakdown. Mole
@@ -1062,17 +1088,28 @@ struct ToolCatalog {
                 "hint": "scanning \(path) took over 300s — analyze a more specific subdirectory instead"])
         }
         guard res.exitCode == 0 else {
-            if DiskScanner.indicatesMissingJSONSupport(stderr: res.stderr) {
+            // Scoped to a mo-family binary — see `DiskScanner.indicatesMissingJSONSupport` for
+            // why the engine has no correct answer to give this question.
+            if BurrowEnvelope.inOutput(res.stdout) == nil,
+               DiskScanner.indicatesMissingJSONSupport(stderr: res.stderr) {
                 return Self.jsonString([
                     "error": "installed mole is too old for `analyze --json` " +
                              "(needs >= \(MoleCLI.minimumAnalyzeJSONVersion)); run `brew upgrade mole`",
                     "path": path])
             }
-            return Self.jsonString(["error": "mo analyze failed",
-                                    "path": path,
-                                    "stderr": Self.stripANSI(res.stderr)])
+            return Self.analyzeFailure(path: path, stdout: res.stdout, stderr: res.stderr)
         }
-        let out = res.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Zero exit, so the payload — but the engine's payload is the envelope's `data`, not the
+        // envelope's own top level. Reading the top level found no `entries` key, so
+        // `prunedAnalyzeLevel` wrote back `entries: []` and an agent was handed an envelope with
+        // an empty entry list bolted onto it: a directory that reads as having no children.
+        // `payloadBytes` unwraps the engine and passes a legacy `mo`'s bare JSON through
+        // untouched, and returns nil for an `ok:false` body that somehow exited 0.
+        guard let payload = BurrowEnvelope.payloadBytes(stdout: res.stdout) else {
+            return Self.analyzeFailure(path: path, stdout: res.stdout, stderr: res.stderr)
+        }
+        let out = String(decoding: payload, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !out.isEmpty else {
             return Self.jsonString(["error": "empty analyze output", "path": path])
         }
@@ -1093,6 +1130,21 @@ struct ToolCatalog {
             }
         }
         return Self.jsonString(root)
+    }
+
+    /// The `burrow_analyze` failure reply. `stderr` stays in the shape (an agent may read it,
+    /// and it is honestly empty against the engine); `reason` and `kind` are the additive fields
+    /// that actually say what went wrong, read from whichever channel the resolved binary uses.
+    /// Pure so both branches are testable without a spawn.
+    static func analyzeFailure(path: String, stdout: String, stderr: String) -> String {
+        var obj: [String: Any] = ["error": "mo analyze failed",
+                                  "path": path,
+                                  "stderr": Self.stripANSI(stderr)]
+        if let reason = BurrowEnvelope.failureReason(stdout: stdout, stderr: stderr) {
+            obj["reason"] = reason
+        }
+        if let kind = BurrowEnvelope.failureKind(stdout: stdout) { obj["kind"] = kind }
+        return Self.jsonString(obj)
     }
 
     /// One pruned analyze level: entries sorted largest-first, filtered by
@@ -1144,9 +1196,12 @@ struct ToolCatalog {
             guard remaining > 5 else { complete = false; break }
             descended += 1
             let res = Self.runMo(["analyze", "--json", childPath], timeout: min(remaining, 60))
+            // Same unwrap as the top level: decoding the envelope itself gave every descended
+            // child `entries: []`, so the hotspot map read as "these directories are empty".
             guard !res.timedOut, res.exitCode == 0,
+                  let payload = BurrowEnvelope.payloadBytes(stdout: res.stdout),
                   var child = (try? JSONSerialization.jsonObject(
-                      with: Data(res.stdout.utf8))) as? [String: Any] else {
+                      with: payload)) as? [String: Any] else {
                 if res.timedOut { complete = false }
                 continue
             }
@@ -1174,7 +1229,13 @@ struct ToolCatalog {
     /// deterministically testable without a real spawn (mirrors `cleanupHistoryResult` above —
     /// same "may be absent on a CI runner" reasoning).
     static func listAppsToolResult(exitCode: Int32, stdout: String, stderr: String) -> String {
-        guard exitCode == 0 else {
+        // A zero exit is not on its own proof of a listing: an `ok:false` body is a failure
+        // whatever the process claimed on the way out, and passing it through would hand an
+        // agent an error document where it expects an app array. `uninstall --list` answers
+        // with a BARE JSON array (verified against burrow-engine @ 945000a — one of the
+        // engine's un-enveloped commands), so there is nothing to unwrap on the success path
+        // and the passthrough at the bottom is unchanged; this only catches the failing shape.
+        guard exitCode == 0, !BurrowEnvelope.reportsFailure(stdout: stdout) else {
             // When the engine fails a command it writes its error envelope to STDOUT, not stderr,
             // so `stderr` alone is always empty here and told an agent nothing. Surface both so
             // the actual reason is visible. Deliberately NO `"apps": []` alongside the error:
@@ -1187,11 +1248,23 @@ struct ToolCatalog {
             // The hint no longer claims the engine has no app-listing command: it implements
             // `uninstall --list` and answered with 135 rows on the machine this was verified on,
             // so a failure here is a real failure, not the expected steady state it once was.
-            return Self.jsonString(["error": "mo uninstall --list failed",
-                                    "hint": "burrow_uninstall can't be given an exact bundle id without this listing — read stdout for the engine's own error envelope",
-                                    "exit_code": Int(exitCode),
-                                    "stdout": Self.stripANSI(stdout),
-                                    "stderr": Self.stripANSI(stderr)])
+            //
+            // `reason`/`kind` are the same additive pair the other tools now carry: the agent
+            // no longer has to notice that "read stdout for the engine's own error envelope"
+            // means "and parse a second JSON document out of this string field". Both raw
+            // streams stay in the shape — the hint above still points at them, and `stderr`
+            // being empty is itself the honest report for the engine.
+            var obj: [String: Any] = [
+                "error": "mo uninstall --list failed",
+                "hint": "burrow_uninstall can't be given an exact bundle id without this listing — read `reason` for the engine's own classified error",
+                "exit_code": Int(exitCode),
+                "stdout": Self.stripANSI(stdout),
+                "stderr": Self.stripANSI(stderr)]
+            if let reason = BurrowEnvelope.failureReason(stdout: stdout, stderr: stderr) {
+                obj["reason"] = reason
+            }
+            if let kind = BurrowEnvelope.failureKind(stdout: stdout) { obj["kind"] = kind }
+            return Self.jsonString(obj)
         }
         let out = Self.stripANSI(stdout).trimmingCharacters(in: .whitespacesAndNewlines)
         return out.isEmpty ? "{\"apps\":[]}" : out

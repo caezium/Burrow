@@ -49,7 +49,10 @@ struct DiskScanResult {
 enum DiskScanError: Error, LocalizedError {
     case moNotFound
     case moTooOld(found: String?)
-    case moFailed(exitCode: Int32, stderr: String)
+    /// `reason` is what the run actually said, read from whichever channel the resolved binary
+    /// says it on (`BurrowEnvelope.failureReason`) — NOT stderr, which the Rust engine leaves
+    /// empty on every classified failure. nil means the run said nothing at all.
+    case moFailed(exitCode: Int32, reason: String?)
     case parseFailed(String)
 
     var errorDescription: String? {
@@ -62,9 +65,16 @@ enum DiskScanError: Error, LocalizedError {
                 comment: ""),
                 MoleCLI.minimumAnalyzeJSONVersion,
                 found ?? NSLocalizedString("an unknown version", comment: ""))
-        case .moFailed(let code, let stderr):
+        case .moFailed(let code, let reason):
+            // "mo analyze exited 2:" with nothing after the colon is what this printed for every
+            // engine failure, because it was formatting stderr and the engine writes none. Say
+            // so explicitly when there really is nothing, instead of trailing off.
+            guard let reason, !reason.isEmpty else {
+                return String(format: NSLocalizedString(
+                    "mo analyze exited %d with no error output.", comment: ""), code)
+            }
             return String(format: NSLocalizedString("mo analyze exited %d: %@", comment: ""),
-                          code, String(stderr.prefix(200)))
+                          code, String(reason.prefix(200)))
         case .parseFailed(let m):
             return String(format: NSLocalizedString("Couldn't parse mo analyze output: %@", comment: ""), m)
         }
@@ -102,18 +112,35 @@ enum DiskScanner {
             // is `indicatesMissingJSONSupport`: it matches two strings that only Go's flag
             // package and mole's TUI produce, and it reads STDERR. The Rust engine reports
             // every failure it classifies — bad path, unknown flag, unknown command — as an
-            // `ok:false` envelope on STDOUT and writes nothing to stderr (verified against
-            // burrow-engine @ 909caa6). `found:` carries the product name anyway, so if a
+            // `ok:false` envelope on STDOUT and writes nothing to stderr (re-verified against
+            // burrow-engine @ 945000a). `found:` carries the product name anyway, so if a
             // future engine ever did reach this line the message reads "needs Mole 1.29.0
             // (you have burrow-engine 0.1.0)" — legible as a scale mismatch — rather than
             // looking like an ancient mo.
-            if indicatesMissingJSONSupport(stderr: result.stderr) {
+            //
+            // The envelope guard makes that invariant CHECKED rather than incidental. Today it
+            // can't change an answer — an envelope means the engine answered, and the engine's
+            // stderr is empty, so the string match already can't fire — but it states the rule
+            // ("this diagnosis is only about a mo-family binary") in a form a test can pin, so
+            // an engine that one day prints anything at all to stderr can't be mistaken for a
+            // 2023 mo and sent to `brew upgrade mole`.
+            if BurrowEnvelope.inOutput(result.stdout) == nil,
+               indicatesMissingJSONSupport(stderr: result.stderr) {
                 throw DiskScanError.moTooOld(found: MoleCLI.versionReport()?.display)
             }
-            throw DiskScanError.moFailed(exitCode: result.exitCode, stderr: result.stderr)
+            throw DiskScanError.moFailed(
+                exitCode: result.exitCode,
+                reason: BurrowEnvelope.failureReason(stdout: result.stdout, stderr: result.stderr))
         }
-        guard let data = result.stdout.data(using: .utf8) else {
-            throw DiskScanError.parseFailed("non-utf8 stdout")
+        // A zero exit is not on its own a success: unwrap the engine's envelope (whose payload
+        // is `data`, NOT its own top level — decoding the envelope directly yields a scan with
+        // path "?" and zero entries, an empty-looking disk rather than an error), and refuse an
+        // `ok:false` body even if the process somehow exited 0. A legacy `mo` has no envelope
+        // and its stdout passes through byte-for-byte, as before.
+        guard let data = BurrowEnvelope.payloadBytes(stdout: result.stdout) else {
+            throw DiskScanError.moFailed(
+                exitCode: result.exitCode,
+                reason: BurrowEnvelope.failureReason(stdout: result.stdout, stderr: result.stderr))
         }
         return try Self.parse(data)
     }
@@ -134,6 +161,23 @@ enum DiskScanner {
     /// or ignores it and launches the TUI, which dies opening /dev/tty
     /// under a GUI parent ("could not open a new TTY", #35). Both mean
     /// the same thing for us: the user must upgrade mole. Pure → tested.
+    ///
+    /// # What it does per binary shape, now that two can answer
+    ///
+    ///   * **A legacy mo-family binary** — unchanged, and this is its whole job. Those two
+    ///     strings are produced by Go's `flag` package and mole's own TUI; the diagnosis they
+    ///     support ("your mole is too old, `brew upgrade mole`") is only ever true of a
+    ///     mo-family binary, and stderr is where that binary says them.
+    ///   * **The Rust engine** — never fires, and must not. Its stderr is empty on every
+    ///     classified failure, so it cannot match; and it should not be TAUGHT to match, because
+    ///     "too old" is meaningless across the two version scales (the engine is a 0.x line —
+    ///     see `MoleCLI.EngineVersion`) and telling a user on the bundled engine to run
+    ///     `brew upgrade mole` would be advice about a program they don't have. Its real reason
+    ///     lives in the `ok:false` envelope and is read by `BurrowEnvelope.failureReason`.
+    ///
+    /// So this deliberately still takes only `stderr` and still knows nothing about envelopes.
+    /// Callers scope it to the binary it's about (`BurrowEnvelope.inOutput(stdout) == nil`)
+    /// rather than this function widening to cover a shape it has no correct answer for.
     static func indicatesMissingJSONSupport(stderr: String) -> Bool {
         stderr.contains("could not open a new TTY")
             || stderr.contains("flag provided but not defined")

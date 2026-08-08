@@ -304,9 +304,16 @@ final class MoActionsTests: XCTestCase {
         // The nil-matched case is what every real call against the bundled engine hits (it
         // answers in JSON, never the legacy text `matchedApps` parses) — the message must say
         // uninstall is unavailable in this build and why, not the old "couldn't verify" non-answer.
+        // The reason is INTERPOLATED, not retyped. This test is about the WIRE FORMAT being byte
+        // stable — key order, escaping, `ran:false` — and `unavailableReason` is prose that changes
+        // whenever the blocker changes. Hardcoding it made this test go red for a source edit that
+        // was correct, and it stayed red invisibly because a stale string still compiles.
+        // UninstallGuardTests owns the prose itself (it asserts the reason names `.app` and does NOT
+        // name the two blockers that have since been fixed), which is the assertion that can
+        // actually catch a wrong reason. Duplicating it here only catches edits.
         XCTAssertEqual(
             ActionWire.uninstallAbort(apps: ["Slack"], matched: nil),
-            #"{"apps":["Slack"],"command":"uninstall","error":"aborted: Uninstall isn't available in this build: the bundled engine can only resolve one app per request and expects an exact bundle id where Burrow currently sends display names, so there's no reliable way to confirm what it would actually remove before anything is deleted.","ran":false}"#)
+            #"{"apps":["Slack"],"command":"uninstall","error":"aborted: \#(UninstallGuard.unavailableReason)","ran":false}"#)
         XCTAssertEqual(
             ActionWire.uninstallAbort(apps: ["Slack"], matched: ["Slack", "Slackpad"],
                                       mismatch: "mo would also remove: Slackpad"),

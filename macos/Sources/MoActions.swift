@@ -283,9 +283,16 @@ enum MoActions {
 /// the redirect note are golden-tested; keys are emitted sorted so the
 /// bytes are stable. Additive changes only.
 enum ActionWire {
+    /// `error` / `kind` are the engine's classified failure, emitted ONLY when there was one —
+    /// additive, so every existing success/preview payload stays byte-identical. They exist
+    /// because the repoint moved the reason: the Rust engine writes an `ok:false` envelope to
+    /// stdout and nothing to stderr, so a failed action used to arrive as a bare non-zero
+    /// `exit_code` with the whole envelope stuffed into `output` as a string an agent had to
+    /// re-parse.
     static func result(command: String, dryRun: Bool, ran: Bool, exitCode: Int32,
                        output: String, apps: [String]? = nil, permanent: Bool? = nil,
-                       note: String? = nil, timedOutAfter: TimeInterval? = nil) -> String {
+                       note: String? = nil, timedOutAfter: TimeInterval? = nil,
+                       error: String? = nil, kind: String? = nil) -> String {
         let stripped = Ansi.strip(output)
         var obj: [String: Any] = [
             "command": command,
@@ -299,6 +306,8 @@ enum ActionWire {
         if let summary = summaryObject(stripped) { obj["summary"] = summary }
         if let apps { obj["apps"] = apps }
         if let permanent { obj["permanent"] = permanent }
+        if let error, !error.isEmpty { obj["error"] = error }
+        if let kind, !kind.isEmpty { obj["kind"] = kind }
         if let note {
             obj["interactive_only"] = true
             obj["note"] = note
@@ -325,9 +334,15 @@ enum ActionWire {
         return json(obj)
     }
 
+    /// `engineError` is the dry run's OWN reason, present only when the pre-flight run itself
+    /// failed. Without it, an engine failure (bad bundle id, permission denial) came back
+    /// wearing the generic "uninstall is unavailable in this build" message — true of the build,
+    /// but not what happened. It never changes the outcome: this function only ever emits
+    /// `ran: false`.
     static func uninstallAbort(apps: [String], matched: [String]?,
-                               mismatch: String? = nil) -> String {
+                               mismatch: String? = nil, engineError: String? = nil) -> String {
         var obj: [String: Any] = ["command": "uninstall", "ran": false, "apps": apps]
+        if let engineError, !engineError.isEmpty { obj["engine_error"] = engineError }
         if let matched {
             obj["matched"] = matched
             obj["error"] = "aborted: mo matched a different set than requested "
