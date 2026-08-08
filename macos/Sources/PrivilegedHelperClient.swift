@@ -330,13 +330,31 @@ struct HelperAwareProcessPort: ProcessPort {
             DispatchQueue.global(qos: .userInitiated).async {
                 switch client.route(for: spec.arguments) {
                 case .helper(let operation):
+                    var sawOutput = false
                     let outcome = client.run(operation: operation) { line in
+                        sawOutput = true
                         continuation.yield(.line(line))
                     }
                     switch outcome {
-                    case .exited(let code): continuation.yield(.exited(code))
-                    case .authCancelled: continuation.yield(.authCancelled)
-                    case .launchFailed: continuation.yield(.exited(127))
+                    case .exited(let code):
+                        continuation.yield(.exited(code))
+                    case .authCancelled:
+                        continuation.yield(.authCancelled)
+                    case .launchFailed:
+                        // Nothing ran. The report parser reduces an EMPTY
+                        // transcript to a cheerful "Done — caches cleared",
+                        // so a silent failure here reads to the user as a
+                        // successful clean that freed nothing — the single
+                        // worst outcome for a tool that deletes files.
+                        //
+                        // Emit a line so the transcript is non-empty and the
+                        // failure is visible, then the nonzero exit.
+                        if !sawOutput {
+                            continuation.yield(.line(NSLocalizedString(
+                                "The privileged helper could not run the bundled engine. Nothing was changed.",
+                                comment: "")))
+                        }
+                        continuation.yield(.exited(127))
                     }
                     continuation.finish()
 

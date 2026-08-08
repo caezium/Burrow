@@ -116,34 +116,60 @@ enum HelperEngine {
         return engine.path
     }
 
-    /// Verify the engine carries our own signature before running it as root.
+    /// The app bundle containing this helper.
+    static func appBundleURL() -> URL? {
+        guard let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
+        return executable
+            .deletingLastPathComponent()     // …/Contents/MacOS
+            .deletingLastPathComponent()     // …/Contents
+            .deletingLastPathComponent()     // …/Burrow.app
+            .standardizedFileURL
+    }
+
+    /// Verify our own app bundle before running anything out of it as root.
     ///
-    /// The app bundle is signed as a unit, so an attacker who can rewrite the
-    /// engine binary has already broken the app's seal — but they may have
-    /// done so on a machine where Gatekeeper never re-evaluates the bundle
-    /// after first launch. Checking here means a tampered engine is refused at
-    /// the moment it would gain root, not merely at install time.
+    /// This deliberately validates the BUNDLE, not the engine file. The engine
+    /// is a bash script — `codesign` reports "code object is not signed at
+    /// all" for it, and it sources a whole `lib/` directory that would each
+    /// need checking too. Running `SecStaticCodeCheckValidity` on the script
+    /// itself can never succeed, which is exactly the bug this replaces.
+    ///
+    /// Validating the app bundle is both achievable and stronger: a bundle's
+    /// signature seals `Contents/Resources/`, so a passing check certifies the
+    /// engine script AND every library it sources AND that all of it came from
+    /// our signing team. Any tampering breaks the seal and fails here — at the
+    /// moment it would gain root, not merely at install time.
     ///
     /// On an ad-hoc (local development) build there is no team to pin, so the
     /// check is skipped and the fact is logged. Release builds always have
     /// one, and the release gate refuses to ship a helper without it.
-    static func verify(path: String, teamID: String?) -> Bool {
+    static func verifyContainingBundle(teamID: String?) -> Bool {
         guard let teamID else {
-            helperTrace("engine signature check skipped: helper is ad-hoc signed (development build)")
+            helperTrace("bundle signature check skipped: helper is ad-hoc signed (development build)")
             return true
         }
-        guard let requirement = HelperCodeRequirement.sameTeam(teamID: teamID) else { return false }
+        guard let requirement = HelperCodeRequirement.sameTeam(teamID: teamID),
+              let bundle = appBundleURL() else { return false }
 
         var staticCode: SecStaticCode?
-        let url = URL(fileURLWithPath: path) as CFURL
-        guard SecStaticCodeCreateWithPath(url, [], &staticCode) == errSecSuccess,
-              let staticCode else { return false }
+        guard SecStaticCodeCreateWithPath(bundle as CFURL, [], &staticCode) == errSecSuccess,
+              let staticCode else {
+            helperTrace("bundle verification: could not read our own code signature")
+            return false
+        }
 
         var secRequirement: SecRequirement?
         guard SecRequirementCreateWithString(requirement as CFString, [], &secRequirement) == errSecSuccess,
               let secRequirement else { return false }
 
-        return SecStaticCodeCheckValidity(staticCode, [], secRequirement) == errSecSuccess
+        // Default flags validate the resource seal, which is what covers the
+        // engine script sitting in Contents/Resources.
+        let status = SecStaticCodeCheckValidity(staticCode, [], secRequirement)
+        if status != errSecSuccess {
+            helperTrace("bundle verification failed: status=\(status)")
+            return false
+        }
+        return true
     }
 }
 
@@ -331,9 +357,12 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         helperTrace("authorized: \(decision.diagnostic)")
 
         // Gate 5 — execution. Our own signed engine, fixed argv.
-        guard let enginePath = HelperEngine.bundledEnginePath(),
-              HelperEngine.verify(path: enginePath, teamID: teamID) else {
-            helperTrace("engine unavailable or failed signature verification")
+        guard let enginePath = HelperEngine.bundledEnginePath() else {
+            helperTrace("engine unavailable: no bundled engine at Contents/Resources/engine/mole")
+            return respond(.engineUnavailable)
+        }
+        guard HelperEngine.verifyContainingBundle(teamID: teamID) else {
+            helperTrace("engine unavailable: containing app bundle failed signature verification")
             return respond(.engineUnavailable)
         }
 
