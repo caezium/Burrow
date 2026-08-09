@@ -104,7 +104,8 @@ final class MCPTests: XCTestCase {
                         "burrow_analyze", "burrow_list_apps",
                         "burrow_dupes", "burrow_net", "burrow_orphans",
                         "burrow_photos", "burrow_rules_dryrun", "burrow_sentinel",
-                        "burrow_slim_check", "burrow_clean",
+                        "burrow_slim_check", "burrow_agent_audit", "burrow_anomalies",
+                        "burrow_clean",
                         "burrow_optimize", "burrow_uninstall", "burrow_purge",
                         "burrow_installer"])
         // Every tool must carry an inputSchema and a description.
