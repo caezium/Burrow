@@ -34,7 +34,7 @@ of either era. See [Protocol surface](#protocol-surface) at the bottom.
 | Tool | Use it proactively when… | Key params |
 |---|---|---|
 | **burrow_snapshot** | The user asks "what's my CPU/memory/disk/network/temperature right now", or you need current vitals before reasoning. Returns the latest full status snapshot incl. top processes + a 0–100 health score. | — |
-| **burrow_doctor** | "Is my Mac healthy / is anything wrong?", or as a first pass on any vague performance/security complaint. One call returns ok/warn/fail checks for engine presence, Full Disk Access, memory pressure, disk headroom, decode errors, **security posture (SIP/Gatekeeper/FileVault/firewall)**, **battery health**, sustained high-CPU, and display/external-volume/network context. | — |
+| **burrow_doctor** | "Is my Mac healthy / is anything wrong?", or as a first pass on any vague performance complaint. Returns ok/warn/fail checks for engine presence, Full Disk Access, memory pressure, disk headroom, SMART disk health, Time Machine backup age, and decode errors. **Not security posture:** SIP/Gatekeeper/FileVault/firewall, battery health, CPU load and display/volume/network context exist in the Doctor engine but are only filled in by the GUI — over MCP those checks are omitted, so answer security questions from the shell, not from this tool. | — |
 | **burrow_top_processes** | "What's using my CPU?" / "why is my Mac hot or loud?" Ranks processes by **peak** CPU% over a window. | `minutes`, `limit` |
 | **burrow_process_usage** | "What's been draining my battery / running hottest *over time*?" Ranks by `cpu_time` (cumulative), `peak_cpu`, `avg_cpu`, or `peak_mem`, and echoes the window it used. Prefer this over `top_processes` for "all day / since this morning" questions. | `minutes`, `metric`, `limit` |
 | **burrow_history** | The user asks about a trend ("has memory crept up since noon?") or you want a time-series slice rather than a single point. | `minutes`, `samples` |
@@ -156,8 +156,10 @@ opening a listener needs its own auth model first.
 - **"My Mac is slow/hot/loud"** → `burrow_doctor` → `burrow_top_processes` (now) or
   `burrow_process_usage` (over time) → name the culprit; offer `burrow_clean`/`optimize`
   preview only if relevant.
-- **"Is anything insecure / what's listening?"** → `burrow_doctor` (SIP/Gatekeeper/FileVault/
-  firewall) + `burrow_ports`.
+- **"What's listening?"** → `burrow_ports`. For "is anything insecure", `burrow_doctor` over MCP
+  does **not** cover SIP/Gatekeeper/FileVault/firewall — read those from the shell (`csrutil
+  status`, `spctl --status`, `fdesetup status`, `socketfilterfw --getglobalstate`) until the
+  tool fills them in.
 - **"What did Burrow change?"** → `burrow_cleanup_history` + `burrow_deleted_files`.
 - **"Did an agent already do this?"** → `burrow_agent_audit` before repeating a cleanup, and
   after a call you're unsure completed.
