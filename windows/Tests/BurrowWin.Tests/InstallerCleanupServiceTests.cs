@@ -45,10 +45,12 @@ public sealed class InstallerCleanupServiceTests : IDisposable
         var service = new InstallerCleanupService(_root, 30, deletionService);
         var candidate = (await service.PreviewAsync()).Single();
 
-        var results = await service.RemoveAsync([candidate]);
+        var candidates = new[] { candidate };
+        var authorization = service.ConfirmRemoval(candidates);
+        var batch = await service.RemoveAsync(candidates, authorization);
 
-        var result = Assert.Single(results);
-        Assert.True(result.Succeeded);
+        var result = Assert.Single(batch.ItemResults);
+        Assert.Equal(Models.SafeDeletionStatus.Recycled, result.Status);
         Assert.True(File.Exists(file));
         Assert.Single(deletionService.DeletedPaths);
         Assert.Equal(Path.GetFullPath(file), deletionService.DeletedPaths[0]);
@@ -71,10 +73,12 @@ public sealed class InstallerCleanupServiceTests : IDisposable
                 7,
                 DateTimeOffset.UtcNow.AddDays(-90));
 
-            var results = await service.RemoveAsync([candidate]);
+            var candidates = new[] { candidate };
+            var authorization = service.ConfirmRemoval(candidates);
+            var batch = await service.RemoveAsync(candidates, authorization);
 
-            var result = Assert.Single(results);
-            Assert.False(result.Succeeded);
+            var result = Assert.Single(batch.ItemResults);
+            Assert.Equal(Models.SafeDeletionStatus.Rejected, result.Status);
             Assert.True(File.Exists(outside));
             Assert.Empty(deletionService.DeletedPaths);
         }
@@ -82,6 +86,62 @@ public sealed class InstallerCleanupServiceTests : IDisposable
         {
             File.Delete(outside);
         }
+    }
+
+    [Fact]
+    public async Task RemoveAsync_RejectsCandidateChangedBetweenPreviewAndApply()
+    {
+        var file = CreateFile("changed.zip", 1024, DateTime.UtcNow.AddDays(-90));
+        var deletionService = new RecordingSafeDeletionService();
+        var service = new InstallerCleanupService(_root, 30, deletionService);
+        var candidates = (await service.PreviewAsync()).ToArray();
+        var authorization = service.ConfirmRemoval(candidates);
+        await File.AppendAllTextAsync(file, "changed");
+
+        var batch = await service.RemoveAsync(candidates, authorization);
+
+        Assert.Equal(Models.SafeDeletionStatus.Rejected, Assert.Single(batch.ItemResults).Status);
+        Assert.Empty(deletionService.DeletedPaths);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_RejectsWhenConfirmationDoesNotMatchSelectedSet()
+    {
+        _ = CreateFile("one.msi", 1024, DateTime.UtcNow.AddDays(-90));
+        _ = CreateFile("two.zip", 2048, DateTime.UtcNow.AddDays(-90));
+        var deletionService = new RecordingSafeDeletionService();
+        var service = new InstallerCleanupService(_root, 30, deletionService);
+        var candidates = (await service.PreviewAsync()).ToArray();
+        var authorization = service.ConfirmRemoval([candidates[0]]);
+
+        var batch = await service.RemoveAsync(candidates, authorization);
+
+        Assert.All(batch.ItemResults, result => Assert.Equal(Models.SafeDeletionStatus.Rejected, result.Status));
+        Assert.Empty(deletionService.DeletedPaths);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_RejectsEligibleCandidateThatWasNotInCurrentPreview()
+    {
+        var file = CreateFile("unpreviewed.msi", 1024, DateTime.UtcNow.AddDays(-90));
+        var deletionService = new RecordingSafeDeletionService();
+        var service = new InstallerCleanupService(_root, 30, deletionService);
+        var info = new FileInfo(file);
+        var candidates = new[]
+        {
+            new Models.InstallerCleanupCandidate(
+                info.Name,
+                info.FullName,
+                "MSI installer",
+                info.Length,
+                new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero))
+        };
+        var authorization = service.ConfirmRemoval(candidates);
+
+        var batch = await service.RemoveAsync(candidates, authorization);
+
+        Assert.Equal(Models.SafeDeletionStatus.Rejected, Assert.Single(batch.ItemResults).Status);
+        Assert.Empty(deletionService.DeletedPaths);
     }
 
     public void Dispose()

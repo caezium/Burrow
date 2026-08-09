@@ -29,6 +29,12 @@ Current Windows-specific adaptations:
 - Cleanup is currently a guarded pending route in the WinUI preview. It does not claim a stable GUI preview/removal flow until Mole Windows exposes a safe non-interactive cleanup contract.
 - Purge now uses a Burrow-style non-interactive preview/removal flow built from the same Windows Mole project markers and artifact patterns because Mole Windows `mo purge` is an interactive selector and does not expose `--dry-run`.
 - Installers uses a Burrow-style preview/removal flow for old top-level Downloads installers and archives, mirroring Mole Windows `Clear-OldDownloads` rules because Mole Windows documents that there is no dedicated installer-file cleanup command yet.
+- Purge, old-installer cleanup, and uninstall-leftover removal share one fail-closed Windows path policy. Raw traversal, roots, UNC/device/NT paths, alternate data streams, protected roots, scope escapes, and any reparse point from the approved scope through the target are rejected before the Shell is invoked.
+- Native fallback removal is asynchronous and Recycle Bin-only. It uses Windows `IFileOperation` with `FOFX_RECYCLEONDELETE`, silent/no-error-UI flags, and early failure. A Shell failure is returned as `Failed`; there is no permanent-delete fallback.
+- Destructive service calls require an immutable authorization object bound to the operation ID and the exact selected candidate fingerprints. Every selected item must also belong to the latest completed preview. Purge rules/project markers, direct-Downloads installer rules plus preview metadata, and approved discovered uninstall leftovers are revalidated after confirmation and immediately before recycling.
+- Native deletion returns per-item `Recycled`, `AlreadyAbsent`, `Rejected`, `Failed`, or `Cancelled` dispositions and a batch outcome of `Success`, `PartialSuccess`, `Failed`, or `Cancelled`. Already-absent items are idempotent no-ops and never count as removed or freed bytes.
+- Cancellation stops future targets but does not interrupt an in-flight Shell operation; Burrow waits for that observable result, preserves all completed item results, then returns a cancelled batch. Determinate removal progress is monotonic and capped below 100% for partial/cancelled outcomes; preview scans remain indeterminate because their total is unknown.
+- Deletion receipts are appended to `%LOCALAPPDATA%\BurrowWin\deletion-receipts.jsonl` with operation correlation, original/canonical paths, expected/observed sizes, disposition, source flow, and failure reason. Windows Shell does not reliably expose the newly-created Recycle Bin item locator through this contract, so the exact recovery locator is explicitly recorded as unavailable rather than fabricated.
 - Optimize uses Mole `optimize --dry-run` for preview and requires explicit confirmation before real `mo optimize` changes.
 - Uninstall lists installed apps natively, auto-loads the inventory on first view, supports search plus size/name/source sorting, and launches vendor uninstallers only after confirmation because the current Mole uninstall command is interactive.
 - History and Activity are persisted locally and surfaced in the GUI and MCP/HTTP paths. Mole command executions, Windows uninstall actions, and BurrowWin native fallback preview/removal flows now write into the same operation history.
@@ -49,7 +55,7 @@ Current Windows-specific adaptations:
 
 - `dotnet build BurrowWin.csproj -p:Platform=x64 -nr:false -v:minimal` succeeds with 0 warnings and 0 errors.
 - `dotnet build Tests\BurrowWin.Tests\BurrowWin.Tests.csproj -nr:false -v:minimal` succeeds with 0 warnings and 0 errors.
-- The last Windows-host verification before the authenticated loopback changes passed 66 tests with 0 failures and 0 skipped tests. The expanded suite must be rerun in Windows CI before this evidence is refreshed.
+- The pre-BUR-10 baseline passed its then-current Windows test suite. BUR-10 and the authenticated-loopback work have since expanded the source to 137 xUnit cases (121 facts plus 16 inline theory cases); the exact build/test result must be taken from Windows CI, because neither change was implemented on a host with the .NET/Windows SDK.
 - Mole command history normalization is covered by `ExecuteCommandAsync_RecordsAnsiFreeHistorySummary`, including ANSI color removal, control character removal, and CLI icon placeholder removal.
 - HTTP runtime settings changes are covered by `HttpServerSettingsPlannerTests`, including no-op, start, stop, restart, and disabled-stays-disabled decisions.
 - `.\run-local.ps1 -NoBuild -SmokeTest -Restart -RequireHealth -TimeoutSeconds 45` starts the x64 Debug GUI, confirms the `BurrowWin` main window is visible, confirms `/health` returns `ok: true`, and writes startup diagnostics to `%LOCALAPPDATA%\BurrowWin\startup.log`.
@@ -77,7 +83,7 @@ Current Windows-specific adaptations:
 - Runtime smoke verified the x64 Debug app starts, authenticated requests to `http://127.0.0.1:9277/health`, `/snapshot`, and `/metrics?limit=2` return live local telemetry, and `Assets\Mcp\burrow-mcp-stdio.exe` reads the per-install credential and can call `burrow_snapshot`, `burrow_info`, `burrow_top_processes`, and `burrow_process_usage`.
 - Runtime smoke after the tray HUD/menu work launched `bin\x64\Debug\...\BurrowWin.exe` and confirmed `/health` returned `ok: true`, engine availability, and a fresh `latest_sample_at`.
 - Latest tray HUD screenshot smoke launched `bin\x64\Debug\...\BurrowWin.exe` with `BURROWWIN_SHOW_TRAY_HUD=1`, captured `artifacts\burrowwin-tray-hud-smoke.png`, and visually confirmed the HUD window, status cards, activity card, top CPU process rows, and quick navigation buttons render without clipping.
-- `.\scripts\build-release.ps1` restores, builds Release x64, runs the Windows test suite, publishes the portable WinUI payload, creates `Burrow-v0.1.0-preview.1-win-x64-setup.exe`, creates `Burrow-v0.1.0-preview.1-win-x64.zip`, writes `SHA256SUMS.txt`, writes WinGet manifests, and copies release docs into the payload.
+- `.\scripts\build-release.ps1` restores, builds Release x64, runs the current test suite, publishes the portable WinUI payload, creates `Burrow-v0.1.0-preview.1-win-x64-setup.exe`, creates `Burrow-v0.1.0-preview.1-win-x64.zip`, writes `SHA256SUMS.txt`, writes WinGet manifests, and copies release docs into the payload.
 - The generated installer and ZIP contain `BurrowWin.exe`, `Assets\Mole\mo.exe`, `Assets\Mcp\burrow-mcp-stdio.exe`, README, LICENSE, release notes, Windows alignment notes, and Mole gap notes.
 - The generated installer and ZIP hashes verify against `artifacts\release\SHA256SUMS.txt`.
 - The generated WinGet manifest targets `Caezium.Burrow`, package name `Burrow`, `InstallerType: inno`, `Scope: user`, x64 architecture, and the GitHub Release setup exe URL.
@@ -91,7 +97,8 @@ Current Windows-specific adaptations:
 - Move history storage closer to upstream Burrow's SQLite/WAL model or prove the JSONL store meets the same retention, pruning, and query requirements.
 - Broaden History screenshot/UI automation from the default rendered range to explicit range-switching interactions.
 - Replace Windows fallbacks with Mole JSON paths when the Mole windows branch exposes safe non-interactive contracts for status, analyze, uninstall, purge, and installer scans.
-- Keep hardening destructive operations through shared Recycle Bin deletion, strict path guards, cancellation, progress streaming, operation-center activity state, and explicit confirmation gates.
+- BUR-9 remains responsible for the currently pending Clean GUI apply flow; BUR-10 does not enable it or add any destructive MCP path.
+- A future Shell integration may add an exact Recycle Bin recovery locator only if Windows exposes one reliably for the completed operation; current receipts intentionally record it as unavailable.
 - Add pixel/interaction comparison for the Windows Burrow visual shell against the upstream reference screens, beyond the current route-level screenshot smoke.
 
 ## Completion criteria for this port

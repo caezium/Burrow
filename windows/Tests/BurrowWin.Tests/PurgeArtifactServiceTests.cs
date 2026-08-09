@@ -46,10 +46,11 @@ public sealed class PurgeArtifactServiceTests : IDisposable
         var service = new PurgeArtifactService(_root, Path.Combine(_root, "missing.txt"), deletionService);
         var projects = await service.PreviewAsync([_root]);
 
-        var results = await service.RemoveAsync(projects);
+        var authorization = service.ConfirmRemoval(projects);
+        var batch = await service.RemoveAsync(projects, authorization);
 
-        Assert.Single(results);
-        Assert.True(results[0].Succeeded);
+        var result = Assert.Single(batch.ItemResults);
+        Assert.Equal(Models.SafeDeletionStatus.Recycled, result.Status);
         Assert.True(Directory.Exists(Path.Combine(_root, "Project", "node_modules")));
         Assert.True(File.Exists(sourceFile));
         Assert.Single(deletionService.DeletedPaths);
@@ -79,6 +80,65 @@ public sealed class PurgeArtifactServiceTests : IDisposable
 
         var cargo = Assert.Single(projects, project => project.Name == "CargoProject");
         Assert.Contains(cargo.Artifacts, artifact => artifact.Name == "target");
+    }
+
+    [Fact]
+    public async Task RemoveAsync_RejectsArtifactChangedAfterPreview()
+    {
+        CreateFile(Path.Combine(_root, "Project", "package.json"), 2);
+        var artifactFile = Path.Combine(_root, "Project", "node_modules", "a.bin");
+        CreateFile(artifactFile, 10);
+        var deletionService = new RecordingSafeDeletionService();
+        var service = new PurgeArtifactService(_root, Path.Combine(_root, "missing.txt"), deletionService);
+        var projects = await service.PreviewAsync([_root]);
+        var authorization = service.ConfirmRemoval(projects);
+        await File.AppendAllTextAsync(artifactFile, "changed");
+
+        var batch = await service.RemoveAsync(projects, authorization);
+
+        Assert.Equal(Models.SafeDeletionStatus.Rejected, Assert.Single(batch.ItemResults).Status);
+        Assert.Empty(deletionService.DeletedPaths);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_RejectsWhenProjectMarkerDisappears()
+    {
+        var marker = Path.Combine(_root, "Project", "package.json");
+        CreateFile(marker, 2);
+        CreateFile(Path.Combine(_root, "Project", "node_modules", "a.bin"), 10);
+        var deletionService = new RecordingSafeDeletionService();
+        var service = new PurgeArtifactService(_root, Path.Combine(_root, "missing.txt"), deletionService);
+        var projects = await service.PreviewAsync([_root]);
+        var authorization = service.ConfirmRemoval(projects);
+        File.Delete(marker);
+
+        var batch = await service.RemoveAsync(projects, authorization);
+
+        Assert.Equal(Models.SafeDeletionStatus.Rejected, Assert.Single(batch.ItemResults).Status);
+        Assert.Empty(deletionService.DeletedPaths);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_RejectsEligibleArtifactThatWasNotInCurrentPreview()
+    {
+        var projectPath = Path.Combine(_root, "Project");
+        CreateFile(Path.Combine(projectPath, "package.json"), 2);
+        CreateFile(Path.Combine(projectPath, "node_modules", "a.bin"), 10);
+        var artifactPath = Path.Combine(projectPath, "node_modules");
+        var project = new Models.PurgeProjectCandidate(
+            "Project",
+            projectPath,
+            "package.json",
+            [new Models.PurgeArtifactCandidate("node_modules", artifactPath, "Directory", "JavaScript/Node.js", 10)]);
+        var deletionService = new RecordingSafeDeletionService();
+        var service = new PurgeArtifactService(_root, Path.Combine(_root, "missing.txt"), deletionService);
+        var projects = new[] { project };
+        var authorization = service.ConfirmRemoval(projects);
+
+        var batch = await service.RemoveAsync(projects, authorization);
+
+        Assert.Equal(Models.SafeDeletionStatus.Rejected, Assert.Single(batch.ItemResults).Status);
+        Assert.Empty(deletionService.DeletedPaths);
     }
 
     public void Dispose()

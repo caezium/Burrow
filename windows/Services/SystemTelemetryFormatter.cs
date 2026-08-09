@@ -42,4 +42,11 @@ public static class SystemTelemetryFormatter
     {
         return $"{Bytes(snapshot.DiskUsedBytes)} / {Bytes(snapshot.DiskTotalBytes)}";
     }
+
+    public static string GpuMetric(SystemTelemetrySnapshot snapshot)
+    {
+        return snapshot.EffectiveGpuUsagePercent is { } usagePercent
+            ? string.Create(CultureInfo.InvariantCulture, $"3D {usagePercent:0.0}%")
+            : "Unavailable";
+    }
 }

@@ -314,10 +314,11 @@ public partial class DashboardViewModel : ViewModelBase
             NetworkAdapterText = BuildNetworkEndpointText(snapshot);
             NetworkFooter =
                 $"↓ {SystemTelemetryFormatter.Rate(snapshot.NetworkReceivedBytesPerSecond)}  ↑ {SystemTelemetryFormatter.Rate(snapshot.NetworkSentBytesPerSecond)} · {NetworkAdapterText}";
-            GpuStatus = snapshot.GpuStatus;
-            GpuMetricText = string.Equals(snapshot.GpuStatus, "Unavailable", StringComparison.OrdinalIgnoreCase)
-                ? "-"
-                : snapshot.GpuStatus;
+            GpuStatus = SystemTelemetryFormatter.GpuMetric(snapshot);
+            GpuMetricText = GpuStatus;
+            GpuFooter = snapshot.IsGpuAvailable
+                ? "Windows GPU engine"
+                : snapshot.GpuUnavailableReason ?? "Windows GPU telemetry unavailable";
             CapturedAt = snapshot.CapturedAt.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
             CpuFooter = string.Create(
                 CultureInfo.InvariantCulture,
@@ -345,7 +346,7 @@ public partial class DashboardViewModel : ViewModelBase
             MemoryStatusChart = BuildChart(chartSamples, sample => sample.MemoryUsagePercent, 100, SystemTelemetryFormatter.Percent);
             (NetworkDownloadChart, NetworkUploadChart) = BuildNetworkCharts(chartSamples);
             NetworkStatusChart = NetworkDownloadChart;
-            GpuStatusChart = BuildChart(chartSamples, sample => ParseGpuPercent(sample.GpuStatus), 100, SystemTelemetryFormatter.Percent);
+            GpuStatusChart = BuildGpuChart(chartSamples);
             FanStatusChart = HistoryChartSeries.Empty("0 RPM", "avg 0 RPM");
 
             TelemetryHistorySummary = BuildTelemetryHistorySummary(recentSnapshots);
@@ -560,10 +561,28 @@ public partial class DashboardViewModel : ViewModelBase
         return values;
     }
 
-    private static double ParseGpuPercent(string gpuStatus)
+    private static HistoryChartSeries BuildGpuChart(IReadOnlyList<SystemTelemetrySnapshot> samples)
     {
-        var numeric = new string(gpuStatus.Where(character => char.IsDigit(character) || character == '.').ToArray());
-        return double.TryParse(numeric, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : 0;
+        var ordered = samples
+            .OrderBy(sample => sample.CapturedAt)
+            .TakeLast(12)
+            .ToArray();
+        var values = ordered
+            .Select(sample => sample.EffectiveGpuUsagePercent)
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToArray();
+
+        if (values.Length == 0)
+        {
+            return HistoryChartSeries.Empty("Unavailable", "avg unavailable");
+        }
+
+        var chart = BuildChartFromValues(values, 100, SystemTelemetryFormatter.Percent);
+        var latestText = ordered[^1].EffectiveGpuUsagePercent is { } latest
+            ? SystemTelemetryFormatter.Percent(latest)
+            : "Unavailable";
+        return new HistoryChartSeries(latestText, chart.AverageText, chart.Points);
     }
 
     private static string BuildUptimeText(DateTimeOffset capturedAt)

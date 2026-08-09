@@ -339,11 +339,26 @@ public sealed class LocalMcpServerServiceTests
             return Task.FromResult(new MoleCommandResult(0, "ok", string.Empty, false, TimeSpan.Zero));
         }
 
-        public Task<IReadOnlyList<LeftoverRemovalResult>> RemoveLeftoversAsync(
-            IEnumerable<LeftoverCandidate> leftovers,
+        public ConfirmedDeletionAuthorization ConfirmLeftoverRemoval(IReadOnlyList<LeftoverCandidate> leftovers)
+        {
+            return ConfirmedDeletionAuthorization.Confirm(
+                DestructiveFlow.UninstallLeftovers,
+                leftovers.Select(item => new DeletionCandidateDescriptor(
+                    item.Path,
+                    item.ApprovedScopeRoot,
+                    DestructiveFlow.UninstallLeftovers,
+                    item.Category,
+                    DeletionItemType.Directory,
+                    item.SizeBytes)));
+        }
+
+        public Task<DeletionBatchResult> RemoveLeftoversAsync(
+            IReadOnlyList<LeftoverCandidate> leftovers,
+            ConfirmedDeletionAuthorization authorization,
+            IProgress<DeletionProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<LeftoverRemovalResult>>([]);
+            return Task.FromResult(EmptyBatch(leftovers.Count, authorization.OperationId));
         }
     }
 
@@ -381,11 +396,27 @@ public sealed class LocalMcpServerServiceTests
             return Task.FromResult(_projects);
         }
 
-        public Task<IReadOnlyList<LeftoverRemovalResult>> RemoveAsync(
+        public ConfirmedDeletionAuthorization ConfirmRemoval(IReadOnlyList<PurgeProjectCandidate> projects)
+        {
+            return ConfirmedDeletionAuthorization.Confirm(
+                DestructiveFlow.Purge,
+                projects.SelectMany(project => project.Artifacts.Select(artifact =>
+                    new DeletionCandidateDescriptor(
+                        artifact.Path,
+                        project.Path,
+                        DestructiveFlow.Purge,
+                        artifact.Type,
+                        DeletionItemType.Directory,
+                        artifact.SizeBytes))));
+        }
+
+        public Task<DeletionBatchResult> RemoveAsync(
             IReadOnlyList<PurgeProjectCandidate> projects,
+            ConfirmedDeletionAuthorization authorization,
+            IProgress<DeletionProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<LeftoverRemovalResult>>([]);
+            return Task.FromResult(EmptyBatch(projects.Sum(project => project.ArtifactCount), authorization.OperationId));
         }
     }
 
@@ -415,13 +446,47 @@ public sealed class LocalMcpServerServiceTests
             return Task.FromResult(_candidates);
         }
 
-        public Task<IReadOnlyList<LeftoverRemovalResult>> RemoveAsync(
+        public ConfirmedDeletionAuthorization ConfirmRemoval(IReadOnlyList<InstallerCleanupCandidate> candidates)
+        {
+            return ConfirmedDeletionAuthorization.Confirm(
+                DestructiveFlow.Installer,
+                candidates.Select(candidate => new DeletionCandidateDescriptor(
+                    candidate.Path,
+                    Path.GetDirectoryName(candidate.Path)!,
+                    DestructiveFlow.Installer,
+                    candidate.Kind,
+                    DeletionItemType.File,
+                    candidate.SizeBytes,
+                    candidate.LastWriteTime)));
+        }
+
+        public Task<DeletionBatchResult> RemoveAsync(
             IReadOnlyList<InstallerCleanupCandidate> candidates,
+            ConfirmedDeletionAuthorization authorization,
+            IProgress<DeletionProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<LeftoverRemovalResult>>([]);
+            return Task.FromResult(EmptyBatch(candidates.Count, authorization.OperationId));
         }
     }
+
+    private static DeletionBatchResult EmptyBatch(int total, string operationId) =>
+        new(
+            [],
+            total,
+            0,
+            0,
+            0,
+            0,
+            total,
+            false,
+            0,
+            0,
+            null,
+            null,
+            DeletionBatchOutcome.Failed,
+            0,
+            operationId);
 
     private sealed class FakeOperationHistoryService : IOperationHistoryService
     {

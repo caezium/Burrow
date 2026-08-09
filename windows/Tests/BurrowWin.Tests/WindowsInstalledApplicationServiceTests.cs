@@ -125,8 +125,10 @@ public sealed class WindowsInstalledApplicationServiceTests
     [Fact]
     public async Task RemoveLeftoversAsync_RoutesSafeDirectoryThroughDeletionService()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), "BurrowWinTests", Guid.NewGuid().ToString("N"));
-        var target = Path.Combine(tempRoot, "DemoApp");
+        var appName = $"BurrowWinTest{Guid.NewGuid():N}";
+        var target = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            appName);
         Directory.CreateDirectory(target);
         await File.WriteAllTextAsync(Path.Combine(target, "cache.bin"), "data");
 
@@ -134,20 +136,66 @@ public sealed class WindowsInstalledApplicationServiceTests
         {
             var deletionService = new RecordingSafeDeletionService();
             var service = new WindowsInstalledApplicationService(deletionService);
+            var app = new InstalledApplication(
+                appName,
+                appName,
+                null,
+                null,
+                null,
+                null,
+                "Test",
+                0);
+            var preview = await service.PreviewLeftoversAsync(app);
+            var candidate = Assert.Single(preview, item => item.Path == target);
+            candidate.IsSelected = true;
+            var candidates = new[] { candidate };
+            var authorization = service.ConfirmLeftoverRemoval(candidates);
 
-            var results = await service.RemoveLeftoversAsync([new("Test", target, 4)]);
+            var batch = await service.RemoveLeftoversAsync(candidates, authorization);
 
-            var result = Assert.Single(results);
-            Assert.True(result.Succeeded, result.Message);
+            var result = Assert.Single(batch.ItemResults);
+            Assert.Equal(SafeDeletionStatus.Recycled, result.Status);
             Assert.Single(deletionService.DeletedPaths);
             Assert.Equal(Path.GetFullPath(target), deletionService.DeletedPaths[0]);
         }
         finally
         {
-            if (Directory.Exists(tempRoot))
+            if (Directory.Exists(target))
             {
-                Directory.Delete(tempRoot, recursive: true);
+                Directory.Delete(target, recursive: true);
             }
+        }
+    }
+
+    [Fact]
+    public async Task RemoveLeftoversAsync_RejectsCandidateThatWasNotDiscoveredByPreview()
+    {
+        var target = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            $"BurrowUnapproved{Guid.NewGuid():N}");
+        Directory.CreateDirectory(target);
+        await File.WriteAllTextAsync(Path.Combine(target, "cache.bin"), "data");
+
+        try
+        {
+            var deletionService = new RecordingSafeDeletionService();
+            var service = new WindowsInstalledApplicationService(deletionService);
+            var candidate = new LeftoverCandidate(
+                "Local app data",
+                target,
+                4,
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+            var candidates = new[] { candidate };
+            var authorization = service.ConfirmLeftoverRemoval(candidates);
+
+            var batch = await service.RemoveLeftoversAsync(candidates, authorization);
+
+            Assert.Equal(SafeDeletionStatus.Rejected, Assert.Single(batch.ItemResults).Status);
+            Assert.Empty(deletionService.DeletedPaths);
+        }
+        finally
+        {
+            Directory.Delete(target, recursive: true);
         }
     }
 }
