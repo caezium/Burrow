@@ -159,33 +159,75 @@ final class MCPConductorToolsTests: XCTestCase {
         }
     }
 
-    // MARK: - Degrade, never throw (no conductor in the test bundle)
+    // MARK: - Degrade, never throw (build that bundled no conductor)
 
-    /// The test bundle ships no Resources/burrow, so `isAvailable` is false
-    /// and the call must come back as a JSON error object naming the
-    /// conductor — never a throw, never a crash, and no process spawned.
+    /// A build without Resources/burrow must answer with a JSON error object naming the
+    /// conductor — never a throw, never a crash, and no process spawned. The fixture chooses
+    /// that state explicitly; before it, the test merely inherited whatever the build staged.
     func testNet_withoutBundledConductor_returnsJSONErrorMentioningConductor() throws {
-        XCTAssertFalse(BurrowConductor.isAvailable,
-                       "test bundles must not ship a conductor; this test depends on that")
-        let json = try catalog.call(name: "burrow_net", arguments: [:])
-        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
-        let error = try XCTUnwrap(obj["error"] as? String)
-        XCTAssertTrue(error.localizedCaseInsensitiveContains("conductor")
-                        || error.localizedCaseInsensitiveContains("burrow"),
-                      "the error must tell the agent the conductor is missing, got: \(error)")
+        try ConductorBundleFixture.withConductor(present: false) {
+            let json = try catalog.call(name: "burrow_net", arguments: [:])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            let error = try XCTUnwrap(obj["error"] as? String)
+            XCTAssertTrue(error.localizedCaseInsensitiveContains("conductor")
+                            || error.localizedCaseInsensitiveContains("burrow"),
+                          "the error must tell the agent the conductor is missing, got: \(error)")
+        }
     }
 
     func testSentinel_withoutBundledConductor_returnsJSONErrorNotThrow() throws {
-        let json = try catalog.call(name: "burrow_sentinel", arguments: [:])
-        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
-        XCTAssertNotNil(obj["error"])
+        try ConductorBundleFixture.withConductor(present: false) {
+            let json = try catalog.call(name: "burrow_sentinel", arguments: [:])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertNotNil(obj["error"])
+        }
     }
 
     /// Valid arguments + missing conductor must still degrade (the
     /// argument check passes, then the availability check reports).
     func testSlimCheck_withBinaryButNoConductor_returnsJSONError() throws {
-        let json = try catalog.call(name: "burrow_slim_check", arguments: ["binary": "/usr/bin/true"])
-        let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
-        XCTAssertNotNil(obj["error"])
+        try ConductorBundleFixture.withConductor(present: false) {
+            let json = try catalog.call(name: "burrow_slim_check", arguments: ["binary": "/usr/bin/true"])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertNotNil(obj["error"])
+        }
+    }
+
+    // MARK: - The other branch: a build that DID bundle one
+
+    /// The complement nothing covered. Argument validation runs BEFORE the availability check, so
+    /// on a build that shipped the conductor a missing argument still surfaces as `badArguments`
+    /// — the caller is told what it got wrong instead of being handed a conductor error, and the
+    /// tool doesn't spawn anything to discover what the schema already knew.
+    func testSlimCheck_withConductorBundled_stillRejectsBadArgumentsWithoutSpawning() throws {
+        try ConductorBundleFixture.withConductor(present: true) {
+            XCTAssertThrowsError(try catalog.call(name: "burrow_slim_check", arguments: [:])) { error in
+                let described = String(describing: error)
+                XCTAssertTrue(described.contains("binary"),
+                              "the caller must be told which argument is missing, got: \(described)")
+                XCTAssertFalse(described.localizedCaseInsensitiveContains("conductor"),
+                               "a missing argument must not be reported as a missing conductor")
+            }
+        }
+    }
+
+    /// Resolution is by executable bit, not by name: a non-executable file called `burrow`
+    /// (a stray artifact, a partially-staged copy) must not read as a usable conductor.
+    func testNonExecutableFileNamedBurrowDoesNotCountAsBundled() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("burrow-nonexec-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: dir.appendingPathComponent("burrow").path,
+                                       contents: Data("not a binary".utf8),
+                                       attributes: [.posixPermissions: 0o644])
+        let saved = BurrowConductor.resourceDirectory
+        BurrowConductor.resourceDirectory = { dir }
+        defer {
+            BurrowConductor.resourceDirectory = saved
+            try? FileManager.default.removeItem(at: dir)
+        }
+
+        XCTAssertNil(BurrowConductor.executableURL())
+        XCTAssertFalse(BurrowConductor.isAvailable)
     }
 }

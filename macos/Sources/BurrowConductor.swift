@@ -20,10 +20,21 @@ enum BurrowConductor {
 
     // MARK: - Resolution
 
+    /// Where the bundled sidecars are looked up. Production reads the app bundle; tests point it
+    /// at a directory they control.
+    ///
+    /// This is a seam rather than a direct `Bundle.main` read because the "no conductor bundled"
+    /// behaviour has to be *chosen* by a test, not inherited from whatever the build happened to
+    /// stage. Resources/burrow only exists when the vendor/burrow-cli submodule is checked out —
+    /// which a developer must do for the Network, Orphans and Photos panes to work at all — so
+    /// tests that simply assumed it was absent went red on a correctly-configured checkout while
+    /// passing on CI, where actions/checkout fetches no submodules.
+    static var resourceDirectory: () -> URL? = { Bundle.main.resourceURL }
+
     /// The bundled conductor binary, or nil if this build didn't ship one — callers then fall
     /// back to the direct engine (MoEngine).
     static func executableURL() -> URL? {
-        guard let res = Bundle.main.resourceURL else { return nil }
+        guard let res = resourceDirectory() else { return nil }
         let burrow = res.appendingPathComponent("burrow")
         return FileManager.default.isExecutableFile(atPath: burrow.path) ? burrow : nil
     }
@@ -31,7 +42,7 @@ enum BurrowConductor {
     /// The bundled engine directory the conductor should target (Resources/engine, from
     /// bundle-engine.sh), or nil if the engine isn't bundled either.
     static func engineDir() -> URL? {
-        guard let res = Bundle.main.resourceURL else { return nil }
+        guard let res = resourceDirectory() else { return nil }
         let dir = res.appendingPathComponent("engine")
         var isDir: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir)
@@ -43,7 +54,7 @@ enum BurrowConductor {
     /// back to a `$BURROW_FCLONES`/PATH fclones, and if none exists the Duplicates pane shows
     /// "fclones not found".
     static func fclonesURL() -> URL? {
-        guard let res = Bundle.main.resourceURL else { return nil }
+        guard let res = resourceDirectory() else { return nil }
         let fclones = res.appendingPathComponent("fclones")
         return FileManager.default.isExecutableFile(atPath: fclones.path) ? fclones : nil
     }
