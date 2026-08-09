@@ -400,7 +400,7 @@ struct HelperAwareProcessPort: ProcessPort {
                             continuation.finish()
                             return
                         }
-                        reviewedPaths = plan.items.map(\.identity.path)
+                        reviewedPaths = plan.orderedReviewedPaths()
                     } else {
                         reviewedPaths = []
                     }

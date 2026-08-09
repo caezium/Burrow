@@ -377,7 +377,12 @@ final class HelperOperationRunner: @unchecked Sendable {
                                 operationID: operationID, ownerUID: invokingUser.uid,
                                 environment: invokingUser.childEnvironment,
                                 emit: emit)
-            if status != 0 { last = status }
+            // For a reviewed clean, `find`'s status is NOT the verdict — the
+            // postcondition below is. `-delete` returns true even when it
+            // removed nothing, and it returns FALSE for an entry that a
+            // deeper delete already took away, so believing it reports a
+            // fully successful clean as "exit 1".
+            if status != 0 && !operation.needsReviewedPaths { last = status }
             // A reviewed clean is a list of independent entries: one that
             // can't be removed must not abandon the ones after it. Every other
             // operation is a sequence where a failed step invalidates the rest.
@@ -681,9 +686,12 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         // how a clean that freed nothing renders as "Done — caches cleared".
         if request.operation.needsReviewedPaths {
             let survivors = HelperReviewedCleanup.survivors(among: reviewedPaths)
+            // Authoritative, in both directions: still-present entries fail the
+            // run, and an entry that is gone is a success no matter what `find`
+            // said on its way out.
+            code = survivors.isEmpty ? 0 : 1
             if !survivors.isEmpty {
                 helperTrace("reviewed cleanup left \(survivors.count) of \(reviewedPaths.count) entries")
-                if code == 0 { code = 1 }
             }
         }
         helperTrace("operation finished with status \(code)")

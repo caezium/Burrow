@@ -70,16 +70,30 @@ struct CleanupExecutionPlan: Sendable, Equatable {
         }
     }
 
-    /// The shell-quoted reviewed paths, deepest-first, for the delete loop.
-    /// Ordering is cosmetic here — each entry is deleted as a whole tree — but
-    /// it keeps the transcript readable when nested caches are both ticked.
-    func quotedReviewedPaths() -> [String] {
+    /// The reviewed paths, deepest-first.
+    ///
+    /// Not cosmetic. The engine's export list routinely contains a parent and
+    /// its own children as separate entries — `~/Library/Caches` alongside
+    /// `~/Library/Caches/GeoServices` — because the writer collapses some
+    /// categories to a parent while others name leaves. Deleting the parent
+    /// first makes every nested entry vanish before its turn, and `find` then
+    /// exits nonzero with "No such file or directory" for work that actually
+    /// succeeded. Deepest-first removes the children before the parent, so
+    /// each entry still exists when it is reached.
+    ///
+    /// Both elevation routes MUST use this order; the helper path skipping it
+    /// is exactly how a fully successful clean reported "exit 1".
+    func orderedReviewedPaths() -> [String] {
         func depth(_ path: String) -> Int { path.filter { $0 == "/" }.count }
-        let ordered = items.map(\.identity.path).sorted { lhs, rhs in
+        return items.map(\.identity.path).sorted { lhs, rhs in
             let l = depth(lhs), r = depth(rhs)
             return l == r ? lhs < rhs : l > r
         }
-        return ordered.map { MoleCLI.shellQuote($0) }
+    }
+
+    /// The shell-quoted form of `orderedReviewedPaths()`, for the delete loop.
+    func quotedReviewedPaths() -> [String] {
+        orderedReviewedPaths().map { MoleCLI.shellQuote($0) }
     }
 
     /// The complete irreversible cleanup: boundary checks, then the deletes.
@@ -150,7 +164,11 @@ struct CleanupSnapshot: Sendable, Equatable {
             case .noApprovedRoots: return "No canonical cleanup roots are available."
             case .malformedPath(let p): return "The cleanup preview contained a malformed path: \(p)"
             case .symbolicLink(let p): return "The cleanup preview contained a symbolic link: \(p)"
-            case .outsideApprovedRoots(let p): return "The cleanup preview escaped its approved roots: \(p)"
+            case .outsideApprovedRoots(let p):
+                // Naming the offending path first: the old wording read as
+                // though the listed path were the approved root, which sent
+                // the reader looking in exactly the wrong place.
+                return "\(p) is outside the folders Burrow is allowed to clean."
             case .unexpectedVolume(let p): return "The cleanup preview crossed onto an unexpected volume: \(p)"
             case .missingPath(let p): return "A reviewed cleanup item no longer exists: \(p)"
             case .selectionMismatch: return "The cleanup selection no longer matches the reviewed preview."
@@ -167,6 +185,25 @@ struct CleanupSnapshot: Sendable, Equatable {
     let list: CleanList
     let approvedRoots: [PinnedFileIdentity]
     let items: [CleanupExecutionPlan.Item]
+    /// Preview entries this snapshot refused, and why.
+    ///
+    /// These exist because the engine's export list collapses siblings to
+    /// their common PARENT: a category that removes two or more loose files
+    /// sitting directly inside an approved root records the root itself. The
+    /// `.DS_Store` sweep does exactly that — `find "$HOME" -name .DS_Store`
+    /// over a home folder with more than one match collapses to `$HOME` — so
+    /// accepting the entry would mean deleting the user's home directory.
+    ///
+    /// Refusing it is right. Refusing the WHOLE preview because of it was not:
+    /// one 471 KB entry blocked 1.79 GB of legitimate cleanup, and the Clean
+    /// button vanished with no way to proceed. Entries are independent, so a
+    /// refusal is now per-entry and reported rather than fatal.
+    let skipped: [SkippedEntry]
+
+    struct SkippedEntry: Equatable, Sendable {
+        let path: String
+        let reason: String
+    }
 
     static func capture(list: CleanList,
                         approvedRootURLs: [URL],
@@ -181,27 +218,53 @@ struct CleanupSnapshot: Sendable, Equatable {
 
         var seen = Set<String>()
         var captured: [CleanupExecutionPlan.Item] = []
+        var skipped: [SkippedEntry] = []
+
+        // Every refusal below is per-entry. Skipping can only ever REMOVE
+        // something from the delete set, so failing this way is strictly safer
+        // than the previous behaviour, which was to abandon the whole plan.
+        func refuse(_ path: String, _ error: SnapshotError) {
+            skipped.append(SkippedEntry(path: path,
+                                        reason: error.errorDescription ?? "Refused."))
+        }
+
         for item in list.categories.flatMap(\.items) {
             let raw = item.path
+            // Structural corruption is still FATAL. A relative path, a NUL, a
+            // newline or a JSON fragment is not something the engine's export
+            // writer can produce, so the list isn't the list — and a preview
+            // that isn't trustworthy shouldn't be partially executed. Every
+            // check below this one is about an entry being unrepresentable,
+            // which is an ordinary fact about a well-formed list.
             guard !raw.isEmpty, raw.hasPrefix("/"),
                   !raw.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
                   !raw.hasPrefix("{"), !raw.hasPrefix("[") else {
                 throw SnapshotError.malformedPath(raw)
             }
             var lst = stat()
-            guard lstat(raw, &lst) == 0 else { throw SnapshotError.missingPath(raw) }
-            guard (lst.st_mode & S_IFMT) != S_IFLNK else { throw SnapshotError.symbolicLink(raw) }
+            guard lstat(raw, &lst) == 0 else { refuse(raw, .missingPath(raw)); continue }
+            guard (lst.st_mode & S_IFMT) != S_IFLNK else {
+                refuse(raw, .symbolicLink(raw)); continue
+            }
             guard let canonical = InvokingUserIdentity.canonicalPath(raw), canonical == raw else {
-                throw SnapshotError.symbolicLink(raw)
+                refuse(raw, .symbolicLink(raw)); continue
             }
             guard seen.insert(canonical).inserted else { continue }
-            let identity = try PinnedFileIdentity.capture(canonical)
-            _ = try approvedRoot(for: canonical, device: identity.device, roots: roots)
+            guard let identity = try? PinnedFileIdentity.capture(canonical) else {
+                refuse(canonical, .missingPath(canonical)); continue
+            }
+            do {
+                _ = try approvedRoot(for: canonical, device: identity.device, roots: roots)
+            } catch let error as SnapshotError {
+                refuse(canonical, error); continue
+            }
             captured.append(.init(identity: identity))
         }
+        // Only a preview with NOTHING usable is fatal. Anything else stays
+        // cleanable, minus the entries named in `skipped`.
         guard !captured.isEmpty else { throw SnapshotError.selectionMismatch }
         return Self(id: UUID(), createdAt: now, expiresAt: now.addingTimeInterval(lifetime),
-                    list: list, approvedRoots: roots, items: captured)
+                    list: list, approvedRoots: roots, items: captured, skipped: skipped)
     }
 
     static func approvedRoot(for path: String, device: UInt64,

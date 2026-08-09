@@ -130,7 +130,30 @@ struct CleanView: View {
     private var idleHero: some View {
         ToolHero(tool: .clean, title: "Clean", subtitle: Tool.clean.tagline) {
             PillButton(title: "Scan your Mac") { startDry() }
+            // The direct path this screen has always been documented to
+            // offer. Scanning first is the better habit, so it keeps the
+            // filled pill — but making review the ONLY way through means
+            // anyone who already trusts the engine has to sit through a
+            // scan they don't want.
+            // Goes straight to the clean — no confirmation sheet. The
+            // elevation prompt is still ahead of any deletion, so this is
+            // one deliberate press away from a system auth gate rather
+            // than a bare one-click delete.
+            PillButton(title: "Clean now", filled: false) { startDirectClean() }
+                .help(NSLocalizedString("Runs the engine's own cache selection without a per-item review.", comment: ""))
         }
+    }
+
+    private func startDirectClean() {
+        trashResult = nil
+        screen = .hero
+        realFlow.reset()
+        // No cleanup plan: the engine chooses its own targets, so this routes
+        // to the plain `clean` operation rather than the reviewed one.
+        realFlow.start(ToolOperation(
+            label: NSLocalizedString("Cleaning caches", comment: ""),
+            arguments: ["clean"], elevated: true,
+            reduce: { parseTaskReport($0) }, notifyOnEnd: true))
     }
 
     // MARK: - Scanning / result hero (2.1)
@@ -238,6 +261,13 @@ struct CleanView: View {
         }
         reviewList = list
         reviewLocked = CleanLock.lockedPaths(in: list, running: CleanLock.runningApps())
+        // Entries the snapshot refused are shown locked, with the reason, and
+        // cannot be ticked. They used to take the whole preview down with
+        // them: one unrepresentable entry meant no snapshot, no Clean button,
+        // and an alert that blamed the preview as a whole.
+        for entry in reviewSnapshot?.skipped ?? [] {
+            reviewLocked[entry.path] = .notCleanable(reason: entry.reason)
+        }
         screen = .review
     }
 
@@ -270,8 +300,11 @@ struct CleanView: View {
     // MARK: - The real run (permanent mode)
 
     private func runRealClean(_ selection: CleanSelection, snapshot: CleanupSnapshot) {
+        // Refused entries can never reach a plan — `plan(selectedPaths:)`
+        // rejects any path it didn't capture, which would fail the whole run.
+        let refused = Set(snapshot.skipped.map(\.path))
         let paths = selection.list.categories.flatMap(\.items).map(\.path)
-            .filter { selection.isTicked($0) }
+            .filter { selection.isTicked($0) && !refused.contains($0) }
         let plan: CleanupExecutionPlan
         do {
             plan = try snapshot.plan(selectedPaths: paths)
@@ -298,8 +331,9 @@ struct CleanView: View {
     /// space frees when Trash empties, and the run isn't in `mo history`
     /// — it lands in Burrow's Activity log instead.
     private func trashTicked(_ selection: CleanSelection, snapshot: CleanupSnapshot) {
+        let refused = Set(snapshot.skipped.map(\.path))
         let paths = selection.list.categories.flatMap(\.items).map(\.path)
-            .filter { selection.isTicked($0) }
+            .filter { selection.isTicked($0) && !refused.contains($0) }
         // Refuse anything that didn't come from the dry-run enumeration.
         assert(Set(paths).isSubset(of: Set(selection.list.categories.flatMap(\.items).map(\.path))))
         let total = selection.selectedBytes
