@@ -262,6 +262,9 @@ struct CleanReviewView: View {
         case .systemBusy:
             Chip(text: NSLocalizedString("System busy", comment: "clean badge"), color: Brand.textTertiary)
                 .help(NSLocalizedString("A system service is using this path right now.", comment: ""))
+        case .notCleanable(let reason):
+            Chip(text: NSLocalizedString("Can't clean", comment: "clean badge"), color: Brand.amber)
+                .help(reason)
         }
     }
 

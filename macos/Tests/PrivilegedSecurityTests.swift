@@ -192,6 +192,9 @@ final class CleanupAuthorizationTests: XCTestCase {
                 list: list([malformed]), approvedRootURLs: [root]), malformed)
         }
 
+        // A well-formed entry that simply can't be represented is SKIPPED, not
+        // fatal — see testOneUnrepresentableEntryDoesNotKillTheWholePreview.
+        // Alone in a list it leaves nothing to clean, which is still an error.
         let outside = FileManager.default.temporaryDirectory
             .appendingPathComponent("outside-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: false)
@@ -205,6 +208,81 @@ final class CleanupAuthorizationTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
         XCTAssertThrowsError(try CleanupSnapshot.capture(list: list([link.path]),
                                                          approvedRootURLs: [root]))
+    }
+
+    /// The bug that broke Clean for essentially everyone.
+    ///
+    /// The engine's export writer collapses siblings to their common PARENT,
+    /// so a category removing two or more loose files directly inside an
+    /// approved root records the ROOT. `find "$HOME" -name .DS_Store` over a
+    /// home folder with more than one match writes `/Users/<you>`, and almost
+    /// every Mac has that. Accepting it would have meant deleting the home
+    /// directory, so refusing is right — but refusing the whole preview took
+    /// the Clean button with it and blocked gigabytes of valid cleanup.
+    func testOneUnrepresentableEntryDoesNotKillTheWholePreview() throws {
+        let good = root.appendingPathComponent("cache")
+        try FileManager.default.createDirectory(at: good, withIntermediateDirectories: false)
+
+        // `root.path` is the approved root itself — exactly what the collapse
+        // produces for a home-directory sweep.
+        let snapshot = try CleanupSnapshot.capture(list: list([root.path, good.path]),
+                                                   approvedRootURLs: [root])
+
+        XCTAssertEqual(snapshot.items.map(\.identity.path), [good.path],
+                       "the usable entry survives")
+        XCTAssertEqual(snapshot.skipped.map(\.path), [root.path],
+                       "the root-collapsed entry is refused and reported")
+
+        // And it must never reach a plan: this is the difference between
+        // deleting a cache directory and deleting someone's home folder.
+        let plan = try snapshot.plan(selectedPaths: [good.path])
+        XCTAssertEqual(plan.items.map(\.identity.path), [good.path])
+        XCTAssertThrowsError(try snapshot.plan(selectedPaths: [root.path, good.path]),
+                             "a refused entry cannot be selected back in")
+    }
+
+    /// Skipping must not become a way to launder a corrupt list. A path the
+    /// engine's writer cannot produce means the list isn't the engine's, and
+    /// partially executing it would be the wrong call.
+    func testStructurallyCorruptPreviewsAreStillFatalRatherThanSkipped() {
+        for corrupt in ["relative/cache", "{\"path\":\"/tmp/x\"}", "/tmp/bad\npath"] {
+            XCTAssertThrowsError(try CleanupSnapshot.capture(
+                list: list([corrupt, root.appendingPathComponent("cache").path]),
+                approvedRootURLs: [root]), corrupt)
+        }
+    }
+
+    /// Why a fully successful clean reported "exit 1".
+    ///
+    /// The engine's export list routinely names a parent AND its own children
+    /// as separate entries. Delete the parent first and every nested entry is
+    /// already gone when its turn comes, so `find` exits nonzero with "No such
+    /// file or directory" for work that succeeded. Deepest-first means each
+    /// entry still exists when it is reached — and both elevation routes have
+    /// to use this order, since the helper path skipping it is what produced
+    /// the failure.
+    func testNestedEntriesAreOrderedDeepestFirstSoNoneVanishesBeforeItsTurn() throws {
+        let caches = root.appendingPathComponent("Caches")
+        let nested = caches.appendingPathComponent("GeoServices")
+        let deeper = nested.appendingPathComponent("tiles")
+        try FileManager.default.createDirectory(at: deeper, withIntermediateDirectories: true)
+
+        // Parent first in the list, exactly as the engine emits it.
+        let snapshot = try CleanupSnapshot.capture(
+            list: list([caches.path, nested.path, deeper.path]), approvedRootURLs: [root])
+        let plan = try snapshot.plan(
+            selectedPaths: [caches.path, nested.path, deeper.path])
+
+        XCTAssertEqual(plan.orderedReviewedPaths(), [deeper.path, nested.path, caches.path],
+                       "a parent must never be deleted before its own listed children")
+        // The shell the osascript route runs is built from the same order.
+        // Only the delete loop matters — the boundary checks ahead of it stat
+        // every root and item, so searching the whole script finds those first.
+        let shell = plan.irreversibleCleanupShell()
+        let loop = String(shell[try XCTUnwrap(shell.range(of: "for p in")).lowerBound...])
+        let deepIndex = try XCTUnwrap(loop.range(of: deeper.path)).lowerBound
+        let parentIndex = try XCTUnwrap(loop.range(of: caches.path + "'")).lowerBound
+        XCTAssertLessThan(deepIndex, parentIndex)
     }
 
     func testApprovedRootRejectsUnexpectedVolumeIdentity() throws {

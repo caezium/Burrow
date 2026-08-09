@@ -18,6 +18,10 @@ struct CleanSelection {
     enum LockReason: Equatable {
         case appOpen(appName: String)
         case systemBusy
+        /// The snapshot refused this entry, so it can never reach a plan.
+        /// Locked rather than hidden: the preview counted it, and silently
+        /// dropping a line the user was just shown reads as a miscount.
+        case notCleanable(reason: String)
     }
 
     enum CategoryState { case all, mixed, none }
