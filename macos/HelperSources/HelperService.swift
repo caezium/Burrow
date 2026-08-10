@@ -432,9 +432,16 @@ final class HelperOperationRunner: @unchecked Sendable {
 
         // One reader per pipe, both draining to EOF before the exit status is
         // read, so no output can be lost between the last write and the reap.
-        let splitter = HelperLineSplitter()
+        //
+        // A splitter EACH, because it carries the partial tail of an incomplete
+        // line. Sharing one across both readers meant two threads mutating that
+        // buffer concurrently — a data race, and even when the timing was kind
+        // it spliced a half-written stdout line onto the front of the next
+        // stderr chunk, producing lines that never appeared on either stream.
+        let splitters = [HelperLineSplitter(), HelperLineSplitter()]
         let group = DispatchGroup()
-        for handle in [outPipe.fileHandleForReading, errPipe.fileHandleForReading] {
+        for (handle, splitter) in zip([outPipe.fileHandleForReading, errPipe.fileHandleForReading],
+                                      splitters) {
             group.enter()
             DispatchQueue.global(qos: .utility).async {
                 // Bytes, not strings, across the pipe boundary. A read can end
@@ -449,7 +456,9 @@ final class HelperOperationRunner: @unchecked Sendable {
             }
         }
         group.wait()
-        for line in splitter.flush() { emit(line) }
+        for splitter in splitters {
+            for line in splitter.flush() { emit(line) }
+        }
 
         process.waitUntilExit()
         return process.terminationStatus

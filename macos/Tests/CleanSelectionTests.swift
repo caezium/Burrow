@@ -94,4 +94,26 @@ final class CleanSelectionTests: XCTestCase {
     func testLockedSummary_nilWhenNothingLocked() {
         XCTAssertNil(CleanSelection(list: makeList(), locked: [:]).lockedSummary)
     }
+
+    /// The line says "Close X to clean another N". An entry the snapshot refused
+    /// is not something closing an app recovers, so it must not appear in the
+    /// count OR the byte total — and when it is the only locked entry there is
+    /// no advice to give, so the header falls back to the neutral message
+    /// instead of naming no app at all.
+    func testLockedSummary_ignoresEntriesNoAppIsHolding() {
+        let refused = CleanSelection(
+            list: makeList(),
+            locked: ["/u/Library/Caches/net.imput.helium": .notCleanable(reason: "outside the approved roots")])
+        XCTAssertNil(refused.lockedSummary)
+
+        let mixed = CleanSelection(
+            list: makeList(),
+            locked: ["/u/Library/Caches/net.imput.helium": .appOpen(appName: "Helium"),
+                     "/u/.npm/_cacache": .notCleanable(reason: "outside the approved roots")])
+        let summary = mixed.lockedSummary
+        XCTAssertEqual(summary?.appNames, ["Helium"])
+        XCTAssertEqual(summary?.itemCount, 1, "the refused entry must not inflate the count")
+        XCTAssertEqual(summary?.bytes, CleanList.parseSize("400MB"),
+                       "nor the bytes closing Helium would actually free")
+    }
 }

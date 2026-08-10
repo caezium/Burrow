@@ -437,6 +437,13 @@ enum DiagnosticPrivacy {
             "secret", "sk-live", "token=", "token:", "x-api-key",
         ]
         guard !sensitiveMarkers.contains(where: lowered.contains) else { return nil }
+        // A credential NAME followed by `:` or `=`, however it is spaced or
+        // spelled. The literal markers above only catch `token=`/`token:`
+        // written tight, so `access_token = abc123` and `api key=abc123` both
+        // walked straight through into a diagnostic that gets uploaded.
+        guard value.range(
+            of: #"(?i)(api[ _-]?key|access[ _-]?token|auth[ _-]?token|refresh[ _-]?token|token|secret|password)\s*[:=]"#,
+            options: .regularExpression) == nil else { return nil }
         let allowed = CharacterSet.alphanumerics.union(
             CharacterSet(charactersIn: " _.$:+<>()[]{}?!,@#&'`~-=")
         )

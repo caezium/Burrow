@@ -469,4 +469,27 @@ final class StatusItemGuardFalsePositiveTests: XCTestCase {
         XCTAssertNil(LaunchRecovery.reason(environment: environment(build: "25F84"),
                                            previous: previous))
     }
+
+    // MARK: - Credential-shaped labels
+
+    /// The literal marker list matched `token=` only when written tight, so a
+    /// space either side of the separator — or inside the name — was enough to
+    /// carry a live credential into an uploaded diagnostic.
+    func testSafeDiagnosticLabel_rejectsCredentialsWhateverTheSpacing() {
+        for value in ["access_token = abc123", "api key=abc123", "API_KEY : abc123",
+                      "auth-token=abc123", "refresh token = abc123", "token=abc123",
+                      "Secret = hunter2", "password:hunter2"] {
+            XCTAssertNil(DiagnosticPrivacy.safeDiagnosticLabel(value),
+                         "\(value) must never reach a diagnostic")
+        }
+    }
+
+    /// And it still keeps the symbol labels it exists to preserve — a rule that
+    /// rejects everything would be just as useless as one that rejects nothing.
+    func testSafeDiagnosticLabel_keepsOrdinarySymbolNames() {
+        for value in ["NSStatusItem", "-[BurrowApp applicationDidFinishLaunching:]",
+                      "Swift.String.init(cString:)", "main"] {
+            XCTAssertEqual(DiagnosticPrivacy.safeDiagnosticLabel(value), value)
+        }
+    }
 }

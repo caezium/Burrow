@@ -650,12 +650,24 @@ final class HelperReplayGuard: @unchecked Sendable {
         return seen.count
     }
 
-    /// `true` the first time an ID is presented, `false` for every repeat.
+    /// The hard memory ceiling. Refusing to forget a still-replayable ID is the
+    /// right call, but it cannot mean growing without limit inside a process
+    /// running as root: a caller sending fresh IDs would otherwise enlarge the
+    /// set for the whole retention window. Past this many live entries the
+    /// guard stops admitting instead of stops remembering, so the failure is a
+    /// refused request rather than a forgotten ID that could then be replayed.
+    private var ceiling: Int { capacity * 16 }
+
+    /// `true` the first time an ID is presented, `false` for every repeat —
+    /// and `false` once the set is full, which fails the request closed.
     func admit(_ operationID: String) -> Bool {
         lock.lock(); defer { lock.unlock() }
         let moment = now()
         evictExpired(before: moment.addingTimeInterval(-retention))
         guard !seen.contains(operationID) else { return false }
+        // Checked AFTER eviction, so a full set means genuinely fresh entries
+        // rather than accumulated expired ones.
+        guard seen.count < ceiling else { return false }
         seen.insert(operationID)
         order.append((operationID, moment))
         return true

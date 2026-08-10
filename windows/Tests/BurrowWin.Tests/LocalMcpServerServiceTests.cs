@@ -20,7 +20,7 @@ public sealed class LocalMcpServerServiceTests
         Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, host: null));
         Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, origin: "http://localhost:3000"));
         Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, origin: "https://example.com"));
-        Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, secFetchSite: "cross-site"));
+        Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, hasFetchMetadata: true));
         Assert.Equal(LocalRequestDecision.Forbidden,
             EvaluateRequest(token, remoteAddress: IPAddress.Parse("192.168.1.10")));
     }
@@ -196,7 +196,7 @@ public sealed class LocalMcpServerServiceTests
         IPAddress? remoteAddress = null,
         string? host = "127.0.0.1:9277",
         string? origin = null,
-        string? secFetchSite = null,
+        bool hasFetchMetadata = false,
         bool includeCredential = true,
         string? authorization = null,
         string path = "/health",
@@ -212,7 +212,7 @@ public sealed class LocalMcpServerServiceTests
             remoteAddress ?? IPAddress.Loopback,
             host,
             origin,
-            secFetchSite,
+            hasFetchMetadata,
             authorization,
             expectedToken,
             LocalMcpServerService.DefaultPort,
