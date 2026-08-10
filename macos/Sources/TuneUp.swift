@@ -19,8 +19,8 @@ enum TuneUp {
         var requiresIrreversibleConsent: Bool { includesClean }
         var notice: String {
             includesClean
-                ? "Clean caches & junk permanently deletes the reviewed cache files. They do not go to the Trash and cannot be recovered. Each elevated step asks for your password separately."
-                : "Maintenance does not run the cache-deletion step. Each elevated step asks for your password separately."
+                ? NSLocalizedString("Clean caches & junk permanently deletes the reviewed cache files. They do not go to the Trash and cannot be recovered. Each elevated step asks for your password separately.", comment: "tune-up notice")
+                : NSLocalizedString("Maintenance does not run the cache-deletion step. Each elevated step asks for your password separately.", comment: "tune-up notice")
         }
 
         func permitsRun(irreversibleConsent: Bool) -> Bool {

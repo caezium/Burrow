@@ -591,7 +591,6 @@ final class UpdatesModel: ObservableObject {
             var results: [AppUpdateCheckResult] = []
             await withTaskGroup(of: AppUpdateCheckResult.self) { group in
                 var iterator = items.makeIterator()
-                var inFlight = 0
                 func enqueue(_ item: AppUpdateItem) {
                     group.addTask {
                         await Self.checkWithRetry(
@@ -602,7 +601,13 @@ final class UpdatesModel: ObservableObject {
                         )
                     }
                 }
-                while inFlight < 6, let next = iterator.next() { enqueue(next); inFlight += 1 }
+                // Prime the window; the `for await` below keeps exactly one
+                // task in flight per completion, so the count never needed
+                // tracking after this point.
+                for _ in 0..<6 {
+                    guard let next = iterator.next() else { break }
+                    enqueue(next)
+                }
                 for await result in group {
                     results.append(result)
                     if let next = iterator.next() { enqueue(next) }
@@ -904,6 +909,11 @@ final class UpdatesModel: ObservableObject {
     func cancel(_ item: AppUpdateItem) {
         guard !updateAllRunning, updateAllTask == nil else { return }
         cancelAppTask(for: item.id)
+        // Cancelling the task does NOT resume a checked continuation, so a
+        // Sparkle session left registered here would keep every
+        // `sparkleSessions.isEmpty` gate shut for the rest of the launch.
+        // Its onFinish handler does the removal and the single resume.
+        sparkleSessions[item.id]?.session.cancelSession()
         stagedElectronUpdates.removeValue(forKey: item.id)?.discard()
         phases[item.id] = .failed(.cancelled)
     }

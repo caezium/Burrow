@@ -201,8 +201,14 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         case .path(let p): exe = p
         }
         guard let executable = exe else {
+            // Elevation resolves ONLY the sealed copy inside the app bundle —
+            // trustedExecutable() deliberately dropped the Homebrew fallback,
+            // so naming Homebrew here sent people to the one location that
+            // could never satisfy this. A missing bundled engine is fixed by
+            // reinstalling the app, which is what installCommand documents.
             state = .finished(.failed(op.elevated
-                ? "mo not found in a trusted location (Homebrew)" : "mo not found"))
+                ? "The bundled engine is missing. Reinstall Burrow to restore it: \(MoleCLI.installCommand)"
+                : "mo not found"))
             return
         }
 
@@ -576,15 +582,19 @@ struct SystemProcessPort: ProcessPort {
 
             do {
                 try t.run()
-                if !spec.elevated {
-                    // Process inherits duplicated write descriptors during
-                    // spawn; the parent must close its copies so the readers
-                    // observe EOF after the child exits. Keeping these handles
-                    // open can strand the stream forever after a timeout even
-                    // though terminate() successfully killed the child.
-                    try? outPipe.fileHandleForWriting.close()
-                    try? errPipe.fileHandleForWriting.close()
-                }
+                // Process inherits duplicated write descriptors during spawn;
+                // the parent must close its copies so the readers observe EOF
+                // after the child exits. Keeping these handles open can strand
+                // the stream forever after a timeout even though terminate()
+                // successfully killed the child.
+                //
+                // Both routes, not just the unelevated one: the elevated branch
+                // hands the SAME two pipes to osascript, and its termination
+                // handler ends with readDataToEndOfFile on each — a read that
+                // only returns once every write descriptor is gone, this
+                // parent's included.
+                try? outPipe.fileHandleForWriting.close()
+                try? errPipe.fileHandleForWriting.close()
                 // Armed only after a successful spawn (a suspended source
                 // must never be cancelled/deallocated).
                 if let timeout = spec.timeout {

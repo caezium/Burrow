@@ -202,8 +202,13 @@ final class HelperContractTests: XCTestCase {
     /// which put a command string in front of a root shell parser.
     func testSteps_neverInvokeAShell() {
         let shells = ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/env"]
+        // Give the reviewed clean its path list, as the sibling argv test does.
+        // Without one it resolves to no steps, so the `find` step — the only
+        // one built from caller-supplied data, and thus the one most worth
+        // checking for a shell — was never actually examined here.
+        let reviewedPaths = ["/Users/henry/Library/Caches/example"]
         for operation in HelperOperation.allCases {
-            for step in operation.steps(interface: "en0") {
+            for step in operation.steps(interface: "en0", reviewedPaths: reviewedPaths) {
                 if case .system(let path) = step.executable {
                     XCTAssertFalse(shells.contains(path), "\(operation) must not run a shell")
                     XCTAssertTrue(HelperSystemTool.all.contains(path),
@@ -424,13 +429,36 @@ final class HelperContractTests: XCTestCase {
     /// `capacity` fresh IDs and the ID you wanted to replay is forgotten, which
     /// turns the memory bound into the replay bypass it was meant to prevent.
     func testReplayGuard_floodOfFreshIDsCannotEvictAStillReplayableID() {
-        let guardian = HelperReplayGuard(capacity: 3)
+        // Capacity 8 still makes the flood 8x the count bound, which is the
+        // point; it just stays clear of the hard ceiling exercised below, so
+        // this test fails only for the reason it is about.
+        let guardian = HelperReplayGuard(capacity: 8)
         let victim = UUID().uuidString
         XCTAssertTrue(guardian.admit(victim))
         for _ in 0..<64 { XCTAssertTrue(guardian.admit(UUID().uuidString)) }
 
         XCTAssertFalse(guardian.admit(victim),
                        "an ID inside the retention window must never become replayable")
+    }
+
+    /// Age-based eviction alone leaves the set unbounded: every ID inside the
+    /// retention window is kept, so a caller sending fresh IDs grows a root
+    /// process's memory for an hour. The ceiling stops ADMITTING rather than
+    /// starting to forget — a refused request is recoverable, a forgotten ID
+    /// is replayable.
+    func testReplayGuard_failsClosedAtTheMemoryCeilingRatherThanForgetting() {
+        let guardian = HelperReplayGuard(capacity: 2)   // ceiling = 32
+        let victim = UUID().uuidString
+        XCTAssertTrue(guardian.admit(victim))
+        while guardian.count < 32 {
+            XCTAssertTrue(guardian.admit(UUID().uuidString))
+        }
+
+        XCTAssertFalse(guardian.admit(UUID().uuidString),
+                       "a full guard must refuse new work, not make room")
+        XCTAssertFalse(guardian.admit(victim),
+                       "and must still refuse the replay it was holding")
+        XCTAssertEqual(guardian.count, 32, "a refused ID is not recorded")
     }
 
     /// Memory is still bounded, just by time rather than by count: entries are

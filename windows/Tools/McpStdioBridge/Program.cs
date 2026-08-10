@@ -15,13 +15,36 @@ internal static class Program
         WriteIndented = false
     };
 
+    /// <summary>Only an http/https URI addressed to this machine may receive the
+    /// stored credential. Uri.IsLoopback covers localhost, 127.0.0.0/8 and ::1.</summary>
+    private static bool IsLocalMcpEndpoint(string? value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return false;
+        }
+        return uri.IsLoopback;
+    }
+
     private static async Task<int> Main()
     {
         var stored = ReadConnectionSettings();
         var endpoint = Environment.GetEnvironmentVariable("BURROWWIN_MCP_ENDPOINT");
-        if (string.IsNullOrWhiteSpace(endpoint))
+        if (string.IsNullOrWhiteSpace(endpoint) || !IsLocalMcpEndpoint(endpoint))
         {
             endpoint = stored.Endpoint ?? DefaultEndpoint;
+        }
+        // The stored value gets the same treatment: whatever this ends up
+        // being, the local bearer token below is attached to every request
+        // sent to it, so an endpoint that is not loopback would hand Burrow's
+        // MCP credential to whoever set it. Fall back rather than trust it.
+        if (!IsLocalMcpEndpoint(endpoint))
+        {
+            endpoint = DefaultEndpoint;
         }
         var authToken = Environment.GetEnvironmentVariable("BURROWWIN_MCP_TOKEN");
         if (string.IsNullOrWhiteSpace(authToken))

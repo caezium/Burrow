@@ -421,6 +421,11 @@ final class CleanupAuthorizationTests: XCTestCase {
     }
 
     func testIrreversibleCleanupContinuesPastOneFailingEntryAndReportsFailure() throws {
+        // The failure this test needs is a permission denial, and root has no
+        // permissions to deny — as uid 0 the "undeletable" entry deletes fine
+        // and the test would fail for a reason that isn't a defect.
+        try XCTSkipIf(getuid() == 0, "the blocked entry is only blocked for a non-root user")
+
         let good = root.appendingPathComponent("removable")
         let blocked = root.appendingPathComponent("blocked")
         let locked = blocked.appendingPathComponent("locked")

@@ -124,6 +124,7 @@ gh secret set MACOS_CERT_PASSWORD --repo caezium/Burrow
 gh secret set MACOS_SIGN_IDENTITY --repo caezium/Burrow
 gh secret set AC_API_KEY_ID --repo caezium/Burrow
 gh secret set AC_API_ISSUER_ID --repo caezium/Burrow
+gh secret set SENTRY_AUTH_TOKEN --repo caezium/Burrow
 gh secret set SPARKLE_ED_PRIVATE_KEY --repo caezium/Burrow \
   < /absolute/path/to/Burrow-Sparkle-Ed25519.key
 ```
@@ -131,6 +132,10 @@ gh secret set SPARKLE_ED_PRIVATE_KEY --repo caezium/Burrow \
 `TAP_PAT` is also required. It should remain the existing fine-grained token
 scoped only to `caezium/homebrew-tap`, with repository **Contents: Read and
 write** permission.
+
+`SENTRY_AUTH_TOKEN` is required by `sentry-issues.yml`, which files deduped
+GitHub issues from Sentry. Without it that workflow warns and does nothing
+rather than failing, so a missing value is easy to miss.
 
 The required names are:
 
@@ -142,6 +147,7 @@ The required names are:
 - `AC_API_KEY_P8`
 - `SPARKLE_ED_PRIVATE_KEY`
 - `TAP_PAT`
+- `SENTRY_AUTH_TOKEN`
 
 `MACOS_SIGN_IDENTITY` is the full output name, including the team ID:
 `Developer ID Application: Name (TEAMID)`.
@@ -150,7 +156,7 @@ Confirm only the names and timestamps, never their values:
 
 ```bash
 gh secret list --app actions --repo caezium/Burrow \
-  | grep -E '^(MACOS_|AC_API_|SPARKLE_|TAP_PAT)'
+  | grep -E '^(MACOS_|AC_API_|SPARKLE_|TAP_PAT|SENTRY_AUTH_TOKEN)'
 ```
 
 After creating or rotating `TAP_PAT`, run the manual credential check before

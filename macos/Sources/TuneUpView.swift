@@ -408,8 +408,22 @@ struct TuneUpView: View {
         guard let snap = model.snapshot else { return }
         var steps: [SafeStep] = []
         if includeClean, !snap.cleanableText.isEmpty {
-            guard let pendingCleanupPlan, pendingCleanupPlan.validateForLaunch() else { return }
-            steps.append(.clean(pendingCleanupPlan))
+            if let pendingCleanupPlan, pendingCleanupPlan.validateForLaunch() {
+                steps.append(.clean(pendingCleanupPlan))
+            } else {
+                // The plan went stale between the review sheet and here. Say so
+                // — returning silently left the user pressing Run and watching
+                // nothing happen — and refuse only the CLEAN: optimize has no
+                // dependency on this plan, so aborting the whole run would
+                // withhold maintenance that is still perfectly safe to do.
+                let alert = NSAlert()
+                alert.messageText = NSLocalizedString("The cleanup preview can't be authorized", comment: "")
+                alert.informativeText = NSLocalizedString(
+                    "Nothing will be removed until you rescan. Any other maintenance you picked still runs.",
+                    comment: "")
+                alert.alertStyle = .warning
+                alert.runModalQuiet()
+            }
         }
         if includeOptimize, !snap.optimizeAreas.isEmpty { steps.append(.optimize) }
         guard !steps.isEmpty else { return }

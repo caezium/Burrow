@@ -258,7 +258,7 @@ public sealed class LocalMcpServerService : BackgroundService
             context.Request.RemoteEndPoint?.Address,
             context.Request.UserHostName,
             context.Request.Headers["Origin"] ?? context.Request.Headers["Referer"],
-            context.Request.Headers["Sec-Fetch-Site"],
+            HasFetchMetadata(context.Request.Headers),
             context.Request.Headers["Authorization"],
             _settingsService.Current.HttpServerAuthToken,
             _activePort,
@@ -1382,11 +1382,26 @@ public sealed class LocalMcpServerService : BackgroundService
         response.Close();
     }
 
+    /// <summary>True when the request carries any Sec-Fetch-* header, i.e. a
+    /// browser built it. The values are set by the user agent and cannot be
+    /// forged by page script, so their mere presence is the signal.</summary>
+    internal static bool HasFetchMetadata(System.Collections.Specialized.NameValueCollection headers)
+    {
+        foreach (var key in headers.AllKeys)
+        {
+            if (key is not null && key.StartsWith("Sec-Fetch-", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     internal static LocalRequestDecision EvaluateRequest(
         IPAddress? remoteAddress,
         string? host,
         string? origin,
-        string? secFetchSite,
+        bool hasFetchMetadata,
         string? authorization,
         string expectedToken,
         int expectedPort,
@@ -1395,7 +1410,11 @@ public sealed class LocalMcpServerService : BackgroundService
         string? contentType,
         long contentLength)
     {
-        if (!IsLoopback(remoteAddress) || !IsAllowedHost(host, expectedPort) || origin is not null || secFetchSite is not null)
+        // ANY fetch-metadata header means a browser built this request. Only
+        // Sec-Fetch-Site was checked before, so a request carrying just
+        // Sec-Fetch-Mode or Sec-Fetch-Dest reached a loopback server that any
+        // local process — including a page's helper — can address.
+        if (!IsLoopback(remoteAddress) || !IsAllowedHost(host, expectedPort) || origin is not null || hasFetchMetadata)
         {
             return LocalRequestDecision.Forbidden;
         }

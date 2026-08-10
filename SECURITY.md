@@ -108,7 +108,7 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
     bundle identifier and signing team via the XPC connection's code-signing
     requirement, so another local process cannot reach it or use it to raise
     a credential prompt.
-  - **It runs only your engine, or those four Apple tools.** The engine it
+  - **It runs only your engine, or those five Apple tools.** The engine it
     executes is the copy inside the app bundle, resolved relative to the
     helper's own path, never through `PATH` or an environment variable. Before
     running anything the helper copies the bundle below a fresh root-only
