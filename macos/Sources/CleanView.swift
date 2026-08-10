@@ -317,10 +317,34 @@ struct CleanView: View {
             return
         }
         screen = .hero
+        // `find -delete` succeeds SILENTLY — it writes nothing at all — so
+        // parsing its output produced an empty report: no items, no bytes, no
+        // done-banner. The reviewed clean deleted exactly what was ticked and
+        // then looked like it had done nothing, which is indistinguishable
+        // from a failure. Build the report from the plan we just authorized;
+        // the run only reaches `.done` when every planned path is gone, which
+        // is precisely what makes this safe to state as fact.
+        let cleaned = selection.list.categories
+            .map { category in
+                (category.name, category.items.filter { paths.contains($0.path) })
+            }
+            .filter { !$0.1.isEmpty }
+        let cleanedBytes = cleaned.flatMap(\.1).reduce(Int64(0)) { $0 + $1.sizeBytes }
+        let cleanedCount = cleaned.reduce(0) { $0 + $1.1.count }
         realFlow.start(ToolOperation(
             label: NSLocalizedString("Cleaning reviewed caches", comment: ""),
             executable: .path("/usr/bin/find"), arguments: [], elevated: true,
-            cleanupPlan: plan, reduce: { parseTaskReport($0) }, notifyOnEnd: true))
+            cleanupPlan: plan,
+            reduce: { _ in
+                (groups: cleaned.map { name, items in
+                    TaskGroup(title: name,
+                              items: items.map { TaskItem(marker: .ok, text: $0.path) })
+                 },
+                 summary: TaskSummary(space: Fmt.bytes(cleanedBytes),
+                                      items: "\(cleanedCount)",
+                                      categories: "\(cleaned.count)"))
+            },
+            notifyOnEnd: true))
     }
 
     // MARK: - Trash mode
