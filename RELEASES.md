@@ -1,56 +1,44 @@
-# Burrow 0.12.0
+# Burrow 0.13.0
 
-Burrow's admin operations can now authenticate with **Touch ID**.
+Headings that rendered as empty boxes now render as text, and Burrow's MCP
+server speaks the 2026-07-28 spec — without dropping any older client.
 
-Until now every elevated action went through macOS's classic authorization
-dialog, which is password-only by construction — it never offers Touch ID, and
-it can't be cancelled safely. This release adds an optional signed helper that
-replaces that path.
+This release is mostly repair. The visible half fixes three things that were
+easy to hit; the larger half is security and reliability work on the paths that
+delete files and run as root, which you should never notice.
 
 ## Added
-- **Touch ID for admin operations.** Install the helper in **Settings ▸
-  Advanced ▸ Privileged helper** and Clean, Optimize, the admin scan previews,
-  Flush DNS, Renew DHCP, and the Login Items list all authenticate through the
-  system's normal prompt — which offers Touch ID where the hardware has it, and
-  falls back to your password everywhere else.
-- **The Login Items list is now complete.** Reading it needs root, so
-  previously macOS raised its own unexplained "sfltool wants to make changes"
-  prompt and still returned only a partial list. Through the helper it's one
-  prompt you recognise, and the full list.
-
-## What the helper can and cannot do
-
-It is strictly opt-in, takes its own one-time macOS approval, and grants no
-standing access — you authenticate for each operation you start.
-
-It accepts seven fixed operations and builds every command line itself. There
-is no field in its API for a path, a shell string, or an executable, so it
-cannot be asked to run anything else. It runs the engine sealed inside the
-signed app plus four Apple tools by absolute path, each as a separate process
-with no shell involved. Only Burrow can talk to it: callers are pinned to the
-app's bundle identifier and signing team by the system.
-
-One honest caveat: the credential from your authentication stays valid for ten
-seconds, because it has to survive the hop from the app to the helper. A second
-operation begun inside that window won't prompt again. Full detail in
-[SECURITY.md](https://github.com/caezium/Burrow/blob/main/SECURITY.md).
-
-Not installing it changes nothing — every operation keeps working exactly as it
-does today, through the existing password prompt. You can remove the helper at
-any time from Settings, or from System Settings ▸ General ▸ Login Items &
-Extensions.
+- **The scan tells you when it's done.** A cache scan can run for minutes and
+  used to end by just sitting there with a number. It now posts a completion
+  notification saying what it found, honouring **Settings ▸ Notify when long
+  operations finish**.
+- **Two more agent tools.** `burrow_anomalies` and `burrow_agent_audit` join the
+  MCP surface.
 
 ## Changed
-- **Flush DNS no longer runs a root shell.** It previously elevated
-  `/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"`, handing a
-  command string to a shell running as root. It's now two separate processes
-  with fixed arguments.
-- **Removed the "Touch ID for sudo" setting.** It configured `pam_tid` for
-  terminal `sudo` and never affected Burrow's own admin prompts, which is what
-  people expected it to do. Those prompts are what the privileged helper now
-  covers. Nothing already configured on your Mac is changed by removing it; to
-  undo it yourself, run `mo touchid disable`.
+- **MCP now speaks the 2026-07-28 revision**, including its task and
+  cancellation semantics. Older clients are unaffected: 2025-11-25 through
+  2024-11-05 are still served, and a client that skips `initialize` entirely
+  still works.
 
 ## Fixed
-- A failed elevated run could report "Done — caches cleared" when nothing had
-  actually run. Failures now say so.
+- **Headings rendered as empty boxes.** Geist and Geist Mono shipped as single
+  variable fonts with only Regular registered, so every bold and semibold
+  heading asked macOS to derive a weight at render time — and sometimes it
+  produced no glyphs at all. Burrow now ships real static faces for every weight
+  it uses.
+- **One bad exit no longer disables the menu bar** until macOS updates.
+- **The window can be made smaller again** — its minimum height is derived from
+  the sidebar rather than hardcoded.
+- **"Stop after current" now responds.** The stop was always queued, but nothing
+  on screen said so until the in-flight update finished.
+- **The clean review no longer promises what closing an app can't deliver.** An
+  entry the scan refused was counted in "Close X to clean another N" even though
+  no app was holding it — with no app named at all when it was the only locked
+  entry.
+- **A cancelled app update no longer blocks later update checks** for the rest of
+  the session.
+- **Root operations can't interleave their output.** stdout and stderr shared one
+  line buffer, which could splice half a line from one stream onto the other.
+- **Update archives are size-capped** before they're kept or expanded.
+- **Diagnostics reject more credential shapes** before anything is uploaded.

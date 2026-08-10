@@ -15,8 +15,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     # The only app/build version declarations. The generated Info.plist keeps
     # these build-setting references, and Xcode expands them in the product.
-    MARKETING_VERSION: "0.12.0"
-    CURRENT_PROJECT_VERSION: "24"
+    MARKETING_VERSION: "0.13.0"
+    CURRENT_PROJECT_VERSION: "25"
     ENABLE_HARDENED_RUNTIME: YES
     # Xcode leaves signing off for reproducible builds. Local scripts apply a
     # coherent ad-hoc signature; the tag workflow applies Developer ID after
