@@ -155,30 +155,49 @@ final class BurrowEnvelopeTests: XCTestCase {
     /// at its last guard — so the assertion held for a reason unrelated to the switch, and would
     /// have kept holding had the default flipped either way.
     func testStreamOverride_withBundledConductor_routesThroughItByDefault() {
-        UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor")
-        ConductorBundleFixture.withConductor(present: true) {
-            let override = BurrowConductor.streamOverride(moArgs: ["clean"], elevated: false)
-            XCTAssertEqual(override?.arguments, ["clean", "--apply", "--stream"])
-            XCTAssertEqual(URL(fileURLWithPath: override?.executable ?? "").lastPathComponent, "burrow")
+        withStreamSwitch(nil) {
+            ConductorBundleFixture.withConductor(present: true) {
+                let override = BurrowConductor.streamOverride(moArgs: ["clean"], elevated: false)
+                XCTAssertEqual(override?.arguments, ["clean", "--apply", "--stream"])
+                XCTAssertEqual(URL(fileURLWithPath: override?.executable ?? "").lastPathComponent, "burrow")
+            }
         }
     }
 
     /// The documented kill-switch has to actually kill it.
     func testStreamOverride_killSwitchKeepsDirectEngineEvenWithConductorBundled() {
-        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
-        ConductorBundleFixture.withConductor(present: true) {
-            XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"], elevated: false))
+        withStreamSwitch(false) {
+            ConductorBundleFixture.withConductor(present: true) {
+                XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"], elevated: false))
+            }
         }
     }
 
     func testStreamOverride_elevatedAlwaysDirect() {
-        UserDefaults.standard.set(true, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
         // Elevated runs (osascript, fresh env) stay on mo even with the switch on — and this is
         // only meaningful on a build that HAS a conductor to be tempted by.
-        ConductorBundleFixture.withConductor(present: true) {
-            XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"], elevated: true))
+        withStreamSwitch(true) {
+            ConductorBundleFixture.withConductor(present: true) {
+                XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"], elevated: true))
+            }
         }
+    }
+
+    /// Put the switch in a chosen state and put it back exactly as it was.
+    ///
+    /// These tests run against `UserDefaults.standard` for the real app domain,
+    /// so removing the key outright would erase a kill-switch the developer had
+    /// genuinely set — restoring the prior value, absent or not, keeps the suite
+    /// from editing anyone's configuration.
+    private func withStreamSwitch(_ value: Bool?, _ body: () -> Void) {
+        let key = "BurrowStreamViaConductor"
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        if let value { UserDefaults.standard.set(value, forKey: key) }
+        else { UserDefaults.standard.removeObject(forKey: key) }
+        body()
     }
 }

@@ -201,11 +201,13 @@ final class MCPConductorToolsTests: XCTestCase {
     /// tool doesn't spawn anything to discover what the schema already knew.
     func testSlimCheck_withConductorBundled_stillRejectsBadArgumentsWithoutSpawning() throws {
         try ConductorBundleFixture.withConductor(present: true) {
-            XCTAssertThrowsError(try catalog.call(name: "burrow_slim_check", arguments: [:])) { error in
-                let described = String(describing: error)
-                XCTAssertTrue(described.contains("binary"),
-                              "the caller must be told which argument is missing, got: \(described)")
-                XCTAssertFalse(described.localizedCaseInsensitiveContains("conductor"),
+            XCTAssertThrowsError(try catalog.call(name: "burrow_slim_check", arguments: [:])) { err in
+                guard case MCPToolError.badArguments(let message) = err else {
+                    return XCTFail("expected .badArguments, got \(err)")
+                }
+                XCTAssertTrue(message.contains("binary"),
+                              "the caller must be told which argument is missing, got: \(message)")
+                XCTAssertFalse(message.localizedCaseInsensitiveContains("conductor"),
                                "a missing argument must not be reported as a missing conductor")
             }
         }
@@ -217,9 +219,11 @@ final class MCPConductorToolsTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("burrow-nonexec-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: dir.appendingPathComponent("burrow").path,
-                                       contents: Data("not a binary".utf8),
-                                       attributes: [.posixPermissions: 0o644])
+        XCTAssertTrue(
+            FileManager.default.createFile(atPath: dir.appendingPathComponent("burrow").path,
+                                           contents: Data("not a binary".utf8),
+                                           attributes: [.posixPermissions: 0o644]),
+            "the fixture must actually stage the file, or the assertions below prove nothing")
         let saved = BurrowConductor.resourceDirectory
         BurrowConductor.resourceDirectory = { dir }
         defer {
