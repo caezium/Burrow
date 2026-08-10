@@ -42,6 +42,17 @@ final class ExternalSparkleUpdateSession: NSObject, SPUUpdaterDelegate {
         )
     }
 
+    /// Abandon a session the user cancelled, settling it through the SAME
+    /// finishOnce path every other exit uses — so the awaiting continuation
+    /// resumes exactly once and the caller's bookkeeping is cleared by the
+    /// existing onFinish handler. Without this, cancelling left the
+    /// continuation suspended forever: the task was cancelled but a checked
+    /// continuation is not resumed by cancellation, so the session stayed
+    /// registered and every `sparkleSessions.isEmpty` gate stayed shut.
+    func cancelSession() {
+        finishOnce()
+    }
+
     func begin() -> UpdateFailure? {
         transition(.checking)
         do {

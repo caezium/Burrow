@@ -114,8 +114,19 @@ final class UpdateWorkflowTests: XCTestCase {
         }
 
         XCTAssertNotEqual(first, second)
-        XCTAssertFalse(first.lastPathComponent.contains("UUID().uuidString"))
-        XCTAssertFalse(second.lastPathComponent.contains("UUID().uuidString"))
+        // These used to assert the name did not contain the literal source text
+        // "UUID().uuidString", which no filesystem path could ever contain — so
+        // they passed no matter what create() produced. Assert the real mkdtemp
+        // shape instead: the fixed prefix, and six substituted template
+        // characters with no X left unreplaced.
+        for url in [first, second] {
+            let name = url.lastPathComponent
+            XCTAssertTrue(name.hasPrefix("BurrowUpdate."),
+                          "unexpected staging name: \(name)")
+            let suffix = name.dropFirst("BurrowUpdate.".count)
+            XCTAssertEqual(suffix.count, 6, "mkdtemp substitutes exactly the six Xs: \(name)")
+            XCTAssertFalse(suffix.contains("X"), "an unsubstituted template leaked: \(name)")
+        }
         var firstStat = stat()
         var secondStat = stat()
         XCTAssertEqual(lstat(first.path, &firstStat), 0)

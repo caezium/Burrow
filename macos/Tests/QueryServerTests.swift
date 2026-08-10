@@ -84,24 +84,28 @@ final class QueryServerTests: XCTestCase {
     private func request(_ target: String,
                          method: String = "GET",
                          host: String? = "127.0.0.1:9277",
-                         credential: String? = "test-only-query-credential",
+                         credential: String? = nil,
+                         omitCredential: Bool = false,
                          extraHeaders: [String] = []) -> String {
         var lines = ["\(method) \(target) HTTP/1.1"]
         if let host { lines.append("Host: \(host)") }
-        if let credential { lines.append("Authorization: Bearer \(credential)") }
+        // nil means "the valid token", derived from the one symbol rather than
+        // a second copy of the literal that could drift out of step with it.
+        // Sending NO Authorization header is now spelled omitCredential: true.
+        if !omitCredential { lines.append("Authorization: Bearer \(credential ?? token)") }
         lines.append(contentsOf: extraHeaders)
         return lines.joined(separator: "\r\n") + "\r\n\r\n"
     }
 
     func testRoute_requiresValidBearerCredential() {
-        let missing = server.route(request("/health", credential: nil))
+        let missing = server.route(request("/health", omitCredential: true))
         XCTAssertEqual(missing.statusCode, 401)
         XCTAssertFalse(missing.body.contains("\"ok\":true"))
 
         let wrong = server.route(request("/health", credential: "wrong"))
         XCTAssertEqual(wrong.statusCode, 401)
 
-        let queryStringLeak = server.route(request("/health?token=\(token)", credential: nil))
+        let queryStringLeak = server.route(request("/health?token=\(token)", omitCredential: true))
         XCTAssertEqual(queryStringLeak.statusCode, 401,
                        "credentials in URLs must not bypass the Authorization header gate")
 

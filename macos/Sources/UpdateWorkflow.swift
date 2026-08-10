@@ -372,17 +372,16 @@ struct BundleUpdateIdentity: Equatable, Sendable {
               let staticCode else { return nil }
         // Validate every architecture in a universal app. Checking only the
         // host architecture could otherwise admit a tampered alternate slice.
-        let checkAllArchitectures = SecCSFlags(rawValue: 1 << 0)
+        let checkAllArchitectures = SecCSFlags(rawValue: kSecCSCheckAllArchitectures)
         // A requirement we could not build is treated as "refuse", never as
         // "skip the check" — the nil-requirement call is the weak one.
         let valid = appleAnchoredRequirement.map {
             SecStaticCodeCheckValidity(staticCode, checkAllArchitectures, $0) == errSecSuccess
         } ?? false
         var information: CFDictionary?
-        let signingInformation: UInt32 = 0x2
         guard SecCodeCopySigningInformation(
             staticCode,
-            SecCSFlags(rawValue: signingInformation),
+            SecCSFlags(rawValue: kSecCSSigningInformation),
             &information
         ) == errSecSuccess,
         let values = information as? [String: Any],
@@ -641,6 +640,12 @@ enum ElectronPostReplacementDecision: Equatable, Sendable {
 }
 
 enum ElectronReplacementInstaller {
+    /// Ceiling on an update archive we will keep and expand. Burrow's own
+    /// releases are tens of megabytes, so 512 MB clears any plausible build
+    /// while still refusing an archive whose only purpose is to fill the disk
+    /// or explode under ditto.
+    static let maximumArchiveBytes: Int64 = 512 * 1024 * 1024
+
     static func stagingDirectoryIdentity(at url: URL) -> BundleFileIdentity? {
         PrivateUpdateDirectory.directoryIdentity(at: url)
     }
@@ -1194,6 +1199,21 @@ enum ElectronReplacementInstaller {
                     status: http.statusCode,
                     retryable: http.statusCode == 408 || http.statusCode == 429 || (500...599).contains(http.statusCode)
                 )
+            }
+            // Refuse an implausible archive BEFORE it is kept, hashed, or —
+            // the part that actually matters — handed to ditto, where a small
+            // zip expands into an arbitrarily large tree. URLSession has
+            // already written the body by the time this returns, so this does
+            // not bound what transits the network; it bounds what we retain
+            // and what we agree to expand. Burrow's own archives are tens of
+            // megabytes, so the ceiling is far above any real release.
+            if http.expectedContentLength > Self.maximumArchiveBytes {
+                throw UpdateFailure.invalidResponse
+            }
+            let downloadedBytes = (try? FileManager.default.attributesOfItem(
+                atPath: temporaryDownload.path)[.size] as? Int64) ?? nil
+            if let downloadedBytes, downloadedBytes > Self.maximumArchiveBytes {
+                throw UpdateFailure.invalidResponse
             }
             try FileManager.default.moveItem(at: temporaryDownload, to: archive)
             guard try sha512(of: archive) == descriptor.sha512 else {
