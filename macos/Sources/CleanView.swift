@@ -435,7 +435,24 @@ struct CleanView: View {
                           let bytes = lines.reduce(Int64(0)) { $0 + CleanList.streamedItemBytes($1) }
                           return (groups, summary, bytes)
                       },
-                      hudLine: { TaskReportText.line($0) })
+                      hudLine: { TaskReportText.line($0) },
+                      // The scan is the step people walk away from — it can run
+                      // for minutes on a full disk and, unlike the clean, it ends
+                      // by just sitting there with a number. Same opt-in the real
+                      // run uses, so it respects the Settings toggle and stays
+                      // silent for anyone who turned it off.
+                      notifyOnEnd: true,
+                      // Without this the notification body is whatever the last
+                      // streamed HUD line happened to be — which for a task
+                      // report is usually the "=====" separator, so the notice
+                      // arrived as a row of equals signs. Say what was found.
+                      finalDetail: { report in
+                          let items = report.groups.reduce(0) { $0 + $1.items.count }
+                          return items == 0
+                              ? NSLocalizedString("Nothing to clean.", comment: "")
+                              : String(format: NSLocalizedString("%@ found across %d items.", comment: ""),
+                                       Fmt.bytes(report.liveBytes), items)
+                      })
     }
 
     private func startDry() {

@@ -158,9 +158,12 @@ struct UpdatesView: View {
                         model.updateAllCompleted,
                         model.updateAllTotal
                     ))
-                PillButton(title: "Stop after current", filled: false) {
+                PillButton(title: model.cancelUpdateAllAfterCurrent
+                            ? "Stopping after current…" : "Stop after current",
+                           filled: false) {
                     model.cancelUpdateAll()
                 }
+                .disabled(model.cancelUpdateAllAfterCurrent)
             } else if model.checked, model.availableItems.count + model.brewItems.count > 1 {
                 PillButton(title: "Update All", filled: false) {
                     model.updateAll()
@@ -448,7 +451,10 @@ final class UpdatesModel: ObservableObject {
     private var appTasks: [String: TrackedAppTask] = [:]
     private var appTaskGeneration: UInt64 = 0
     private var updateAllTask: Task<Void, Never>?
-    private var cancelUpdateAllAfterCurrent = false
+    /// Published, and not private, because the header button reads it: the
+    /// stop only takes effect after the in-flight item, so without a visible
+    /// state change the click looked ignored for however long that took.
+    @Published private(set) var cancelUpdateAllAfterCurrent = false
 
     init(
         detectSource: ((InstalledApp) -> UpdateSources.Source?)? = nil,
