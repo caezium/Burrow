@@ -92,11 +92,18 @@ struct SystemPrivilegeBroker: PrivilegeBroker {
         task.standardError = errPipe
         do {
             try task.run()
-            // Drain both pipes to EOF before reaping so neither can fill and
-            // wedge osascript; small output, so a blocking read is fine.
+            // Drain both pipes to EOF before reaping so neither can fill and wedge osascript.
+            // stderr goes on its own queue because draining it AFTER stdout does not deliver
+            // that promise: a child filling stderr's ~64KB buffer while stdout is still open
+            // deadlocks — we block reading stdout, it blocks writing stderr, and neither moves.
+            // osascript's output is small enough that this has never bitten, but the ordering
+            // was the hazard, not the volume. Same shape as SystemMoleProcess.capture.
+            var err = Data()
+            let errQueue = DispatchQueue(label: "dev.caezium.burrow.broker.err")
+            errQueue.async { err = errPipe.fileHandleForReading.readDataToEndOfFile() }
             let out = outPipe.fileHandleForReading.readDataToEndOfFile()
-            let err = errPipe.fileHandleForReading.readDataToEndOfFile()
             task.waitUntilExit()
+            errQueue.sync {}
             let code = task.terminationStatus
             let sawOutput = !out.isEmpty || !err.isEmpty
             return AuthCancel.outcome(exitCode: code, sawOutput: sawOutput)
