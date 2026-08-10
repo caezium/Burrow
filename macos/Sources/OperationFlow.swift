@@ -367,13 +367,19 @@ extension ToolOperation where Report == TaskRunReport {
 /// The streaming-op spawn mechanics: plain runs stream
 /// stdout+stderr through pipes; elevated runs go through ONE osascript auth
 /// prompt with output tailed from a temp log (`do shell script` doesn't
-/// stream); stdin is fed then closed; a timeout kills the child. All output
-/// is ANSI-stripped and newline-split before it reaches the flow.
+/// stream); stdin is fed then closed; a timeout kills the child — SIGTERM
+/// escalating to SIGKILL, and the readers stop waiting on a pipe the dead
+/// child's descendants left open (see ChildGuard). All output is ANSI-stripped
+/// and newline-split before it reaches the flow.
 struct SystemProcessPort: ProcessPort {
     func events(_ spec: ProcessSpec) -> AsyncStream<ProcessEvent> {
         AsyncStream { cont in
             let splitter = LineSplitter()
             let t = Process()
+            // Kill-and-reap state shared by the timeout timer, the pipe readers
+            // and the stream's teardown — and the thing that guarantees this
+            // stream always finishes (see ChildGuard).
+            let child = ChildGuard(name: (spec.executable as NSString).lastPathComponent)
             // One serial queue owns every splitter access, line yield, and the
             // final finish — so `cont.finish()` can never overtake a still-
             // pending `.line` from a reader. (The old readabilityHandler yielded
@@ -382,6 +388,12 @@ struct SystemProcessPort: ProcessPort {
             // silently drop lines — an intermittent CI failure that surfaced as
             // [] or ["a"] instead of ["a","b"].)
             let streamQ = DispatchQueue(label: "dev.caezium.burrow.opflow.stream")
+            // The kill timer and its escalation get a queue of their own instead
+            // of a shared global one. Work submitted to a global concurrent
+            // queue waits on that pool's threads, and the code that kills a
+            // wedged child is the last thing that should ever queue behind
+            // somebody else's blocking read.
+            let killQ = DispatchQueue(label: "dev.caezium.burrow.opflow.kill")
             var tailTimer: Timer?
             var logHandle: FileHandle?
             var killTimer: DispatchSourceTimer?
@@ -390,6 +402,11 @@ struct SystemProcessPort: ProcessPort {
                 for line in splitter.ingest(Ansi.strip(s)) { cont.yield(.line(line)) }
             }
             func finish(_ code: Int32) {                   // streamQ only
+                // Exactly once. Three paths reach here (the elevated
+                // termination handler, the readers' group, a spawn failure) and
+                // `onTermination` can run concurrently with any of them; an
+                // AsyncStream continuation must be finished a single time.
+                guard child.claimFinish() else { return }
                 for line in splitter.flush() { cont.yield(.line(line)) }
                 cont.yield(Self.finalEvent(exitCode: code, elevated: spec.elevated,
                                            sawOutput: splitter.sawAnyLine))
@@ -427,6 +444,7 @@ struct SystemProcessPort: ProcessPort {
                 tailTimer = timer
 
                 t.terminationHandler = { proc in
+                    child.reaped(status: proc.terminationStatus)
                     killTimer?.cancel()
                     DispatchQueue.main.async { tailTimer?.invalidate() }
                     streamQ.async {
@@ -449,15 +467,29 @@ struct SystemProcessPort: ProcessPort {
                     inPipe.fileHandleForWriting.write(Data(stdin.utf8))
                     inPipe.fileHandleForWriting.closeFile()
                 }
+                // The plain path had no termination handler: it learned the exit
+                // status by blocking in `waitUntilExit()`, and that call is what
+                // hung this stream (see the note on the group's completion
+                // below). Taking the status where Foundation hands it to us
+                // means the finish can wait for it with a DEADLINE instead
+                // (ChildGuard.awaitStatus), and gives the readers the "the child
+                // is dead" edge they need to stop waiting on a pipe nobody will
+                // ever close. Set before run(): a handler installed afterwards
+                // races the exit it wants to hear about.
+                t.terminationHandler = { proc in child.reaped(status: proc.terminationStatus) }
             }
 
             cont.onTermination = { @Sendable _ in
                 DispatchQueue.main.async { tailTimer?.invalidate() }
-                if t.isRunning { t.terminate() }
+                // The consumer is gone (cancelled, or the stream just finished);
+                // the child must not outlive it. A no-op once the child has been
+                // reaped, so a normal finish costs nothing and says nothing.
+                child.killEscalating(on: killQ, because: "the stream was torn down")
             }
 
             do {
                 try t.run()
+                child.spawned(t)
                 if !spec.elevated {
                     // Process inherits duplicated write descriptors during
                     // spawn; the parent must close its copies so the readers
@@ -470,33 +502,59 @@ struct SystemProcessPort: ProcessPort {
                 // Armed only after a successful spawn (a suspended source
                 // must never be cancelled/deallocated).
                 if let timeout = spec.timeout {
-                    let k = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+                    let k = DispatchSource.makeTimerSource(queue: killQ)
                     k.schedule(deadline: .now() + timeout, repeating: .never)
-                    k.setEventHandler { if t.isRunning { t.terminate() } }
+                    k.setEventHandler {
+                        child.killEscalating(on: killQ, because: "it outlived its \(timeout)s timeout")
+                    }
                     k.resume()
                     killTimer = k
+                    // One breadcrumb up front: if a run ever wedges again, a log
+                    // that says "timeout armed" and nothing else means the timer
+                    // itself never fired, which is a very different bug from a
+                    // child that survived the signal.
+                    child.note("timeout armed: \(timeout)s")
                 }
                 if !spec.elevated {
                     // Dedicated blocking reader per pipe, started only after a
                     // successful spawn (so a failed launch can't leak them).
                     // Each drains its pipe to EOF; ingest+yield hop synchronously
                     // onto streamQ; completion fires via the group ONLY once both
-                    // pipes are at EOF — so finish() is strictly last and no line
-                    // is lost (see streamQ note above).
+                    // pipes are done — so finish() is strictly last and no line
+                    // is lost (see streamQ note above). The group stays the ONE
+                    // completion path for the plain runs: the readers' own escape
+                    // hatch (drain) makes them leave the group rather than
+                    // finishing behind its back.
+                    //
+                    // Each reader gets its own queue, not a slot in the shared
+                    // global pool: a thread parked in read() is a thread that
+                    // pool can't give to anyone else.
                     let group = DispatchGroup()
-                    for fh in [outPipe.fileHandleForReading, errPipe.fileHandleForReading] {
+                    for (pipe, fh) in [("stdout", outPipe.fileHandleForReading),
+                                       ("stderr", errPipe.fileHandleForReading)] {
                         group.enter()
-                        DispatchQueue.global(qos: .utility).async {
-                            while case let d = fh.availableData, !d.isEmpty {
-                                if let s = String(data: d, encoding: .utf8) { streamQ.sync { emit(s) } }
+                        DispatchQueue(label: "dev.caezium.burrow.opflow.read.\(pipe)").async {
+                            Self.drain(fh, pipe: pipe, child: child) { chunk in
+                                streamQ.sync { emit(chunk) }
                             }
                             group.leave()
                         }
                     }
                     group.notify(queue: streamQ) {
                         killTimer?.cancel()
-                        t.waitUntilExit()
-                        finish(t.terminationStatus)
+                        // This used to be `t.waitUntilExit()` then
+                        // `t.terminationStatus`, and THAT is what hung the
+                        // 29-minute CI run: with both pipes at EOF and
+                        // `isRunning` already false — the child dead and reaped
+                        // — waitUntilExit never returned. Measured on macOS
+                        // 26.5: 24 of 150 runs of the `sleep 10` + 0.3s timeout
+                        // test, and 40 of 400 runs of a plain 600-line child
+                        // that exits on its own, wedged here forever. Foundation
+                        // hands the status to the termination handler instead,
+                        // and awaitStatus waits for it with a deadline, so the
+                        // worst case is a wrong exit code rather than a stream
+                        // that never ends.
+                        finish(child.awaitStatus())
                     }
                 }
             } catch {
@@ -515,6 +573,221 @@ struct SystemProcessPort: ProcessPort {
             return .authCancelled
         }
         return .exited(exitCode)
+    }
+
+    /// One pipe's reader: wait for bytes, hand whole chunks to `onChunk`
+    /// synchronously, stop at EOF.
+    ///
+    /// It waits in `poll` on a tick rather than in `FileHandle.availableData`
+    /// because `availableData` has no way out — it returns on data or on EOF and
+    /// on nothing else. Pipe EOF needs EVERY write end closed, so a child that
+    /// dies leaving a descendant holding one open parks this thread, and with it
+    /// the whole stream, forever. The tick is only an escape hatch: bytes still
+    /// arrive through a blocking read on a dedicated thread and the reader still
+    /// reports completion by leaving the DispatchGroup, so finish() stays
+    /// strictly last. (Deliberately NOT readabilityHandler — that is the design
+    /// whose unordered yields dropped lines.)
+    private static func drain(_ handle: FileHandle, pipe: String, child: ChildGuard,
+                              onChunk: (String) -> Void) {
+        let fd = handle.fileDescriptor
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            var fds = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            let ready = poll(&fds, 1, ChildGuard.pollTickMs)
+            if ready < 0 {
+                if errno == EINTR { continue }
+                child.note("\(pipe): poll failed (errno \(errno)) — giving up on this pipe")
+                return
+            }
+            if ready == 0 {                                  // tick: nothing to read yet
+                if child.shouldStopReading(pipe) { return }
+                continue
+            }
+            let n = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
+            if n < 0 {
+                if errno == EINTR { continue }
+                child.note("\(pipe): read failed (errno \(errno)) — giving up on this pipe")
+                return
+            }
+            if n == 0 { return }                             // EOF: every write end is closed
+            child.sawData()
+            if let s = String(data: Data(buffer[0..<n]), encoding: .utf8) { onChunk(s) }
+        }
+    }
+
+    /// The kill-and-reap state one spawned child needs, shared by the timeout
+    /// timer, the pipe readers and the stream's teardown. It exists so that this
+    /// stream cannot hang — the GUI runs on it, so a path that can block forever
+    /// is a stuck progress HUD, not just a stuck test.
+    ///
+    /// The kill actually kills. SIGTERM first, then SIGKILL after a grace
+    /// period, both addressed straight at the pid rather than routed through
+    /// `Process.terminate()` — SIGKILL can't be caught, blocked or ignored, so
+    /// the child dies and the descriptors it holds on our pipes close.
+    /// `Process.isRunning` deliberately gates nothing here: it reports whether
+    /// Foundation has OBSERVED the exit, so a `guard isRunning` around the kill
+    /// skips the kill in exactly the window where the child is alive and the
+    /// stream is waiting on it to die. Signals do stop once the child is reaped,
+    /// because from then on the pid could be recycled and killing a stranger is
+    /// worse than leaving a corpse.
+    ///
+    /// And the readers stop waiting for an EOF that may never come. One
+    /// descendant that outlives the child — a shell's backgrounded job, a helper
+    /// the engine spawned — holds the write end open and EOF never arrives. Once
+    /// the child is known dead (reaped, or SIGKILLed, which is the same thing
+    /// within milliseconds) the readers give the pipe a grace period of SILENCE
+    /// and then stop of their own accord. The grace restarts on every byte, so a
+    /// descendant that is still producing real output gets drained rather than
+    /// truncated.
+    private final class ChildGuard: @unchecked Sendable {
+        /// How long the child gets to honour SIGTERM before SIGKILL.
+        static let killGrace: TimeInterval = 1
+        /// How long a pipe may stay silent, after the child is dead, before its
+        /// reader gives up on EOF.
+        static let readerGrace: TimeInterval = 2
+        /// How long the finish waits for an exit status once both pipes are done.
+        static let statusGrace: TimeInterval = 5
+        /// Reader poll tick in ms — also the resolution of `readerGrace`.
+        static let pollTickMs: Int32 = 200
+
+        /// Guards every stored property AND wakes `awaitStatus`.
+        private let cond = NSCondition()
+        private let name: String
+        /// Held for the child's lifetime: once `events()` returns nothing else
+        /// retains the Process, and a deallocated Process never delivers its
+        /// terminationHandler. Dropped on reap, which also breaks the cycle
+        /// (process → handler → self → process).
+        private var process: Process?
+        private var pid: pid_t = 0
+        private var didReap = false
+        private var status: Int32?
+        private var lastSignal: Int32?
+        private var stopReadingAt: DispatchTime?
+        private var stopReason = ""
+        private var didFinish = false
+
+        init(name: String) { self.name = name }
+
+        func spawned(_ process: Process) {
+            cond.lock(); defer { cond.unlock() }
+            pid = process.processIdentifier
+            // A child can be reaped before this line runs (`/bin/sh -c printf`
+            // is finished long before). Retaining it then would re-form the
+            // cycle that `reaped` just broke, for a Process nobody needs.
+            guard !didReap else { return }
+            self.process = process
+        }
+
+        /// Foundation observed the exit: the status is final, the pid is now off
+        /// limits, and the readers are on the clock.
+        func reaped(status: Int32) {
+            cond.lock()
+            didReap = true
+            self.status = status
+            process = nil
+            armReadDeadline(reason: "exited")
+            cond.broadcast()
+            cond.unlock()
+        }
+
+        /// SIGTERM now; SIGKILL after `killGrace` if that didn't take.
+        func killEscalating(on queue: DispatchQueue, because reason: String) {
+            guard send(SIGTERM, saying: "\(reason) — SIGTERM") else { return }
+            queue.asyncAfter(deadline: .now() + Self.killGrace) { [self] in
+                guard send(SIGKILL, saying: "still alive \(Self.killGrace)s after SIGTERM — SIGKILL")
+                else { return }
+                // SIGKILL isn't negotiable: the child is gone within
+                // milliseconds whether or not Foundation gets around to
+                // noticing. Start the readers' clock from here as well, so a
+                // reap notification that never lands can't strand them.
+                cond.lock(); armReadDeadline(reason: "was SIGKILLed"); cond.unlock()
+            }
+        }
+
+        /// Signal the child unless it never started, or has already been reaped
+        /// and its pid could belong to someone else by now.
+        private func send(_ signal: Int32, saying reason: String) -> Bool {
+            cond.lock()
+            guard !didReap, pid > 0 else { cond.unlock(); return false }
+            lastSignal = signal
+            let sent = kill(pid, signal) == 0
+            let failure = errno
+            cond.unlock()
+            note(sent ? reason : "\(reason) failed (errno \(failure))")
+            return sent
+        }
+
+        /// Caller holds `cond`.
+        private func armReadDeadline(reason: String) {
+            guard stopReadingAt == nil else { return }
+            stopReason = reason
+            stopReadingAt = .now() + Self.readerGrace
+        }
+
+        /// Bytes arrived: if the child is already dead, restart the silence
+        /// grace so a descendant still writing real output is drained, not cut.
+        func sawData() {
+            cond.lock(); defer { cond.unlock() }
+            if stopReadingAt != nil { stopReadingAt = .now() + Self.readerGrace }
+        }
+
+        /// Asked on every reader tick: is this pipe waiting on an EOF that is
+        /// never coming?
+        func shouldStopReading(_ pipe: String) -> Bool {
+            cond.lock()
+            guard let deadline = stopReadingAt, DispatchTime.now() >= deadline else {
+                cond.unlock()
+                return false
+            }
+            let reason = stopReason
+            cond.unlock()
+            note("\(pipe) has no EOF: the child \(reason) and the pipe has been silent for " +
+                 "\(Self.readerGrace)s, so something it spawned still holds the write end. " +
+                 "Abandoning \(pipe) so the run can finish.")
+            return true
+        }
+
+        /// The exit status, waiting up to `statusGrace` for the reap to land.
+        /// Both pipes reaching EOF normally means the child is already gone, so
+        /// this returns at once; the deadline is there so that a reap that never
+        /// arrives costs seconds instead of forever.
+        func awaitStatus() -> Int32 {
+            cond.lock()
+            let deadline = Date().addingTimeInterval(Self.statusGrace)
+            while status == nil, cond.wait(until: deadline) {}
+            if let status {
+                cond.unlock()
+                return status
+            }
+            let signal = lastSignal
+            cond.unlock()
+            // Nothing to report, but something to say: 128 + signal is the
+            // shell's convention for "killed by", and any nonzero code is truer
+            // than claiming the run succeeded.
+            let code = signal.map { 128 + $0 } ?? -1
+            note("no exit status \(Self.statusGrace)s after both pipes finished — reporting \(code)")
+            return code
+        }
+
+        /// True exactly once — the stream's single-shot finish latch.
+        func claimFinish() -> Bool {
+            cond.lock(); defer { cond.unlock() }
+            if didFinish { return false }
+            didFinish = true
+            return true
+        }
+
+        /// A breadcrumb for a run that misbehaved, on stderr because that is
+        /// what `xcodebuild test` captures in a CI log (an os.Logger line would
+        /// not show up there at all). Every caller is on an abnormal path, so a
+        /// healthy run without a timeout says nothing.
+        func note(_ message: String) {
+            cond.lock()
+            let id = pid
+            cond.unlock()
+            fputs("[SystemProcessPort] \(name)[\(id)]: \(message)\n", stderr)
+            fflush(stderr)
+        }
     }
 
     /// Buffers partial chunks and emits whole lines; thread-confined to

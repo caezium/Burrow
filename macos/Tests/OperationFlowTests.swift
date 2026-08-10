@@ -282,15 +282,62 @@ final class OperationFlowTests: XCTestCase {
 // MARK: - Production adapter against real (tiny) processes
 
 final class SystemProcessPortTests: XCTestCase {
-    private func run(_ spec: ProcessSpec) async -> (lines: [String], exit: Int32?) {
-        var lines: [String] = []
-        var exit: Int32?
-        for await e in SystemProcessPort().events(spec) {
-            switch e {
-            case .line(let l): lines.append(l)
-            case .exited(let c): exit = c
-            case .authCancelled: XCTFail("un-elevated specs never classify as auth-cancel")
+    /// What the stream produced, filled from the consuming task so the deadline
+    /// branch can report how far the run actually got.
+    private actor Collected {
+        private(set) var lines: [String] = []
+        private(set) var exit: Int32?
+        private(set) var sawAuthCancel = false
+        func append(_ line: String) { lines.append(line) }
+        func exited(_ code: Int32) { exit = code }
+        func authCancelled() { sawAuthCancel = true }
+    }
+
+    /// Consume the stream, but never for longer than `deadline`.
+    ///
+    /// These tests drive real processes and real pipes, so a bug in the runner
+    /// shows up as a test that never returns — which cost one CI run half an
+    /// hour of silence before it was cancelled, with a single "started" line to
+    /// show for it. A bounded wait turns that into a failure that says how far
+    /// the run got; SystemProcessPort's own stderr breadcrumbs say why.
+    private func run(_ spec: ProcessSpec, deadline: TimeInterval = 15,
+                     file: StaticString = #filePath,
+                     line: UInt = #line) async -> (lines: [String], exit: Int32?) {
+        let collected = Collected()
+        let stream = SystemProcessPort().events(spec)
+        let started = Date()
+        let finished = await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                for await e in stream {
+                    switch e {
+                    case .line(let l): await collected.append(l)
+                    case .exited(let c): await collected.exited(c)
+                    case .authCancelled: await collected.authCancelled()
+                    }
+                }
+                return true
             }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(deadline * 1_000_000_000))
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+        let lines = await collected.lines
+        let exit = await collected.exit
+        if !finished {
+            XCTFail("""
+                    the stream never finished: \(spec.executable) \(spec.arguments.joined(separator: " ")) \
+                    still had not produced a terminal event after \
+                    \(String(format: "%.1f", Date().timeIntervalSince(started)))s \
+                    (timeout \(spec.timeout.map { "\($0)s" } ?? "none"), \
+                    \(lines.count) line(s) so far: \(lines.prefix(4)))
+                    """, file: file, line: line)
+        }
+        if await collected.sawAuthCancel {
+            XCTFail("un-elevated specs never classify as auth-cancel", file: file, line: line)
         }
         return (lines, exit)
     }
@@ -317,6 +364,27 @@ final class SystemProcessPortTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(started), 5,
                           "the kill timer must fire, not the 10 s sleep")
         XCTAssertNotEqual(r.exit, 0)
+    }
+
+    /// The kill has to work on a child that SIGTERM can't touch, and the stream
+    /// has to finish even when the pipe's write end outlives that child.
+    ///
+    /// `trap '' TERM` makes the ignore-disposition survive the exec, so this
+    /// child cannot be terminated politely — only the escalation to SIGKILL
+    /// ends it. And depending on whether /bin/sh execs `sleep` or forks it, the
+    /// surviving `sleep` may still hold our stdout open after the shell is
+    /// dead, in which case EOF never arrives and only the readers' own bound
+    /// lets the run finish. Both shapes used to wedge the stream forever, which
+    /// in the app is a progress HUD that never comes back.
+    func testTimeoutFinishesEvenWhenTheChildIgnoresSIGTERM() async {
+        let started = Date()
+        let r = await run(ProcessSpec(executable: "/bin/sh",
+                                      arguments: ["-c", "trap '' TERM; sleep 10"],
+                                      stdin: nil, elevated: false, timeout: 0.3))
+        XCTAssertLessThan(Date().timeIntervalSince(started), 10,
+                          "SIGTERM is ignored here: the SIGKILL escalation and the reader " +
+                          "bound must still end the run before the 10 s sleep does")
+        XCTAssertNotEqual(r.exit, 0, "a killed run never reports success")
     }
 
     func testSpawnFailureYieldsExit127() async {
