@@ -158,7 +158,7 @@ opening a listener needs its own auth model first.
   preview only if relevant.
 - **"What's listening?"** → `burrow_ports`. For "is anything insecure", `burrow_doctor` over MCP
   does **not** cover SIP/Gatekeeper/FileVault/firewall — read those from the shell (`csrutil
-  status`, `spctl --status`, `fdesetup status`, `socketfilterfw --getglobalstate`) until the
+  status`, `spctl --status`, `fdesetup status`, `/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate`) until the
   tool fills them in.
 - **"What did Burrow change?"** → `burrow_cleanup_history` + `burrow_deleted_files`.
 - **"Did an agent already do this?"** → `burrow_agent_audit` before repeating a cleanup, and

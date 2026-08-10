@@ -10,6 +10,8 @@ import sys
 import time
 
 BIN = sys.argv[1] if len(sys.argv) > 1 else None
+if not BIN:
+    sys.exit(f"usage: {sys.argv[0]} <path-to-Burrow-binary>\nwithout it the harness fails inside Popen with a TypeError that says nothing useful")
 VERSION = "2026-07-28"
 
 FAILURES = []
@@ -119,10 +121,17 @@ ro = {t["name"] for t in tools if t.get("annotations", {}).get("readOnlyHint")}
 mutating = {"burrow_clean", "burrow_optimize", "burrow_uninstall", "burrow_purge", "burrow_installer"}
 check("mutating tools are not readOnly", not (ro & mutating), sorted(ro & mutating))
 check("23 read-only tools", len(ro) == 23, len(ro))
-clean = next(t for t in tools if t["name"] == "burrow_clean")
-check("burrow_clean destructiveHint", clean["annotations"].get("destructiveHint") is True)
-report = next(t for t in tools if t["name"] == "burrow_report")
-check("burrow_report has no outputSchema (markdown)", "outputSchema" not in report)
+# By name, with .get: a server that omits a tool should FAIL that check and let
+# the run reach its verdict, not raise StopIteration and kill the harness.
+by_name = {t["name"]: t for t in tools}
+clean = by_name.get("burrow_clean")
+check("burrow_clean present", clean is not None)
+check("burrow_clean destructiveHint",
+      bool(clean) and clean.get("annotations", {}).get("destructiveHint") is True)
+report = by_name.get("burrow_report")
+check("burrow_report present", report is not None)
+check("burrow_report has no outputSchema (markdown)",
+      bool(report) and "outputSchema" not in report)
 schema_count = sum(1 for t in tools if "outputSchema" in t)
 check("27 tools declare outputSchema", schema_count == 27, schema_count)
 
@@ -280,49 +289,57 @@ check("clean without confirm is a dry run",
 check("dry run still reports a command", gp.get("command") == "clean", gp.get("command"))
 
 # -------------------------------------------------------------------- tasks
-tc = Client(capabilities={"extensions": {"io.modelcontextprotocol/tasks": {}}})
-tr = tc.result("tools/call", {"name": "burrow_analyze",
-                              "arguments": {"path": "/usr/share/dict", "depth": 1}})
-check("task handle returned", tr.get("resultType") == "task", tr.get("resultType"))
-check("task has taskId", isinstance(tr.get("taskId"), str), tr)
-check("task starts working", tr.get("status") == "working", tr.get("status"))
-check("task has pollIntervalMs", isinstance(tr.get("pollIntervalMs"), int))
-check("task has ttlMs", tr.get("ttlMs") is None or isinstance(tr.get("ttlMs"), (int, float)))
-check("task timestamps", "createdAt" in tr and "lastUpdatedAt" in tr, tr)
+# Every spawned server gets closed even if a check below raises -- otherwise a
+# single unexpected payload leaves Burrow processes running AND swallows the
+# verdict the run exists to print.
+tc = None
+try:
+    tc = Client(capabilities={"extensions": {"io.modelcontextprotocol/tasks": {}}})
+    tr = tc.result("tools/call", {"name": "burrow_analyze",
+                                  "arguments": {"path": "/usr/share/dict", "depth": 1}})
+    check("task handle returned", tr.get("resultType") == "task", tr.get("resultType"))
+    check("task has taskId", isinstance(tr.get("taskId"), str), tr)
+    check("task starts working", tr.get("status") == "working", tr.get("status"))
+    check("task has pollIntervalMs", isinstance(tr.get("pollIntervalMs"), int))
+    check("task has ttlMs", tr.get("ttlMs") is None or isinstance(tr.get("ttlMs"), (int, float)))
+    check("task timestamps", "createdAt" in tr and "lastUpdatedAt" in tr, tr)
 
-task_id = tr["taskId"]
-deadline = time.time() + 120
-final = None
-while time.time() < deadline:
-    got = tc.result("tasks/get", {"taskId": task_id})
-    if got["status"] in ("completed", "failed", "cancelled"):
-        final = got
-        break
-    time.sleep(0.4)
-check("task reaches a terminal state", final is not None, "timed out polling")
-if final:
-    check("task completed", final["status"] == "completed", final.get("statusMessage"))
-    check("completed task carries result", isinstance(final.get("result"), dict), final.get("result"))
-    if isinstance(final.get("result"), dict):
-        check("task result is a CallToolResult", "content" in final["result"], final["result"].keys())
+    task_id = tr["taskId"]
+    deadline = time.time() + 120
+    final = None
+    while time.time() < deadline:
+        got = tc.result("tasks/get", {"taskId": task_id})
+        if got["status"] in ("completed", "failed", "cancelled"):
+            final = got
+            break
+        time.sleep(0.4)
+    check("task reaches a terminal state", final is not None, "timed out polling")
+    if final:
+        check("task completed", final["status"] == "completed", final.get("statusMessage"))
+        check("completed task carries result", isinstance(final.get("result"), dict), final.get("result"))
+        if isinstance(final.get("result"), dict):
+            check("task result is a CallToolResult", "content" in final["result"], final["result"].keys())
 
-unknown = tc.send("tasks/get", {"taskId": "nope"})
-check("unknown task is -32602", unknown.get("error", {}).get("code") == -32602, unknown.get("error"))
+    unknown = tc.send("tasks/get", {"taskId": "nope"})
+    check("unknown task is -32602", unknown.get("error", {}).get("code") == -32602, unknown.get("error"))
 
-# cancel a fresh one
-tr2 = tc.result("tools/call", {"name": "burrow_analyze", "arguments": {"path": "/usr", "depth": 2}})
-cancelled = tc.result("tasks/cancel", {"taskId": tr2["taskId"]})
-check("tasks/cancel acks", cancelled.get("resultType") == "complete", cancelled)
-after = tc.result("tasks/get", {"taskId": tr2["taskId"]})
-check("cancelled task reports cancelled", after["status"] == "cancelled", after.get("status"))
-upd = tc.result("tasks/update", {"taskId": tr2["taskId"], "inputResponses": {}})
-check("tasks/update acks", upd.get("resultType") == "complete", upd)
+    # cancel a fresh one
+    tr2 = tc.result("tools/call", {"name": "burrow_analyze", "arguments": {"path": "/usr", "depth": 2}})
+    cancelled = tc.result("tasks/cancel", {"taskId": tr2["taskId"]})
+    check("tasks/cancel acks", cancelled.get("resultType") == "complete", cancelled)
+    after = tc.result("tasks/get", {"taskId": tr2["taskId"]})
+    check("cancelled task reports cancelled", after["status"] == "cancelled", after.get("status"))
+    upd = tc.result("tasks/update", {"taskId": tr2["taskId"], "inputResponses": {}})
+    check("tasks/update acks", upd.get("resultType") == "complete", upd)
 
-# A non-long-running tool must stay synchronous even for a tasks client.
-sync = tc.result("tools/call", {"name": "burrow_info", "arguments": {}})
-check("short tools stay synchronous", sync.get("resultType") == "complete", sync.get("resultType"))
-tc.close()
-c.close()
+    # A non-long-running tool must stay synchronous even for a tasks client.
+    sync = tc.result("tools/call", {"name": "burrow_info", "arguments": {}})
+    check("short tools stay synchronous", sync.get("resultType") == "complete", sync.get("resultType"))
+finally:
+    # tc may be None if its own construction raised.
+    if tc is not None:
+        tc.close()
+    c.close()
 
 # ------------------------------------------------------------------ verdict
 print(f"passed {len(PASSES)}")

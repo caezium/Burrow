@@ -170,7 +170,10 @@ final class MCPConformanceTests: XCTestCase {
         XCTAssertEqual(r["cacheScope"] as? String, "private",
                        "anything describing this Mac must not be shared across contexts")
         let ttl = try XCTUnwrap(r["ttlMs"] as? Int)
-        XCTAssertLessThanOrEqual(ttl, MCPProtocol.Cache.digestTTL,
+        // burrow://info declares liveTTL, so digestTTL (12x longer) was a bound
+        // loose enough to hold even if the resource regressed to minute-long
+        // caching. Pin it to the TTL the resource actually claims.
+        XCTAssertLessThanOrEqual(ttl, MCPProtocol.Cache.liveTTL,
                                  "live data must not be cacheable for long")
     }
 
