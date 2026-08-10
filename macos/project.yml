@@ -126,16 +126,12 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           # Build the ONE MIT `burrow-engine` binary and stage it as Resources/burrow — it does all
-          # the work natively AND emits the stable Burrow envelope + NDJSON streaming, so it replaces
-          # both the old burrow-cli conductor and the burrow-digger engine (a single binary, no
-          # separate engine dir or conductor anymore).
+          # the work natively AND emits the stable Burrow envelope + NDJSON streaming, so a single
+          # bundled binary serves every command (no separate engine dir, no conductor).
           #
-          # NAMING TRAP: this phase (and the vendor/burrow-engine submodule path below) kept their
-          # old names, but what they point at changed. See bundle-burrow.sh for the full story —
-          # short version: vendor/burrow-engine is, until a separate submodule-swap change lands,
-          # still checked out from burrow-digger, not the new Rust burrow-engine. The Cargo.toml
-          # gate below is what keeps that safe: a digger checkout has no Cargo.toml, so it falls
-          # through to "no engine bundled" instead of trying (and failing) to cargo-build it.
+          # The staged FILENAME is `burrow`, not `burrow-engine`, and that is deliberate:
+          # `BurrowConductor.executableURL()` resolves Resources/burrow, so keeping the name is what
+          # lets every `capture()` call site stay unedited. See bundle-burrow.sh's header.
           #
           # Activates when a real burrow-engine checkout is present — a release/CI vendors it
           # (vendor/burrow-engine) or sets BURROW_ENGINE_SRC; dev builds without it fall back to a

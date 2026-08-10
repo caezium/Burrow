@@ -132,9 +132,14 @@ enum MoAction: Equatable {
         }
     }
 
-    /// The match-preflight command (uninstall only): pin what the resolved binary's matcher
-    /// resolves BEFORE answering its prompts. `--dry-run` changes nothing
+    /// The match pre-flight (uninstall only): the policy AND the probe that satisfies it, as one
+    /// value, so nothing downstream can hold one without the other. It pins what the resolved
+    /// binary's matcher resolves BEFORE answering its prompts. `--dry-run` changes nothing
     /// and exits at its prompt on stdin EOF.
+    ///
+    /// nil for every other action — only uninstall has a pre-flight — and that is the ONLY nil
+    /// this returns. Either both halves or neither: a caller that got a policy back could never be
+    /// handed a missing probe, because the two are built here, together, from one pattern match.
     ///
     /// Built from mo-style argv, same as every other command here, and translated for the same
     /// reason and under the same condition `mint` translates: only when `target` IS the bundled
@@ -161,14 +166,16 @@ enum MoAction: Equatable {
     /// `--permanent` is deliberately absent — the mo argv here is the PREVIEW spelling, so the probe
     /// asks what would be removed and never how. A flag that only distinguishes Trash from outright
     /// deletion has nothing to say about a run that deletes neither.
-    func preflightCommand(on target: EngineTarget) -> ActionCommand? {
+    func matchPreflight(on target: EngineTarget) -> ActionPreflight? {
         guard case .uninstall(let apps, _) = self else { return nil }
         let moArgs = ["uninstall", "--dry-run"] + apps
-        return ActionCommand(executable: target.path,
-                             args: target.isBundledEngine
-                                 ? BurrowConductor.engineArgv(fromMo: moArgs, assertDryRun: true)
-                                 : moArgs,
-                             stdin: "", timeout: 120, elevated: false)
+        return ActionPreflight(
+            policy: .verifyUninstallMatch(expected: apps),
+            command: ActionCommand(executable: target.path,
+                                   args: target.isBundledEngine
+                                       ? BurrowConductor.engineArgv(fromMo: moArgs, assertDryRun: true)
+                                       : moArgs,
+                                   stdin: "", timeout: 120, elevated: false))
     }
 
     /// App names for wire payloads (uninstall carries them everywhere).
@@ -248,9 +255,24 @@ enum BlockedReason: Equatable {
     }
 }
 
-enum ActionPreflight: Equatable {
-    /// Fail closed unless mo's matched set equals what was confirmed.
-    case verifyUninstallMatch(expected: [String])
+/// A check a real run must pass before it is allowed to touch anything, and the read-only probe
+/// that performs it — ONE value, because they are only meaningful together.
+///
+/// These used to be two independent optionals on `RunTicket`, which made "verify the match, with
+/// nothing to verify it against" a representable ticket. That state was never minted, but the
+/// consumers had to assume it wasn't: `MCP.execute` combined both optionals in a single `if`, so a
+/// policy with a nil probe would have skipped the guard and fallen straight through to the
+/// destructive apply — failing OPEN on an irreversible action, silently. Bundling them removes the
+/// state instead of asking every call site to remember to refuse it.
+struct ActionPreflight: Equatable {
+    enum Policy: Equatable {
+        /// Fail closed unless mo's matched set equals what was confirmed.
+        case verifyUninstallMatch(expected: [String])
+    }
+    let policy: Policy
+    /// The read-only probe that answers `policy`, built against the SAME resolved binary as the
+    /// ticket's `command` so the guard and the run it guards cannot describe different files.
+    let command: ActionCommand
 }
 
 /// A runnable, fully-specified action. Minted ONLY by `MoActions.decide`
@@ -259,22 +281,18 @@ struct RunTicket: Equatable {
     let action: MoAction
     let mode: RunMode
     let command: ActionCommand
+    /// The pre-flight this run must pass — policy and probe together, or nothing at all. Minted
+    /// here rather than rebuilt at the call site, so a consumer that finds one has the other.
     let preflight: ActionPreflight?
-    /// The read-only probe `preflight` requires, built against the SAME resolved binary as
-    /// `command` and non-nil exactly when `preflight` is. Minted here rather than rebuilt at the
-    /// call site so the guard and the run it guards cannot end up describing different files.
-    let preflightCommand: ActionCommand?
     /// Interactive-only redirect text (agent purge/installer downgrade).
     let note: String?
 
     fileprivate init(action: MoAction, mode: RunMode, command: ActionCommand,
-                     preflight: ActionPreflight?, preflightCommand: ActionCommand?,
-                     note: String?) {
+                     preflight: ActionPreflight?, note: String?) {
         self.action = action
         self.mode = mode
         self.command = command
         self.preflight = preflight
-        self.preflightCommand = preflightCommand
         self.note = note
     }
 }
@@ -373,12 +391,11 @@ enum MoActions {
             elevated: isElevated)
         let needsPreflight = mode == .real && spec.requiresMatchPreflight
         return RunTicket(action: action, mode: mode, command: command,
-                         preflight: needsPreflight
-                             ? .verifyUninstallMatch(expected: action.wireApps ?? []) : nil,
                          // Built from the SAME `target`, so the probe reads the plan of the
                          // binary that is about to act on it — and reuses the resolution rather
-                         // than making a second one.
-                         preflightCommand: needsPreflight ? action.preflightCommand(on: target) : nil,
+                         // than making a second one. `matchPreflight` returns the policy and that
+                         // probe as one value, so this can't hand a ticket half a pre-flight.
+                         preflight: needsPreflight ? action.matchPreflight(on: target) : nil,
                          note: note)
     }
 

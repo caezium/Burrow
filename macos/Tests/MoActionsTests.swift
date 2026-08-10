@@ -108,7 +108,7 @@ final class MoActionsTests: XCTestCase {
         XCTAssertEqual(ticket.command.args, ["uninstall", "--permanent", "Slack", "Zoom", "--apply"])
         XCTAssertEqual(ticket.command.stdin, String(repeating: "y\n", count: 4))
         XCTAssertEqual(ticket.command.timeout, 600)
-        XCTAssertEqual(ticket.preflight, .verifyUninstallMatch(expected: ["Slack", "Zoom"]))
+        XCTAssertEqual(ticket.preflight?.policy, .verifyUninstallMatch(expected: ["Slack", "Zoom"]))
     }
 
     func testAgent_uninstallPreview_skipsPreflightAndStdin() throws {
@@ -184,7 +184,7 @@ final class MoActionsTests: XCTestCase {
             action, .real, .gui(hasFullDiskAccess: true, userConfirmed: true)) else {
             return XCTFail()
         }
-        XCTAssertEqual(ticket.preflight, .verifyUninstallMatch(expected: ["Slack"]))
+        XCTAssertEqual(ticket.preflight?.policy, .verifyUninstallMatch(expected: ["Slack"]))
         XCTAssertFalse(ticket.command.elevated)
         // Deliberate unification: the GUI previously used 300 s where MCP
         // used 600 s for the same command — the catalog spells it once.
@@ -214,6 +214,8 @@ final class MoActionsTests: XCTestCase {
         }
         XCTAssertEqual(gui.command.args, agent.command.args)
         XCTAssertEqual(gui.command.stdin, agent.command.stdin)
+        // The whole pre-flight, probe argv included — it is one value, so this compares both
+        // halves and not just which check was asked for.
         XCTAssertEqual(gui.preflight, agent.preflight)
         XCTAssertEqual(gui.command.timeout, agent.command.timeout)
         // Pin the concrete value too, not just "the two surfaces agree" — engine-style
@@ -353,7 +355,7 @@ final class MoActionsTests: XCTestCase {
             XCTAssertEqual(ticket.command.executable, target.path,
                            "\(target): the ticket names the file its argv was built for")
             XCTAssertEqual(ticket.command.spawnPath, target.path)
-            XCTAssertEqual(ticket.preflightCommand?.executable, target.path,
+            XCTAssertEqual(ticket.preflight?.command.executable, target.path,
                            "\(target): the probe reads the plan of the binary that will act on it")
         }
     }
@@ -371,7 +373,7 @@ final class MoActionsTests: XCTestCase {
         })
         guard case .run(let ticket) = verdict else { return XCTFail("fully opted-in must mint") }
         XCTAssertEqual(calls, 1, "argv, spawn path and pre-flight all come from one lookup")
-        XCTAssertEqual(ticket.command.executable, ticket.preflightCommand?.executable,
+        XCTAssertEqual(ticket.command.executable, ticket.preflight?.command.executable,
                        "so the probe and the run cannot be different files")
     }
 
@@ -417,8 +419,8 @@ final class MoActionsTests: XCTestCase {
 
     // MARK: - The uninstall pre-flight's argv (read-only ASSERTED, not assumed)
     //
-    // `preflightCommand` is the probe that runs before the user's consent is acted on, and its
-    // argv was untested — the section above pins what `mint` builds, which is a different string.
+    // `matchPreflight`'s command is the probe that runs before the user's consent is acted on, and
+    // its argv was untested — the section above pins what `mint` builds, which is a different string.
     // It used to translate to `["uninstall", <ids>]`: no flag at all, non-destructive purely
     // because the engine happens to default that way. That was a small bet while `uninstall` only
     // swept `~/Library` leftovers and a much larger one since burrow-engine `df9ea3f`, where the
@@ -428,7 +430,7 @@ final class MoActionsTests: XCTestCase {
     // spellings and both are pinned: the engine's (below) and mo's own (`--dry-run` ahead of the
     // positionals), further down.
 
-    /// The exact argv `preflightCommand` builds for one app, and the ONE definition of it in this
+    /// The exact argv `matchPreflight` builds for one app, and the ONE definition of it in this
     /// file — the capture below is the verbatim stdout of running it, so a change to either has to
     /// move both, rather than leaving a hardcoded string quietly describing a run that no longer
     /// happens.
@@ -450,7 +452,7 @@ final class MoActionsTests: XCTestCase {
 
     func testPreflight_argvCarriesTheDryRunFlag_soReadOnlyIsNotInheritedFromADefault() throws {
         let action = MoAction.uninstall(apps: ["org.localsend.localsendApp"], permanent: false)
-        let pre = try XCTUnwrap(action.preflightCommand(on: .bundledEngine(Self.bundledPath)))
+        let pre = try XCTUnwrap(action.matchPreflight(on: .bundledEngine(Self.bundledPath))?.command)
         XCTAssertEqual(pre.args, preflightArgvLocalSend)
         XCTAssertFalse(pre.elevated, "the probe never elevates — the uninstall ticket doesn't either")
     }
@@ -493,7 +495,7 @@ final class MoActionsTests: XCTestCase {
                                        .moStyle(Self.legacyMoPath), .unresolved]
         for action in actions {
             for target in targets {
-                let pre = try XCTUnwrap(action.preflightCommand(on: target))
+                let pre = try XCTUnwrap(action.matchPreflight(on: target)?.command)
                 XCTAssertTrue(pre.args.contains("--dry-run"),
                               "\(action) on \(target): the probe must SAY it is read-only, not inherit it")
                 XCTAssertFalse(pre.args.contains("--apply"),
@@ -503,16 +505,53 @@ final class MoActionsTests: XCTestCase {
                                "\(action) on \(target): a preview asks what would go, never how")
             }
         }
-        XCTAssertNil(MoAction.clean.preflightCommand(on: .bundledEngine(Self.bundledPath)),
+        XCTAssertNil(MoAction.clean.matchPreflight(on: .bundledEngine(Self.bundledPath)),
                      "only uninstall has a pre-flight")
-        XCTAssertNil(MoAction.purge.preflightCommand(on: .moStyle(Self.legacyMoPath)))
+        XCTAssertNil(MoAction.purge.matchPreflight(on: .moStyle(Self.legacyMoPath)))
+    }
+
+    /// The invalid state the type now forbids, asserted where it would come from.
+    ///
+    /// `RunTicket` used to carry the pre-flight POLICY and its PROBE as two independent optionals,
+    /// which made "verify the matched set, with nothing to verify it against" a representable
+    /// ticket. Nothing minted it, but the consumers could not know that: `MCP.execute` read both
+    /// in one `if`, so a policy without a probe would have skipped the guard entirely and gone
+    /// straight to the irreversible apply — failing OPEN, silently. `ActionPreflight` holds both,
+    /// so that pair no longer exists to get wrong.
+    ///
+    /// What a type can't state is the other half of the coupling: that every action whose SPEC
+    /// demands a pre-flight can actually build one. `mint` reads `requiresMatchPreflight` and asks
+    /// the action for the value, and an action that answered nil there would mint a real
+    /// destructive ticket with no guard at all. That is a catalog fact, so it is swept over the
+    /// catalog rather than argued from the one action that has a pre-flight today.
+    func testCatalog_specAndProbeAgreeOnWhichActionsHaveAPreflight() {
+        let catalog: [MoAction] = [.clean, .optimize, .purge, .installer,
+                                   .uninstall(apps: ["Slack"], permanent: false)]
+        for action in catalog {
+            XCTAssertEqual(action.spec.requiresMatchPreflight,
+                           action.matchPreflight(on: .bundledEngine(Self.bundledPath)) != nil,
+                           "\(action): the spec and the probe builder disagree — one direction " +
+                           "mints an unguarded real run, the other guards a run that needs none")
+        }
+    }
+
+    /// And the ticket end of it: a real uninstall arrives with BOTH halves, aimed at one binary.
+    func testMint_realUninstallTicket_carriesPolicyAndProbeTogether() throws {
+        guard case .run(let ticket) = decide(.uninstall(apps: ["Slack"], permanent: false), .real,
+                                             .agent(actionsOptIn: true, irreversibleOptIn: true))
+        else { return XCTFail("fully opted-in uninstall must mint") }
+        let preflight = try XCTUnwrap(ticket.preflight,
+                                      "a real uninstall without its pre-flight is an unguarded delete")
+        XCTAssertEqual(preflight.policy, .verifyUninstallMatch(expected: ["Slack"]))
+        XCTAssertEqual(preflight.command.args, ["uninstall", "Slack", "--dry-run"])
+        XCTAssertEqual(preflight.command.executable, ticket.command.executable)
     }
 
     /// Multi-app, which also pins the flag's position after the positionals — verified accepted by
     /// the real binary, whose output for that spelling is byte-identical to the leading one.
     func testPreflight_multiAppArgv_isByteStable() throws {
         let action = MoAction.uninstall(apps: ["Slack", "Zoom"], permanent: true)
-        let pre = try XCTUnwrap(action.preflightCommand(on: .bundledEngine(Self.bundledPath)))
+        let pre = try XCTUnwrap(action.matchPreflight(on: .bundledEngine(Self.bundledPath))?.command)
         XCTAssertEqual(pre.args, ["uninstall", "Slack", "Zoom", "--dry-run"])
         XCTAssertEqual(pre.stdin, "")
         XCTAssertEqual(pre.timeout, 120)
@@ -526,7 +565,7 @@ final class MoActionsTests: XCTestCase {
     /// property of a program Burrow doesn't own; not relying on it costs one branch.
     func testPreflight_onALegacyMo_isMosOwnPreviewSpelling() throws {
         let action = MoAction.uninstall(apps: ["Slack", "Zoom"], permanent: true)
-        let pre = try XCTUnwrap(action.preflightCommand(on: .moStyle(Self.legacyMoPath)))
+        let pre = try XCTUnwrap(action.matchPreflight(on: .moStyle(Self.legacyMoPath))?.command)
         XCTAssertEqual(pre.args, ["uninstall", "--dry-run", "Slack", "Zoom"])
         XCTAssertEqual(pre.executable, Self.legacyMoPath,
                        "the probe carries the binary it was built for")

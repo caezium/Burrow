@@ -2,24 +2,19 @@
 #
 # bundle-burrow.sh — build the `burrow-engine` binary and stage it as the app's `Resources/burrow`.
 #
-# NAMING TRAP — read this before grepping for "engine" in this directory. In this repo "engine"
-# used to mean the legacy Go DIGGER: bundle-engine.sh staged it at Resources/engine, sourced from
-# caezium/burrow-digger, and the submodule at vendor/burrow-engine still checks out burrow-digger
-# until a separate change repoints it. This script is named "burrow" because it used to build the
-# FSL burrow-cli CONDUCTOR — but now it builds the new MIT `caezium/burrow-engine` Rust crate
-# instead, and stages IT as Resources/burrow. So: the script called "burrow" builds the thing
-# actually named "burrow-engine", and writes it to a file named neither. That's deliberate, not
-# a leftover: keeping the staged filename `burrow` means `BurrowConductor.executableURL()`
-# (Resources/burrow) never has to change, which is what lets every `capture()` call site need
-# zero edits for this repoint.
+# WHY THREE NAMES, NONE OF THEM MATCHING — read this before grepping for "engine" here. The
+# script is called "burrow", it builds the crate named `burrow-engine` (the submodule at
+# macos/vendor/burrow-engine, which tracks caezium/burrow-engine), and it writes the result to a
+# file named neither: Resources/burrow. That last one is deliberate rather than a leftover —
+# `BurrowConductor.executableURL()` resolves Resources/burrow, so keeping the staged filename is
+# exactly what lets every `capture()` call site stay unedited.
 #
 # The GUI shells out to this ONE bundled binary (`burrow <cmd> --json`) for the stable Burrow
-# envelope, and `clean --stream` / `optimize --stream` for the live NDJSON progress feed. The new
-# MIT `burrow-engine` does all the work natively (analyze/status/clean/optimize/uninstall/net/
+# envelope, and `clean --stream` / `optimize --stream` for the live NDJSON progress feed. The MIT
+# `burrow-engine` does all the work natively (analyze/status/clean/optimize/uninstall/net/
 # orphans/slim-check/evict/dupes/photos/history/purge/installer), so there is no separate engine
-# dir or conductor anymore — this single binary replaces both the old burrow-cli conductor and the
-# burrow-digger engine. Only the built binary travels — no Rust source ships. `dupes` shells the
-# sibling-bundled Resources/fclones via $BURROW_FCLONES.
+# dir or conductor — this single binary serves every command. Only the built binary travels — no
+# Rust source ships. `dupes` shells the sibling-bundled Resources/fclones via $BURROW_FCLONES.
 #
 # Usage: bundle-burrow.sh <BURROW_ENGINE_SRC> <RESOURCES_DIR>
 #   BURROW_ENGINE_SRC  a burrow-engine checkout (has Cargo.toml with the `burrow-engine` binary)

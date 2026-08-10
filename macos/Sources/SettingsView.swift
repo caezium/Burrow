@@ -689,7 +689,11 @@ struct SettingsView: View {
             let engine = MoleCLI.versionReport()
             let policy = MoleCLI.currentEngineUpdatePolicy
             DispatchQueue.main.async {
-                moleVersion = engine?.display ?? "not found"
+                // Same fallback string, and the same localization, as `AppDelegate.showAboutPanel`
+                // — the two rows report the identical fact one panel apart, and only this one was
+                // hard-coded, so a zh build read "burrow-engine 0.1.0" in the About panel and a
+                // bare English "not found" in Settings.
+                moleVersion = engine?.display ?? NSLocalizedString("not found", comment: "")
                 engineUpdatePolicy = policy
             }
         }

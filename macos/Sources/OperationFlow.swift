@@ -349,11 +349,16 @@ extension ToolOperation where Report == TaskRunReport {
                            notifyOnEnd: Bool = false) -> ToolOperation {
         // The bundled engine streams NDJSON (clean/optimize --stream); reduce those events into the
         // same (groups, summary) shape the human-text parser produced. See BurrowStreamReport.
-        ToolOperation(label: label, arguments: args, gate: gate, elevated: elevated,
-                      reduce: { BurrowStreamReport.reduce($0) },
-                      hudLine: { BurrowStreamReport.hudLine($0) },
-                      notifyOnEnd: notifyOnEnd,
-                      finalDetail: { $0.summary?.completionLine ?? "" })
+        //
+        // The group title comes from THIS operation's argv, so the same factory titles a
+        // `["clean"]` run "Cleanup" and TuneUp's `["optimize"]` run "Maintenance" — the reduce sees
+        // only the events, which is the wrong place to decide what tool ran.
+        let title = BurrowStreamReport.groupTitle(forMo: args)
+        return ToolOperation(label: label, arguments: args, gate: gate, elevated: elevated,
+                             reduce: { BurrowStreamReport.reduce($0, title: title) },
+                             hudLine: { BurrowStreamReport.hudLine($0) },
+                             notifyOnEnd: notifyOnEnd,
+                             finalDetail: { $0.summary?.completionLine ?? "" })
     }
 }
 

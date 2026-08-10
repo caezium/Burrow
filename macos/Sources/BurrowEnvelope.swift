@@ -143,11 +143,18 @@ extension BurrowEnvelope {
     /// instead (`SoftwareView`'s uninstall-failure alert already did exactly this fallback, and
     /// it is the one site that kept working through the repoint). ANSI is stripped from the two
     /// raw streams — mo decorates its output — and is a no-op on the engine's JSON.
+    ///
+    /// A failure envelope ANSWERS THE QUESTION even when its `message` is empty, so that case
+    /// returns nil rather than falling through to the raw streams. The fall-through was the bug:
+    /// the raw stdout of an `ok:false` run IS the envelope, so an engine that classified a
+    /// failure without a message put the JSON itself on screen — `{"ok":false,"burrow_cli":…}` in
+    /// an alert — which is strictly worse than the "no error output" sentence the callers already
+    /// have ready for nil. stderr can't rescue it either: the engine writes nothing there.
     static func failureReason(stdout: String, stderr: String) -> String? {
         if let envelope = inOutput(stdout), !envelope.ok {
             let message = (envelope.error?.message ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !message.isEmpty { return message }
+            return message.isEmpty ? nil : message
         }
         for stream in [stderr, stdout] {
             let text = Ansi.strip(stream).trimmingCharacters(in: .whitespacesAndNewlines)

@@ -94,6 +94,24 @@ final class EngineFailureChannelTests: XCTestCase {
                      "nil, so a caller prints \"no error output\" instead of an empty reason")
     }
 
+    /// A failure envelope with nothing in `message` must NOT fall through to the raw streams: on
+    /// an `ok:false` run the raw stdout IS the envelope, so the fallback printed the JSON document
+    /// itself into the alert — strictly worse than the "no error output" sentence callers already
+    /// have ready for nil. stderr can't rescue it either; the engine writes nothing there.
+    func testFailureReason_failureEnvelopeWithNoMessage_isNilNotTheRawEnvelopeJSON() {
+        let noMessageKey = #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"clean","error":{"kind":"process_failed","platform":"macos"}}"#
+        XCTAssertNil(BurrowEnvelope.failureReason(stdout: noMessageKey, stderr: ""),
+                     "the envelope must never become its own error string")
+        // Whitespace-only is the same case — it trims to empty.
+        let blankMessage = #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"clean","error":{"kind":"error","message":"  \n ","platform":"macos"}}"#
+        XCTAssertNil(BurrowEnvelope.failureReason(stdout: blankMessage, stderr: ""))
+        // Narrow: only the FAILURE envelope short-circuits. A success envelope (exit 1 with
+        // `ok:true` — the engine's `i32::from(failed)`) keeps the raw-stream fallback that
+        // `MCP.realRunClaim` and the uninstall alert still depend on.
+        let successEnvelope = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"clean","data":{}}"#
+        XCTAssertEqual(BurrowEnvelope.failureReason(stdout: successEnvelope, stderr: "boom"), "boom")
+    }
+
     func testFailureKind_classifiesPerFixture_andIsNilForNonEngineShapes() {
         XCTAssertEqual(BurrowEnvelope.failureKind(stdout: analyzeMissing), "error")
         XCTAssertEqual(BurrowEnvelope.failureKind(stdout: dupesMissing), "process_failed")
@@ -144,7 +162,12 @@ final class EngineFailureChannelTests: XCTestCase {
 
     func testPayloadBytes_legacyBarePayload_passesThroughByteForByte() throws {
         let bytes = try XCTUnwrap(BurrowEnvelope.payloadBytes(stdout: legacyBareAnalyze))
-        XCTAssertEqual(String(decoding: bytes, as: UTF8.self), legacyBareAnalyze)
+        // The FAILABLE initializer, not `String(decoding:as:)`: this asserts "byte for byte", and
+        // the lossy form silently substitutes U+FFFD for a bad byte, so the comparison would fail
+        // for a reason the failure message never names. XCTUnwrap says "not valid UTF-8" instead.
+        let text = try XCTUnwrap(String(data: bytes, encoding: .utf8),
+                                 "payloadBytes must hand back decodable UTF-8")
+        XCTAssertEqual(text, legacyBareAnalyze)
     }
 
     // MARK: - DiskScanner: the reported bug, and the legacy diagnosis that must survive

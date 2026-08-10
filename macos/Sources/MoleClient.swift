@@ -19,11 +19,11 @@ enum MoleClient {
     // MARK: - Installed apps (`mo uninstall --list`)
 
     /// `listAppsResult`'s outcome — kept distinct from a plain `[InstalledApp]` because an empty
-    /// ARRAY collapses two very different situations: "the lookup failed" (the bundled engine
-    /// has no `--list` at all, post-repoint — every real call today) and "the lookup succeeded
-    /// and there are genuinely no apps". A caller (a human reading the Software tab, or an agent
-    /// deciding whether to keep looking for something to uninstall) needs to tell those apart
-    /// rather than treat both as "no apps installed".
+    /// ARRAY collapses two very different situations: "the lookup failed" (a spawn error, a
+    /// non-zero exit, a binary with no `--list`) and "the lookup succeeded and there are genuinely
+    /// no apps". A caller (a human reading the Software tab, or an agent deciding whether to keep
+    /// looking for something to uninstall) needs to tell those apart rather than treat both as
+    /// "no apps installed".
     enum ListAppsResult {
         case ok([InstalledApp])
         case unavailable
@@ -32,6 +32,16 @@ enum MoleClient {
     /// Installed apps + the exact names `mo uninstall` accepts, distinguishing a failed lookup
     /// from a genuinely empty result. Sizes can take a while on a full /Applications, so callers
     /// give it room.
+    ///
+    /// `stdout` goes STRAIGHT to `parseApps` — no `BurrowEnvelope.payloadBytes` unwrap, unlike
+    /// `DiskScanner.scan` / `MoCLIStatusSource.statusJSON` / `MCP.callAnalyze`. That asymmetry is
+    /// the contract, not an oversight: `uninstall --list` is the one command the engine answers
+    /// with a bare top-level ARRAY, and it pins that on its own side with a test that names this
+    /// parser (`uninstall_list_emits_a_bare_array_never_an_envelope`) — because `parseApps` does
+    /// `as? [[String: Any]]` and returns `[]` for an object, so an envelope here would empty the
+    /// Software tab with no error anywhere. Unwrapping would also be a no-op even if it were
+    /// added: `BurrowEnvelope.parse` throws `.notAnObject` on an array, so `payloadBytes` passes
+    /// it through untouched.
     static func listAppsResult(timeout: TimeInterval = 180) -> ListAppsResult {
         guard let res = try? MoEngine.shared.capture(
                 MoCommand(target: .mo, args: ["uninstall", "--list"], timeout: timeout)),

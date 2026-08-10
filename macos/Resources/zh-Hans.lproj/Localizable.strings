@@ -486,7 +486,10 @@
 "one of these apps" = "其中某个应用";
 "Homebrew removes %1$@: `%2$@`. `--zap` also deletes configuration and data the cask declares, which the preview can't list." = "Homebrew 会删除 %1$@：`%2$@`。`--zap` 还会删除该 cask 声明的配置与数据，预览无法列出这些内容。";
 "aborted — nothing removed" = "已中止 — 未删除任何内容";
+"The engine reported: %@" = "引擎报告：%@";
 "uninstall failed" = "卸载失败";
+"Uninstall failed" = "卸载失败";
+"The engine reported a failure with no error output. Nothing was removed." = "引擎报告运行失败，但没有输出任何错误信息。未删除任何内容。";
 "OK" = "好";
 
 /* ===== Uninstall outcomes (per app: removed / partial / refused) ===== */

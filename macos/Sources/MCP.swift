@@ -1069,8 +1069,16 @@ struct ToolCatalog {
     /// Run a gate-minted ticket: preflight (uninstall pins mo's matched set
     /// before any prompt is answered — fail closed), spawn, render.
     private func execute(_ ticket: RunTicket) -> String {
-        if case .verifyUninstallMatch(let expected) = ticket.preflight,
-           let pre = ticket.preflightCommand {
+        if let preflight = ticket.preflight {
+            let pre = preflight.command
+            // Exhaustive, so a pre-flight kind added to the catalog can't quietly acquire a
+            // "no branch matched, run it anyway" path here. The probe comes off the same value as
+            // the policy, so there is no second optional that could be absent while this one is
+            // present — that pair is what used to let a policy fall through to the apply below.
+            let expected: [String]
+            switch preflight.policy {
+            case .verifyUninstallMatch(let apps): expected = apps
+            }
             // `pre.spawnPath` and `ticket.command.spawnPath` are the same file by construction —
             // the gate resolved once and put the answer on both — so the plan this reads is the
             // plan the apply below executes, and neither is re-discovered here.

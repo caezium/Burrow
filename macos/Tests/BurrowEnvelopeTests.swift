@@ -289,7 +289,15 @@ final class BurrowEnvelopeTests: XCTestCase {
     // not variant of `shouldStreamViaConductor` to test — the absence of the parameter IS the
     // regression guard; a future edit would have to deliberately re-add it to reintroduce the bug.
 
-    func testStreamOverride_offByDefault_keepsDirectEngine() {
+    /// Nil here is NOT the switch being off — `streamingEnabled` defaults to TRUE, and the switch
+    /// is set explicitly below anyway so no ambient default can decide it. It is the SECOND guard:
+    /// `executableURL()` finds no `Resources/burrow` in a unit-test bundle, so no host running
+    /// this suite can produce an override, and the caller keeps the direct-engine path.
+    func testStreamOverride_isNilWithoutABundledBinary_soTheTestHostKeepsDirectEngine() {
+        UserDefaults.standard.set(true, forKey: "BurrowStreamViaConductor")
+        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
+        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "clean"),
+                      "the command gate is open — what follows isolates the bundling gate")
         XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"]))
     }
 }

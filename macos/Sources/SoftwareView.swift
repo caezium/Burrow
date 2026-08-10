@@ -1318,10 +1318,18 @@ final class SoftwareModel: ObservableObject {
         // speaks, and which file the two spawns below run. `uninstallBatch` already built
         // `arguments` from the same answer, so the identifiers, the argv and the binary all come
         // from ONE lookup — the sheet the user agreed to describes the run that happens.
+        //
+        // The pre-flight comes off the ticket as ONE value — the policy and the read-only probe
+        // that answers it — so unwrapping it here is the whole check. A real uninstall always
+        // carries one; a ticket that somehow didn't would run the destructive apply below with no
+        // guard in front of it, so this refuses instead, exactly like the verdict test it rides
+        // with. Both refusals are silent because nothing has started yet: no HUD entry, no
+        // `loading`, no Trash — there is nothing to unwind and nothing to explain.
         guard case .run(let ticket) = MoActions.decide(
-            .uninstall(apps: arguments, permanent: false), .real,
-            .gui(hasFullDiskAccess: true, userConfirmed: true),
-            resolve: { _ in engine }) else { return }
+                  .uninstall(apps: arguments, permanent: false), .real,
+                  .gui(hasFullDiskAccess: true, userConfirmed: true),
+                  resolve: { _ in engine }),
+              let pre = ticket.preflight?.command else { return }
         loading = true
         // Surface the run in the menu-bar HUD's Activity section too. Both resolved binaries now
         // remove the `.app` as well as its support files, so "Uninstalling" is the true label —
@@ -1334,10 +1342,8 @@ final class SoftwareModel: ObservableObject {
             // Pre-flight (audit H4): the resolved binary does its own matching, so before anything
             // is removed, verify what it says it will ACT ON equals what the user CONFIRMED.
             // `--dry-run` changes nothing; anything unreadable aborts (fail closed).
-            // Minted with the ticket, from the same resolution, so this probe and the apply below
-            // are the same binary reading argv built for it. Non-nil whenever `ticket.preflight`
-            // is, which a real uninstall always sets.
-            let pre = ticket.preflightCommand!
+            // `pre` was minted with the ticket, from the same resolution, so this probe and the
+            // apply below are the same binary reading argv built for it.
             let dry = try? MoEngine.shared.capture(
                 MoCommand(target: .executable(pre.spawnPath), args: pre.args, stdin: pre.stdin,
                           timeout: pre.timeout ?? 120))

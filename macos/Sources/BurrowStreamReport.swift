@@ -18,15 +18,38 @@
 //                   "dry_run":true,"tasks":N}
 //
 //  Parsed line-by-line with JSONSerialization (like BurrowEnvelope) — the reduce is called on the
-//  accumulated `[String]` after every streamed line (throttled) and once at exit.
+//  accumulated `[String]` after every streamed line (throttled) and once at exit. Output that
+//  isn't NDJSON at all (a legacy Homebrew `mo`, reachable when no conductor is bundled) falls
+//  through to `parseTaskReport` rather than reducing to a blank report — see `reduce`.
 //
 
 import Foundation
 
 enum BurrowStreamReport {
+    /// The card title for a streamed run's one group, decided by the mo-style argv the operation
+    /// was built with rather than inferred from the events that come back.
+    ///
+    /// Inferring would half-work: clean and optimize emit disjoint event vocabularies today
+    /// (`removed`/`would_remove`/`protected` vs `task`/`would_run`), so a mapping off the event
+    /// name is possible — but it has nothing to go on for a run whose only line is `done`, and it
+    /// silently mistitles the day the engine adds an event. The argv is settled before the process
+    /// even spawns and is the operation's own statement of which tool it is, so every streamed
+    /// ToolOperation passes it through here and no run can be labelled as the other tool.
+    static func groupTitle(forMo moArgs: [String]) -> String {
+        moArgs.first == "optimize"
+            ? NSLocalizedString("Maintenance", comment: "streamed optimize group title")
+            : cleanupTitle
+    }
+
+    private static var cleanupTitle: String {
+        NSLocalizedString("Cleanup", comment: "streamed clean group title")
+    }
+
     /// Reduce the accumulated NDJSON lines into a TaskRunReport. Unparseable / non-event lines are
-    /// skipped, so a stray warning on stderr never breaks the result screen.
-    static func reduce(_ lines: [String]) -> TaskRunReport {
+    /// skipped, so a stray warning on stderr never breaks the result screen. `title` names the one
+    /// group the items land in — pass `groupTitle(forMo:)`; the default keeps clean's wording for
+    /// the clean-only callers.
+    static func reduce(_ lines: [String], title: String? = nil) -> TaskRunReport {
         var items: [TaskItem] = []
         var summary: TaskSummary?
 
@@ -55,10 +78,25 @@ enum BurrowStreamReport {
             }
         }
 
-        let groups = items.isEmpty
-            ? []
-            : [TaskGroup(title: NSLocalizedString("Cleanup", comment: "streamed op group title"),
-                         items: items)]
+        let groups = items.isEmpty ? [] : [TaskGroup(title: title ?? cleanupTitle, items: items)]
+
+        // Nothing was NDJSON → parse the lines as mo's human text instead of returning a blank
+        // report. That path is live, not hypothetical: `OperationFlow.start` only appends
+        // `--stream` when a conductor is bundled (`BurrowConductor.streamOverride`), and when one
+        // isn't, `resolveMo` can land on a legacy Homebrew `/opt/homebrew/bin/mo`
+        // (`MoleCLI.trustedExecutable`), which speaks the ➤/→ marker grammar `parseTaskReport`
+        // was written for. Putting the fallback in the reducer rather than in a view means the
+        // result screen AND the completion notification (whose detail line is derived from this
+        // same report, via `ToolOperation.finalDetail`) both get it.
+        //
+        // Both empty is the trigger, never either alone. A streamed run that legitimately did
+        // nothing — a clean machine — still ends with a `done` event, so it returns empty `groups`
+        // WITH a summary and is kept as-is. And when the trigger does fire on NDJSON or on no
+        // output at all, `parseTaskReport` returns exactly the empty report we'd have returned
+        // anyway: it needs a ➤ or marker line to open a group, drops groups that end up with no
+        // items, and its bare-header branch rejects any line containing a `:` — which every JSON
+        // line has. So the fallback can only add a report, never fabricate one.
+        if groups.isEmpty, summary == nil { return parseTaskReport(lines) }
         return (groups: groups, summary: summary)
     }
 
