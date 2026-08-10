@@ -262,13 +262,19 @@ final class OperationFlowTests: XCTestCase {
         XCTAssertFalse(message.contains("Nothing was cleaned"), message)
     }
 
+    /// This is about the DIRECT engine path, so it has to pin the no-conductor world: with a
+    /// conductor staged, `streamOverride` supplies an executable for a non-elevated `clean`
+    /// before `resolveMo` is ever consulted, and the unresolvable-engine branch under test is
+    /// never reached. It previously relied on the test host happening not to bundle one.
     func testMissingExecutableFailsBeforeSpawn() {
-        let port = FakeProcessPort(script: [])
-        let flow = OperationFlow<CleanReport>(process: port, hasFullDiskAccess: { true },
-                                              resolveMo: { _ in nil }, center: OperationCenter())
-        flow.start(Self.cleanOp())
-        guard case .finished(.failed) = flow.state else { return XCTFail("expected failed") }
-        XCTAssertTrue(port.specs.isEmpty)
+        ConductorBundleFixture.withConductor(present: false) {
+            let port = FakeProcessPort(script: [])
+            let flow = OperationFlow<CleanReport>(process: port, hasFullDiskAccess: { true },
+                                                  resolveMo: { _ in nil }, center: OperationCenter())
+            flow.start(Self.cleanOp())
+            guard case .finished(.failed) = flow.state else { return XCTFail("expected failed") }
+            XCTAssertTrue(port.specs.isEmpty)
+        }
     }
 
     func testElevatedRunFailsBeforeSpawnWhenInvokingAccountCannotBeResolved() {
