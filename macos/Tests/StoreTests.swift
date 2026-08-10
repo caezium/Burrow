@@ -75,6 +75,15 @@ final class StoreTests: XCTestCase {
         XCTAssertTrue(Store.telemetryNoticeAcknowledged)
     }
 
+    // The Touch ID banner offers an optional convenience, so unlike the FDA
+    // notice its dismiss is final: shown on a fresh install, never again once
+    // the user says no.
+    func testHelperNotice_defaultsUndismissedAndPersists() {
+        XCTAssertFalse(Store.helperNoticeDismissed)
+        Store.helperNoticeDismissed = true
+        XCTAssertTrue(Store.helperNoticeDismissed)
+    }
+
     // Issue #4: the menu-bar icon is on by default; the off-switch must
     // persist (it's read once at launch to decide menu-bar vs Dock mode).
     func testShowMenuBarIcon_defaultsTrueAndPersists() {

@@ -78,8 +78,19 @@ struct RootView: View {
     /// notice — so one historical dismiss suppressed it forever even while FDA
     /// stayed off, which is why upgraders never saw it.)
     @State private var fdaBannerDismissed = false
+    /// Whether the privileged helper is registered. Starts optimistic so the
+    /// banner never flashes before the first probe answers, and is read off
+    /// the main thread — `SMAppService.status` is a synchronous XPC call.
+    @State private var helperInstalled = true
+    /// Persisted, unlike the FDA dismiss: the helper is a convenience (Touch
+    /// ID instead of a password), so once someone says no we stop asking.
+    @State private var helperBannerDismissed = Store.helperNoticeDismissed
     /// Where Esc in the Settings pane returns to.
     @State private var lastNonSettingsPane: Pane = .home
+    /// Set by a banner deep-link so Settings opens on the right tab, scrolled
+    /// to the section that was being offered. Cleared on leaving Settings.
+    @State private var settingsTab: SettingsView.Tab = .general
+    @State private var settingsScrollTarget: String?
     /// Tools that have been opened this session. Panes mount on FIRST visit and stay alive
     /// after (preserving in-flight work) — but never before: a hidden pane still runs full
     /// layout + material backdrops on every display flush, and mounting all ten at launch
@@ -145,11 +156,18 @@ struct RootView: View {
         .onAppear {
             producer.setForeground(Self.isMetricsPane(pane))
             if screenTelemetry.appeared(on: pane) { Telemetry.screen(pane) }
+            refreshHelperStatus()
         }
         .onChange(of: pane) { _, p in
             producer.setForeground(windowVisible && Self.isMetricsPane(p))
             if screenTelemetry.paneChanged(to: p) { Telemetry.screen(p) }
-            if p != .settings { lastNonSettingsPane = p }
+            if p != .settings {
+                lastNonSettingsPane = p
+                // A deep-link is a one-shot: reaching Settings any other way
+                // should land on General, at the top.
+                settingsTab = .general
+                settingsScrollTarget = nil
+            }
             if case .tool(let t) = p { visitedTools.insert(t) }
         }
         .onDisappear { producer.setForeground(false) }
@@ -168,21 +186,59 @@ struct RootView: View {
         // the banner auto-dismisses the moment access is granted.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             fdaGranted = Privacy.hasFullDiskAccess()
+            // Approving the helper happens in System Settings, in another
+            // process, with nothing notifying us — so re-read on return.
+            refreshHelperStatus()
         }
+        // At most one banner at a time. FDA outranks the helper: without it
+        // scans can't read the caches the helper would elevate over anyway.
         .overlay(alignment: .bottom) {
             if !fdaGranted, !fdaBannerDismissed {
-                AccessBanner(onDismiss: {
-                    // Session-only — don't persist, so a future launch with FDA
-                    // still off shows it again (a gentle once-per-launch nudge).
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                        fdaBannerDismissed = true
-                    }
-                })
+                AccessBanner(
+                    title: NSLocalizedString("Full Disk Access is off", comment: ""),
+                    detail: NSLocalizedString("Without it, Burrow can't reach most system caches.", comment: ""),
+                    onDismiss: {
+                        // Session-only — don't persist, so a future launch with FDA
+                        // still off shows it again (a gentle once-per-launch nudge).
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                            fdaBannerDismissed = true
+                        }
+                    })
+                .padding(.horizontal, 18).padding(.bottom, 14)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            } else if !helperInstalled, !helperBannerDismissed {
+                AccessBanner(
+                    glyph: "touchid",
+                    title: NSLocalizedString("Use Touch ID for admin operations", comment: ""),
+                    detail: NSLocalizedString("Install the signed helper and scan, clean, and optimize authenticate with a fingerprint instead of a password.", comment: ""),
+                    actionTitle: NSLocalizedString("Set up", comment: ""),
+                    onAction: {
+                        settingsTab = .advanced
+                        settingsScrollTarget = SettingsView.helperAnchor
+                        pane = .settings
+                    },
+                    onDismiss: {
+                        Store.helperNoticeDismissed = true
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                            helperBannerDismissed = true
+                        }
+                    })
                 .padding(.horizontal, 18).padding(.bottom, 14)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: fdaGranted)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: helperInstalled)
+    }
+
+    /// `SMAppService.status` is a synchronous XPC round-trip — reading it on
+    /// the main thread hung the window in Settings (BURROW app-hang reports),
+    /// so the banner's probe stays off-main too.
+    private func refreshHelperStatus() {
+        DispatchQueue.global(qos: .utility).async {
+            let installed = PrivilegedHelperClient.shared.registrationStatus != .notRegistered
+            DispatchQueue.main.async { helperInstalled = installed }
+        }
     }
 
     /// Panes whose charts want live, high-cadence data. Home's Overview /
@@ -241,7 +297,9 @@ struct RootView: View {
                     // VACUUM can rewrite the whole DB file).
                     let m = delegate?.maintenance
                     DispatchQueue.global(qos: .utility).async { m?.runNow() }
-                }, onClose: { pane = lastNonSettingsPane })
+                }, onClose: { pane = lastNonSettingsPane },
+                   initialTab: settingsTab,
+                   scrollTarget: settingsScrollTarget)
             }
         }
     }

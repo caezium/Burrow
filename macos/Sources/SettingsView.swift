@@ -33,13 +33,30 @@ struct SettingsView: View {
         }
     }
 
+    /// Anchor for deep-links that want the privileged-helper section on
+    /// screen (RootView's Touch ID banner).
+    static let helperAnchor = "privileged-helper"
+
     /// Wired by AppDelegate; the only consumer is "Run maintenance now".
     var onRunMaintenance: (() -> Void)?
     /// Esc leaves Settings (RootView returns to the previous pane). The
     /// pane has no close chrome of its own — navigation lives in the floating rail.
     var onClose: (() -> Void)?
+    /// A section anchor to scroll to once the pane lays out. Only set when
+    /// something deep-linked here to offer a specific setting.
+    var scrollTarget: String?
 
-    @State private var tab: Tab = .general
+    @State private var tab: Tab
+
+    init(onRunMaintenance: (() -> Void)? = nil,
+         onClose: (() -> Void)? = nil,
+         initialTab: Tab = .general,
+         scrollTarget: String? = nil) {
+        self.onRunMaintenance = onRunMaintenance
+        self.onClose = onClose
+        self.scrollTarget = scrollTarget
+        self._tab = State(initialValue: initialTab)
+    }
 
     // General
     @State private var fdaGranted = Privacy.hasFullDiskAccess()
@@ -134,24 +151,37 @@ struct SettingsView: View {
             header
                 .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 10)
             Rectangle().fill(Brand.hairline).frame(height: 1)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    switch tab {
-                    case .general:     generalTab
-                    case .maintenance: maintenanceTab
-                    case .menuBar:     menuBarTab
-                    case .advanced:    advancedTab
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        switch tab {
+                        case .general:     generalTab
+                        case .maintenance: maintenanceTab
+                        case .menuBar:     menuBarTab
+                        case .advanced:    advancedTab
+                        }
+                    }
+                    // Full-bleed pane, readable column: the cards cap at a
+                    // comfortable measure and stay centered in wide windows.
+                    .frame(maxWidth: 680)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 22)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollIndicators(.hidden)
+                // A deep-linked section is often below the fold; the anchor
+                // only exists once the tab's content has laid out, so this
+                // waits a beat rather than scrolling to nothing.
+                .onAppear {
+                    guard let scrollTarget else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(scrollTarget, anchor: .center)
+                        }
                     }
                 }
-                // Full-bleed pane, readable column: the cards cap at a
-                // comfortable measure and stay centered in wide windows.
-                .frame(maxWidth: 680)
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 22)
-                .frame(maxWidth: .infinity)
             }
-            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onExitCommand { onClose?() }
@@ -672,6 +702,7 @@ struct SettingsView: View {
                 }
                 footnote("Runs Burrow's admin operations — scan, clean, optimize — through a small signed helper instead of a password-only prompt, so macOS can offer Touch ID. Installing it needs your approval once and grants no standing access: you're asked to authenticate for each operation you start. The helper can only perform those three operations — it cannot be asked to run anything else.")
             }
+            .id(Self.helperAnchor)
 
             section("Mole engine", "shippingbox") {
                 infoRow("Version", moleVersion)

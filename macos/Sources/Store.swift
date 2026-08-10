@@ -373,6 +373,16 @@ enum Store {
         set { d.set(newValue, forKey: "fda_notice_dismissed") }
     }
 
+    /// Whether the user has dismissed the banner offering the privileged
+    /// helper (Touch ID for admin operations). Unlike the FDA notice — which
+    /// re-asks each launch because without it scans genuinely can't read
+    /// protected caches — the helper is a convenience, so one dismiss is
+    /// final. Installing it hides the banner on its own.
+    static var helperNoticeDismissed: Bool {
+        get { d.object(forKey: "helper_notice_dismissed") as? Bool ?? false }
+        set { write(newValue, "helper_notice_dismissed") }
+    }
+
     /// Whether the popover shows a camera/microphone in-use indicator.
     /// Opt-in (off by default): detection is honest (system "in use" flag,
     /// like Control Center) but lights for Siri/dictation/Continuity too, so

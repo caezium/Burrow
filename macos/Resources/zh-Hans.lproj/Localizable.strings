@@ -541,6 +541,9 @@
 /* Access banner */
 "Full Disk Access is off" = "完全磁盘访问权限已关闭";
 "Without it, Burrow can't reach most system caches." = "没有它，Burrow 无法触达大多数系统缓存。";
+"Use Touch ID for admin operations" = "用触控 ID 完成管理员操作";
+"Install the signed helper and scan, clean, and optimize authenticate with a fingerprint instead of a password." = "安装已签名的辅助工具后，扫描、清理与优化将用指纹验证，而不必输入密码。";
+"Set up" = "去设置";
 "Dismiss" = "关闭";
 
 /* Clean — result hero & run */
