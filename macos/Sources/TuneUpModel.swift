@@ -184,7 +184,7 @@ final class TuneUpModel: ObservableObject {
     /// compile error — confirmed with `swiftc -typecheck` reproducing this file's exact shape;
     /// `swiftc -parse` alone does not catch it, which is how it shipped in the first place.
     nonisolated static func cleanableSpace(fromCaptureStdout stdout: String) -> String {
-        guard let envelope = try? BurrowEnvelope.parse(stdout) else {
+        guard let envelope = BurrowEnvelope.inOutput(stdout) else {
             let (_, summary) = parseTaskReport(stdout.components(separatedBy: "\n"))
             let space = summary?.space ?? ""
             // "0B" / "0 B" reads as nothing to do.
@@ -209,7 +209,7 @@ final class TuneUpModel: ObservableObject {
     /// `Task.detached` closure and the plain-XCTestCase tests both call this from outside the
     /// main actor.
     nonisolated static func optimizeAreas(fromCaptureStdout stdout: String) -> [String] {
-        guard let envelope = try? BurrowEnvelope.parse(stdout) else {
+        guard let envelope = BurrowEnvelope.inOutput(stdout) else {
             let (groups, _) = parseTaskReport(stdout.components(separatedBy: "\n"))
             return groups.map { TaskReportText.title($0.title) }
         }
