@@ -748,6 +748,14 @@ struct SystemProcessPort: ProcessPort {
                               onChunk: (String) -> Void) {
         let fd = handle.fileDescriptor
         var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        // Bytes held back because the read ended mid-UTF-8-sequence. A 64KB read
+        // boundary lands wherever the kernel put it, so it can split a multi-byte
+        // character — and lossy decoding each read INDEPENDENTLY would turn that one
+        // character into U+FFFD on both sides of the seam. Engine output carries file
+        // paths, which are routinely non-ASCII, so this is reachable rather than
+        // theoretical. Carrying the partial sequence to the next read makes the seam
+        // invisible; the lossy decode below then only ever sees whole characters.
+        var carry: [UInt8] = []
         while true {
             var fds = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
             let ready = poll(&fds, 1, ChildGuard.pollTickMs)
@@ -766,14 +774,54 @@ struct SystemProcessPort: ProcessPort {
                 child.note("\(pipe): read failed (errno \(errno)) — giving up on this pipe")
                 return
             }
-            if n == 0 { return }                             // EOF: every write end is closed
+            if n == 0 {                                      // EOF: every write end is closed
+                // Whatever is still held back is genuinely truncated output, not a
+                // seam — emit it lossily rather than swallowing it.
+                if !carry.isEmpty { onChunk(String(decoding: carry, as: UTF8.self)) }
+                return
+            }
             child.sawData()
-            // Lossy decode, never the failable initializer: a read can end
-            // mid-UTF-8-sequence, and `String(data:encoding:)` returning nil
-            // there discarded the whole 64KB chunk — losing entire lines of a
-            // run's transcript. Same rule the elevated tail follows.
-            onChunk(String(decoding: buffer[0..<n], as: UTF8.self))
+            // Lossy decode, never the failable initializer: `String(data:encoding:)`
+            // returning nil on a split sequence used to discard the whole 64KB chunk,
+            // losing entire lines of a run's transcript. Same rule the elevated tail
+            // follows. The split itself is handled by `carry` rather than by the
+            // decoder, so what reaches it is always a whole number of characters.
+            var bytes = carry
+            bytes.append(contentsOf: buffer[0..<n])
+            carry = Self.splitTrailingPartialSequence(&bytes)
+            if !bytes.isEmpty { onChunk(String(decoding: bytes, as: UTF8.self)) }
         }
+    }
+
+    /// Removes and returns a trailing INCOMPLETE UTF-8 sequence from `bytes`, leaving
+    /// `bytes` ending on a character boundary. Returns empty when the buffer already
+    /// ends cleanly, which is the overwhelmingly common case.
+    ///
+    /// A sequence is at most 4 bytes, so at most the last 3 can be incomplete — scan
+    /// back that far for a lead byte and compare its declared width against what
+    /// actually arrived. A malformed lead (or none within 3 bytes) is NOT held back:
+    /// waiting for a continuation that is never coming would stall the stream, and the
+    /// lossy decode below renders it as U+FFFD, which is the honest answer for bytes
+    /// that are not UTF-8 in the first place.
+    static func splitTrailingPartialSequence(_ bytes: inout [UInt8]) -> [UInt8] {
+        let maxSequence = 4
+        for back in 1..<maxSequence where bytes.count >= back {
+            let byte = bytes[bytes.count - back]
+            if byte & 0b1100_0000 == 0b1000_0000 { continue }   // continuation — keep scanning
+            let width: Int
+            switch byte {
+            case 0x00...0x7F: width = 1
+            case 0xC2...0xDF: width = 2
+            case 0xE0...0xEF: width = 3
+            case 0xF0...0xF4: width = 4
+            default: return []                                  // malformed lead: let it decode
+            }
+            guard width > back else { return [] }               // complete: nothing to hold back
+            let tail = Array(bytes.suffix(back))
+            bytes.removeLast(back)
+            return tail
+        }
+        return []
     }
 
     /// The kill-and-reap state one spawned child needs, shared by the timeout

@@ -482,6 +482,46 @@ final class SystemProcessPortTests: XCTestCase {
         XCTAssertEqual(r.exit, 127)
     }
 
+    // MARK: Chunk seams — a 64KB read boundary must not corrupt a character
+
+    /// A pipe read ends wherever the kernel put it, so it can split a multi-byte
+    /// character in half. Decoding each read independently turns that one character
+    /// into U+FFFD on both sides of the seam — and engine output carries file paths,
+    /// which are routinely non-ASCII, so this is reachable rather than theoretical.
+    ///
+    /// Drives EVERY split point of a string mixing 1-, 2-, 3- and 4-byte sequences
+    /// rather than a hand-picked boundary: the interesting cuts are exactly the ones
+    /// a hand-written case would miss.
+    func testChunkSeam_everySplitPointReassemblesExactly() {
+        let text = "清理/Résumé 🎉 done\n"
+        let all = Array(text.utf8)
+        for cut in 0...all.count {
+            var out = ""
+            var carry: [UInt8] = []
+            for piece in [Array(all[0..<cut]), Array(all[cut...])] {
+                var bytes = carry
+                bytes.append(contentsOf: piece)
+                carry = SystemProcessPort.splitTrailingPartialSequence(&bytes)
+                if !bytes.isEmpty { out += String(decoding: bytes, as: UTF8.self) }
+            }
+            if !carry.isEmpty { out += String(decoding: carry, as: UTF8.self) }
+            XCTAssertEqual(out, text, "a read boundary at byte \(cut) corrupted the stream")
+        }
+    }
+
+    /// The carry must never outlive what it is for. Bytes that are not UTF-8 at all
+    /// have no continuation coming, so holding them back would stall the stream —
+    /// they decode to U+FFFD instead, which is the honest answer.
+    func testChunkSeam_malformedBytesAreNotHeldBack() {
+        var lone: [UInt8] = [0xFF]
+        XCTAssertEqual(SystemProcessPort.splitTrailingPartialSequence(&lone), [],
+                       "a malformed lead byte must decode, not wait forever")
+        var complete = Array("done\n".utf8)
+        XCTAssertEqual(SystemProcessPort.splitTrailingPartialSequence(&complete), [],
+                       "a buffer already ending on a boundary holds nothing back")
+        XCTAssertEqual(complete, Array("done\n".utf8), "and is left untouched")
+    }
+
     // MARK: Auth-cancel classification — an engine rule, not view folklore
 
     /// Only AppleScript's canonical userCanceledErr is a cancellation.
