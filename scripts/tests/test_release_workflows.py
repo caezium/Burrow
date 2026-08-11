@@ -215,15 +215,26 @@ class ReleaseWorkflowTests(unittest.TestCase):
             1,
             "the engine token belongs to the fetch step alone",
         )
-        for line in workflow.splitlines():
+        lines = workflow.splitlines()
+        for i, line in enumerate(lines):
             stripped = line.lstrip()
-            if stripped == "env:":
-                self.assertGreaterEqual(
-                    len(line) - len(stripped),
-                    8,
-                    "workflow- or job-level `env:` is inherited by every step, including the "
-                    f"tap push — keep env step-scoped: {line!r}",
-                )
+            indent = len(line) - len(stripped)
+            if stripped != "env:" or indent >= 8:
+                continue  # step-scoped: reaches only its own step
+            # An outer `env:` IS inherited by every step in the job, so what matters is
+            # whether it carries the token — not that it exists. A job-level block of
+            # ordinary config (EXPECTED_TEAM_ID) is fine and release.yml has one.
+            body = []
+            for nxt in lines[i + 1 :]:
+                if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= indent:
+                    break
+                body.append(nxt)
+            self.assertNotIn(
+                "ENGINE_PAT",
+                "\n".join(body),
+                "an inherited workflow- or job-level `env:` reaches every step, including "
+                f"the tap push — keep the engine token step-scoped: {body!r}",
+            )
 
         # ENGINE_PAT survives only in the fetch step, where every use is scoped
         # to one `git -c` invocation that writes no config anywhere.
