@@ -23,6 +23,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $project = Join-Path $root "BurrowWin.csproj"
 $exe = Join-Path $root "bin\x64\Debug\net8.0-windows10.0.26100.0\win-x64\BurrowWin.exe"
 $startupLog = Join-Path $env:LOCALAPPDATA "BurrowWin\startup.log"
+$settingsPath = Join-Path $env:LOCALAPPDATA "BurrowWin\settings.json"
 
 function Stop-ExistingBurrow {
     param([string]$ExpectedPath)
@@ -357,7 +358,10 @@ try {
 
         if ($null -eq $health) {
             try {
-                $health = Invoke-RestMethod -Uri "http://127.0.0.1:9277/health" -TimeoutSec 2
+                $settings = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+                $port = [Math]::Min(65535, [Math]::Max(1024, [int]$settings.HttpServerPort))
+                $headers = @{ Authorization = "Bearer $($settings.HttpServerAuthToken)" }
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -Headers $headers -TimeoutSec 2
             } catch {
                 $health = $null
             }

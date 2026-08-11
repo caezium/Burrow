@@ -43,6 +43,7 @@
                 <Button
                     Command="{Binding ScanCommand}"
                     Content="Scan"
+                    IsEnabled="{Binding CanStartOperation}"
                     Style="{StaticResource BurrowPillButtonStyle}" />
             </StackPanel>
         </Grid>
@@ -167,42 +168,54 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel VerticalAlignment="Center" Orientation="Horizontal" Spacing="8">
-                <ProgressRing
-                    Width="22"
-                    Height="22"
-                    IsActive="{Binding IsBusy}" />
+            <StackPanel VerticalAlignment="Center" Spacing="4">
+                <ProgressBar
+                    Width="320"
+                    Maximum="{Binding ProgressMaximum}"
+                    Value="{Binding ProgressValue}"
+                    IsIndeterminate="{Binding IsProgressIndeterminate}" />
                 <TextBlock
-                    VerticalAlignment="Center"
                     FontFamily="{StaticResource BurrowMonoFont}"
-                    FontSize="18"
+                    FontSize="12"
                     FontWeight="Bold"
                     Foreground="{StaticResource BurrowMutedBrush}"
-                    Text="old Downloads installers" />
+                    Text="{Binding CurrentTarget}"
+                    TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
             <Button
                 Grid.Column="1"
                 Margin="0,0,12,0"
-                Command="{Binding ClearSelectionCommand}"
-                Content="clear"
+                Command="{Binding CancelCommand}"
+                Content="Cancel"
+                IsEnabled="{Binding CanCancel}"
                 Style="{StaticResource BurrowSecondaryPillButtonStyle}" />
             <Button
                 Grid.Column="2"
                 Margin="0,0,12,0"
-                Command="{Binding SelectAllCommand}"
-                Content="select all"
+                Command="{Binding ClearSelectionCommand}"
+                Content="clear"
+                IsEnabled="{Binding CanStartOperation}"
                 Style="{StaticResource BurrowSecondaryPillButtonStyle}" />
             <Button
                 Grid.Column="3"
                 Margin="0,0,12,0"
-                Command="{Binding ScanCommand}"
-                Content="Preview"
+                Command="{Binding SelectAllCommand}"
+                Content="select all"
+                IsEnabled="{Binding CanStartOperation}"
                 Style="{StaticResource BurrowSecondaryPillButtonStyle}" />
             <Button
                 Grid.Column="4"
+                Margin="0,0,12,0"
+                Command="{Binding ScanCommand}"
+                Content="Preview"
+                IsEnabled="{Binding CanStartOperation}"
+                Style="{StaticResource BurrowSecondaryPillButtonStyle}" />
+            <Button
+                Grid.Column="5"
                 Click="RemoveButton_Click"
                 Content="Remove"
                 IsEnabled="{Binding CanRemove}"

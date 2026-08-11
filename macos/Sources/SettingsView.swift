@@ -33,13 +33,30 @@ struct SettingsView: View {
         }
     }
 
+    /// Anchor for deep-links that want the privileged-helper section on
+    /// screen (RootView's Touch ID banner).
+    static let helperAnchor = "privileged-helper"
+
     /// Wired by AppDelegate; the only consumer is "Run maintenance now".
     var onRunMaintenance: (() -> Void)?
     /// Esc leaves Settings (RootView returns to the previous pane). The
     /// pane has no close chrome of its own — navigation lives in the floating rail.
     var onClose: (() -> Void)?
+    /// A section anchor to scroll to once the pane lays out. Only set when
+    /// something deep-linked here to offer a specific setting.
+    var scrollTarget: String?
 
-    @State private var tab: Tab = .general
+    @State private var tab: Tab
+
+    init(onRunMaintenance: (() -> Void)? = nil,
+         onClose: (() -> Void)? = nil,
+         initialTab: Tab = .general,
+         scrollTarget: String? = nil) {
+        self.onRunMaintenance = onRunMaintenance
+        self.onClose = onClose
+        self.scrollTarget = scrollTarget
+        self._tab = State(initialValue: initialTab)
+    }
 
     // General
     @State private var fdaGranted = Privacy.hasFullDiskAccess()
@@ -85,6 +102,7 @@ struct SettingsView: View {
     /// The compatibility guard suppresses the menu-bar item on some macOS
     /// builds. Without this the toggle read as on while doing nothing (#319).
     @State private var menuBarSuppressed: Bool = false
+    @State private var menuBarSuppressionReason: LaunchRecoveryReason? = nil
     @State private var menuBarItems: [MenuBarItem] = Store.menuBarItems
     /// Which widget's options panel is expanded in the editor (one at a time).
     @State private var expandedMenuBarItem: UUID?
@@ -138,24 +156,37 @@ struct SettingsView: View {
             header
                 .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 10)
             Rectangle().fill(Brand.hairline).frame(height: 1)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    switch tab {
-                    case .general:     generalTab
-                    case .maintenance: maintenanceTab
-                    case .menuBar:     menuBarTab
-                    case .advanced:    advancedTab
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        switch tab {
+                        case .general:     generalTab
+                        case .maintenance: maintenanceTab
+                        case .menuBar:     menuBarTab
+                        case .advanced:    advancedTab
+                        }
+                    }
+                    // Full-bleed pane, readable column: the cards cap at a
+                    // comfortable measure and stay centered in wide windows.
+                    .frame(maxWidth: 680)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 22)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollIndicators(.hidden)
+                // A deep-linked section is often below the fold; the anchor
+                // only exists once the tab's content has laid out, so this
+                // waits a beat rather than scrolling to nothing.
+                .onAppear {
+                    guard let scrollTarget else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(scrollTarget, anchor: .center)
+                        }
                     }
                 }
-                // Full-bleed pane, readable column: the cards cap at a
-                // comfortable measure and stay centered in wide windows.
-                .frame(maxWidth: 680)
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 22)
-                .frame(maxWidth: .infinity)
             }
-            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onExitCommand { onClose?() }
@@ -171,6 +202,7 @@ struct SettingsView: View {
             loadHelperStatus()
             whitelistPatterns = MoleWhitelist.live.patterns()
             menuBarSuppressed = AppDelegate.shared?.menuBarSuppressedByCompatibilityGuard ?? false
+            menuBarSuppressionReason = AppDelegate.shared?.menuBarSuppressionReason
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             fdaGranted = Privacy.hasFullDiskAccess()
@@ -464,6 +496,28 @@ struct SettingsView: View {
     /// Shown in place of a toggle that cannot act. The recovery alert fires
     /// once per macOS build, so without this the only lasting explanation for
     /// a missing menu-bar icon was a checked switch that did nothing (#319).
+    /// Only the macOS-build guard is about macOS. The other reason is "a
+    /// previous launch of Burrow ended badly while the item was being
+    /// created", and telling that user to update macOS sends them to do
+    /// something that cannot help.
+    private var menuBarNoticeTitle: String {
+        switch menuBarSuppressionReason {
+        case .macOS27Beta4:
+            return NSLocalizedString("Menu bar item paused on this macOS build", comment: "")
+        default:
+            return NSLocalizedString("Menu bar item paused after a failed start", comment: "")
+        }
+    }
+
+    private var menuBarNoticeBody: String {
+        switch menuBarSuppressionReason {
+        case .macOS27Beta4:
+            return NSLocalizedString("Creating it could freeze system input on this build, so Burrow runs from the Dock instead. It returns automatically once you update macOS.", comment: "")
+        default:
+            return NSLocalizedString("Burrow stopped unexpectedly while creating the menu bar item last time, so it started from the Dock instead. It returns on its own the next time Burrow runs normally.", comment: "")
+        }
+    }
+
     private var menuBarCompatibilityNotice: some View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -471,9 +525,9 @@ struct SettingsView: View {
                 .foregroundStyle(Brand.amber)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(NSLocalizedString("Menu bar item paused on this macOS build", comment: ""))
+                Text(menuBarNoticeTitle)
                     .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.textPrimary)
-                Text(NSLocalizedString("Creating it could freeze system input on this build, so Burrow runs from the Dock instead. It returns automatically once you update macOS.", comment: ""))
+                Text(menuBarNoticeBody)
                     .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -606,7 +660,8 @@ struct SettingsView: View {
             section("Local HTTP query server", "antenna.radiowaves.left.and.right") {
                 toggleRow("Enable HTTP query server", isOn: $queryServerEnabled) { Store.queryServerEnabled = $0 }
                 infoRow("Endpoint", "127.0.0.1:\(Store.queryServerPort)")
-                footnote("Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch.")
+                infoRow("Authentication", NSLocalizedString("Bearer token required", comment: "query server auth"))
+                footnote("Optional REST surface for dashboards or curl: /health, /info, /snapshot, /metrics over localhost. Every request needs the per-install token; retrieve it locally with `defaults read dev.caezium.Burrow query_auth_token`. Separate from the MCP stdio server above; toggle + port changes take effect after a relaunch.")
             }
 
             section("Explain (AI) — experimental", "sparkles") {
@@ -652,6 +707,7 @@ struct SettingsView: View {
                 }
                 footnote("Runs Burrow's admin operations — scan, clean, optimize — through a small signed helper instead of a password-only prompt, so macOS can offer Touch ID. Installing it needs your approval once and grants no standing access: you're asked to authenticate for each operation you start. The helper can only perform those three operations — it cannot be asked to run anything else.")
             }
+            .id(Self.helperAnchor)
 
             section("Engine", "shippingbox") {
                 infoRow("Version", moleVersion)

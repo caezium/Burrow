@@ -132,13 +132,73 @@
 <header class="hero page">
   <h1>Changelog</h1>
   <p>Every version at a glance, what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">24 releases · latest 0.12.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p class="count">26 releases · latest 0.14.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
 </header>
 
 <main class="page">
+    <article class="entry" id="v0.14.0">
+      <div class="ver-col">
+        <h2 class="ver">0.14.0<span class="latest">latest</span></h2>
+        <span class="date mono">Aug 11, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.14.0" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">The Touch ID helper now offers itself instead of hiding in Settings, and the reviewed clean says what it removed instead of finishing silently.</p>
+        <div class="sblock">
+          <div class="slabel mono">added</div>
+          <ul class="slist">
+            <li><b>Burrow offers the privileged helper.</b> The Touch ID helper shipped in 0.13.0 behind a single button in <b>Settings ▸ Advanced</b>, and nothing pointed anyone at it — upgraders learned about it from the release notes, fresh installs not at all. It is now offered from an ambient banner, at most one notice at a time, and the dismissal persists. (<a href="https://github.com/caezium/Burrow/pull/379" target="_blank" rel="noopener">#379</a>)</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">fixed</div>
+          <ul class="slist">
+            <li><b>The reviewed clean reports what it removed.</b> It deleted exactly what was ticked and then looked like it had done nothing — that path deletes each reviewed path with <code>find</code>, which succeeds silently, leaving the result screen with no output to show. It now reports what it was authorized to remove, which the run only claims after confirming every planned path is gone. (<a href="https://github.com/caezium/Burrow/pull/380" target="_blank" rel="noopener">#380</a>)</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <article class="entry" id="v0.13.0">
+      <div class="ver-col">
+        <h2 class="ver">0.13.0</h2>
+        <span class="date mono">Aug 11, 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.13.0" target="_blank" rel="noopener">full notes ↗</a>
+      </div>
+      <div class="sbody">
+        <p class="lead">Headings that rendered as empty boxes render as text again, the MCP server speaks the 2026-07-28 spec without dropping older clients, and the cache scan tells you when it has finished.</p>
+        <div class="sblock">
+          <div class="slabel mono">added</div>
+          <ul class="slist">
+            <li><b>The scan tells you when it's done.</b> A cache scan can run for minutes and used to end by just sitting there with a number. It now posts a completion notification saying what it found, honouring <b>Settings ▸ Notify when long operations finish</b>. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
+            <li><b>Two more agent tools.</b> <code>burrow_anomalies</code> and <code>burrow_agent_audit</code> join the MCP surface. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">changed</div>
+          <ul class="slist">
+            <li><b>MCP now speaks the 2026-07-28 revision</b>, including its task and cancellation semantics. Older clients are unaffected: 2025-11-25 through 2024-11-05 are still served, and a client that skips <code>initialize</code> entirely still works. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+          </ul>
+        </div>
+        <div class="sblock">
+          <div class="slabel mono">fixed</div>
+          <ul class="slist">
+            <li><b>Headings rendered as empty boxes.</b> Burrow now ships real static faces for every weight it uses instead of deriving them from a variable font at render time. (<a href="https://github.com/caezium/Burrow/pull/372" target="_blank" rel="noopener">#372</a>)</li>
+            <li><b>One bad exit no longer disables the menu bar</b> until macOS updates. (<a href="https://github.com/caezium/Burrow/pull/365" target="_blank" rel="noopener">#365</a>)</li>
+            <li><b>The window can be made smaller again</b> — its minimum height is derived from the sidebar rather than hardcoded. (<a href="https://github.com/caezium/Burrow/pull/364" target="_blank" rel="noopener">#364</a>)</li>
+            <li><b>“Stop after current” now responds.</b> The stop was always queued, but nothing on screen said so until the in-flight update finished. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
+            <li><b>The clean review no longer promises what closing an app can't deliver.</b> An entry the scan refused was counted in “Close X to clean another N” even though no app was holding it. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>A cancelled app update no longer blocks later update checks</b> for the rest of the session. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>Root operations can't interleave their output.</b> stdout and stderr shared one line buffer, which could splice half a line from one stream onto the other. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>Update archives are size-capped</b> before they're kept or expanded, and diagnostics reject more credential shapes before anything is uploaded. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
     <article class="entry" id="v0.12.0">
       <div class="ver-col">
-        <h2 class="ver">0.12.0<span class="latest">latest</span></h2>
+        <h2 class="ver">0.12.0</h2>
         <span class="date mono">Aug 8, 2026</span>
         <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.12.0" target="_blank" rel="noopener">full notes ↗</a>
       </div>

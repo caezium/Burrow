@@ -72,6 +72,18 @@ struct LaunchRecord: Codable, Equatable {
     var statusItemUnsafeOSBuild: String? = nil
     var statusItemAttempted: Bool? = nil
     var statusItemStable: Bool? = nil
+    /// Consecutive launches that ended without the status item proving itself.
+    ///
+    /// The guard used to act on the first one, which made it fire on anything
+    /// that kills the app in its first 30 seconds — a force quit, an unrelated
+    /// crash, a jetsam kill, or Launch at Login followed by a restart. For a
+    /// menu-bar app that means losing the primary surface to an unrelated
+    /// event, and the mark then persisted until the user updated macOS.
+    ///
+    /// A real WindowServer freeze reproduces on every launch (it did, on two
+    /// Macs), so requiring two in a row still catches it on the second run
+    /// while a one-off never pauses anything.
+    var statusItemFailureStreak: Int? = nil
     var automaticUpdaterUnsafeEnvironment: String? = nil
     var automaticUpdaterAttempted: Bool? = nil
     var automaticUpdaterStable: Bool? = nil
@@ -93,6 +105,11 @@ final class LaunchJournal {
     /// Starts a new durable record and returns the prior run only when it did
     /// not reach normal termination. A power loss can create the same signal,
     /// so callers treat it as a coarse diagnostic rather than proof of a crash.
+    /// Consecutive suspicious launches required before the status item is
+    /// paused. Two, because a genuine WindowServer freeze reproduces every
+    /// time while an unrelated kill does not.
+    static let statusItemFailureThreshold = 2
+
     @discardableResult
     func begin(environment: RuntimeEnvironment) -> LaunchRecord? {
         lock.lock()
@@ -100,9 +117,26 @@ final class LaunchJournal {
 
         let previous = readRecord()
         let timestamp = now()
-        let unsafeBuild: String?
+
+        // Count consecutive launches that ended without the item proving
+        // itself, and only treat the build as unsafe once there are two. A
+        // launch that reached stable clears the count outright — that is
+        // positive proof the item works here, and without it the mark was
+        // carried forward forever and only expired on a macOS update.
+        let streak: Int
         if Self.hasUnstableStatusItem(previous) {
+            streak = (previous?.statusItemFailureStreak ?? 0) + 1
+        } else if previous?.statusItemStable == true {
+            streak = 0
+        } else {
+            streak = previous?.statusItemFailureStreak ?? 0
+        }
+
+        let unsafeBuild: String?
+        if streak >= Self.statusItemFailureThreshold {
             unsafeBuild = previous?.environment.osBuild
+        } else if streak == 0 {
+            unsafeBuild = nil
         } else {
             unsafeBuild = previous?.statusItemUnsafeOSBuild
         }
@@ -122,6 +156,8 @@ final class LaunchJournal {
             statusItemUnsafeOSBuild: unsafeBuild == environment.osBuild ? unsafeBuild : nil,
             statusItemAttempted: false,
             statusItemStable: nil,
+            // The streak only means anything on the build that produced it.
+            statusItemFailureStreak: previous?.environment.osBuild == environment.osBuild ? streak : 0,
             automaticUpdaterUnsafeEnvironment: unsafeUpdaterEnvironment == currentUpdaterEnvironment
                 ? unsafeUpdaterEnvironment
                 : nil,
@@ -230,6 +266,15 @@ final class LaunchJournal {
         return support.appendingPathComponent("launch-state.json")
     }
 
+    /// Did the previous launch end without the status item proving itself?
+    ///
+    /// Deliberately broad, and it stays broad: the macOS 27 Beta 4 freeze hung
+    /// WindowServer *after* the item existed, so the next boot saw
+    /// `.statusItemReady` or later rather than `.statusItemCreating`. Narrowing
+    /// this to mid-creation would miss the very bug the guard exists for.
+    ///
+    /// Breadth is fine as a SUSPICION. What was wrong is that one suspicion
+    /// was enough to act on — see `statusItemFailureStreak`.
     fileprivate static func hasUnstableStatusItem(_ record: LaunchRecord?) -> Bool {
         guard let record, record.phase != .terminatedNormally else { return false }
         if let attempted = record.statusItemAttempted {
@@ -284,9 +329,15 @@ enum LaunchRecovery {
         if environment.osMajorVersion == 27, environment.osBuild == "26A5388g" {
             return .macOS27Beta4
         }
-        let unstableOnCurrentOS = LaunchJournal.hasUnstableStatusItem(previous)
+        // One bad launch is not enough. `hasUnstableStatusItem` is broad by
+        // design — it has to be, to catch a freeze that happens after the item
+        // exists — so it needs a second, consecutive occurrence before it
+        // costs the user their menu-bar icon.
+        let streakWithThisLaunch = (previous?.statusItemFailureStreak ?? 0)
+            + (LaunchJournal.hasUnstableStatusItem(previous) ? 1 : 0)
+        let repeatedOnCurrentOS = streakWithThisLaunch >= LaunchJournal.statusItemFailureThreshold
             && previous?.environment.osBuild == environment.osBuild
-        if unstableOnCurrentOS
+        if repeatedOnCurrentOS
             || previous?.statusItemUnsafeOSBuild == environment.osBuild {
             return .previousStatusItemFailure
         }
@@ -314,7 +365,9 @@ enum DiagnosticPrivacy {
         "api_key", "token", "authorization", "password", "secret",
         "file_path", "path", "url", "home", "home_dir", "username",
         "user", "email", "clipboard", "file_name", "contents",
-        "run_id", "distinct_id", "device_id"
+        "run_id", "distinct_id", "device_id", "account", "apikey", "argv",
+        "argument", "arguments", "command", "command_line", "cookie", "headers",
+        "payload", "session"
     ]
 
     private static let urlPattern = try! NSRegularExpression(
@@ -371,6 +424,44 @@ enum DiagnosticPrivacy {
             }
         }
         return sanitized
+    }
+
+    /// Preserve only bounded symbol/type labels. Path syntax, email/URL
+    /// redactions, control characters, and credential-shaped text fail closed.
+    static func safeDiagnosticLabel(_ value: String?) -> String? {
+        guard let value, !value.isEmpty, value.utf8.count <= 240,
+              redact(value) == value else { return nil }
+        let lowered = value.lowercased()
+        let sensitiveMarkers = [
+            "api_key", "apikey", "authorization", "bearer ", "password",
+            "secret", "sk-live", "token=", "token:", "x-api-key",
+        ]
+        guard !sensitiveMarkers.contains(where: lowered.contains) else { return nil }
+        // A credential NAME followed by `:` or `=`, however it is spaced or
+        // spelled. The literal markers above only catch `token=`/`token:`
+        // written tight, so `access_token = abc123` and `api key=abc123` both
+        // walked straight through into a diagnostic that gets uploaded.
+        guard value.range(
+            of: #"(?i)(api[ _-]?key|access[ _-]?token|auth[ _-]?token|refresh[ _-]?token|token|secret|password)\s*[:=]"#,
+            options: .regularExpression) == nil else { return nil }
+        let allowed = CharacterSet.alphanumerics.union(
+            CharacterSet(charactersIn: " _.$:+<>()[]{}?!,@#&'`~-=")
+        )
+        guard value.unicodeScalars.allSatisfy(allowed.contains) else { return nil }
+        return value
+    }
+
+    static func safeHexAddress(_ value: String?) -> String? {
+        guard let value,
+              value.range(of: #"^0x[0-9a-fA-F]{1,16}$"#, options: .regularExpression) != nil
+        else { return nil }
+        return value
+    }
+
+    static func safeDebugID(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let pattern = #"^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$"#
+        return value.range(of: pattern, options: .regularExpression) == nil ? nil : value
     }
 
     static func isSafeIdentifier(_ value: String) -> Bool {

@@ -13,6 +13,10 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+    # The only app/build version declarations. The generated Info.plist keeps
+    # these build-setting references, and Xcode expands them in the product.
+    MARKETING_VERSION: "0.14.0"
+    CURRENT_PROJECT_VERSION: "26"
     ENABLE_HARDENED_RUNTIME: YES
     # Xcode leaves signing off for reproducible builds. Local scripts apply a
     # coherent ad-hoc signature; the tag workflow applies Developer ID after
@@ -61,8 +65,8 @@ targets:
       properties:
         LSUIElement: true   # menu-bar agent, no Dock icon
         CFBundleDisplayName: Burrow
-        CFBundleShortVersionString: "0.12.0"
-        CFBundleVersion: "24"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSHumanReadableCopyright: "MIT License. © 2026 Henry Zhang."
         # Burrow uses only exempt encryption supplied by macOS (for example,
         # URLSession HTTPS); it contains no proprietary or non-exempt crypto.
@@ -189,11 +193,9 @@ targets:
         # bundle happens to surround it after an update.
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         GENERATE_INFOPLIST_FILE: YES
-        # Must track the app's CFBundleVersion above — a mismatch is exactly
-        # what HelperVersionSkew refuses, so a stale value here disables the
-        # helper rather than shipping a subtly wrong one.
-        CURRENT_PROJECT_VERSION: "24"
-        MARKETING_VERSION: "0.12.0"
+        # Version/build inherit the repository-wide settings above. The app
+        # plist also references those settings, so helper/app skew cannot be
+        # introduced by changing a second declaration.
         SKIP_INSTALL: YES
 
   BurrowTests:

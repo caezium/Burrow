@@ -75,6 +75,15 @@ final class StoreTests: XCTestCase {
         XCTAssertTrue(Store.telemetryNoticeAcknowledged)
     }
 
+    // The Touch ID banner offers an optional convenience, so unlike the FDA
+    // notice its dismiss is final: shown on a fresh install, never again once
+    // the user says no.
+    func testHelperNotice_defaultsUndismissedAndPersists() {
+        XCTAssertFalse(Store.helperNoticeDismissed)
+        Store.helperNoticeDismissed = true
+        XCTAssertTrue(Store.helperNoticeDismissed)
+    }
+
     // Issue #4: the menu-bar icon is on by default; the off-switch must
     // persist (it's read once at launch to decide menu-bar vs Dock mode).
     func testShowMenuBarIcon_defaultsTrueAndPersists() {
@@ -159,6 +168,30 @@ final class StoreTests: XCTestCase {
 
     func testQueryServerPort_defaultsTo9277() {
         XCTAssertEqual(Store.queryServerPort, Int(QueryServer.defaultPort))
+    }
+
+    func testQueryServerCredential_isRandomLookingAndStable() {
+        let first = Store.queryAuthToken
+        let second = Store.queryAuthToken
+        XCTAssertEqual(first, second)
+        XCTAssertGreaterThanOrEqual(first.utf8.count, 43,
+                                    "the loopback credential needs at least 256 random bits")
+        XCTAssertFalse(first.contains("/"), "credential must be safe in an HTTP header")
+        XCTAssertFalse(first.contains("+"), "credential must be safe in an HTTP header")
+    }
+
+    func testQueryServerCredential_rotatesLegacyShortToken() {
+        Store.d.set("legacy-short-token", forKey: "query_auth_token")
+        let migrated = Store.queryAuthToken
+        XCTAssertNotEqual(migrated, "legacy-short-token")
+        XCTAssertGreaterThanOrEqual(migrated.utf8.count, 43)
+    }
+
+    func testQueryServerCredential_rotatesHeaderUnsafeToken() {
+        Store.d.set(String(repeating: "a", count: 63) + "\n", forKey: "query_auth_token")
+        let migrated = Store.queryAuthToken
+        XCTAssertFalse(migrated.contains("\n"))
+        XCTAssertGreaterThanOrEqual(migrated.utf8.count, 43)
     }
 
     func testLastHistoryRangeMinutes_defaultsToOneHour() {

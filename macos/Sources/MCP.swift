@@ -13,16 +13,25 @@
 //  app writes to. SQLite WAL means the spawn can read concurrently
 //  with the GUI's sampler write loop.
 //
+//  The server speaks the 2026-07-28 revision — the one that retired the
+//  `initialize` handshake in favour of per-request `_meta` — while still
+//  answering a pre-2026 client that expects the handshake. The envelope
+//  layer lives in MCPProtocol.swift; the routing lives in MCPServer.swift;
+//  this file keeps the process entry point and the tool catalogue.
+//
 //  Protocol surface implemented:
-//    * initialize → server info + capabilities
-//    * notifications/initialized → no-op (notification, no response)
-//    * tools/list → fixed set, see ToolCatalog
-//    * tools/call → dispatched to the catalog
+//    * server/discover → supported versions, capabilities, instructions
+//    * initialize / notifications/initialized → legacy handshake, still served
+//    * tools/list, tools/call → the catalogue below, with MRTR and tasks
+//    * resources/list, resources/templates/list, resources/read
+//    * prompts/list, prompts/get, completion/complete
+//    * tasks/get, tasks/update, tasks/cancel (io.modelcontextprotocol/tasks)
 //
 //  All other methods return JSON-RPC error -32601 (method not found).
 //  Tool results are wrapped as `{content: [{type: "text", text: "..."}]}`
 //  per MCP convention — the text payload is the actual JSON we want
-//  the agent to read.
+//  the agent to read, mirrored into `structuredContent` for the tools
+//  that declare an output schema.
 //
 //  Wire it up in your Claude Code config (`~/.claude/settings.json`):
 //
@@ -61,151 +70,6 @@ enum MCP {
     /// into its agent log file.
     fileprivate static func stderr(_ s: String) {
         FileHandle.standardError.write(Data((s + "\n").utf8))
-    }
-}
-
-// MARK: - Server
-
-final class MCPServer {
-    private let db: DB
-    private let dec = JSONDecoder()
-    private let enc = JSONEncoder()
-    private let catalog: ToolCatalog
-
-    init(db: DB) {
-        self.db = db
-        self.catalog = ToolCatalog(db: db)
-        self.enc.outputFormatting = [.withoutEscapingSlashes]
-    }
-
-    /// Drive the loop. Reads line by line from `input`; one JSON-RPC
-    /// message per line is the de-facto standard for stdio MCP. Exits
-    /// cleanly on EOF.
-    func serve(input: FileHandle, output: FileHandle) {
-        var buffer = Data()
-        while true {
-            let chunk = input.availableData
-            if chunk.isEmpty { break }   // EOF — peer closed
-            buffer.append(chunk)
-            while let nl = buffer.firstIndex(of: 0x0A) {
-                let line = buffer.subdata(in: buffer.startIndex..<nl)
-                buffer.removeSubrange(buffer.startIndex...nl)
-                if line.isEmpty { continue }
-                self.handleLine(line, output: output)
-            }
-        }
-    }
-
-    private func handleLine(_ data: Data, output: FileHandle) {
-        if let response = self.response(toLine: data) {
-            self.write(output, response)
-        }
-    }
-
-    /// The whole JSON-RPC envelope decision for one input line — nil means
-    /// "send nothing" (notifications). Split from the FileHandle writer so
-    /// the protocol surface (parse errors, notification silence, unknown
-    /// methods, error-code mapping) is unit-testable.
-    func response(toLine data: Data) -> [String: Any]? {
-        // Decode the JSON-RPC envelope loosely — we only care about
-        // jsonrpc/id/method/params. Use a flexible decode so we can
-        // tell notifications (no id) from requests (with id).
-        guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return MCPServer.errorResponse(id: nil, code: -32700, message: "parse error")
-        }
-        let method = (raw["method"] as? String) ?? ""
-        let id = raw["id"]   // may be nil for notifications
-
-        switch method {
-        case "initialize":
-            return self.initializeResponse(id: id)
-        case "notifications/initialized":
-            // Notification — no response. The client is just telling us
-            // it processed our initialize response.
-            return nil
-        case "tools/list":
-            return self.toolsListResponse(id: id)
-        case "tools/call":
-            return self.toolsCallResponse(raw: raw, id: id)
-        default:
-            // Notifications have no id; don't reply with an error to
-            // them, that would be malformed JSON-RPC.
-            guard id != nil else { return nil }
-            return MCPServer.errorResponse(id: id, code: -32601,
-                                           message: "method not found: \(method)")
-        }
-    }
-
-    // MARK: - Method handlers
-
-    private func initializeResponse(id: Any?) -> [String: Any] {
-        return [
-            "jsonrpc": "2.0",
-            "id": id as Any,
-            "result": [
-                "protocolVersion": "2024-11-05",
-                "capabilities": ["tools": [String: Any]()],
-                "serverInfo": [
-                    "name": "burrow",
-                    "version": "0.3.0",
-                ],
-            ],
-        ]
-    }
-
-    private func toolsListResponse(id: Any?) -> [String: Any] {
-        return [
-            "jsonrpc": "2.0",
-            "id": id as Any,
-            "result": ["tools": self.catalog.descriptors()],
-        ]
-    }
-
-    private func toolsCallResponse(raw: [String: Any], id: Any?) -> [String: Any] {
-        let params = raw["params"] as? [String: Any] ?? [:]
-        let name = params["name"] as? String ?? ""
-        let args = params["arguments"] as? [String: Any] ?? [:]
-
-        do {
-            let resultText = try self.catalog.call(name: name, arguments: args)
-            return [
-                "jsonrpc": "2.0",
-                "id": id as Any,
-                "result": [
-                    "content": [
-                        ["type": "text", "text": resultText],
-                    ],
-                ],
-            ]
-        } catch let MCPToolError.unknown(toolName) {
-            return MCPServer.errorResponse(id: id, code: -32602,
-                                           message: "unknown tool: \(toolName)")
-        } catch let MCPToolError.badArguments(reason) {
-            return MCPServer.errorResponse(id: id, code: -32602,
-                                           message: "bad arguments: \(reason)")
-        } catch {
-            return MCPServer.errorResponse(id: id, code: -32603,
-                                           message: "internal error: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Plumbing
-
-    private func write(_ fh: FileHandle, _ object: [String: Any]) {
-        guard var data = try? JSONSerialization.data(withJSONObject: object,
-                                                     options: [.withoutEscapingSlashes]) else {
-            return
-        }
-        data.append(0x0A)
-        try? fh.write(contentsOf: data)
-    }
-
-    static func errorResponse(id: Any?, code: Int, message: String) -> [String: Any] {
-        return [
-            "jsonrpc": "2.0",
-            "id": id as Any,
-            "error": ["code": code, "message": message],
-        ]
     }
 }
 
@@ -525,6 +389,27 @@ struct ToolCatalog {
                     "additionalProperties": false,
                 ] as [String: Any],
             ],
+            [
+                "name": "burrow_agent_audit",
+                "description": "What AI agents have already done through this MCP server: one row per mutating tool call with the tool name, the exact arguments, whether it was a dry run, whether it succeeded, and how long it took. `minutes` selects the window (default 10080 = 7 days), `limit` caps rows (default 50, max 500). Read-only. Use it to answer 'what has an agent changed on this machine?' before assuming a cleanup didn't happen — and to check your own earlier calls in a long session.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "minutes": ["type": "integer", "minimum": 1, "description": "How far back to look. Default 10080 (7 days)."],
+                        "limit": ["type": "integer", "minimum": 1, "maximum": 500],
+                    ],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
+                "name": "burrow_anomalies",
+                "description": "Processes whose CPU over the last 24h has regressed against their own 14-day baseline, worst first. This is a per-process comparison, not a leaderboard: a process that always uses 40% CPU is not an anomaly, one that jumped from 2% to 15% is. Returns an empty list when there isn't enough history to compare. Read-only.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [String: Any](),
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
         ]
     }
 
@@ -622,6 +507,10 @@ struct ToolCatalog {
             return self.runAction(.purge, confirm: (arguments["confirm"] as? Bool) ?? false)
         case "burrow_installer":
             return self.runAction(.installer, confirm: (arguments["confirm"] as? Bool) ?? false)
+        case "burrow_agent_audit":
+            return try self.callAgentAudit(arguments)
+        case "burrow_anomalies":
+            return self.callAnomalies()
         default:
             throw MCPToolError.unknown(name)
         }
@@ -717,6 +606,68 @@ struct ToolCatalog {
             pieces.append("{\"ts\":\(r.ts),\"snapshot\":\(r.json)}")
         }
         return "{\"count\":\(rows.count),\"rows\":[\(pieces.joined(separator: ","))]}"
+    }
+
+    /// `burrow_agent_audit` — read back the rows `recordAudit` writes. The
+    /// audit trail was write-only until now: the GUI could show it and the
+    /// MCP process could append to it, but an agent had no way to see what
+    /// it (or another agent) had already done. Read-only, and never audited
+    /// itself — reading the log isn't an action worth logging.
+    private func callAgentAudit(_ args: [String: Any]) throws -> String {
+        let minutes = (args["minutes"] as? Int) ?? 10_080
+        // Same overflow bound as the other windowed tools.
+        guard minutes > 0, minutes <= 1_000_000 else {
+            throw MCPToolError.badArguments("minutes must be between 1 and 1000000")
+        }
+        let limit = max(1, min((args["limit"] as? Int) ?? 50, 500))
+
+        let now = Int(Date().timeIntervalSince1970)
+        let rows = self.metrics.rawRows(prefix: AgentAudit.prefix,
+                                        MetricsStore.Window(since: now - minutes * 60, until: now),
+                                        maxPoints: nil)
+        var entries: [[String: Any]] = []
+        for row in rows.suffix(limit).reversed() {   // newest first
+            guard let e = AgentAudit.decode(row.json) else { continue }
+            var item: [String: Any] = [
+                "ts": row.ts,
+                "tool": e.tool,
+                "client": e.client,
+                "dry_run": e.dryRun,
+                "duration_ms": e.durationMs,
+                "ok": e.ok,
+                "summary": e.summary,
+            ]
+            // Args were stored as a JSON string; hand them back as an object
+            // so the agent doesn't have to parse a string inside JSON.
+            if let d = e.argsJSON.data(using: .utf8),
+               let parsed = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                item["args"] = parsed
+            } else {
+                item["args_raw"] = e.argsJSON
+            }
+            entries.append(item)
+        }
+        return Self.jsonString(["count": entries.count,
+                                "window_minutes": minutes,
+                                "entries": entries])
+    }
+
+    /// `burrow_anomalies` — per-process CPU regressions against each
+    /// process's own baseline. The detector already backed a GUI card; this
+    /// is the same call with no new logic behind it.
+    private func callAnomalies() -> String {
+        let findings = AnomalyScan.scan(metrics: self.metrics,
+                                        now: Int(Date().timeIntervalSince1970))
+        let items: [[String: Any]] = findings.map {
+            ["process": $0.process,
+             "recent_median_cpu": $0.recentMedian,
+             "baseline_median_cpu": $0.baselineMedian]
+        }
+        return Self.jsonString([
+            "count": items.count,
+            "findings": items,
+            "basis": "last 24h vs the prior 14 days, per process",
+        ])
     }
 
     private func callTopProcesses(_ args: [String: Any]) throws -> String {

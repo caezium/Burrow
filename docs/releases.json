@@ -2,6 +2,102 @@
   "_comment": "Source of truth for the site's release history. Newest first. Edit this, then run `python3 scripts/site-release.py` to regenerate the homepage 'New in X' section and releases.html. Icons/colors: run `python3 scripts/site-release.py --list-icons`.",
   "releases": [
     {
+      "version": "0.14.0",
+      "date": "2026-08-11",
+      "tag": "v0.14.0",
+      "tagline": "The Touch ID helper now offers itself instead of hiding in Settings, and the reviewed clean says what it removed instead of finishing silently.",
+      "highlights": [
+        {
+          "icon": "fingerprint",
+          "color": "accent",
+          "title": "Burrow offers the privileged helper",
+          "line": "The helper that lets admin operations authenticate with Touch ID shipped behind a single Settings button that nothing pointed at. It is now offered the way Full Disk Access is — one banner over the window, informing rather than blocking, and dismissing it is permanent because the helper is a convenience rather than something Burrow needs to work."
+        },
+        {
+          "icon": "sweep",
+          "color": "teal",
+          "title": "The reviewed clean reports what it removed",
+          "line": "It deleted exactly what was ticked and then looked like it had done nothing: that path deletes with find, which succeeds silently, so the result screen had no output to show. It now reports the paths it was authorized to remove, grouped by category with their sizes summed."
+        }
+      ],
+      "chips": [
+        "Nothing changed about what the reviewed clean deletes — only what it tells you",
+        "The helper stays strictly optional; decline it and every operation works as before"
+      ],
+      "sections": [
+        {
+          "label": "added",
+          "items": [
+            "**Burrow offers the privileged helper.** The Touch ID helper shipped in 0.13.0 behind a single button in **Settings ▸ Advanced**, and nothing pointed anyone at it — upgraders learned about it from the release notes, fresh installs not at all. It is now offered from an ambient banner, at most one notice at a time, and the dismissal persists. ([#379](https://github.com/caezium/Burrow/pull/379))"
+          ]
+        },
+        {
+          "label": "fixed",
+          "items": [
+            "**The reviewed clean reports what it removed.** It deleted exactly what was ticked and then looked like it had done nothing — that path deletes each reviewed path with `find`, which succeeds silently, leaving the result screen with no output to show. It now reports what it was authorized to remove, which the run only claims after confirming every planned path is gone. ([#380](https://github.com/caezium/Burrow/pull/380))"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.13.0",
+      "date": "2026-08-11",
+      "tag": "v0.13.0",
+      "tagline": "Headings that rendered as empty boxes render as text again, the MCP server speaks the 2026-07-28 spec without dropping older clients, and the cache scan tells you when it has finished.",
+      "highlights": [
+        {
+          "icon": "layout",
+          "color": "accent",
+          "title": "Headings render again",
+          "line": "Geist and Geist Mono shipped as single variable fonts with only Regular registered, so every bold and semibold heading asked macOS to derive a weight at render time — and sometimes it produced no glyphs at all, leaving a row of empty boxes. Burrow now ships real static faces for every weight it uses."
+        },
+        {
+          "icon": "robot",
+          "color": "lilac",
+          "title": "MCP speaks the 2026-07-28 revision",
+          "line": "Including its task and cancellation semantics, plus two more read-only tools. Older clients are unaffected: 2025-11-25 through 2024-11-05 are still served, and a client that skips initialize entirely still works."
+        },
+        {
+          "icon": "clock",
+          "color": "teal",
+          "title": "The scan tells you when it is done",
+          "line": "A cache scan can run for minutes and used to end by just sitting there with a number. It now posts a completion notification saying what it found, honouring the existing Settings toggle."
+        }
+      ],
+      "chips": [
+        "Backward compatible — no agent integration has to change",
+        "Mostly repair: three visible fixes, plus hardening on the paths that delete files and run as root"
+      ],
+      "sections": [
+        {
+          "label": "added",
+          "items": [
+            "**The scan tells you when it's done.** A cache scan can run for minutes and used to end by just sitting there with a number. It now posts a completion notification saying what it found, honouring **Settings ▸ Notify when long operations finish**. ([#377](https://github.com/caezium/Burrow/pull/377))",
+            "**Two more agent tools.** `burrow_anomalies` and `burrow_agent_audit` join the MCP surface. ([#369](https://github.com/caezium/Burrow/pull/369))"
+          ]
+        },
+        {
+          "label": "changed",
+          "items": [
+            "**MCP now speaks the 2026-07-28 revision**, including its task and cancellation semantics. Older clients are unaffected: 2025-11-25 through 2024-11-05 are still served, and a client that skips `initialize` entirely still works. ([#369](https://github.com/caezium/Burrow/pull/369))"
+          ]
+        },
+        {
+          "label": "fixed",
+          "items": [
+            "**Headings rendered as empty boxes.** Burrow now ships real static faces for every weight it uses instead of deriving them from a variable font at render time. ([#372](https://github.com/caezium/Burrow/pull/372))",
+            "**One bad exit no longer disables the menu bar** until macOS updates. ([#365](https://github.com/caezium/Burrow/pull/365))",
+            "**The window can be made smaller again** — its minimum height is derived from the sidebar rather than hardcoded. ([#364](https://github.com/caezium/Burrow/pull/364))",
+            "**“Stop after current” now responds.** The stop was always queued, but nothing on screen said so until the in-flight update finished. ([#377](https://github.com/caezium/Burrow/pull/377))",
+            "**The clean review no longer promises what closing an app can't deliver.** An entry the scan refused was counted in “Close X to clean another N” even though no app was holding it. ([#367](https://github.com/caezium/Burrow/pull/367))",
+            "**A cancelled app update no longer blocks later update checks** for the rest of the session. ([#367](https://github.com/caezium/Burrow/pull/367))",
+            "**Root operations can't interleave their output.** stdout and stderr shared one line buffer, which could splice half a line from one stream onto the other. ([#367](https://github.com/caezium/Burrow/pull/367))",
+            "**Update archives are size-capped** before they're kept or expanded, and diagnostics reject more credential shapes before anything is uploaded. ([#367](https://github.com/caezium/Burrow/pull/367))"
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.12.0",
       "date": "2026-08-08",
       "tag": "v0.12.0",

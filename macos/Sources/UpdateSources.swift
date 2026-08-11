@@ -12,6 +12,7 @@
 
 import Foundation
 import AppKit
+import Darwin
 
 enum UpdateSources {
     enum Source: String {
@@ -47,6 +48,27 @@ enum UpdateSources {
             return .electron
         }
         return nil
+    }
+
+    /// Files whose identity/content metadata can change update-source
+    /// detection without changing InstalledApp's stable id or path. `lstat`
+    /// keeps this fingerprint cheap and does not follow a planted symlink.
+    static func detectionFingerprint(appPath: String) -> String {
+        let contents = (appPath as NSString).appendingPathComponent("Contents")
+        let paths = [
+            (contents as NSString).appendingPathComponent("Info.plist"),
+            (contents as NSString).appendingPathComponent("_MASReceipt/receipt"),
+            (contents as NSString).appendingPathComponent("Frameworks/Electron Framework.framework"),
+            (contents as NSString).appendingPathComponent("Resources/app-update.yml"),
+        ]
+        return paths.map(fileFingerprint).joined(separator: "|")
+    }
+
+    private static func fileFingerprint(_ path: String) -> String {
+        var info = stat()
+        guard lstat(path, &info) == 0 else { return "missing" }
+        return "\(info.st_dev):\(info.st_ino):\(info.st_mode):\(info.st_size):" +
+            "\(info.st_mtimespec.tv_sec):\(info.st_mtimespec.tv_nsec)"
     }
 
     /// The app's Sparkle feed URL, when it advertises one.

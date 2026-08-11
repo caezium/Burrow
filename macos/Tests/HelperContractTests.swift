@@ -25,17 +25,157 @@ import XCTest
 
 final class HelperContractTests: XCTestCase {
 
+    private var validInvokingUserClaim: HelperInvokingUserClaim {
+        HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/test")
+    }
+
+    // MARK: - Invoking identity
+
+    func testInvokingUserResolver_bindsTheClaimToThePeerUIDAndDaemonAccount() throws {
+        let claim = HelperInvokingUserClaim(uid: 502, canonicalHome: "/Users/Jane Doe")
+        let accounts = [
+            HelperInvokingUserAccount(uid: 501, username: "other", homeDirectory: "/Users/other"),
+            HelperInvokingUserAccount(uid: 502, username: "jane doe", homeDirectory: "/Users/Jane Doe"),
+        ]
+
+        let resolved = try HelperInvokingUserResolver.resolve(
+            peerUID: 502,
+            claim: claim,
+            accounts: accounts,
+            inspectHome: { path in
+                XCTAssertEqual(path, "/Users/Jane Doe")
+                return HelperHomeInspection(kind: .directory,
+                                            canonicalPath: "/Users/Jane Doe",
+                                            ownerUID: 502)
+            })
+
+        XCTAssertEqual(resolved.uid, 502)
+        XCTAssertEqual(resolved.username, "jane doe")
+        XCTAssertEqual(resolved.canonicalHome, "/Users/Jane Doe")
+        XCTAssertEqual(resolved.childEnvironment["HOME"], "/Users/Jane Doe")
+        XCTAssertEqual(resolved.childEnvironment["USER"], "jane doe")
+        XCTAssertEqual(resolved.childEnvironment["LOGNAME"], "jane doe")
+        XCTAssertEqual(resolved.childEnvironment["SUDO_USER"], "jane doe")
+        XCTAssertEqual(resolved.childEnvironment["SUDO_UID"], "502")
+        XCTAssertFalse(resolved.childEnvironment.values.contains("/var/root"))
+    }
+
+    func testRequestCarriesAnExplicitInvokingUserClaimAndRejectsItsAbsence() throws {
+        let claim = HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/henry")
+        let request = HelperRequest(operation: .clean,
+                                    operationID: UUID().uuidString,
+                                    clientBuild: "24",
+                                    invokingUser: claim)
+
+        let roundTripped = try JSONDecoder().decode(
+            HelperRequest.self, from: JSONEncoder().encode(request))
+        XCTAssertEqual(roundTripped.invokingUser, claim)
+
+        let missingClaim = #"{"operation":"clean","operationID":"00000000-0000-0000-0000-000000000001","clientBuild":"24"}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HelperRequest.self,
+                                                       from: Data(missingClaim.utf8)))
+    }
+
+    func testInvokingUserResolver_refusesRootAndAClaimForAnotherPeer() {
+        let account = HelperInvokingUserAccount(uid: 501, username: "user",
+                                                homeDirectory: "/Users/user")
+        let inspection = HelperHomeInspection(kind: .directory,
+                                              canonicalPath: "/Users/user", ownerUID: 501)
+
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 0,
+            claim: HelperInvokingUserClaim(uid: 0, canonicalHome: "/var/root"),
+            accounts: [], inspectHome: { _ in inspection })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .rootPeer)
+            }
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501,
+            claim: HelperInvokingUserClaim(uid: 502, canonicalHome: "/Users/user"),
+            accounts: [account], inspectHome: { _ in inspection })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .claimUIDMismatch)
+            }
+    }
+
+    func testInvokingUserResolver_refusesMissingOrSymlinkedHomes() {
+        let account = HelperInvokingUserAccount(uid: 501, username: "user",
+                                                homeDirectory: "/Users/user")
+        let claim = HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/user")
+
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [account],
+            inspectHome: { _ in HelperHomeInspection(kind: .missing,
+                                                      canonicalPath: nil, ownerUID: nil) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .missingHome)
+            }
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [account],
+            inspectHome: { _ in HelperHomeInspection(kind: .symbolicLink,
+                                                      canonicalPath: nil, ownerUID: 501) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .symbolicLinkHome)
+            }
+    }
+
+    func testInvokingUserResolver_refusesWrongOwnerAndCanonicalHomeMismatch() {
+        let account = HelperInvokingUserAccount(uid: 501, username: "user",
+                                                homeDirectory: "/Users/user")
+        let claim = HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/user")
+
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [account],
+            inspectHome: { _ in HelperHomeInspection(kind: .directory,
+                                                      canonicalPath: "/Users/user", ownerUID: 502) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .homeOwnerMismatch)
+            }
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [account],
+            inspectHome: { _ in HelperHomeInspection(kind: .directory,
+                                                      canonicalPath: "/Users/renamed", ownerUID: 501) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .canonicalHomeMismatch)
+            }
+    }
+
+    func testInvokingUserResolver_refusesMissingAccountAndRootHome() {
+        let claim = HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/user")
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501, claim: claim, accounts: [],
+            inspectHome: { _ in HelperHomeInspection(kind: .directory,
+                                                      canonicalPath: "/Users/user", ownerUID: 501) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .missingAccount)
+            }
+
+        let rootHomeAccount = HelperInvokingUserAccount(uid: 501, username: "user",
+                                                        homeDirectory: "/var/root")
+        XCTAssertThrowsError(try HelperInvokingUserResolver.resolve(
+            peerUID: 501,
+            claim: HelperInvokingUserClaim(uid: 501, canonicalHome: "/private/var/root"),
+            accounts: [rootHomeAccount],
+            inspectHome: { _ in HelperHomeInspection(kind: .directory,
+                                                      canonicalPath: "/private/var/root", ownerUID: 501) })) { error in
+                XCTAssertEqual(error as? HelperInvokingUserResolutionError, .invalidAccountHome)
+            }
+    }
+
     // MARK: - The closed operation set
     //
-    // The approved scope is exactly: privileged scan, clean, optimize. Not
-    // "run this binary", not "run this shell string", not "run mo with these
-    // args". A new case here is a deliberate security decision, so the count
-    // is pinned — adding one without updating this test is a failing build.
+    // The approved scope is exactly: privileged scan, clean, optimize, the
+    // reviewed clean, and three system-state operations. Not "run this binary",
+    // not "run this shell string", not "run mo with these args". A new case
+    // here is a deliberate security decision, so the set is pinned — adding one
+    // without updating this test is a failing build.
 
     func testOperationSet_isPinned() {
         XCTAssertEqual(Set(HelperOperation.allCases.map(\.rawValue)),
-                       ["scan", "clean", "optimize", "optimizeScan", "flushDNS", "renewDHCP", "readLoginItems"],
+                       ["scan", "clean", "cleanReviewed", "optimize", "optimizeScan",
+                        "flushDNS", "renewDHCP", "readLoginItems"],
                        "the helper's operation set is closed; widening it is a security decision")
+    }
+
+    /// `cleanReviewed` is the only operation carrying caller data, so the
+    /// property that matters is that it stays the only one.
+    func testOnlyTheReviewedCleanAcceptsCallerSuppliedPaths() {
+        let accepting = HelperOperation.allCases.filter(\.needsReviewedPaths)
+        XCTAssertEqual(accepting, [.cleanReviewed],
+                       "widening which operations take paths is a security decision")
     }
 
     // MARK: - The closed executable set
@@ -54,7 +194,7 @@ final class HelperContractTests: XCTestCase {
     func testSystemTools_setIsExactlyWhatTheOperationsNeed() {
         XCTAssertEqual(HelperSystemTool.all,
                        ["/usr/bin/dscacheutil", "/usr/bin/killall",
-                        "/usr/sbin/ipconfig", "/usr/bin/sfltool"])
+                        "/usr/sbin/ipconfig", "/usr/bin/sfltool", "/usr/bin/find"])
     }
 
     /// No step may ever name a shell. The path this replaces elevated
@@ -62,8 +202,13 @@ final class HelperContractTests: XCTestCase {
     /// which put a command string in front of a root shell parser.
     func testSteps_neverInvokeAShell() {
         let shells = ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/env"]
+        // Give the reviewed clean its path list, as the sibling argv test does.
+        // Without one it resolves to no steps, so the `find` step — the only
+        // one built from caller-supplied data, and thus the one most worth
+        // checking for a shell — was never actually examined here.
+        let reviewedPaths = ["/Users/henry/Library/Caches/example"]
         for operation in HelperOperation.allCases {
-            for step in operation.steps(interface: "en0") {
+            for step in operation.steps(interface: "en0", reviewedPaths: reviewedPaths) {
                 if case .system(let path) = step.executable {
                     XCTAssertFalse(shells.contains(path), "\(operation) must not run a shell")
                     XCTAssertTrue(HelperSystemTool.all.contains(path),
@@ -124,7 +269,8 @@ final class HelperContractTests: XCTestCase {
     func testValidate_renewDHCPRequiresARealInterface() {
         func request(_ name: String?) -> HelperRequest {
             HelperRequest(operation: .renewDHCP, operationID: UUID().uuidString,
-                          clientBuild: "23", networkInterface: name)
+                          clientBuild: "23", invokingUser: validInvokingUserClaim,
+                          networkInterface: name)
         }
         // Well-formed AND present on the machine.
         XCTAssertNil(request("en0").validate(expectedBuild: "23", liveInterfaces: ["en0", "lo0"]))
@@ -145,7 +291,8 @@ final class HelperContractTests: XCTestCase {
         for operation in [HelperOperation.clean, .optimize, .scan, .optimizeScan,
                           .flushDNS, .readLoginItems] {
             let request = HelperRequest(operation: operation, operationID: UUID().uuidString,
-                                        clientBuild: "23", networkInterface: "en0")
+                                        clientBuild: "23", invokingUser: validInvokingUserClaim,
+                                        networkInterface: "en0")
             XCTAssertEqual(request.validate(expectedBuild: "23", liveInterfaces: ["en0"]),
                            .invalidInterface, "\(operation) takes no interface")
         }
@@ -172,8 +319,11 @@ final class HelperContractTests: XCTestCase {
     /// anywhere in here would signal that someone started templating strings
     /// into a command that runs as root.
     func testArguments_neverEmptyAndNeverShellMetacharacters() {
+        // The reviewed clean is driven by its path list, so it is given one —
+        // and a path the daemon would have had to validate before it got here.
+        let reviewedPaths = ["/Users/henry/Library/Caches/example"]
         for op in HelperOperation.allCases {
-            let steps = op.steps(interface: "en0")
+            let steps = op.steps(interface: "en0", reviewedPaths: reviewedPaths)
             XCTAssertFalse(steps.isEmpty, "\(op) must resolve to at least one command")
             for token in steps.flatMap(\.arguments) {
                 XCTAssertFalse(token.contains(where: { ";|&`$<>\n\0".contains($0) }),
@@ -193,7 +343,8 @@ final class HelperContractTests: XCTestCase {
 
     func testDecoding_roundTripsEveryOperation() throws {
         for op in HelperOperation.allCases {
-            let request = HelperRequest(operation: op, operationID: UUID().uuidString, clientBuild: "23")
+            let request = HelperRequest(operation: op, operationID: UUID().uuidString,
+                                        clientBuild: "23", invokingUser: validInvokingUserClaim)
             let data = try JSONEncoder().encode(request)
             XCTAssertEqual(try JSONDecoder().decode(HelperRequest.self, from: data), request)
         }
@@ -202,8 +353,25 @@ final class HelperContractTests: XCTestCase {
     // MARK: - Validation (named rejections, never a partial run)
 
     func testValidate_acceptsAWellFormedRequest() {
-        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString, clientBuild: "23")
+        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString,
+                                    clientBuild: "23", invokingUser: validInvokingUserClaim)
         XCTAssertNil(request.validate(expectedBuild: "23"))
+    }
+
+    func testValidate_rejectsMalformedInvokingUserClaims() {
+        let claims = [
+            HelperInvokingUserClaim(uid: 0, canonicalHome: "/var/root"),
+            HelperInvokingUserClaim(uid: 501, canonicalHome: "/private/var/root"),
+            HelperInvokingUserClaim(uid: 501, canonicalHome: "Users/test"),
+            HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/test\nother"),
+        ]
+        for claim in claims {
+            let request = HelperRequest(operation: .clean,
+                                        operationID: UUID().uuidString,
+                                        clientBuild: "23",
+                                        invokingUser: claim)
+            XCTAssertEqual(request.validate(expectedBuild: "23"), .invalidInvokingUser)
+        }
     }
 
     /// A non-UUID operation ID is rejected outright. The ID is the replay key,
@@ -211,7 +379,8 @@ final class HelperContractTests: XCTestCase {
     /// reused; requiring a UUID makes every request distinguishable.
     func testValidate_rejectsNonUUIDOperationID() {
         for bad in ["", "1", "not-a-uuid", String(repeating: "a", count: 400)] {
-            let request = HelperRequest(operation: .clean, operationID: bad, clientBuild: "23")
+            let request = HelperRequest(operation: .clean, operationID: bad,
+                                        clientBuild: "23", invokingUser: validInvokingUserClaim)
             XCTAssertEqual(request.validate(expectedBuild: "23"), .malformedOperationID,
                            "operation ID \(bad.prefix(12)) must be rejected")
         }
@@ -222,12 +391,14 @@ final class HelperContractTests: XCTestCase {
     /// runs as root — so the mismatch stops the operation and the GUI
     /// re-registers instead.
     func testValidate_rejectsBuildMismatch() {
-        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString, clientBuild: "22")
+        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString,
+                                    clientBuild: "22", invokingUser: validInvokingUserClaim)
         XCTAssertEqual(request.validate(expectedBuild: "23"), .buildMismatch)
     }
 
     func testValidate_rejectsEmptyBuild() {
-        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString, clientBuild: "")
+        let request = HelperRequest(operation: .clean, operationID: UUID().uuidString,
+                                    clientBuild: "", invokingUser: validInvokingUserClaim)
         XCTAssertEqual(request.validate(expectedBuild: "23"), .buildMismatch)
     }
 
@@ -252,18 +423,60 @@ final class HelperContractTests: XCTestCase {
         }
     }
 
-    /// The guard is bounded so a long-lived daemon can't be grown without
-    /// limit by a client that just keeps sending fresh IDs. Eviction is
-    /// oldest-first, and the CURRENT id is always remembered — so the replay
-    /// window can only ever shrink for ancient ids, never for a live one.
-    func testReplayGuard_isBoundedAndEvictsOldestFirst() {
-        let guardian = HelperReplayGuard(capacity: 3)
-        let ids = (0..<4).map { _ in UUID().uuidString }
-        for id in ids { XCTAssertTrue(guardian.admit(id)) }
+    /// A flood of fresh IDs must NOT be able to push an older one back out of
+    /// the set. Count-bounded FIFO eviction looks equivalent to age-based
+    /// eviction until you notice that the attacker chooses the traffic: send
+    /// `capacity` fresh IDs and the ID you wanted to replay is forgotten, which
+    /// turns the memory bound into the replay bypass it was meant to prevent.
+    func testReplayGuard_floodOfFreshIDsCannotEvictAStillReplayableID() {
+        // Capacity 8 still makes the flood 8x the count bound, which is the
+        // point; it just stays clear of the hard ceiling exercised below, so
+        // this test fails only for the reason it is about.
+        let guardian = HelperReplayGuard(capacity: 8)
+        let victim = UUID().uuidString
+        XCTAssertTrue(guardian.admit(victim))
+        for _ in 0..<64 { XCTAssertTrue(guardian.admit(UUID().uuidString)) }
 
-        XCTAssertTrue(guardian.admit(ids[0]), "the oldest ID was evicted once capacity was exceeded")
-        XCTAssertFalse(guardian.admit(ids[3]), "the newest ID is still remembered")
-        XCTAssertEqual(guardian.count, 3, "the guard never grows past its capacity")
+        XCTAssertFalse(guardian.admit(victim),
+                       "an ID inside the retention window must never become replayable")
+    }
+
+    /// Age-based eviction alone leaves the set unbounded: every ID inside the
+    /// retention window is kept, so a caller sending fresh IDs grows a root
+    /// process's memory for an hour. The ceiling stops ADMITTING rather than
+    /// starting to forget — a refused request is recoverable, a forgotten ID
+    /// is replayable.
+    func testReplayGuard_failsClosedAtTheMemoryCeilingRatherThanForgetting() {
+        let guardian = HelperReplayGuard(capacity: 2)   // ceiling = 32
+        let victim = UUID().uuidString
+        XCTAssertTrue(guardian.admit(victim))
+        while guardian.count < 32 {
+            XCTAssertTrue(guardian.admit(UUID().uuidString))
+        }
+
+        XCTAssertFalse(guardian.admit(UUID().uuidString),
+                       "a full guard must refuse new work, not make room")
+        XCTAssertFalse(guardian.admit(victim),
+                       "and must still refuse the replay it was holding")
+        XCTAssertEqual(guardian.count, 32, "a refused ID is not recorded")
+    }
+
+    /// Memory is still bounded, just by time rather than by count: entries are
+    /// forgotten once they are far older than any authorization could still be
+    /// valid for, so nothing usable is ever discarded.
+    func testReplayGuard_forgetsOnlyEntriesPastTheRetentionWindow() {
+        var now = Date(timeIntervalSince1970: 1_000_000)
+        let guardian = HelperReplayGuard(capacity: 8, retention: 60, now: { now })
+        let old = UUID().uuidString
+        let recent = UUID().uuidString
+        XCTAssertTrue(guardian.admit(old))
+        now = now.addingTimeInterval(59)
+        XCTAssertTrue(guardian.admit(recent))
+
+        // Cross the window for `old` but not for `recent`.
+        now = now.addingTimeInterval(2)
+        XCTAssertFalse(guardian.admit(recent), "a still-fresh ID stays remembered")
+        XCTAssertTrue(guardian.admit(old), "an expired ID is forgotten and its slot reclaimed")
     }
 
     // MARK: - Response encoding
@@ -280,6 +493,7 @@ final class HelperContractTests: XCTestCase {
             .authorizationDenied,
             .rejected(.buildMismatch),
             .rejected(.replayedOperationID),
+            .rejected(.invalidInvokingUser),
             .engineUnavailable,
         ]
         for outcome in outcomes {
@@ -309,5 +523,193 @@ final class HelperContractTests: XCTestCase {
         XCTAssertEqual(HelperResponse.Outcome.authorizationCancelled.elevatedOutcome, .authCancelled)
         XCTAssertEqual(HelperResponse.Outcome.engineUnavailable.elevatedOutcome, .launchFailed)
         XCTAssertEqual(HelperResponse.Outcome.authorizationDenied.elevatedOutcome, .authCancelled)
+    }
+}
+
+// MARK: - Reviewed cleanup targets
+//
+// The one operation that accepts data from the caller beyond a verb. Every
+// rule below is enforced against facts the DAEMON gathers, so these tests
+// inject the inspection rather than the policy trusting a supplied fact.
+
+final class HelperReviewedPathPolicyTests: XCTestCase {
+    private let uid: UInt32 = 501
+    private let homeDevice: UInt64 = 1
+    private let cacheDevice: UInt64 = 1
+
+    private var roots: [HelperReviewedRoot] {
+        [
+            HelperReviewedRoot(path: "/Users/henry", device: homeDevice, allowsForeignOwner: false),
+            HelperReviewedRoot(path: "/Library/Caches", device: cacheDevice, allowsForeignOwner: true),
+        ]
+    }
+
+    private func target(device: UInt64? = nil,
+                        owner: UInt32? = nil,
+                        exists: Bool = true,
+                        isSymbolicLink: Bool = false,
+                        canonical: String?) -> HelperReviewedTarget {
+        HelperReviewedTarget(exists: exists, isSymbolicLink: isSymbolicLink,
+                             canonicalPath: canonical,
+                             device: device ?? homeDevice, ownerUID: owner ?? uid)
+    }
+
+    private func validate(_ paths: [String],
+                          inspect: @escaping (String) -> HelperReviewedTarget)
+        -> Result<[String], HelperReviewedPathRejection> {
+        HelperReviewedPathPolicy.validate(paths: paths, roots: roots,
+                                          invokingUID: uid, inspect: inspect)
+    }
+
+    func testAcceptsOwnedEntriesBelowAnApprovedRoot() throws {
+        let path = "/Users/henry/Library/Caches/app"
+        let result = validate([path]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(try result.get(), [path])
+    }
+
+    func testRefusesAPathOutsideEveryApprovedRoot() {
+        let result = validate(["/System/Library/Caches/x"]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(result.failureRejection, .outsideApprovedRoots)
+    }
+
+    /// A root itself is not a cache entry. Deleting `/Library/Caches` wholesale
+    /// is never what a reviewed selection meant.
+    func testRefusesAnApprovedRootItself() {
+        let result = validate(["/Library/Caches"]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(result.failureRejection, .outsideApprovedRoots)
+    }
+
+    func testRefusesTraversalOutOfAnApprovedRoot() {
+        let result = validate(["/Users/henry/../root/.ssh"]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(result.failureRejection, .malformedPath)
+    }
+
+    /// A symlink would put the delete wherever it points, which is the whole
+    /// reason the daemon lstats instead of trusting the string.
+    func testRefusesASymbolicLink() {
+        let result = validate(["/Users/henry/Library/Caches/link"]) { [unowned self] in
+            self.target(isSymbolicLink: true, canonical: $0)
+        }
+        XCTAssertEqual(result.failureRejection, .symbolicLink)
+    }
+
+    /// realpath disagreeing with the literal path means some ANCESTOR is a
+    /// link, so the entry is not where the client says it is.
+    func testRefusesWhenAnAncestorIsASymbolicLink() {
+        let result = validate(["/Users/henry/Library/Caches/app"]) { [unowned self] _ in
+            self.target(canonical: "/Volumes/elsewhere/app")
+        }
+        XCTAssertEqual(result.failureRejection, .notCanonical)
+    }
+
+    func testRefusesAnEntryOnAnotherVolume() {
+        let result = validate(["/Users/henry/Library/Caches/app"]) { [unowned self] in
+            self.target(device: 99, canonical: $0)
+        }
+        XCTAssertEqual(result.failureRejection, .foreignVolume)
+    }
+
+    /// The escalation that matters. Per-user trees hold other accounts' files,
+    /// and root deleting those is something the invoking user could not do
+    /// themselves — unlike anything in their own home.
+    func testRefusesAnotherAccountsEntryInAPerUserTree() {
+        let result = validate(["/Users/henry/Library/Caches/app"]) { [unowned self] in
+            self.target(owner: 502, canonical: $0)
+        }
+        XCTAssertEqual(result.failureRejection, .foreignOwner)
+    }
+
+    /// System cache trees are root-owned and shared, so foreign ownership
+    /// there is normal rather than suspicious.
+    func testAllowsForeignOwnershipUnderSharedSystemCaches() throws {
+        let path = "/Library/Caches/com.apple.something"
+        let result = validate([path]) { [unowned self] in self.target(owner: 0, canonical: $0) }
+        XCTAssertEqual(try result.get(), [path])
+    }
+
+    func testRefusesAMissingEntryRatherThanSkippingIt() {
+        let result = validate(["/Users/henry/Library/Caches/gone"]) { [unowned self] in
+            self.target(exists: false, canonical: $0)
+        }
+        XCTAssertEqual(result.failureRejection, .missingPath)
+    }
+
+    func testRefusesAnEmptyOrOversizedSelection() {
+        XCTAssertEqual(validate([]) { [unowned self] in self.target(canonical: $0) }.failureRejection,
+                       .emptySelection)
+        let many = (0...HelperReviewedPathPolicy.maximumTargets)
+            .map { "/Users/henry/Library/Caches/app-\($0)" }
+        XCTAssertEqual(validate(many) { [unowned self] in self.target(canonical: $0) }.failureRejection,
+                       .tooManyTargets)
+    }
+
+    func testDeduplicatesRepeatedEntries() throws {
+        let path = "/Users/henry/Library/Caches/app"
+        let result = validate([path, path]) { [unowned self] in self.target(canonical: $0) }
+        XCTAssertEqual(try result.get(), [path])
+    }
+}
+
+final class HelperReviewedRequestTests: XCTestCase {
+    private func claim() -> HelperInvokingUserClaim {
+        HelperInvokingUserClaim(uid: 501, canonicalHome: "/Users/henry")
+    }
+
+    private func request(_ operation: HelperOperation, paths: [String]) -> HelperRequest {
+        HelperRequest(operation: operation, operationID: UUID().uuidString,
+                      clientBuild: "1", invokingUser: claim(), reviewedPaths: paths)
+    }
+
+    func testReviewedPathsRoundTripAcrossTheWire() throws {
+        let original = request(.cleanReviewed, paths: ["/Users/henry/Library/Caches/a"])
+        let decoded = try JSONDecoder().decode(
+            HelperRequest.self, from: try JSONEncoder().encode(original))
+        XCTAssertEqual(decoded, original)
+    }
+
+    func testCleanReviewedRequiresAtLeastOnePath() {
+        XCTAssertEqual(request(.cleanReviewed, paths: []).validate(expectedBuild: "1"),
+                       .invalidReviewedPaths)
+    }
+
+    /// Paths on an operation that takes none means the caller and the contract
+    /// disagree; refuse rather than silently ignoring them.
+    func testOtherOperationsRefusePathsRatherThanIgnoringThem() {
+        XCTAssertEqual(request(.clean, paths: ["/Users/henry/x"]).validate(expectedBuild: "1"),
+                       .invalidReviewedPaths)
+    }
+
+    /// The recogniser maps engine argv onto operations. A reviewed cleanup has
+    /// no engine argv, so it must never be reachable that way.
+    func testReviewedCleanupIsNotReachableFromEngineArguments() {
+        for operation in HelperOperation.allCases {
+            if let argv = operation.engineArguments {
+                XCTAssertNotEqual(HelperOperation(engineArguments: argv), .cleanReviewed)
+            }
+        }
+        XCTAssertNil(HelperOperation.cleanReviewed.engineArguments)
+    }
+
+    func testStepsAreFixedFindInvocationsOverTheValidatedPaths() {
+        let paths = ["/Users/henry/Library/Caches/a", "/Library/Caches/b"]
+        let steps = HelperOperation.cleanReviewed.steps(interface: nil, reviewedPaths: paths)
+        XCTAssertEqual(steps.count, 2)
+        for (step, path) in zip(steps, paths) {
+            XCTAssertEqual(step.executable, .system(HelperSystemTool.find))
+            XCTAssertEqual(step.arguments, ["-x", path, "-depth", "-delete"])
+        }
+        XCTAssertTrue(HelperSystemTool.all.contains(HelperSystemTool.find))
+    }
+
+    func testNoReviewedPathsMeansNoStepsRatherThanADeleteOfSomethingElse() {
+        XCTAssertTrue(HelperOperation.cleanReviewed.steps(interface: nil,
+                                                          reviewedPaths: []).isEmpty)
+    }
+}
+
+private extension Result where Success == [String], Failure == HelperReviewedPathRejection {
+    var failureRejection: HelperReviewedPathRejection? {
+        if case .failure(let rejection) = self { return rejection }
+        return nil
     }
 }

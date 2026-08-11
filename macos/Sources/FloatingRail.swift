@@ -12,11 +12,44 @@
 
 import SwiftUI
 
+/// The rail's fixed geometry, in one place.
+///
+/// These were inline literals, and the window's minimum height was a separate
+/// hand-picked number. Adding tools to `Tool.navOrder` grew the rail past that
+/// minimum, so the foot of it — Settings — fell off the bottom of the window
+/// with nothing failing to say so. Deriving the minimum from the same numbers
+/// the layout uses means the next tool moves both together.
+enum RailMetrics {
+    static let width: CGFloat = 60
+    static let buttonSize: CGFloat = 44
+    static let itemSpacing: CGFloat = 8
+    static let dividerThickness: CGFloat = 1
+    static let dividerPadding: CGFloat = 2
+    static let topPadding: CGFloat = 20
+    static let bottomPadding: CGFloat = 8
+    /// The rail keeps at least this much air above Settings.
+    static let footGap: CGFloat = 8
+
+    /// Height the rail needs before anything is clipped, for `toolCount`
+    /// tools. Mirrors the VStack below exactly: Monitor, a divider, the
+    /// tools, the spacer, Settings — with `itemSpacing` between every pair.
+    static func intrinsicHeight(toolCount: Int) -> CGFloat {
+        let children = 1 + 1 + toolCount + 1 + 1     // monitor, divider, tools, spacer, settings
+        let gaps = CGFloat(max(children - 1, 0)) * itemSpacing
+        let divider = dividerThickness + dividerPadding * 2
+        let buttons = buttonSize * CGFloat(toolCount + 2)  // tools + monitor + settings
+        return topPadding + buttons + divider + footGap + gaps + bottomPadding
+    }
+
+    /// Height for the tools actually shipping.
+    static var intrinsicHeight: CGFloat { intrinsicHeight(toolCount: Tool.navOrder.count) }
+}
+
 struct FloatingRail: View {
     @Binding var selected: Pane
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: RailMetrics.itemSpacing) {
             RailButton(label: NSLocalizedString("Monitor", comment: ""),
                        isOn: selected == .home, accent: nil, gradient: false,
                        action: { select(.home) }) {
@@ -24,8 +57,8 @@ struct FloatingRail: View {
             }
 
             Rectangle().fill(Brand.hairline)
-                .frame(width: 22, height: 1)
-                .padding(.vertical, 2)
+                .frame(width: 22, height: RailMetrics.dividerThickness)
+                .padding(.vertical, RailMetrics.dividerPadding)
 
             ForEach(Tool.navOrder) { tool in
                 let on = selected == .tool(tool)
@@ -37,7 +70,7 @@ struct FloatingRail: View {
                 }
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: RailMetrics.footGap)
 
             RailButton(label: NSLocalizedString("Settings", comment: ""),
                        isOn: selected == .settings, accent: Brand.accent, gradient: false,
@@ -50,9 +83,9 @@ struct FloatingRail: View {
         // Panel runs near the window top; the top inset is just enough to
         // clear the traffic lights that the OS pins over this corner.
         .padding(.horizontal, 8)
-        .padding(.top, 20)
-        .padding(.bottom, 8)
-        .frame(width: 60)
+        .padding(.top, RailMetrics.topPadding)
+        .padding(.bottom, RailMetrics.bottomPadding)
+        .frame(width: RailMetrics.width)
         .frame(maxHeight: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)

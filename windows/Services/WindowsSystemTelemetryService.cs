@@ -9,6 +9,12 @@ namespace BurrowWin.Services;
 public sealed class WindowsSystemTelemetryService : ISystemTelemetryService
 {
     private static readonly TimeSpan SampleWindow = TimeSpan.FromMilliseconds(350);
+    private readonly IGpuTelemetryProvider _gpuTelemetryProvider;
+
+    public WindowsSystemTelemetryService(IGpuTelemetryProvider gpuTelemetryProvider)
+    {
+        _gpuTelemetryProvider = gpuTelemetryProvider;
+    }
 
     public async Task<SystemTelemetrySnapshot> CaptureAsync(CancellationToken cancellationToken = default)
     {
@@ -26,6 +32,7 @@ public sealed class WindowsSystemTelemetryService : ISystemTelemetryService
         var memory = GetMemory();
         var disk = GetSystemDisk();
         var battery = GetBattery();
+        var gpu = _gpuTelemetryProvider.Capture();
 
         var cpuPercent = elapsed.TotalMilliseconds <= 0
             ? 0
@@ -44,7 +51,7 @@ public sealed class WindowsSystemTelemetryService : ISystemTelemetryService
             disk.TotalBytes,
             Math.Max(0, (networkAfter.ReceivedBytes - networkBefore.ReceivedBytes) / networkSeconds),
             Math.Max(0, (networkAfter.SentBytes - networkBefore.SentBytes) / networkSeconds),
-            GetGpuStatus(),
+            gpu.Status,
             BuildTopProcesses(processesBefore, processesAfter, elapsed))
         {
             NetworkInterfaceName = networkAfter.InterfaceName,
@@ -53,7 +60,9 @@ public sealed class WindowsSystemTelemetryService : ISystemTelemetryService
             BatteryChargePercent = battery.ChargePercent,
             BatteryStatusText = battery.StatusText,
             BatteryHealthText = battery.HealthText,
-            BatteryEstimatedSecondsRemaining = battery.EstimatedSecondsRemaining
+            BatteryEstimatedSecondsRemaining = battery.EstimatedSecondsRemaining,
+            GpuUsagePercent = gpu.UsagePercent,
+            GpuUnavailableReason = gpu.UnavailableReason
         };
     }
 
@@ -312,50 +321,6 @@ public sealed class WindowsSystemTelemetryService : ISystemTelemetryService
             .OrderByDescending(process => process.WorkingSetBytes)
             .Take(8)
             .ToArray();
-    }
-
-    private static string GetGpuStatus()
-    {
-        try
-        {
-            const string categoryName = "GPU Engine";
-            const string counterName = "Utilization Percentage";
-
-            if (!PerformanceCounterCategory.Exists(categoryName))
-            {
-                return "Unavailable";
-            }
-
-            var category = new PerformanceCounterCategory(categoryName);
-            var instanceNames = category.GetInstanceNames()
-                .Where(name => name.Contains("engtype_3D", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-
-            if (instanceNames.Length == 0)
-            {
-                return "Unavailable";
-            }
-
-            double total = 0;
-            foreach (var instanceName in instanceNames)
-            {
-                using var counter = new PerformanceCounter(categoryName, counterName, instanceName, readOnly: true);
-                try
-                {
-                    total += counter.NextValue();
-                }
-                catch
-                {
-                    // GPU engine instances may disappear while being sampled.
-                }
-            }
-
-            return $"3D {ClampPercent(total):0.0}%";
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or PlatformNotSupportedException)
-        {
-            return "Unavailable";
-        }
     }
 
     private static double Percent(long used, long total)

@@ -31,7 +31,6 @@ struct PortsView: View {
     @State private var sortAsc = true
     @State private var resolveDNS = true
     @State private var expandedID: String?
-    @State private var killTarget: ListeningPort?
     @State private var loaded = false
     @State private var loading = false
     private let uid = Int(getuid())
@@ -62,18 +61,6 @@ struct PortsView: View {
         }
         .onAppear { if isActive { reload() } }
         .onChange(of: isActive) { _, now in if now { reload() } }
-        .confirmationDialog(
-            NSLocalizedString("Quit this process?", comment: ""),
-            isPresented: Binding(get: { killTarget != nil }, set: { if !$0 { killTarget = nil } }),
-            presenting: killTarget
-        ) { p in
-            Button(NSLocalizedString("Quit", comment: ""), role: .destructive) {
-                _ = kill(pid_t(p.pid), SIGTERM); reload()
-            }
-            Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {}
-        } message: { p in
-            Text("\(p.process) (pid \(p.pid)) — port \(p.port)")
-        }
     }
 
     // MARK: Toolbar
@@ -272,7 +259,13 @@ struct PortsView: View {
                 copyButton(NSLocalizedString("Copy kill", comment: ""), "kill \(p.pid)")
                 Spacer()
                 if PortInspector.isKillable(p, currentUID: uid) {
-                    Button(NSLocalizedString("Quit", comment: "")) { killTarget = p }
+                    Button(NSLocalizedString("Quit…", comment: "")) {
+                        ProcessActions.confirmTermination(
+                            pid: p.pid,
+                            displayName: p.process,
+                            onRefresh: reload
+                        )
+                    }
                         .buttonStyle(.plain)
                         .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.red)
                 }

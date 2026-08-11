@@ -30,6 +30,7 @@
 //
 
 import Foundation
+import Darwin
 import Security
 import os
 
@@ -84,38 +85,150 @@ func helperTrace(_ message: String) {
     try? helperTraceHandle.write(contentsOf: Data("[\(stamp)] \(message)\n".utf8))
 }
 
+// MARK: - Invoking identity
+
+/// Reconstructs the invoking account entirely inside the daemon. The request's
+/// uid/home are comparison values only; getpwuid_r and descriptor-backed stat
+/// facts are the authority used to build the child environment.
+enum HelperDaemonIdentityResolver {
+    static func resolve(peerUID: uid_t,
+                        claim: HelperInvokingUserClaim) throws -> HelperResolvedInvokingUser {
+        let account = try account(for: peerUID)
+        return try HelperInvokingUserResolver.resolve(
+            peerUID: UInt32(peerUID),
+            claim: claim,
+            accounts: [account],
+            inspectHome: inspectHome)
+    }
+
+    private static func account(for uid: uid_t) throws -> HelperInvokingUserAccount {
+        var record = passwd()
+        var result: UnsafeMutablePointer<passwd>?
+        let configured = sysconf(_SC_GETPW_R_SIZE_MAX)
+        let capacity = configured > 0 ? Int(configured) : 16_384
+        var buffer = [CChar](repeating: 0, count: capacity)
+        let status = buffer.withUnsafeMutableBufferPointer { bytes in
+            getpwuid_r(uid, &record, bytes.baseAddress, bytes.count, &result)
+        }
+        guard status == 0, result != nil,
+              let name = record.pw_name, let home = record.pw_dir else {
+            throw HelperInvokingUserResolutionError.missingAccount
+        }
+        return HelperInvokingUserAccount(uid: UInt32(record.pw_uid),
+                                         username: String(cString: name),
+                                         homeDirectory: String(cString: home))
+    }
+
+    private static func inspectHome(_ rawPath: String) -> HelperHomeInspection {
+        var before = stat()
+        guard lstat(rawPath, &before) == 0 else {
+            return HelperHomeInspection(kind: .missing, canonicalPath: nil, ownerUID: nil)
+        }
+        switch before.st_mode & S_IFMT {
+        case S_IFLNK:
+            return HelperHomeInspection(kind: .symbolicLink, canonicalPath: nil,
+                                        ownerUID: UInt32(before.st_uid))
+        case S_IFDIR:
+            break
+        default:
+            return HelperHomeInspection(kind: .other, canonicalPath: nil,
+                                        ownerUID: UInt32(before.st_uid))
+        }
+
+        guard let firstCanonical = canonicalPath(rawPath) else {
+            return HelperHomeInspection(kind: .missing, canonicalPath: nil, ownerUID: nil)
+        }
+        let descriptor = Darwin.open(rawPath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard descriptor >= 0 else {
+            return HelperHomeInspection(kind: .missing, canonicalPath: nil, ownerUID: nil)
+        }
+        defer { Darwin.close(descriptor) }
+
+        var opened = stat()
+        guard fstat(descriptor, &opened) == 0,
+              (opened.st_mode & S_IFMT) == S_IFDIR,
+              opened.st_dev == before.st_dev,
+              opened.st_ino == before.st_ino,
+              canonicalPath(rawPath) == firstCanonical else {
+            return HelperHomeInspection(kind: .other, canonicalPath: nil, ownerUID: nil)
+        }
+        return HelperHomeInspection(kind: .directory,
+                                    canonicalPath: firstCanonical,
+                                    ownerUID: UInt32(opened.st_uid))
+    }
+
+    private static func canonicalPath(_ path: String) -> String? {
+        guard let resolved = realpath(path, nil) else { return nil }
+        defer { free(resolved) }
+        return String(cString: resolved)
+    }
+}
+
+// MARK: - Reviewed cleanup targets
+
+/// Gathers the facts `HelperReviewedPathPolicy` judges. Everything here is the
+/// daemon's own observation; the client's list supplies candidate strings and
+/// nothing else.
+enum HelperReviewedCleanup {
+    /// The roots a reviewed clean may touch, rebuilt inside the daemon.
+    ///
+    /// The home comes from the account the daemon itself resolved through
+    /// getpwuid, not from anything the client said. The system cache trees are
+    /// fixed literals. A root that cannot be stat'd is dropped rather than
+    /// assumed, so a missing location can only ever narrow what is allowed.
+    static func approvedRoots(for user: HelperResolvedInvokingUser) -> [HelperReviewedRoot] {
+        let candidates: [(String, Bool)] = [
+            (user.canonicalHome, false),
+            ("/Library/Caches", true),
+            ("/Library/Logs", true),
+            ("/private/var/folders", false),
+        ]
+        return candidates.compactMap { path, allowsForeignOwner in
+            var status = stat()
+            guard lstat(path, &status) == 0,
+                  (status.st_mode & S_IFMT) == S_IFDIR else { return nil }
+            return HelperReviewedRoot(path: path,
+                                      device: UInt64(status.st_dev),
+                                      allowsForeignOwner: allowsForeignOwner)
+        }
+    }
+
+    static func inspect(_ path: String) -> HelperReviewedTarget {
+        var status = stat()
+        guard lstat(path, &status) == 0 else {
+            return HelperReviewedTarget(exists: false, isSymbolicLink: false,
+                                        canonicalPath: nil, device: 0, ownerUID: 0)
+        }
+        let isLink = (status.st_mode & S_IFMT) == S_IFLNK
+        var canonical: String?
+        // realpath follows links, so it is only meaningful once we know this
+        // entry is not one itself; the policy compares it against the literal
+        // path to prove no ancestor is a link either.
+        if !isLink, let resolved = realpath(path, nil) {
+            canonical = String(cString: resolved)
+            free(resolved)
+        }
+        return HelperReviewedTarget(exists: true,
+                                    isSymbolicLink: isLink,
+                                    canonicalPath: canonical,
+                                    device: UInt64(status.st_dev),
+                                    ownerUID: UInt32(status.st_uid))
+    }
+
+    /// Whether every target is gone. `find -delete` is documented to "always
+    /// return true", so it exits 0 having printed a permission error and
+    /// removed nothing — the exit status cannot be the success signal.
+    static func survivors(among paths: [String]) -> [String] {
+        paths.filter { path in
+            var status = stat()
+            return lstat(path, &status) == 0
+        }
+    }
+}
+
 // MARK: - Engine resolution
 
 enum HelperEngine {
-
-    /// The signed engine inside the app bundle that contains this helper,
-    /// resolved RELATIVE TO OUR OWN EXECUTABLE:
-    ///
-    ///   …/Burrow.app/Contents/MacOS/BurrowHelper   ← us
-    ///   …/Burrow.app/Contents/Resources/engine/mole ← the engine
-    ///
-    /// Never `PATH`, never an environment variable, never a caller-supplied
-    /// path. A root process that resolves its executable through any of those
-    /// hands root to whoever wins the race to shadow the name — which is the
-    /// exact reason `MoleCLI.trustedExecutable()` already refuses PATH on the
-    /// osascript path.
-    static func bundledEnginePath() -> String? {
-        guard let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
-        let contents = executable            // …/Contents/MacOS/BurrowHelper
-            .deletingLastPathComponent()     // …/Contents/MacOS
-            .deletingLastPathComponent()     // …/Contents
-        let engine = contents
-            .appendingPathComponent("Resources/engine/mole")
-            .standardizedFileURL
-
-        // Belt and braces: after standardizing, the engine must still sit
-        // inside our own Contents directory. A symlink pointing out of the
-        // bundle would otherwise be followed as root.
-        guard engine.path.hasPrefix(contents.standardizedFileURL.path + "/") else { return nil }
-        guard FileManager.default.isExecutableFile(atPath: engine.path) else { return nil }
-        return engine.path
-    }
-
     /// The app bundle containing this helper.
     static func appBundleURL() -> URL? {
         guard let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
@@ -144,12 +257,44 @@ enum HelperEngine {
     /// check is skipped and the fact is logged. Release builds always have
     /// one, and the release gate refuses to ship a helper without it.
     static func verifyContainingBundle(teamID: String?) -> Bool {
+        guard let bundle = appBundleURL() else { return false }
+        return verifyBundle(at: bundle, teamID: teamID)
+    }
+
+    /// Clone first, then validate the clone that will actually be executed.
+    /// The snapshot's 0700 root-owned parent removes the signature-check/path-
+    /// exec window without relying on another best-effort stat immediately
+    /// before `Process.run()`.
+    static func executableSnapshot(teamID: String?) -> HelperExecutableSnapshot? {
+        guard let bundle = appBundleURL() else { return nil }
+        do {
+            return try HelperExecutableSnapshot.prepare(
+                appBundleURL: bundle,
+                expectedBundleID: HelperNames.clientBundleID,
+                expectedBuild: HelperService.build) { copiedBundle in
+                verifyBundle(at: copiedBundle, teamID: teamID)
+            }
+        } catch {
+            helperTrace("bundle execution snapshot could not be prepared")
+            return nil
+        }
+    }
+
+    private static func verifyBundle(at bundle: URL, teamID: String?) -> Bool {
+        guard HelperExecutableSnapshot.matchesSealedMetadata(
+            at: bundle,
+            expectedBundleID: HelperNames.clientBundleID,
+            expectedBuild: HelperService.build) else {
+            helperTrace("bundle verification failed: identity or build mismatch")
+            return false
+        }
         guard let teamID else {
             helperTrace("bundle signature check skipped: helper is ad-hoc signed (development build)")
             return true
         }
-        guard let requirement = HelperCodeRequirement.sameTeam(teamID: teamID),
-              let bundle = appBundleURL() else { return false }
+        let requirement = HelperCodeRequirement.string(bundleID: HelperNames.clientBundleID,
+                                                       teamID: teamID)
+        guard requirement != HelperCodeRequirement.unsatisfiable else { return false }
 
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(bundle as CFURL, [], &staticCode) == errSecSuccess,
@@ -182,8 +327,16 @@ enum HelperEngine {
 /// the root child it had spawned, so the streaming flow simply had no safe
 /// cancel. Here the child is ours to signal and reap.
 final class HelperOperationRunner: @unchecked Sendable {
+    private struct Running {
+        let process: Process
+        /// Who started it. Cancellation is bound to the same account, so on a
+        /// machine with several signed-in users one session cannot stop
+        /// another's root operation just by knowing its ID.
+        let ownerUID: UInt32
+    }
+
     private let lock = NSLock()
-    private var running: [String: Process] = [:]
+    private var running: [String: Running] = [:]
 
     /// Run every step of `operation` in order, stopping at the first failure,
     /// and return the exit status of the last step attempted.
@@ -195,13 +348,19 @@ final class HelperOperationRunner: @unchecked Sendable {
     func run(operation: HelperOperation,
              operationID: String,
              interface: String?,
-             enginePath: String,
+             reviewedPaths: [String] = [],
+             enginePath: String?,
+             invokingUser: HelperResolvedInvokingUser,
              emit: @escaping (String) -> Void) -> Int32 {
         var last: Int32 = 0
-        for step in operation.steps(interface: interface) {
+        for step in operation.steps(interface: interface, reviewedPaths: reviewedPaths) {
             let path: String
             switch step.executable {
             case .bundledEngine:
+                guard let enginePath else {
+                    helperTrace("refused: bundled engine step has no verified engine")
+                    return 127
+                }
                 path = enginePath
             case .system(let systemPath):
                 // Re-check against the closed set at the moment of use, not
@@ -214,9 +373,20 @@ final class HelperOperationRunner: @unchecked Sendable {
                 }
                 path = systemPath
             }
-            last = runOne(path: path, arguments: step.arguments,
-                          operationID: operationID, emit: emit)
-            guard last == 0 else { break }
+            let status = runOne(path: path, arguments: step.arguments,
+                                operationID: operationID, ownerUID: invokingUser.uid,
+                                environment: invokingUser.childEnvironment,
+                                emit: emit)
+            // For a reviewed clean, `find`'s status is NOT the verdict — the
+            // postcondition below is. `-delete` returns true even when it
+            // removed nothing, and it returns FALSE for an entry that a
+            // deeper delete already took away, so believing it reports a
+            // fully successful clean as "exit 1".
+            if status != 0 && !operation.needsReviewedPaths { last = status }
+            // A reviewed clean is a list of independent entries: one that
+            // can't be removed must not abandon the ones after it. Every other
+            // operation is a sequence where a failed step invalidates the rest.
+            guard operation.needsReviewedPaths || status == 0 else { break }
         }
         return last
     }
@@ -224,6 +394,8 @@ final class HelperOperationRunner: @unchecked Sendable {
     private func runOne(path: String,
                         arguments: [String],
                         operationID: String,
+                        ownerUID: UInt32,
+                        environment: [String: String],
                         emit: @escaping (String) -> Void) -> Int32 {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -236,11 +408,7 @@ final class HelperOperationRunner: @unchecked Sendable {
         // inherited from the launchd context that could redirect a lookup
         // (PATH, DYLD_*, the engine's own overrides) is dropped rather than
         // passed through.
-        process.environment = [
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME": NSHomeDirectory(),
-            "LC_ALL": "C",
-        ]
+        process.environment = environment
 
         let outPipe = Pipe(), errPipe = Pipe()
         process.standardOutput = outPipe
@@ -254,7 +422,9 @@ final class HelperOperationRunner: @unchecked Sendable {
             return 127
         }
 
-        lock.lock(); running[operationID] = process; lock.unlock()
+        lock.lock()
+        running[operationID] = Running(process: process, ownerUID: ownerUID)
+        lock.unlock()
         defer { lock.lock(); running.removeValue(forKey: operationID); lock.unlock() }
 
         try? outPipe.fileHandleForWriting.close()
@@ -262,30 +432,46 @@ final class HelperOperationRunner: @unchecked Sendable {
 
         // One reader per pipe, both draining to EOF before the exit status is
         // read, so no output can be lost between the last write and the reap.
-        let splitter = HelperLineSplitter()
+        //
+        // A splitter EACH, because it carries the partial tail of an incomplete
+        // line. Sharing one across both readers meant two threads mutating that
+        // buffer concurrently — a data race, and even when the timing was kind
+        // it spliced a half-written stdout line onto the front of the next
+        // stderr chunk, producing lines that never appeared on either stream.
+        let splitters = [HelperLineSplitter(), HelperLineSplitter()]
         let group = DispatchGroup()
-        for handle in [outPipe.fileHandleForReading, errPipe.fileHandleForReading] {
+        for (handle, splitter) in zip([outPipe.fileHandleForReading, errPipe.fileHandleForReading],
+                                      splitters) {
             group.enter()
             DispatchQueue.global(qos: .utility).async {
+                // Bytes, not strings, across the pipe boundary. A read can end
+                // mid-UTF-8-sequence — a path with an accent or a CJK filename
+                // is enough — and decoding each chunk on its own would fail and
+                // silently drop the ENTIRE chunk, losing whole lines of a root
+                // operation's output. The splitter carries the partial tail.
                 while case let chunk = handle.availableData, !chunk.isEmpty {
-                    guard let text = String(data: chunk, encoding: .utf8) else { continue }
-                    for line in splitter.ingest(text) { emit(line) }
+                    for line in splitter.ingest(chunk) { emit(line) }
                 }
                 group.leave()
             }
         }
         group.wait()
-        for line in splitter.flush() { emit(line) }
+        for splitter in splitters {
+            for line in splitter.flush() { emit(line) }
+        }
 
         process.waitUntilExit()
         return process.terminationStatus
     }
 
-    /// Terminate a running operation. Returns whether anything was running.
-    func cancel(operationID: String) -> Bool {
-        lock.lock(); let process = running[operationID]; lock.unlock()
-        guard let process, process.isRunning else { return false }
-        process.terminate()
+    /// Terminate a running operation started by `requestedBy`. Returns whether
+    /// anything was stopped. An ID owned by a different account is treated
+    /// exactly like an ID that isn't running: no signal, no acknowledgement
+    /// that it exists.
+    func cancel(operationID: String, requestedBy: UInt32) -> Bool {
+        lock.lock(); let entry = running[operationID]; lock.unlock()
+        guard let entry, entry.ownerUID == requestedBy, entry.process.isRunning else { return false }
+        entry.process.terminate()
         return true
     }
 
@@ -297,23 +483,36 @@ final class HelperOperationRunner: @unchecked Sendable {
 
 /// Buffers partial reads and emits whole lines. Mirrors the GUI's splitter so
 /// both elevation routes deliver output the same way.
+///
+/// Buffering happens in BYTES. Decoding per read and concatenating strings
+/// loses any multi-byte character that straddles a chunk boundary, and the
+/// paths this daemon reports are exactly where non-ASCII shows up. Decoding is
+/// deferred until a whole line is in hand, and uses a lossy decode so one
+/// undecodable byte costs a replacement character rather than the line.
 final class HelperLineSplitter: @unchecked Sendable {
-    private var buffer = ""
+    private var buffer = Data()
     private let lock = NSLock()
+    private static let newline = UInt8(ascii: "\n")
 
-    func ingest(_ text: String) -> [String] {
+    func ingest(_ chunk: Data) -> [String] {
         lock.lock(); defer { lock.unlock() }
-        buffer += text
-        var parts = buffer.components(separatedBy: "\n")
-        buffer = parts.removeLast()
-        return parts
+        buffer.append(chunk)
+        var lines: [String] = []
+        while let index = buffer.firstIndex(of: Self.newline) {
+            lines.append(String(decoding: buffer[buffer.startIndex..<index], as: UTF8.self))
+            buffer = buffer[buffer.index(after: index)...]
+        }
+        // Re-base so the sliced storage cannot grow without bound.
+        buffer = Data(buffer)
+        return lines
     }
 
     func flush() -> [String] {
         lock.lock(); defer { lock.unlock() }
-        let rest = buffer
-        buffer = ""
-        return rest.isEmpty ? [] : [rest]
+        guard !buffer.isEmpty else { return [] }
+        let rest = String(decoding: buffer, as: UTF8.self)
+        buffer = Data()
+        return [rest]
     }
 }
 
@@ -323,10 +522,6 @@ final class HelperService: NSObject, BurrowHelperProtocol {
     private let replayGuard = HelperReplayGuard()
     private let runner = HelperOperationRunner()
     private let teamID: String?
-
-    /// The client callback for the connection currently being served. Set by
-    /// the listener delegate per connection.
-    weak var currentConnection: NSXPCConnection?
 
     init(teamID: String?) {
         self.teamID = teamID
@@ -368,17 +563,28 @@ final class HelperService: NSObject, BurrowHelperProtocol {
 
     func cancelOperation(operationID: String, withReply reply: @escaping (Bool) -> Void) {
         // Cancellation stops work; it never starts any, so it needs no
-        // authorization of its own. The connection gate has already
-        // established that the caller is Burrow, and an ID it doesn't know
-        // simply isn't running.
-        guard UUID(uuidString: operationID) != nil else { return reply(false) }
-        reply(runner.cancel(operationID: operationID))
+        // authorization of its own. But it is still bound to the invoking
+        // account: `execute` establishes who owns an operation, and on a Mac
+        // with several signed-in users a second session must not be able to
+        // stop the first one's root work just by presenting its ID.
+        guard UUID(uuidString: operationID) != nil,
+              let connection = NSXPCConnection.current() else { return reply(false) }
+        reply(runner.cancel(operationID: operationID,
+                            requestedBy: UInt32(connection.effectiveUserIdentifier)))
     }
 
     func execute(requestData: Data, authorization: Data, withReply reply: @escaping (Data) -> Void) {
         func respond(_ outcome: HelperResponse.Outcome) {
             let encoded = (try? JSONEncoder().encode(HelperResponse(outcome: outcome))) ?? Data()
             reply(encoded)
+        }
+
+        // Capture the connection for THIS invocation. A listener-wide mutable
+        // `currentConnection` lets a second client race the first and receive
+        // its output; Foundation binds current() to the dispatching XPC call.
+        guard let connection = NSXPCConnection.current() else {
+            helperTrace("request refused: no current XPC connection")
+            return respond(.rejected(.invalidInvokingUser))
         }
 
         // Gate 2 — shape. An unknown operation cannot survive decoding.
@@ -394,6 +600,41 @@ final class HelperService: NSObject, BurrowHelperProtocol {
                                             liveInterfaces: HelperService.liveInterfaceNames()) {
             helperTrace("request refused: \(rejection.rawValue)")
             return respond(.rejected(rejection))
+        }
+
+        let invokingUser: HelperResolvedInvokingUser
+        do {
+            invokingUser = try HelperDaemonIdentityResolver.resolve(
+                peerUID: connection.effectiveUserIdentifier,
+                claim: request.invokingUser)
+        } catch {
+            // Numeric uid is useful for auditing account-switch/mismatch
+            // failures. Never log the account name, home, or claim text.
+            helperTrace("request refused: invoking identity mismatch for uid \(connection.effectiveUserIdentifier)")
+            return respond(.rejected(.invalidInvokingUser))
+        }
+        helperTrace("invoking identity accepted for uid \(invokingUser.uid); canonical home matched")
+
+        // The reviewed path list is judged HERE, against roots and lstat facts
+        // the daemon gathered itself, before anything is authorized. A client
+        // that fully controls the payload still cannot name a target outside
+        // the invoking user's own trees.
+        var reviewedPaths: [String] = []
+        if request.operation.needsReviewedPaths {
+            let decision = HelperReviewedPathPolicy.validate(
+                paths: request.reviewedPaths,
+                roots: HelperReviewedCleanup.approvedRoots(for: invokingUser),
+                invokingUID: invokingUser.uid,
+                inspect: HelperReviewedCleanup.inspect)
+            switch decision {
+            case .success(let accepted):
+                reviewedPaths = accepted
+            case .failure(let rejection):
+                // The reason is a closed enum, never a path — this log is
+                // world-readable.
+                helperTrace("request refused: reviewed path rejected (\(rejection.rawValue))")
+                return respond(.rejected(.invalidReviewedPaths))
+            }
         }
 
         // Gate 3 — freshness. One authorization buys exactly one operation, so
@@ -418,24 +659,49 @@ final class HelperService: NSObject, BurrowHelperProtocol {
 
         // Gate 5 — execution. Our own signed engine, or a system tool from the
         // closed set; fixed argv either way.
-        guard let enginePath = HelperEngine.bundledEnginePath() else {
-            helperTrace("engine unavailable: no bundled engine at Contents/Resources/engine/mole")
-            return respond(.engineUnavailable)
-        }
-        guard HelperEngine.verifyContainingBundle(teamID: teamID) else {
+        var engineSnapshot: HelperExecutableSnapshot?
+        var enginePath: String?
+        if request.operation.engineArguments != nil {
+            guard let snapshot = HelperEngine.executableSnapshot(teamID: teamID) else {
+                helperTrace("engine unavailable: signed execution snapshot could not be prepared")
+                return respond(.engineUnavailable)
+            }
+            engineSnapshot = snapshot
+            enginePath = snapshot.executableURL.path
+        } else if !HelperEngine.verifyContainingBundle(teamID: teamID) {
             helperTrace("engine unavailable: containing app bundle failed signature verification")
             return respond(.engineUnavailable)
         }
 
         helperTrace("running \(request.operation.rawValue) (mutating: \(request.operation.mutatesDisk))")
 
-        let client = currentConnection?.remoteObjectProxy as? BurrowHelperClientProtocol
+        let client = connection.remoteObjectProxy as? BurrowHelperClientProtocol
         let operationID = request.operationID
-        let code = runner.run(operation: request.operation,
+        var code = runner.run(operation: request.operation,
                               operationID: operationID,
                               interface: request.networkInterface,
-                              enginePath: enginePath) { line in
+                              reviewedPaths: reviewedPaths,
+                              enginePath: enginePath,
+                              invokingUser: invokingUser) { line in
             client?.helperDidEmit(line: line, operationID: operationID)
+        }
+        // Keep the validated clone alive until Process has exited and every
+        // output pipe has drained; deinit then removes the private snapshot.
+        withExtendedLifetime(engineSnapshot) {}
+
+        // Success is the POSTCONDITION, not find's exit status: `-delete` is
+        // documented to always return true, so it exits 0 having printed a
+        // permission error and removed nothing. Reporting that as success is
+        // how a clean that freed nothing renders as "Done — caches cleared".
+        if request.operation.needsReviewedPaths {
+            let survivors = HelperReviewedCleanup.survivors(among: reviewedPaths)
+            // Authoritative, in both directions: still-present entries fail the
+            // run, and an entry that is gone is a success no matter what `find`
+            // said on its way out.
+            code = survivors.isEmpty ? 0 : 1
+            if !survivors.isEmpty {
+                helperTrace("reviewed cleanup left \(survivors.count) of \(reviewedPaths.count) entries")
+            }
         }
         helperTrace("operation finished with status \(code)")
         respond(.exited(code))
@@ -461,7 +727,6 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate {
         connection.exportedInterface = HelperInterface.daemon()
         connection.exportedObject = service
         connection.remoteObjectInterface = HelperInterface.client()
-        service.currentConnection = connection
         connection.resume()
         helperTrace("connection accepted from a verified Burrow client")
         return true

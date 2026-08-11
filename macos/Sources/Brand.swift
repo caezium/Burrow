@@ -110,11 +110,16 @@ enum Brand {
     }
 
     // MARK: Type — the bundled brand set (registered in Fonts.swift)
+    //
+    // Geist resolves to a REAL face per weight rather than `.weight(...)` over
+    // one family. Asking a variable font for a weight it has no registered face
+    // for made CoreText synthesize the instance, and that occasionally produced
+    // no glyphs at all — see the note in Fonts.swift.
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .custom(Fonts.mono, size: size).weight(weight)
+        .custom(Fonts.geistMono(weight), size: size)
     }
     static func sans(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .custom(Fonts.ui, size: size).weight(weight)
+        .custom(Fonts.geist(weight), size: size)
     }
     /// The display / hero voice — Cal Sans.
     static func display(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {

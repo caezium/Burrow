@@ -614,6 +614,25 @@ final class SoftwareModel: ObservableObject {
     @Published var previewLoading: Set<String> = []
     @Published var pathSelections: [String: Set<String>] = [:]
     private var started = false
+    private let appsLoader: () -> (apps: [InstalledApp], unavailable: Bool)
+    private let recentDateLoader: (String) -> Date?
+    private let previewLoader: (InstalledApp) -> UninstallPreview
+    private var loadGeneration = 0
+    private var recentGeneration = 0
+
+    /// `loadApps` hands back rows only: a test that can produce a list has, by construction, a
+    /// working inventory, so the "couldn't check" half of `fetch()`'s answer is false for it.
+    /// `loadPreview` takes the whole row rather than a name because the real loader
+    /// (`fetchPreview`) chooses between the engine's bundle-id argv and the legacy name argv.
+    init(
+        loadApps: (() -> [InstalledApp])? = nil,
+        lastUsedDate: ((String) -> Date?)? = nil,
+        loadPreview: ((InstalledApp) -> UninstallPreview)? = nil
+    ) {
+        appsLoader = loadApps.map { load in { (apps: load(), unavailable: false) } } ?? { Self.fetch() }
+        recentDateLoader = lastUsedDate ?? { Self.lastUsedDate($0) }
+        previewLoader = loadPreview ?? { Self.fetchPreview(for: $0) }
+    }
 
     /// `id` → lowercased name, rebuilt once per `apps` load. The search field
     /// filters on every keystroke, so doing the ICU case-folding
@@ -714,10 +733,17 @@ final class SoftwareModel: ObservableObject {
         expandedAppID = app.id
         guard previews[app.id] == nil, !previewLoading.contains(app.id) else { return }
         previewLoading.insert(app.id)
+        let path = app.path
+        let generation = loadGeneration
+        let loader = previewLoader
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let preview = Self.fetchPreview(for: app)
+            // The whole app, not just its uninstall name: `fetchPreview` decides between the
+            // engine's bundle-id argv and the legacy name argv, and it needs the row to do it.
+            let preview = loader(app)
             Task { @MainActor in
-                guard let self else { return }
+                guard let self,
+                      generation == self.loadGeneration,
+                      self.apps.contains(where: { $0.id == app.id && $0.path == path }) else { return }
                 self.previewLoading.remove(app.id)
                 self.previews[app.id] = preview
                 // Default ticks: the auto-selected kinds, minus anything the engine already said
@@ -897,29 +923,50 @@ final class SoftwareModel: ObservableObject {
         guard !recentLoaded, !apps.isEmpty else { return }
         recentLoaded = true
         let snapshot = apps
+        recentGeneration &+= 1
+        let generation = recentGeneration
+        let inventoryGeneration = loadGeneration
+        let dateLoader = recentDateLoader
         DispatchQueue.global(qos: .userInitiated).async {
-            let dated = snapshot.map { a in
-                InstalledApp(id: a.id, name: a.name, bundleId: a.bundleId, source: a.source,
-                             uninstallName: a.uninstallName, path: a.path, sizeStr: a.sizeStr,
-                             sizeBytes: a.sizeBytes, lastUsed: Self.lastUsedDate(a.path))
+            let dates = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, dateLoader($0.path)) })
+            Task { @MainActor in
+                guard generation == self.recentGeneration,
+                      inventoryGeneration == self.loadGeneration else { return }
+                // The inventory may have refreshed metadata while dates were
+                // loading. Merge onto the live rows by stable app identity so
+                // a late date pass never resurrects an old snapshot.
+                self.apps = self.apps.map { app in
+                    guard let date = dates[app.id] else { return app }
+                    return InstalledApp(
+                        id: app.id, name: app.name, bundleId: app.bundleId, source: app.source,
+                        uninstallName: app.uninstallName, path: app.path, sizeStr: app.sizeStr,
+                        sizeBytes: app.sizeBytes, lastUsed: date
+                    )
+                }
             }
-            Task { @MainActor in self.apps = dated }
         }
     }
 
     func load() {
+        loadGeneration &+= 1
+        recentGeneration &+= 1
+        let generation = loadGeneration
+        let loader = appsLoader
         loading = true
         error = nil
         DispatchQueue.global(qos: .userInitiated).async {
-            let (parsed, unavailable) = Self.fetch()
+            let (parsed, unavailable) = loader()
             Task { @MainActor in
+                guard generation == self.loadGeneration else { return }
                 self.apps = parsed
                 self.inventoryUnavailable = unavailable
                 self.loading = false
                 self.recentLoaded = false
                 self.previews = [:]
+                self.previewLoading = []
                 self.pathSelections = [:]
                 self.expandedAppID = nil
+                self.selected.formIntersection(parsed.map(\.id))
                 if self.sort == .recent { self.ensureRecentDates() }
             }
         }
@@ -948,7 +995,7 @@ final class SoftwareModel: ObservableObject {
     /// querying metadata for every installed app woke `mds`/`mdworker` and spiked
     /// CPU/energy. Filesystem dates are close enough for the Recent sort and cost
     /// nothing — no metadata server, no indexing.
-    private static func lastUsedDate(_ path: String) -> Date? {
+    private nonisolated static func lastUsedDate(_ path: String) -> Date? {
         let url = URL(fileURLWithPath: path)
         if let vals = try? url.resourceValues(forKeys: [.contentAccessDateKey, .contentModificationDateKey]) {
             return vals.contentAccessDate ?? vals.contentModificationDate

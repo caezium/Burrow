@@ -15,18 +15,52 @@ internal static class Program
         WriteIndented = false
     };
 
+    /// <summary>Only an http/https URI addressed to this machine may receive the
+    /// stored credential. Uri.IsLoopback covers localhost, 127.0.0.0/8 and ::1.</summary>
+    private static bool IsLocalMcpEndpoint(string? value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return false;
+        }
+        return uri.IsLoopback;
+    }
+
     private static async Task<int> Main()
     {
+        var stored = ReadConnectionSettings();
         var endpoint = Environment.GetEnvironmentVariable("BURROWWIN_MCP_ENDPOINT");
-        if (string.IsNullOrWhiteSpace(endpoint))
+        if (string.IsNullOrWhiteSpace(endpoint) || !IsLocalMcpEndpoint(endpoint))
         {
-            endpoint = ReadEndpointFromSettings() ?? DefaultEndpoint;
+            endpoint = stored.Endpoint ?? DefaultEndpoint;
+        }
+        // The stored value gets the same treatment: whatever this ends up
+        // being, the local bearer token below is attached to every request
+        // sent to it, so an endpoint that is not loopback would hand Burrow's
+        // MCP credential to whoever set it. Fall back rather than trust it.
+        if (!IsLocalMcpEndpoint(endpoint))
+        {
+            endpoint = DefaultEndpoint;
+        }
+        var authToken = Environment.GetEnvironmentVariable("BURROWWIN_MCP_TOKEN");
+        if (string.IsNullOrWhiteSpace(authToken))
+        {
+            authToken = stored.AuthToken;
         }
 
         using var httpClient = new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(120)
         };
+        if (!string.IsNullOrWhiteSpace(authToken))
+        {
+            httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", authToken);
+        }
 
         string? line;
         while ((line = await Console.In.ReadLineAsync().ConfigureAwait(false)) is not null)
@@ -48,7 +82,7 @@ internal static class Program
         return 0;
     }
 
-    private static string? ReadEndpointFromSettings()
+    private static (string? Endpoint, string? AuthToken) ReadConnectionSettings()
     {
         var path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -57,7 +91,7 @@ internal static class Program
 
         if (!File.Exists(path))
         {
-            return null;
+            return (null, null);
         }
 
         try
@@ -65,11 +99,12 @@ internal static class Program
             var root = JsonNode.Parse(File.ReadAllText(path))?.AsObject();
             var port = root?["HttpServerPort"]?.GetValue<int>() ?? 9277;
             port = Math.Clamp(port, 1024, 65535);
-            return $"http://127.0.0.1:{port}/mcp";
+            var authToken = root?["HttpServerAuthToken"]?.GetValue<string>();
+            return ($"http://127.0.0.1:{port}/mcp", authToken);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         {
-            return null;
+            return (null, null);
         }
     }
 

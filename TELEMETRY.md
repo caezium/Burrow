@@ -63,10 +63,14 @@ own project instead.
   Opting out leaves those ids and any Sentry cache on disk; deleting the app's
   Application Support and Caches folders removes them.
 - **No PII, ever.** `DiagnosticPrivacy.sanitize()` drops sensitive keys (paths,
-  file names, contents, URLs, tokens, email, username, identifiers, …), accepts
-  only primitive values, and replaces complete path-like strings. Sentry event
-  frames keep symbols/modules/debug IDs while all package, source-file, and
-  binary-image path fields are removed.
+  file names, contents, URLs, tokens, email, username, identifiers, arguments,
+  headers, payloads, …), accepts only primitive values, and replaces complete
+  path-like strings. Sentry stack-memory introspection is explicitly disabled.
+  Before transport, exception values and mechanism metadata are removed,
+  contexts are recursively sanitized, raw registers are cleared, and debug/frame
+  labels, UUIDs, and addresses must pass strict bounded formats. Package,
+  source-file, source-context, variable, and binary-image path fields are
+  removed.
 - **PostHog sizes/counts/durations are bucketed**, never raw — see
   `bytesBucket`, `countBucket`, `secondsBucket`. Sentry's sampled performance
   traces necessarily contain precise span timing, but every span has a fixed
@@ -125,7 +129,7 @@ for about 1% of launches overall; profiling is disabled from Downloads, home
 directories, mounted volumes, and other relocated paths because profile
 envelopes contain binary-image paths. Pre-main profiling is always disabled.
 Burrow adds at most 50 fixed-name manual breadcrumbs and fixed-name
-warning/error logs. Automatic network breadcrumbs, failed-request capture,
+warning/error logs. Stack-memory introspection, automatic network breadcrumbs, failed-request capture,
 file I/O tracing, Core Data tracing, UI tracing, screenshots, and view-hierarchy
 capture remain disabled.
 
@@ -135,10 +139,13 @@ fixed `move_to_applications` recovery, ordinary network download failures stay
 in PostHog with `sparkle_scheduled_retry`, and user cancellations are recorded
 as completed cycles. Configuration, signature/validation, installation, and
 otherwise unknown failures still create a scrubbed Sentry diagnostic. The
-GitHub bridge includes bounded release, OS-build, launch-phase, status-item,
-count, and stack information on every new issue. App-Hang groups are aggregated
-into a weekly digest instead of being silently skipped or opening one issue per
-sampled frame.
+public GitHub bridge includes only the Sentry short ID/restricted link and
+bounded project, release, OS-build, launch-phase, status-item, level, count, and
+time fields. It never copies raw Sentry titles, frames, paths, usernames,
+arguments, or payloads. Maintainers review detailed diagnostics in restricted
+Sentry and copy only a minimal privacy-reviewed diagnosis into the public issue.
+App-Hang groups are aggregated into a weekly digest instead of being silently
+skipped or opening one issue per sampled frame.
 
 Automatic Sparkle startup begins only after the status item has remained
 responsive for 30 seconds, then receives a separate 30-second durable

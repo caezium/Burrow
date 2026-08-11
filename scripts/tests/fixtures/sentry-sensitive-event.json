@@ -1,0 +1,34 @@
+{
+  "release": {
+    "version": "dev.caezium.Burrow@0.11.2+23"
+  },
+  "tags": [
+    {"key": "os_build", "value": "25A123"},
+    {"key": "launch_phase", "value": "launch_started"},
+    {"key": "status_item_state", "value": "stable"},
+    {"key": "username", "value": "alice"},
+    {"key": "command_arguments", "value": "--upload /Users/alice/customer.txt"}
+  ],
+  "entries": [
+    {
+      "type": "threads",
+      "data": {
+        "values": [
+          {
+            "name": "alice-private-worker",
+            "stacktrace": {
+              "frames": [
+                {
+                  "function": "Burrow.run(secret: sk-live-SECRET)",
+                  "filename": "/Users/alice/customer.txt",
+                  "package": "/Users/alice/Downloads/Burrow.app",
+                  "vars": {"argv": ["--token", "SECRET"]}
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -58,6 +58,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// can say what is actually happening rather than flipping on and quietly
     /// doing nothing (#319).
     var menuBarSuppressedByCompatibilityGuard: Bool { recoveryReason != nil }
+
+    /// Why the menu-bar item is paused, so Settings can say something true.
+    /// The two reasons need different advice: only the macOS-build guard is
+    /// fixed by updating macOS.
+    var menuBarSuppressionReason: LaunchRecoveryReason? { recoveryReason }
     private var recoveryNoticePresented = false
     private var launchCompleted = false
     private var initialStatusItemCreationTask: Task<Void, Never>?
@@ -444,7 +449,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.center()
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 940, height: 640)
+        // Derived from the rail's own height — see WindowMetrics. The window
+        // uses fullSizeContentView, so the frame minimum IS the content
+        // minimum; there is no title bar to subtract.
+        window.minSize = NSSize(width: WindowMetrics.minimumSize.width,
+                                height: WindowMetrics.minimumSize.height)
         window.delegate = self
 
         // Show a Dock icon (and Cmd-Tab presence) while the dashboard is

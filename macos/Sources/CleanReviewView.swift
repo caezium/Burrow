@@ -262,6 +262,13 @@ struct CleanReviewView: View {
         case .systemBusy:
             Chip(text: NSLocalizedString("System busy", comment: "clean badge"), color: Brand.textTertiary)
                 .help(NSLocalizedString("A system service is using this path right now.", comment: ""))
+        case .notCleanable(let reason):
+            Chip(text: NSLocalizedString("Can't clean", comment: "clean badge"), color: Brand.amber)
+                .help(reason)
+                // The reason only lives in the tooltip, which VoiceOver never
+                // reaches — without this the row announces "Can't clean" and
+                // gives no way to find out why.
+                .accessibilityLabel(Text("\(NSLocalizedString("Can't clean", comment: "clean badge")). \(reason)"))
         }
     }
 

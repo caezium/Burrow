@@ -63,4 +63,31 @@ public sealed class SystemTelemetryFormatterTests
         Assert.Equal("0%", snapshot.TopProcesses[0].CpuUsageText);
         Assert.Equal("1 KB/s", SystemTelemetryFormatter.Rate(snapshot.NetworkReceivedBytesPerSecond));
     }
+
+    [Fact]
+    public void GpuMetric_DistinguishesUnavailableFromRealZero()
+    {
+        var unavailable = CreateGpuSnapshot("Unavailable");
+        var zero = CreateGpuSnapshot("Unavailable") with { GpuUsagePercent = 0 };
+
+        Assert.Equal("Unavailable", SystemTelemetryFormatter.GpuMetric(unavailable));
+        Assert.Equal("3D 0.0%", SystemTelemetryFormatter.GpuMetric(zero));
+    }
+
+    private static SystemTelemetrySnapshot CreateGpuSnapshot(string gpuStatus)
+    {
+        return new SystemTelemetrySnapshot(
+            DateTimeOffset.UnixEpoch,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            gpuStatus,
+            []);
+    }
 }

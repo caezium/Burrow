@@ -8,7 +8,11 @@ public interface IPurgeArtifactService
         IReadOnlyList<string>? searchRoots = null,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<LeftoverRemovalResult>> RemoveAsync(
+    ConfirmedDeletionAuthorization ConfirmRemoval(IReadOnlyList<PurgeProjectCandidate> projects);
+
+    Task<DeletionBatchResult> RemoveAsync(
         IReadOnlyList<PurgeProjectCandidate> projects,
+        ConfirmedDeletionAuthorization authorization,
+        IProgress<DeletionProgress>? progress = null,
         CancellationToken cancellationToken = default);
 }

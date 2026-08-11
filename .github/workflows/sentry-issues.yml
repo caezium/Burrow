@@ -9,15 +9,15 @@ name: sentry-issues
 # isn't on. This workflow needs only a read-only Sentry auth token and the
 # free plan's API.
 #
-# Each filed issue also embeds the most recent event's stack trace (fetched
-# from the events/latest API) in a collapsed <details> block, so triage rarely
-# needs a trip to the Sentry dashboard. Best-effort: if the trace can't be
-# fetched/parsed the issue is still filed, just without the trace block.
+# Public issues contain only a small allowlist of bounded operational fields.
+# Stack traces, paths, arguments, usernames, and event payloads stay in the
+# restricted Sentry project and must cross a human privacy-review boundary
+# before anyone copies a diagnosis into GitHub.
 #
 # App-Hang groups are collected into one rolling weekly digest instead of
 # opening one GitHub issue per sampled top frame. The digest still carries
-# every Sentry short-id, release/build tags, and a bounded stack trace, so hangs
-# stay visible without flooding the tracker.
+# every Sentry short-id and bounded release/build tags, so hangs stay visible
+# without flooding the tracker or publishing diagnostic payloads.
 #
 # Dedup is by a hidden marker line ("sentry-id: <short-id>") in the body of
 # every issue or digest we file. Before filing, we read back the short-ids of all
@@ -71,10 +71,9 @@ jobs:
       LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours || '168' }}
       # Cap creations per run so a backlog can't open hundreds of issues at once.
       MAX_PER_RUN: "25"
-      # Bound each App-Hang batch so its table, traces, and markers fit inside
+      # Bound each App-Hang batch so its table and markers fit inside
       # GitHub's 65,536-character issue-body limit with room to append safely.
       MAX_HANG_GROUPS_PER_RUN: "20"
-      MAX_HANG_TRACE_CHARS: "1200"
       MAX_ISSUE_BODY_BYTES: "60000"
       # Defensive ceiling against a malformed cursor loop. Normal runs exhaust
       # the Sentry result set long before this (100 pages × 50 groups).
@@ -83,6 +82,9 @@ jobs:
       GH_REPO: ${{ github.repository }}
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
+      - name: Checkout privacy filter
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
       - name: Poll Sentry and file GitHub issues
         run: |
           set -euo pipefail
@@ -102,55 +104,8 @@ jobs:
             | grep -oE 'sentry-id: [^ <]+' | awk '{print $2}' | sort -u > "$seen" || true
           echo "Already filed: $(wc -l < "$seen" | tr -d ' ') Sentry issue(s)."
           hang_rows="$(mktemp)"
-          hang_details="$(mktemp)"
           hang_markers="$(mktemp)"
           hang_count=0
-
-          # jq program that distils a Sentry event into a compact stack trace.
-          # Prefers the crashed/current thread (the right one for App Hang/ANR
-          # events, where the main thread is what stalled), falling back to the
-          # exception's own stacktrace. Frames arrive oldest-first, so reverse
-          # to put the offending frame on top; cap at 30. In-app frames are
-          # marked with "* ". Emits "" when there are no frames to show.
-          read -r -d '' TRACE_JQ <<'JQ' || true
-          def fmtframe:
-            (if (.inApp // false) then "* " else "  " end)
-            + (.function // .symbol // "<unknown>")
-            + (if .filename then " (" + .filename + (if .lineNo then ":" + (.lineNo|tostring) else "" end) + ")"
-               elif .package then " [" + (.package | sub(".*/";"")) + "]"
-               else "" end);
-          ( [ .entries[]? | select(.type=="threads") | .data.values[]?
-              | select((.crashed // false) or (.current // false))
-              | .stacktrace.frames ] | map(select(. != null)) | .[0] ) as $tf
-          | ( [ .entries[]? | select(.type=="exception") | .data.values[]?
-              | .stacktrace.frames ] | map(select(. != null)) | .[0] ) as $ef
-          | ( ($tf // $ef) // [] )
-          | reverse | .[0:30] | map(fmtframe) | join("\n")
-          JQ
-
-          # Populate four globals from a latest-event payload. Burrow's
-          # beforeSend policy already bounds these fields; sanitize again
-          # before copying them into a public GitHub issue.
-          populate_event_context() {
-            local event_json="${1:-{}}"
-            release=$(jq -r '
-              if (.release | type) == "object" then (.release.version // "unknown")
-              elif (.release | type) == "string" then .release
-              else "unknown"
-              end
-            ' <<<"$event_json" 2>/dev/null || echo unknown)
-            osBuild=$(jq -r '[.tags[]? | select(.key=="os_build") | .value][0] // "unknown"' <<<"$event_json" 2>/dev/null || echo unknown)
-            launchPhase=$(jq -r '[.tags[]? | select(.key=="launch_phase") | .value][0] // "unknown"' <<<"$event_json" 2>/dev/null || echo unknown)
-            statusItem=$(jq -r '[.tags[]? | select(.key=="status_item_state") | .value][0] // "unknown"' <<<"$event_json" 2>/dev/null || echo unknown)
-            release=$(printf '%s' "$release" | tr -cd 'A-Za-z0-9._:+-' | cut -c1-80)
-            osBuild=$(printf '%s' "$osBuild" | tr -cd 'A-Za-z0-9._:+-' | cut -c1-80)
-            launchPhase=$(printf '%s' "$launchPhase" | tr -cd 'A-Za-z0-9._:+-' | cut -c1-80)
-            statusItem=$(printf '%s' "$statusItem" | tr -cd 'A-Za-z0-9._:+-' | cut -c1-80)
-            [ -n "$release" ] || release=unknown
-            [ -n "$osBuild" ] || osBuild=unknown
-            [ -n "$launchPhase" ] || launchPhase=unknown
-            [ -n "$statusItem" ] || statusItem=unknown
-          }
 
           filed=0
           for project in $SENTRY_PROJECTS; do
@@ -178,7 +133,7 @@ jobs:
 
               page_fetched=$(jq 'if type=="array" then length else -1 end' "$page" 2>/dev/null || echo -1)
               if [ "$page_fetched" = "-1" ]; then
-                echo "::warning::Sentry returned a non-array response for '${project}' page $((page_count + 1)); processing pages already fetched. Head: $(head -c 160 "$page")"
+                echo "::warning::Sentry returned a non-array response for '${project}' page $((page_count + 1)); processing pages already fetched without logging the payload."
                 break
               fi
               jq -c '.[]' "$page" >> "$response_rows"
@@ -209,10 +164,50 @@ jobs:
             skipped_seen=0
             skipped_old=0
 
-            while read -r issue; do
+            while IFS= read -r issue; do
               [ -z "$issue" ] && continue
-              shortId=$(jq -r '.shortId // empty' <<<"$issue")
-              [ -z "$shortId" ] && continue
+
+              # Raw Sentry objects remain in temporary files and are reduced by
+              # a fail-closed allowlist before any value can reach GitHub.
+              issue_json="$(mktemp)"
+              event_json="$(mktemp)"
+              summary_json="$(mktemp)"
+              printf '%s\n' "$issue" > "$issue_json"
+              printf '{}\n' > "$event_json"
+
+              issueId=$(jq -r '.id // empty' "$issue_json" 2>/dev/null || true)
+              if [[ "$issueId" =~ ^[0-9]{1,20}$ ]]; then
+                if ! curl -fsS -o "$event_json" \
+                     -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" \
+                     "${SENTRY_HOST}/api/0/organizations/${SENTRY_ORG}/issues/${issueId}/events/latest/"; then
+                  printf '{}\n' > "$event_json"
+                  echo "::warning::Latest event unavailable; filing only the allowlisted issue summary."
+                fi
+              fi
+
+              if ! python3 scripts/sentry_public_summary.py \
+                   --issue-file "$issue_json" \
+                   --event-file "$event_json" \
+                   --org "$SENTRY_ORG" \
+                   --project "$project" > "$summary_json"; then
+                echo "::warning::Refusing to publish a Sentry issue that did not pass the public-summary policy."
+                rm -f "$issue_json" "$event_json" "$summary_json"
+                continue
+              fi
+              rm -f "$issue_json" "$event_json"
+
+              shortId=$(jq -r '.shortId' "$summary_json")
+              permalink=$(jq -r '.sentryUrl' "$summary_json")
+              level=$(jq -r '.level' "$summary_json")
+              count=$(jq -r '.count' "$summary_json")
+              release=$(jq -r '.release' "$summary_json")
+              osBuild=$(jq -r '.osBuild' "$summary_json")
+              launchPhase=$(jq -r '.launchPhase' "$summary_json")
+              statusItem=$(jq -r '.statusItem' "$summary_json")
+              firstSeen=$(jq -r '.firstSeen' "$summary_json")
+              lastSeen=$(jq -r '.lastSeen' "$summary_json")
+              isAppHang=$(jq -r '.isAppHang' "$summary_json")
+              rm -f "$summary_json"
 
               # Already filed?
               if grep -qxF "$shortId" "$seen"; then
@@ -220,7 +215,6 @@ jobs:
                 continue
               fi
 
-              firstSeen=$(jq -r '.firstSeen // empty' <<<"$issue")
               fsEpoch=$(date -u -d "$firstSeen" +%s 2>/dev/null || echo 0)
               if [ "$fsEpoch" -lt "$cutoff" ]; then
                 echo "Skipping ${shortId}: firstSeen ${firstSeen} is outside the ${LOOKBACK_HOURS}h lookback."
@@ -228,48 +222,19 @@ jobs:
                 continue
               fi
 
-              # A single sampled stall may fan out across several Sentry groups
-              # when their top frames differ. Keep every group visible, but add
-              # it to one weekly digest instead of opening one GitHub issue per
-              # short-id. Match on issueType/title so this survives wording
-              # changes between Sentry Cocoa SDK versions.
-              issueType=$(jq -r '.issueType // empty' <<<"$issue")
-              titleProbe=$(jq -r '.title // .metadata.value // empty' <<<"$issue")
-              if printf '%s %s' "$issueType" "$titleProbe" | grep -qiE 'app[ _-]?hang|hanging'; then
+              # The reducer classifies hangs internally; neither the raw title
+              # nor any frame used by Sentry to group a hang reaches GitHub.
+              if [ "$isAppHang" = "true" ]; then
                 if [ "$hang_count" -ge "$MAX_HANG_GROUPS_PER_RUN" ]; then
                   echo "Deferring App-Hang ${shortId}: this run's bounded digest batch is full."
                   continue
                 fi
-                count=$(jq -r '.count // "?"' <<<"$issue")
-                lastSeen=$(jq -r '.lastSeen // "?"' <<<"$issue")
-                permalink=$(jq -r '.permalink // empty' <<<"$issue")
-                issueId=$(jq -r '.id // empty' <<<"$issue")
-                ev=""
-                trace=""
-                if [ -n "$issueId" ]; then
-                  ev=$(curl -fsS -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" \
-                        "${SENTRY_HOST}/api/0/organizations/${SENTRY_ORG}/issues/${issueId}/events/latest/" 2>/dev/null) || ev=""
-                  [ -n "$ev" ] && trace=$(jq -r "$TRACE_JQ" <<<"$ev" 2>/dev/null || true)
-                fi
-                if [ "${#trace}" -gt "$MAX_HANG_TRACE_CHARS" ]; then
-                  trace="$(printf '%s' "$trace" | cut -c1-"$MAX_HANG_TRACE_CHARS")
-          … trace truncated by the Sentry bridge"
-                fi
-
-                populate_event_context "$ev"
 
                 # Backticks are literal Markdown delimiters.
                 # shellcheck disable=SC2016
                 printf '| [%s](%s) | `%s` | %s | `%s` | `%s` | `%s` | %s | %s |\n' \
                   "$shortId" "$permalink" "$project" "$count" "$release" "$osBuild" \
                   "$launchPhase" "$statusItem" "$lastSeen" >> "$hang_rows"
-                if [ -n "$trace" ]; then
-                  {
-                    printf '\n<details>\n<summary>%s latest stack trace</summary>\n\n```\n' "$shortId"
-                    printf '%s\n' "$trace"
-                    printf '```\n\n</details>\n'
-                  } >> "$hang_details"
-                fi
                 printf '<sub>sentry-id: %s — managed marker, do not edit or remove.</sub>\n' "$shortId" >> "$hang_markers"
                 echo "$shortId" >> "$seen"
                 hang_count=$((hang_count + 1))
@@ -282,29 +247,9 @@ jobs:
                 break 2
               fi
 
-              title=$(jq -r '.title // .metadata.value // .culprit // "Unknown error"' <<<"$issue")
-              level=$(jq -r '.level // "error"' <<<"$issue")
-              count=$(jq -r '.count // "?"' <<<"$issue")
-              lastSeen=$(jq -r '.lastSeen // "?"' <<<"$issue")
-              permalink=$(jq -r '.permalink // empty' <<<"$issue")
-
-              # Fetch the most recent event so the GitHub issue carries a real
-              # stack trace — saves a manual Sentry dive on every triage. Pure
-              # best-effort: a failed request (event:read missing, message-only
-              # issue, network blip) or an empty jq result just files the issue
-              # without a trace block, exactly as before.
-              issueId=$(jq -r '.id // empty' <<<"$issue")
-              ev=""
-              trace=""
-              if [ -n "$issueId" ]; then
-                ev=$(curl -fsS -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" \
-                      "${SENTRY_HOST}/api/0/organizations/${SENTRY_ORG}/issues/${issueId}/events/latest/" 2>/dev/null) || ev=""
-                [ -n "$ev" ] && trace=$(jq -r "$TRACE_JQ" <<<"$ev" 2>/dev/null || true)
-              fi
-              populate_event_context "$ev"
-
               printf -v body '%s\n' \
-                "Auto-filed from Sentry by the \`sentry-issues\` workflow." \
+                "Auto-filed from Sentry by the \`sentry-issues\` workflow. This public issue contains only the workflow's allowlisted operational summary." \
+                "Detailed diagnostics stay in restricted Sentry. Review them there; copy only a minimal, privacy-reviewed diagnosis into this public issue." \
                 "" \
                 "| | |" \
                 "|---|---|" \
@@ -319,29 +264,16 @@ jobs:
                 "| **First seen** | ${firstSeen} |" \
                 "| **Last seen** | ${lastSeen} |"
 
-              if [ -n "$trace" ]; then
-                body="${body}
-          <details>
-          <summary>Stack trace (most recent event)</summary>
-
-          \`\`\`
-          ${trace}
-          \`\`\`
-
-          </details>
-          "
-              fi
-
               # Keep the managed marker LAST: the dedup read greps for
               # 'sentry-id:' across all sentry-labelled issues.
               body="${body}
           <sub>sentry-id: ${shortId} — managed marker, do not edit or remove (prevents duplicate filings).</sub>
-          "
+              "
               if gh issue create --repo "$GH_REPO" \
-                   --title "[Sentry] ${shortId}: ${title}" \
+                   --title "[Sentry] ${shortId}: restricted diagnostic" \
                    --label sentry \
                    --body "$body" >/dev/null; then
-                echo "Filed ${shortId}: ${title}"
+                echo "Filed allowlisted public summary for ${shortId}."
                 echo "$shortId" >> "$seen"   # dedup within this run too
                 filed=$((filed + 1))
               else
@@ -360,7 +292,6 @@ jobs:
               printf '| Sentry | Project | Events | Release | OS build | Launch phase | Status item | Last seen |\n'
               printf '|---|---|---:|---|---|---|---|---|\n'
               cat "$hang_rows"
-              cat "$hang_details"
               printf '\n'
               cat "$hang_markers"
             } > "$digest_section"
@@ -382,7 +313,7 @@ jobs:
             done
 
             # If the latest open part still has room, append there. Otherwise,
-            # create the next numbered part. The per-run group/trace bounds
+            # create the next numbered part. The per-run group bounds
             # above guarantee a fresh part stays below the body limit.
             if [ -n "$digest_number" ]; then
               digest_body="$(mktemp)"
@@ -407,6 +338,7 @@ jobs:
                 # shellcheck disable=SC2016
                 printf '%s\n\n' 'Auto-filed from Sentry by the `sentry-issues` workflow.'
                 printf '%s\n' 'App-Hang samples can split into several Sentry groups when their top frames differ. This weekly digest keeps every group visible without opening one GitHub issue per sampled frame.'
+                printf '%s\n' 'Detailed diagnostics stay in restricted Sentry. Review them there; copy only a minimal, privacy-reviewed diagnosis into this public issue.'
                 cat "$digest_section"
               } > "$digest_body"
               gh issue create --repo "$GH_REPO" --title "$digest_title" --label sentry \

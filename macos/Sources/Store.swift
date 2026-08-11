@@ -373,6 +373,16 @@ enum Store {
         set { d.set(newValue, forKey: "fda_notice_dismissed") }
     }
 
+    /// Whether the user has dismissed the banner offering the privileged
+    /// helper (Touch ID for admin operations). Unlike the FDA notice — which
+    /// re-asks each launch because without it scans genuinely can't read
+    /// protected caches — the helper is a convenience, so one dismiss is
+    /// final. Installing it hides the banner on its own.
+    static var helperNoticeDismissed: Bool {
+        get { d.object(forKey: "helper_notice_dismissed") as? Bool ?? false }
+        set { write(newValue, "helper_notice_dismissed") }
+    }
+
     /// Whether the popover shows a camera/microphone in-use indicator.
     /// Opt-in (off by default): detection is honest (system "in use" flag,
     /// like Control Center) but lights for Siri/dictation/Continuity too, so
@@ -569,12 +579,19 @@ enum Store {
         set { write(min(100, max(50, newValue)), "mem_alert_threshold") }
     }
 
-    /// Bearer token for the query server's SSE /events stream (B.6). Generated
-    /// once and persisted; agents pass it as `?token=…`. The server is loopback-
-    /// only, so this just stops other local processes/pages from subscribing.
+    /// Per-install bearer credential for every HTTP query-server route,
+    /// including SSE. Two UUIDv4 payloads provide more than 256 random bits;
+    /// strip punctuation so the value is safe to paste into an HTTP header.
+    /// URLs are never accepted as credential transport because they leak into
+    /// browser history, shell history, and diagnostics.
     static var queryAuthToken: String {
-        if let t = d.string(forKey: "query_auth_token"), !t.isEmpty { return t }
-        let t = UUID().uuidString
+        if let t = d.string(forKey: "query_auth_token"),
+           t.utf8.count >= 43,
+           t.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_" }) {
+            return t
+        }
+        let t = (UUID().uuidString + UUID().uuidString)
+            .replacingOccurrences(of: "-", with: "")
         write(t, "query_auth_token")
         return t
     }

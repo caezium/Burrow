@@ -1,5 +1,6 @@
 using System.Net;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -8,10 +9,58 @@ using Microsoft.Extensions.Hosting;
 
 namespace BurrowWin.Services;
 
+internal enum LocalRequestDecision
+{
+    Allowed,
+    BadRequest,
+    Unauthorized,
+    Forbidden,
+    MethodNotAllowed,
+    PayloadTooLarge,
+    UnsupportedMediaType,
+    RateLimited
+}
+
+internal sealed class LocalRequestRateLimiter
+{
+    private readonly int _limit;
+    private readonly TimeSpan _window;
+    private readonly Queue<DateTimeOffset> _acceptedAt = new();
+    private readonly object _sync = new();
+
+    public LocalRequestRateLimiter(int limit = 120, TimeSpan? window = null)
+    {
+        _limit = Math.Max(1, limit);
+        _window = window is { } configured && configured > TimeSpan.Zero
+            ? configured
+            : TimeSpan.FromMinutes(1);
+    }
+
+    public bool Allow(DateTimeOffset? at = null)
+    {
+        lock (_sync)
+        {
+            var now = at ?? DateTimeOffset.UtcNow;
+            var cutoff = now - _window;
+            while (_acceptedAt.TryPeek(out var accepted) && accepted <= cutoff)
+            {
+                _acceptedAt.Dequeue();
+            }
+            if (_acceptedAt.Count >= _limit)
+            {
+                return false;
+            }
+            _acceptedAt.Enqueue(now);
+            return true;
+        }
+    }
+}
+
 public sealed class LocalMcpServerService : BackgroundService
 {
     public const int DefaultPort = 9277;
     private const string ProtocolVersion = "2025-11-25";
+    private const long MaxRequestBodyBytes = 64 * 1024;
 
     private readonly IMoleEngineService _moleEngineService;
     private readonly IDiskAnalyzerService _diskAnalyzerService;
@@ -22,6 +71,7 @@ public sealed class LocalMcpServerService : BackgroundService
     private readonly IInstallerCleanupService _installerCleanupService;
     private readonly IOperationHistoryService _operationHistoryService;
     private readonly IApplicationSettingsService _settingsService;
+    private readonly LocalRequestRateLimiter _requestRateLimiter = new();
     private readonly SemaphoreSlim _listenerGate = new(1, 1);
     private HttpListener? _listener;
     private Task? _listenerTask;
@@ -203,14 +253,52 @@ public sealed class LocalMcpServerService : BackgroundService
 
     private async Task HandleRequestAsync(HttpListenerContext context, CancellationToken cancellationToken)
     {
-        if (!IsRequestAllowed(context.Request.RemoteEndPoint?.Address, context.Request.Headers["Origin"]))
+        var path = context.Request.Url?.AbsolutePath.TrimEnd('/').ToLowerInvariant() ?? string.Empty;
+        var decision = EvaluateRequest(
+            context.Request.RemoteEndPoint?.Address,
+            context.Request.UserHostName,
+            context.Request.Headers["Origin"] ?? context.Request.Headers["Referer"],
+            HasFetchMetadata(context.Request.Headers),
+            context.Request.Headers["Authorization"],
+            _settingsService.Current.HttpServerAuthToken,
+            _activePort,
+            path,
+            context.Request.HttpMethod,
+            context.Request.ContentType,
+            context.Request.ContentLength64);
+        // Counted for EVERY request that reaches the handler, not only the ones
+        // that already authenticated. Limiting after the credential check
+        // leaves rejected requests unbounded, which hands an attacker unlimited
+        // guesses at the token out of the same loopback socket.
+        if (!_requestRateLimiter.Allow())
         {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            decision = LocalRequestDecision.RateLimited;
+        }
+        if (decision != LocalRequestDecision.Allowed)
+        {
+            context.Response.StatusCode = decision switch
+            {
+                LocalRequestDecision.BadRequest => StatusCodes.Status400BadRequest,
+                LocalRequestDecision.Unauthorized => StatusCodes.Status401Unauthorized,
+                LocalRequestDecision.Forbidden => StatusCodes.Status403Forbidden,
+                LocalRequestDecision.MethodNotAllowed => StatusCodes.Status405MethodNotAllowed,
+                LocalRequestDecision.PayloadTooLarge => StatusCodes.Status413PayloadTooLarge,
+                LocalRequestDecision.UnsupportedMediaType => StatusCodes.Status415UnsupportedMediaType,
+                LocalRequestDecision.RateLimited => StatusCodes.Status429TooManyRequests,
+                _ => StatusCodes.Status400BadRequest
+            };
+            if (decision == LocalRequestDecision.Unauthorized)
+            {
+                context.Response.Headers["WWW-Authenticate"] = "Bearer";
+            }
+            if (decision == LocalRequestDecision.RateLimited)
+            {
+                context.Response.Headers["Retry-After"] = "60";
+            }
             context.Response.Close();
             return;
         }
 
-        var path = context.Request.Url?.AbsolutePath.TrimEnd('/').ToLowerInvariant() ?? string.Empty;
         var response = ShouldBlockRestEndpoint(_settingsService.Current.HttpServerEnabled, path, context.Request.HttpMethod)
             ? new JsonObject
             {
@@ -662,6 +750,9 @@ public sealed class LocalMcpServerService : BackgroundService
             ["network_received_bytes_per_second"] = snapshot.NetworkReceivedBytesPerSecond,
             ["network_sent_bytes_per_second"] = snapshot.NetworkSentBytesPerSecond,
             ["gpu_status"] = snapshot.GpuStatus,
+            ["gpu_available"] = snapshot.IsGpuAvailable,
+            ["gpu_usage_percent"] = snapshot.EffectiveGpuUsagePercent,
+            ["gpu_unavailable_reason"] = snapshot.GpuUnavailableReason,
             ["has_battery"] = snapshot.HasBattery,
             ["battery_charge_percent"] = snapshot.BatteryChargePercent,
             ["battery_status"] = snapshot.BatteryStatusText,
@@ -1291,9 +1382,75 @@ public sealed class LocalMcpServerService : BackgroundService
         response.Close();
     }
 
-    internal static bool IsRequestAllowed(IPAddress? remoteAddress, string? origin)
+    /// <summary>True when the request carries any Sec-Fetch-* header, i.e. a
+    /// browser built it. The values are set by the user agent and cannot be
+    /// forged by page script, so their mere presence is the signal.</summary>
+    internal static bool HasFetchMetadata(System.Collections.Specialized.NameValueCollection headers)
     {
-        return IsLoopback(remoteAddress) && IsAllowedOrigin(origin);
+        foreach (var key in headers.AllKeys)
+        {
+            if (key is not null && key.StartsWith("Sec-Fetch-", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal static LocalRequestDecision EvaluateRequest(
+        IPAddress? remoteAddress,
+        string? host,
+        string? origin,
+        bool hasFetchMetadata,
+        string? authorization,
+        string expectedToken,
+        int expectedPort,
+        string path,
+        string method,
+        string? contentType,
+        long contentLength)
+    {
+        // ANY fetch-metadata header means a browser built this request. Only
+        // Sec-Fetch-Site was checked before, so a request carrying just
+        // Sec-Fetch-Mode or Sec-Fetch-Dest reached a loopback server that any
+        // local process — including a page's helper — can address.
+        if (!IsLoopback(remoteAddress) || !IsAllowedHost(host, expectedPort) || origin is not null || hasFetchMetadata)
+        {
+            return LocalRequestDecision.Forbidden;
+        }
+        if (!HasValidBearerCredential(authorization, expectedToken))
+        {
+            return LocalRequestDecision.Unauthorized;
+        }
+        if (contentLength > MaxRequestBodyBytes)
+        {
+            return LocalRequestDecision.PayloadTooLarge;
+        }
+
+        var isGet = method.Equals("GET", StringComparison.OrdinalIgnoreCase);
+        var isPost = method.Equals("POST", StringComparison.OrdinalIgnoreCase);
+        var postRoute = path is "/mcp" or "/tools/call";
+        if ((!isGet && !isPost) || (isPost && !postRoute) || (isGet && postRoute))
+        {
+            return LocalRequestDecision.MethodNotAllowed;
+        }
+        if (isGet && contentLength != 0)
+        {
+            return LocalRequestDecision.BadRequest;
+        }
+        if (isPost)
+        {
+            if (contentLength < 0)
+            {
+                return LocalRequestDecision.BadRequest;
+            }
+            var mediaType = contentType?.Split(';', 2)[0].Trim();
+            if (!string.Equals(mediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+            {
+                return LocalRequestDecision.UnsupportedMediaType;
+            }
+        }
+        return LocalRequestDecision.Allowed;
     }
 
     internal static bool ShouldBlockRestEndpoint(bool httpRestEnabled, string path, string method)
@@ -1311,26 +1468,37 @@ public sealed class LocalMcpServerService : BackgroundService
         return address is not null && IPAddress.IsLoopback(address);
     }
 
-    private static bool IsAllowedOrigin(string? origin)
+    private static bool IsAllowedHost(string? host, int expectedPort)
     {
-        if (string.IsNullOrWhiteSpace(origin))
-        {
-            return true;
-        }
+        return string.Equals(host, $"127.0.0.1:{expectedPort}", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, $"localhost:{expectedPort}", StringComparison.OrdinalIgnoreCase);
+    }
 
-        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+    private static bool HasValidBearerCredential(string? authorization, string expectedToken)
+    {
+        if (string.IsNullOrWhiteSpace(authorization) || string.IsNullOrWhiteSpace(expectedToken))
         {
             return false;
         }
-
-        return uri.IsLoopback &&
-               (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
-                uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+        var pieces = authorization.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (pieces.Length != 2 || !pieces[0].Equals("Bearer", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        var supplied = Encoding.UTF8.GetBytes(pieces[1]);
+        var expected = Encoding.UTF8.GetBytes(expectedToken);
+        return supplied.Length == expected.Length && CryptographicOperations.FixedTimeEquals(supplied, expected);
     }
 
     private static class StatusCodes
     {
         public const int Status200OK = 200;
+        public const int Status400BadRequest = 400;
+        public const int Status401Unauthorized = 401;
         public const int Status403Forbidden = 403;
+        public const int Status405MethodNotAllowed = 405;
+        public const int Status413PayloadTooLarge = 413;
+        public const int Status415UnsupportedMediaType = 415;
+        public const int Status429TooManyRequests = 429;
     }
 }

@@ -13,6 +13,21 @@
 import Foundation
 
 enum TuneUp {
+    struct ConfirmationPolicy: Equatable {
+        let includesClean: Bool
+
+        var requiresIrreversibleConsent: Bool { includesClean }
+        var notice: String {
+            includesClean
+                ? NSLocalizedString("Clean caches & junk permanently deletes the reviewed cache files. They do not go to the Trash and cannot be recovered. Each elevated step asks for your password separately.", comment: "tune-up notice")
+                : NSLocalizedString("Maintenance does not run the cache-deletion step. Each elevated step asks for your password separately.", comment: "tune-up notice")
+        }
+
+        func permitsRun(irreversibleConsent: Bool) -> Bool {
+            !requiresIrreversibleConsent || irreversibleConsent
+        }
+    }
+
     enum Kind: String, Equatable {
         case brewCleanup, freeCache, updateApp        // safe to auto-run
         case uninstallUnused, disableStartupItem       // destructive — review only

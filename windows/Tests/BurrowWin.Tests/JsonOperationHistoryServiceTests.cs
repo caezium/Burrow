@@ -84,6 +84,38 @@ public sealed class JsonOperationHistoryServiceTests : IDisposable
         Assert.Equal(101, entries.Count);
     }
 
+    [Fact]
+    public async Task RecordAsync_PreservesPartialDeletionOutcomeAndCorrelation()
+    {
+        var service = new JsonOperationHistoryService(_historyPath);
+        var entry = new OperationHistoryEntry(
+            DateTimeOffset.UtcNow,
+            "burrowwin",
+            "installer-remove",
+            "2 selected",
+            2,
+            false,
+            5,
+            "Partial removal",
+            DeletionBatchOutcome.PartialSuccess,
+            "operation-123",
+            RecycledCount: 1,
+            RejectedCount: 1,
+            ProcessedCount: 2,
+            TotalSelectedItems: 2,
+            RecycledBytes: 10);
+
+        await service.RecordAsync(entry);
+
+        var restored = Assert.Single(await service.ReadRecentAsync(1));
+        Assert.Equal(DeletionBatchOutcome.PartialSuccess, restored.BatchOutcome);
+        Assert.Equal("operation-123", restored.OperationId);
+        Assert.Equal(1, restored.RecycledCount);
+        Assert.Equal(1, restored.RejectedCount);
+        Assert.Equal(10, restored.RecycledBytes);
+        Assert.False(restored.Succeeded);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))

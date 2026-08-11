@@ -18,6 +18,10 @@ struct CleanSelection {
     enum LockReason: Equatable {
         case appOpen(appName: String)
         case systemBusy
+        /// The snapshot refused this entry, so it can never reach a plan.
+        /// Locked rather than hidden: the preview counted it, and silently
+        /// dropping a line the user was just shown reads as a miscount.
+        case notCleanable(reason: String)
     }
 
     enum CategoryState { case all, mixed, none }
@@ -98,7 +102,16 @@ struct CleanSelection {
     /// "Close Helium, X to clean another N GB · M items" — the locked
     /// upside, summed over app-locked items. nil when nothing is locked.
     var lockedSummary: (appNames: [String], bytes: Int64, itemCount: Int)? {
-        let lockedItems = list.categories.flatMap(\.items).filter { locked[$0.path] != nil }
+        // Only .appOpen entries belong in this line. It reads "Close X to clean
+        // another N" — a promise that quitting an app reclaims those bytes,
+        // which is false for a path a system service holds and outright wrong
+        // for one the snapshot refused, since no action of the user's frees it.
+        // Counting those inflated the total and, when they were the ONLY locked
+        // entries, produced "Close  to clean another 12 GB" with no app named.
+        let lockedItems = list.categories.flatMap(\.items).filter {
+            if case .appOpen? = locked[$0.path] { return true }
+            return false
+        }
         guard !lockedItems.isEmpty else { return nil }
         var names: [String] = []
         for item in lockedItems {

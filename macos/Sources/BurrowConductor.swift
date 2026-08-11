@@ -29,18 +29,31 @@ enum BurrowConductor {
 
     // MARK: - Resolution
 
-    /// The bundled conductor binary, or nil if this build didn't ship one — callers then fall
+    /// Where the bundled sidecars are looked up. Production reads the app bundle; tests point it
+    /// at a directory they control.
+    ///
+    /// This is a seam rather than a direct `Bundle.main` read because the "no conductor bundled"
+    /// behaviour has to be *chosen* by a test, not inherited from whatever the build happened to
+    /// stage. Resources/burrow only exists when the vendor/burrow-engine submodule is checked out —
+    /// which a developer must do for the Network, Orphans and Photos panes to work at all — so
+    /// tests that simply assumed it was absent went red on a correctly-configured checkout while
+    /// passing on CI, where actions/checkout fetches no submodules.
+    static var resourceDirectory: () -> URL? = { Bundle.main.resourceURL }
+
+    /// The bundled engine binary, or nil if this build didn't ship one — callers then fall
     /// back to the direct engine (MoEngine).
     ///
-    /// Delegates to `MoleCLI.bundledExecutable()` rather than re-deriving the path with a
-    /// second `Bundle` API (this used to do its own `resourceURL.appendingPathComponent`
-    /// lookup, independent of `MoleCLI`'s `Bundle.main.url(forResource:)` one). Two resolvers
-    /// for the same file is exactly the kind of thing that can silently disagree — and if it
-    /// ever did, `streamOverride` would fire on one answer while `resolveMo`'s fallback (via
+    /// This is the ONE resolver for that file: `MoleCLI.bundledExecutable()` delegates here
+    /// rather than doing its own `Bundle.main.url(forResource:)` lookup. Two resolvers for the
+    /// same file is exactly the kind of thing that can silently disagree — and if it ever did,
+    /// `streamOverride` would fire on one answer while `resolveMo`'s fallback (via
     /// `trustedExecutable()`) fell through to a Homebrew `mo` on the other, on an ELEVATED run.
-    /// One implementation makes that impossible instead of merely unlikely.
+    /// One implementation makes that impossible instead of merely unlikely — and putting it on
+    /// this side of the call means the `resourceDirectory` seam governs both.
     static func executableURL() -> URL? {
-        MoleCLI.bundledExecutable().map(URL.init(fileURLWithPath:))
+        guard let res = resourceDirectory() else { return nil }
+        let burrow = res.appendingPathComponent("burrow")
+        return FileManager.default.isExecutableFile(atPath: burrow.path) ? burrow : nil
     }
 
     /// The bundled `fclones` sidecar (Resources/fclones, from bundle-fclones.sh), or nil if this
@@ -48,7 +61,7 @@ enum BurrowConductor {
     /// back to a `$BURROW_FCLONES`/PATH fclones, and if none exists the Duplicates pane shows
     /// "fclones not found".
     static func fclonesURL() -> URL? {
-        guard let res = Bundle.main.resourceURL else { return nil }
+        guard let res = resourceDirectory() else { return nil }
         let fclones = res.appendingPathComponent("fclones")
         return FileManager.default.isExecutableFile(atPath: fclones.path) ? fclones : nil
     }

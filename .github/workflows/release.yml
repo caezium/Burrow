@@ -22,6 +22,7 @@ name: release
 #   AC_API_KEY_P8         base64 of the AuthKey_XXXX.p8
 #   SPARKLE_ED_PRIVATE_KEY private Sparkle seed exported by generate_keys -x
 #   TAP_PAT               fine-grained token for caezium/homebrew-tap
+#   SENTRY_AUTH_TOKEN     token with project:releases for mandatory dSYM upload
 #
 # Optional telemetry secrets — release.sh reads these from the environment
 # (locally it sources the gitignored scripts/release.env instead). Without
@@ -50,7 +51,9 @@ jobs:
     # The build is capped at 38 minutes and Apple's synchronous notarization
     # wait at 60 minutes. Keep bounded headroom for setup, signing, stapling,
     # packaging, publication, and the external tap update.
-    timeout-minutes: 120
+    timeout-minutes: 150
+    env:
+      EXPECTED_TEAM_ID: YGSM2722TZ
     steps:
       # Pinned to a commit SHA, not a floating tag: this job holds
       # contents:write, the signing cert, and TAP_PAT, so a moved tag must
@@ -69,6 +72,7 @@ jobs:
           AC_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
           SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
           TAP_TOKEN: ${{ secrets.TAP_PAT }}
+          SENTRY_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           missing=()
           [ -n "$CERT_P12" ] || missing+=(MACOS_CERT_P12)
@@ -79,6 +83,7 @@ jobs:
           [ -n "$AC_KEY_P8" ] || missing+=(AC_API_KEY_P8)
           [ -n "$SPARKLE_KEY" ] || missing+=(SPARKLE_ED_PRIVATE_KEY)
           [ -n "$TAP_TOKEN" ] || missing+=(TAP_PAT)
+          [ -n "$SENTRY_TOKEN" ] || missing+=(SENTRY_AUTH_TOKEN)
           if [ "${#missing[@]}" -ne 0 ]; then
             echo "::error::Release blocked: missing required secret(s): ${missing[*]}"
             exit 1
@@ -87,6 +92,13 @@ jobs:
             "Developer ID Application:"*) ;;
             *)
               echo "::error::MACOS_SIGN_IDENTITY must name a Developer ID Application certificate."
+              exit 1
+              ;;
+          esac
+          case "$SIGN_IDENTITY" in
+            *"($EXPECTED_TEAM_ID)") ;;
+            *)
+              echo "::error::MACOS_SIGN_IDENTITY must preserve Developer ID team $EXPECTED_TEAM_ID."
               exit 1
               ;;
           esac
@@ -159,8 +171,30 @@ jobs:
       - name: Build fclones sidecar (MIT, universal)
         run: bash scripts/build-fclones.sh
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Install checksum-pinned XcodeGen
+        run: |
+          bash scripts/fetch-xcodegen.sh "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Test exact tagged commit
+        timeout-minutes: 30
+        run: |
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          ACTUAL_TAG="$(git describe --exact-match --tags "$ACTUAL_SHA")"
+          [ "$ACTUAL_SHA" = "$GITHUB_SHA" ] \
+            || { echo "::error::checkout $ACTUAL_SHA does not match triggering commit $GITHUB_SHA"; exit 1; }
+          [ "$ACTUAL_TAG" = "$GITHUB_REF_NAME" ] \
+            || { echo "::error::commit is tagged $ACTUAL_TAG, expected $GITHUB_REF_NAME"; exit 1; }
+
+          bash scripts/fetch-sentry.sh
+          bash scripts/fetch-sparkle.sh
+          python3 scripts/verify-project-generation.py \
+            --xcodegen "$(command -v xcodegen)" --check-git
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+          node --test scripts/tests/test_site_analytics.mjs
+          xcodebuild test -project macos/Burrow.xcodeproj -scheme Burrow \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
       - name: Build (Release)
         id: build
@@ -269,30 +303,26 @@ jobs:
       # Burrow frames arrive as <unknown> ("debug information file was
       # missing") — exactly what made the 0.6.7 "App Hanging" reports show only
       # system frames. Runs after the tag/version check so only a real
-      # release's symbols ship; skipped (with a warning) when no token is set.
-      # Signing and notarization remain mandatory and fail closed independently.
-      - name: Upload dSYMs to Sentry — skipped if no token
+      # release's symbols ship. The token, dSYM, and exact app/dSYM UUID match
+      # are release requirements: publishing an unsymbolicatable build is blocked.
+      - name: Verify and upload release dSYM
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: henry-zhang-r7
           SENTRY_PROJECT: burrow
         run: |
-          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
-            echo "::warning::No SENTRY_AUTH_TOKEN — skipping dSYM upload; Sentry frames for ${{ steps.build.outputs.version }} stay unsymbolicated."
-            exit 0
-          fi
+          APP="${{ steps.build.outputs.app }}"
           DSYM="build_dist/Build/Products/Release/Burrow.app.dSYM"
-          if [ ! -d "$DSYM" ]; then
-            echo "::warning::No dSYM at $DSYM — nothing to upload (Release build didn't emit one?)."
-            exit 0
-          fi
-          # From Homebrew, consistent with the xcodegen install above — this
-          # job is SHA-pinned for Actions, so sentry-cli comes from brew rather
-          # than a piped remote installer.
-          brew install sentry-cli
+          [ -d "$DSYM" ] \
+            || { echo "::error::Release blocked: dSYM is missing at $DSYM"; exit 1; }
+          bash scripts/verify-dsym-uuids.sh "$APP" "$DSYM"
+          bash scripts/fetch-sentry-cli.sh "$RUNNER_TEMP/sentry-cli"
           # Debug symbols only (names + line maps); no --include-sources, so no
           # source files are ever shipped to Sentry.
-          sentry-cli debug-files upload "$DSYM"
+          "$RUNNER_TEMP/sentry-cli" debug-files check \
+            "$DSYM/Contents/Resources/DWARF/Burrow"
+          "$RUNNER_TEMP/sentry-cli" debug-files upload \
+            --no-sources --wait "$DSYM"
 
       - name: Code-sign every executable (Developer ID)
         env:
@@ -406,9 +436,9 @@ jobs:
             exit 1
           fi
           xcrun stapler staple "$APP"
-          xcrun stapler validate "$APP"
-          codesign --verify --deep --strict --verbose=2 "$APP"
-          spctl --assess --type execute --verbose=4 "$APP"
+          bash scripts/verify-macos-release.sh \
+            "$APP" "$EXPECTED_TEAM_ID" \
+            "${{ steps.build.outputs.version }}" "${{ steps.build.outputs.build_number }}"
 
       - name: Package (zip + sha256)
         id: pkg
@@ -463,28 +493,74 @@ jobs:
             "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - "$APPCAST"
           echo "Signed Sparkle archive + feed verified; release publication is now allowed."
 
-      - name: Publish GitHub release (idempotent)
+      - name: Upload GitHub release draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ZIP="dist/Burrow-${{ steps.build.outputs.version }}.zip"
           APPCAST="dist/appcast.xml"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            # Release already exists (e.g. re-run after adding TAP_PAT) —
-            # replace the archive first and the signed feed last. During that
-            # narrow window, a mismatch fails signature validation closed.
-            gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
-            gh release upload "$GITHUB_REF_NAME" "$APPCAST" --clobber
+            IS_DRAFT="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)"
+            if [ "$IS_DRAFT" != "true" ]; then
+              echo "::error::Release $GITHUB_REF_NAME is already public; immutable published assets will not be replaced."
+              exit 1
+            fi
           else
-            # Keep the release draft until both assets have uploaded; a
-            # partial upload must never become Sparkle's latest feed.
-            gh release create "$GITHUB_REF_NAME" "$ZIP" "$APPCAST" \
+            gh release create "$GITHUB_REF_NAME" \
               --title "Burrow ${{ steps.build.outputs.version }}" \
               --notes-file RELEASES.md \
               --draft
           fi
-          # Also publish a draft left by a previously interrupted attempt.
-          # Reaching this line means both freshly verified assets now exist.
+          gh release upload "$GITHUB_REF_NAME" "$ZIP" "$APPCAST" --clobber
+
+      - name: Verify downloaded release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          VERSION="${{ steps.build.outputs.version }}"
+          BUILD_NUMBER="${{ steps.build.outputs.build_number }}"
+          ZIP_NAME="Burrow-${VERSION}.zip"
+          DOWNLOAD_DIR="$(mktemp -d)"
+          EXTRACT_DIR="$(mktemp -d)"
+          gh release download "$GITHUB_REF_NAME" \
+            --pattern "$ZIP_NAME" --pattern appcast.xml --dir "$DOWNLOAD_DIR"
+          DOWNLOADED_ZIP="$DOWNLOAD_DIR/$ZIP_NAME"
+          DOWNLOADED_APPCAST="$DOWNLOAD_DIR/appcast.xml"
+          [ -f "$DOWNLOADED_ZIP" ] && [ -f "$DOWNLOADED_APPCAST" ] \
+            || { echo "::error::Draft release did not return both expected assets."; exit 1; }
+
+          DOWNLOADED_SHA="$(shasum -a 256 "$DOWNLOADED_ZIP" | awk '{print $1}')"
+          [ "$DOWNLOADED_SHA" = "${{ steps.pkg.outputs.sha }}" ] \
+            || { echo "::error::Downloaded release archive differs from the verified package."; exit 1; }
+          ditto -x -k "$DOWNLOADED_ZIP" "$EXTRACT_DIR"
+          DOWNLOADED_APP="$EXTRACT_DIR/Burrow.app"
+          bash scripts/verify-macos-release.sh \
+            "$DOWNLOADED_APP" "$EXPECTED_TEAM_ID" "$VERSION" "$BUILD_NUMBER"
+          bash scripts/verify-dsym-uuids.sh \
+            "$DOWNLOADED_APP" "build_dist/Build/Products/Release/Burrow.app.dSYM"
+
+          ARCHIVE_URL="https://github.com/caezium/Burrow/releases/download/${GITHUB_REF_NAME}/${ZIP_NAME}"
+          python3 scripts/verify-sparkle-appcast.py "$DOWNLOADED_APPCAST" \
+            --archive "$DOWNLOADED_ZIP" \
+            --version "$VERSION" \
+            --build "$BUILD_NUMBER" \
+            --url "$ARCHIVE_URL" \
+            --release-notes RELEASES.md \
+            --signature-output "$RUNNER_TEMP/downloaded-archive-signature.txt"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - \
+            "$DOWNLOADED_ZIP" "$(< "$RUNNER_TEMP/downloaded-archive-signature.txt")"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            "$SPARKLE_TOOLS/sign_update" --verify --ed-key-file - "$DOWNLOADED_APPCAST"
+
+      - name: Publish verified GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IS_DRAFT="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)"
+          [ "$IS_DRAFT" = "true" ] \
+            || { echo "::error::Release draft state changed before publication."; exit 1; }
           gh release edit "$GITHUB_REF_NAME" --draft=false
 
       - name: Bump Homebrew cask in caezium/homebrew-tap

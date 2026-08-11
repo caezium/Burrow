@@ -63,3 +63,6 @@ macos/vendor/.sentry-*.ok
 macos/vendor/Sparkle.framework/
 macos/vendor/.sparkle-cache/
 .site-deploy/
+
+# Internal planning docs — kept local, not published
+plans/

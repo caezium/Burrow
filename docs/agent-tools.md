@@ -9,9 +9,13 @@ reference + when to reach for each one**. Setup is in the
 Everything is **local** (`127.0.0.1` / stdio only), reads a shared on-disk history Burrow
 samples continuously, and every actuating call is **dry-run by default**.
 
+The server speaks MCP **2026-07-28** — the stateless revision, with `server/discover`, tasks,
+and cache hints — and still answers the older `initialize` handshake, so it works with clients
+of either era. See [Protocol surface](#protocol-surface) at the bottom.
+
 ## The two kinds of tools
 
-- **Read-only (21)** — observe and diagnose. Always safe; call these proactively whenever a
+- **Read-only (23)** — observe and diagnose. Always safe; call these proactively whenever a
   question is about *this machine's* state, history, or health.
 - **Actuating, gated (5)** — clean / optimize / uninstall / purge / installer. **Preview by
   default** (`--dry-run`); a real run needs `confirm: true` **and** the user's Settings
@@ -30,7 +34,7 @@ samples continuously, and every actuating call is **dry-run by default**.
 | Tool | Use it proactively when… | Key params |
 |---|---|---|
 | **burrow_snapshot** | The user asks "what's my CPU/memory/disk/network/temperature right now", or you need current vitals before reasoning. Returns the latest full status snapshot incl. top processes + a 0–100 health score. | — |
-| **burrow_doctor** | "Is my Mac healthy / is anything wrong?", or as a first pass on any vague performance/security complaint. One call returns ok/warn/fail checks for engine presence, Full Disk Access, memory pressure, disk headroom, decode errors, **security posture (SIP/Gatekeeper/FileVault/firewall)**, **battery health**, sustained high-CPU, and display/external-volume/network context. | — |
+| **burrow_doctor** | "Is my Mac healthy / is anything wrong?", or as a first pass on any vague performance complaint. Returns ok/warn/fail checks for engine presence, Full Disk Access, memory pressure, disk headroom, SMART disk health, Time Machine backup age, and decode errors. **Not security posture:** SIP/Gatekeeper/FileVault/firewall, battery health, CPU load and display/volume/network context exist in the Doctor engine but are only filled in by the GUI — over MCP those checks are omitted, so answer security questions from the shell, not from this tool. | — |
 | **burrow_top_processes** | "What's using my CPU?" / "why is my Mac hot or loud?" Ranks processes by **peak** CPU% over a window. | `minutes`, `limit` |
 | **burrow_process_usage** | "What's been draining my battery / running hottest *over time*?" Ranks by `cpu_time` (cumulative), `peak_cpu`, `avg_cpu`, or `peak_mem`, and echoes the window it used. Prefer this over `top_processes` for "all day / since this morning" questions. | `minutes`, `metric`, `limit` |
 | **burrow_history** | The user asks about a trend ("has memory crept up since noon?") or you want a time-series slice rather than a single point. | `minutes`, `samples` |
@@ -39,6 +43,8 @@ samples continuously, and every actuating call is **dry-run by default**.
 | **burrow_ports** | "What's listening on my machine / what's using port 3000?" Lists listening TCP/UDP ports with the owning process (pid, name, uid). Read-only — to free a port, tell the user which pid to kill. | — |
 | **burrow_report** | "Give me a weekly digest." Returns a Markdown system report over `days`: disk forecast, top energy users, cleanup summary. | `days` |
 | **burrow_info** | Meta/diagnostic: "is Burrow actually recording data?" Shows data prefixes + row counts + staleness, retention, sample interval, decode-skip count. Use when other tools return empty/stale data to explain why. | — |
+| **burrow_anomalies** | "Is anything behaving *unusually*?" Processes whose last-24h CPU has regressed against their own 14-day baseline. This is per-process, not a leaderboard: a process that always sits at 40% isn't flagged, one that went 2% → 15% is. Empty when there isn't enough history. | — |
+| **burrow_agent_audit** | "What has an agent already done to this machine?" One row per mutating call with the exact arguments, dry-run flag, outcome, and duration. Check it before assuming a cleanup didn't run — and to re-read your own earlier calls in a long session. | `minutes`, `limit` |
 
 ## Cleanup history (read-only)
 
@@ -86,7 +92,55 @@ it. Real cleans run at user level (not elevated).
 | **burrow_purge** | Finds dev build artifacts (`node_modules`, `target/`, …). | **Preview-only over MCP** — returns the dry-run list; the real purge is an interactive flow in the app. | `confirm` (reserved) |
 | **burrow_installer** | Finds leftover installers (`.dmg`/`.pkg`/…). | **Preview-only over MCP**, like purge. | `confirm` (reserved) |
 
-Every actuating call is recorded to Burrow's audit log, so the user can see what an agent did.
+Every actuating call is recorded to Burrow's audit log, so the user can see what an agent did —
+and `burrow_agent_audit` reads that log back, so you can see it too.
+
+---
+
+## Beyond tools
+
+**Resources** — the read-only answers agents re-poll most, attachable instead of re-called.
+`burrow://snapshot/latest`, `burrow://doctor`, `burrow://ports`, `burrow://info`,
+`burrow://forecast/disk`, `burrow://cleanup/history`, `burrow://cleanup/deleted-files`,
+`burrow://agent-audit`, `burrow://anomalies`, `burrow://report/weekly`, plus templates
+`burrow://history/{minutes}`, `burrow://processes/{metric}`, and `burrow://report/{days}`.
+Each read carries a `ttlMs` telling you how long it stays honest — five seconds for a live
+snapshot, a minute for a digest.
+
+**Prompts** — `diagnose_slow_mac`, `reclaim_disk_space`, `explain_last_cleanup`,
+`investigate_process`, `pre_uninstall_check`. Each encodes the tool ordering that avoids wrong
+answers, so a host can offer the right investigation as one click.
+
+**Tasks** — a client that declares `io.modelcontextprotocol/tasks` gets a task handle instead
+of a blocking call for the slow tools (`burrow_analyze`, `burrow_dupes`, `burrow_photos`,
+`burrow_orphans`, and the five actuating ones). Poll `tasks/get` until terminal; pass a
+`progressToken` if you want `notifications/progress` while it runs. Without the extension the
+same call behaves exactly as before. This is what stops a multi-minute clean coming back as
+`timed_out: true`, which reads like "nothing to clean" when it means "we gave up".
+
+**Missing arguments** — a client that supports elicitation gets an `input_required` result
+asking for the argument (which apps to uninstall, which directory to scan) rather than an
+error. Answer it by re-issuing the call with `inputResponses` and the `requestState` you were
+given. Note what this is *not*: answering an elicitation cannot authorise a destructive run.
+The Settings opt-in is the only thing that can, and an agent cannot set it.
+
+---
+
+## Protocol surface
+
+| Method | Notes |
+|---|---|
+| `server/discover` | Supported versions, capabilities, and the usage instructions. No handshake needed. |
+| `initialize` | Still answered for pre-2026 clients; negotiates down to their revision. |
+| `tools/list` / `tools/call` | Deterministically ordered, annotated, `outputSchema` + `structuredContent` on all but `burrow_report` (Markdown). |
+| `resources/list`, `resources/templates/list`, `resources/read` | Cache hints on every result. |
+| `prompts/list`, `prompts/get`, `completion/complete` | Completion covers metric names and recently-seen process names. |
+| `tasks/get`, `tasks/update`, `tasks/cancel` | The tasks extension. Cancellation is cooperative — it stops us reporting, not the engine subprocess. |
+
+Deliberately not implemented: Roots, Sampling, and Logging (all deprecated in this revision),
+the legacy HTTP+SSE transport, and Streamable HTTP. The last one is a security design question
+rather than a transport swap — Burrow shells out to a privileged helper and deletes files, so
+opening a listener needs its own auth model first.
 
 ---
 
@@ -102,15 +156,21 @@ Every actuating call is recorded to Burrow's audit log, so the user can see what
 - **"My Mac is slow/hot/loud"** → `burrow_doctor` → `burrow_top_processes` (now) or
   `burrow_process_usage` (over time) → name the culprit; offer `burrow_clean`/`optimize`
   preview only if relevant.
-- **"Is anything insecure / what's listening?"** → `burrow_doctor` (SIP/Gatekeeper/FileVault/
-  firewall) + `burrow_ports`.
+- **"What's listening?"** → `burrow_ports`. For "is anything insecure", `burrow_doctor` over MCP
+  does **not** cover SIP/Gatekeeper/FileVault/firewall — read those from the shell (`csrutil
+  status`, `spctl --status`, `fdesetup status`, `/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate`) until the
+  tool fills them in.
 - **"What did Burrow change?"** → `burrow_cleanup_history` + `burrow_deleted_files`.
+- **"Did an agent already do this?"** → `burrow_agent_audit` before repeating a cleanup, and
+  after a call you're unsure completed.
+- **"Something's off but nothing looks high"** → `burrow_anomalies`, which compares each
+  process against its own history rather than against the others.
 - **Empty/stale results?** → `burrow_info` to confirm data is flowing.
 
 ## Not yet exposed over MCP
 
-The 0.9 app has features that don't yet have agent tools (tracked for a follow-up): the
-per-process **inspector** (code signature, Mach-O arch, deep metrics, open connections), the
-**process tree**, table **filter/suspend/resume/export**, the **CPU watchdog**, and **Get
-Online** (speed test, nearby Wi-Fi scan, captive-portal tips, connection history). Until then,
-use `burrow_snapshot` / `burrow_top_processes` / `burrow_process_usage` for process questions.
+The app still has features without agent tools (tracked for a follow-up): the per-process
+**inspector** (code signature, Mach-O arch, deep metrics, open connections), the **process
+tree**, table **filter/suspend/resume/export**, the **CPU watchdog**, and **Get Online** (speed
+test, nearby Wi-Fi scan, captive-portal tips, connection history). Until then, use
+`burrow_snapshot` / `burrow_top_processes` / `burrow_process_usage` for process questions.

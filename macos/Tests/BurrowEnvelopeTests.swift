@@ -244,60 +244,106 @@ final class BurrowEnvelopeTests: XCTestCase {
     }
 
     // MARK: streamOverride / shouldStreamViaConductor
-    //
-    // `streamOverride` itself needs a real bundled `burrow` binary to ever return non-nil, which
-    // this test host doesn't ship — so these test the pure decision (`shouldStreamViaConductor`)
-    // rather than asserting a real override fires. Whether the resolved binary actually behaves
-    // is the hand-test in the plan's exit gate ("An elevated clean that actually deletes").
 
     func testShouldStreamViaConductor_onByDefault() {
         // `streamingEnabled` is `?? true` (see its doc: "Default ON, hand-validated on a real
-        // build") — with no UserDefaults key set (the CI/fresh-launch case, and this test's own
-        // starting state), clean/optimize stream through the conductor unless someone explicitly
-        // turns the switch off. An earlier version of this test asserted the OPPOSITE — that the
-        // switch defaults OFF — which doesn't match `streamingEnabled`'s own `?? true` fallback
-        // and failed in exactly the environment (no host app, no launch args) it claimed to cover.
-        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "clean"))
-        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
+        // build") — with no UserDefaults key set (the CI/fresh-launch case), clean/optimize stream
+        // through the conductor unless someone explicitly turns the switch off. An earlier version
+        // of this test asserted the OPPOSITE — that the switch defaults OFF — which doesn't match
+        // `streamingEnabled`'s own `?? true` fallback and failed in exactly the environment (no
+        // host app, no launch args) it claimed to cover.
+        withStreamSwitch(nil) {
+            XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "clean"))
+            XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
+        }
     }
 
     func testShouldStreamViaConductor_explicitlyOff_disablesStreaming() {
-        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
-        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "clean"))
-        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
+        withStreamSwitch(false) {
+            XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "clean"))
+            XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
+        }
     }
 
     func testShouldStreamViaConductor_onlyClean_andOptimize_whenSwitchIsOn() {
-        UserDefaults.standard.set(true, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
-        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "clean"))
-        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
-        // purge/installer are the interactive PTY flow; uninstall is matcher-gated — neither is
-        // ever streamed, switch on or off.
-        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "purge"))
-        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "installer"))
-        XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "uninstall"))
+        withStreamSwitch(true) {
+            XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "clean"))
+            XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "optimize"))
+            // purge/installer are the interactive PTY flow; uninstall is matcher-gated — neither is
+            // ever streamed, switch on or off.
+            XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "purge"))
+            XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "installer"))
+            XCTAssertFalse(BurrowConductor.shouldStreamViaConductor(command: "uninstall"))
+        }
     }
 
-    // `shouldStreamViaConductor`/`streamOverride` deliberately take no `elevated` parameter at
-    // all — see `shouldStreamViaConductor`'s doc for why. Before this change, a `!elevated` guard
-    // meant `CleanView`/`TuneUpView`'s real clean/optimize (the app's ONLY GUI callers of
-    // `.moleStream`, both always `elevated: true`) never received the mo→engine argv translation:
-    // every actual Clean/Optimize button fell through to the direct-engine path with untranslated
-    // argv, which the engine reads with inverted dry-run/apply meaning. There is no elevated-vs-
-    // not variant of `shouldStreamViaConductor` to test — the absence of the parameter IS the
-    // regression guard; a future edit would have to deliberately re-add it to reintroduce the bug.
+    /// No conductor staged → no override, whatever the switch says, because there is nothing to
+    /// route to. This is the fallback every call site depends on.
+    func testStreamOverride_withoutBundledConductor_keepsDirectEngine() {
+        ConductorBundleFixture.withConductor(present: false) {
+            XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"]))
+        }
+    }
 
-    /// Nil here is NOT the switch being off — `streamingEnabled` defaults to TRUE, and the switch
-    /// is set explicitly below anyway so no ambient default can decide it. It is the SECOND guard:
-    /// `executableURL()` finds no `Resources/burrow` in a unit-test bundle, so no host running
-    /// this suite can produce an override, and the caller keeps the direct-engine path.
-    func testStreamOverride_isNilWithoutABundledBinary_soTheTestHostKeepsDirectEngine() {
-        UserDefaults.standard.set(true, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
-        XCTAssertTrue(BurrowConductor.shouldStreamViaConductor(command: "clean"),
-                      "the command gate is open — what follows isolates the bundling gate")
-        XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"]))
+    /// Streaming is ON by default (`BurrowStreamViaConductor` unset), so a build that bundled the
+    /// conductor routes `clean` through it.
+    ///
+    /// This used to be asserted the other way round, as "off by default keeps the direct engine".
+    /// It only ever passed because the test host bundled no conductor and `streamOverride` bailed
+    /// at its last guard — so the assertion held for a reason unrelated to the switch, and would
+    /// have kept holding had the default flipped either way.
+    func testStreamOverride_withBundledConductor_routesThroughItByDefault() {
+        withStreamSwitch(nil) {
+            ConductorBundleFixture.withConductor(present: true) {
+                let override = BurrowConductor.streamOverride(moArgs: ["clean"])
+                XCTAssertEqual(override?.arguments, ["clean", "--apply", "--stream"])
+                XCTAssertEqual(URL(fileURLWithPath: override?.executable ?? "").lastPathComponent, "burrow")
+            }
+        }
+    }
+
+    /// The documented kill-switch has to actually kill it.
+    func testStreamOverride_killSwitchKeepsDirectEngineEvenWithConductorBundled() {
+        withStreamSwitch(false) {
+            ConductorBundleFixture.withConductor(present: true) {
+                XCTAssertNil(BurrowConductor.streamOverride(moArgs: ["clean"]))
+            }
+        }
+    }
+
+    /// The inverse of the assertion this replaces. `streamOverride` used to take an `elevated`
+    /// flag and return nil for every elevated run; that guard meant `CleanView`/`TuneUpView`'s
+    /// real clean/optimize (the app's only GUI callers of `.moleStream`, all `elevated: true`)
+    /// never received the mo→engine argv translation, so every actual Clean/Optimize button fell
+    /// through to the direct-engine path with untranslated argv — which the engine reads with
+    /// inverted dry-run/apply meaning. The parameter is gone (see `shouldStreamViaConductor`'s
+    /// doc); elevation now decides osascript-vs-plain-spawn in `SystemProcessPort` and nothing
+    /// else. An elevated run must therefore route exactly like an unelevated one.
+    func testStreamOverride_elevatedRunsRouteThroughTheConductorToo() {
+        withStreamSwitch(true) {
+            ConductorBundleFixture.withConductor(present: true) {
+                // The argv an elevated LIVE clean produces — `--apply`, so it actually deletes.
+                let override = BurrowConductor.streamOverride(moArgs: ["clean"])
+                XCTAssertEqual(override?.arguments, ["clean", "--apply", "--stream"])
+            }
+        }
+    }
+
+    /// Put the switch in a chosen state and put it back exactly as it was.
+    ///
+    /// These tests run against `UserDefaults.standard` for the real app domain,
+    /// so removing the key outright would erase a kill-switch the developer had
+    /// genuinely set — restoring the prior value, absent or not, keeps the suite
+    /// from editing anyone's configuration.
+    private func withStreamSwitch(_ value: Bool?, _ body: () -> Void) {
+        let key = "BurrowStreamViaConductor"
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        if let value { UserDefaults.standard.set(value, forKey: key) }
+        else { UserDefaults.standard.removeObject(forKey: key) }
+        body()
     }
 }

@@ -96,28 +96,23 @@ enum MoleCLI {
         if let override = bundledExecutableOverride { return override }
         // The single bundled `burrow-engine` binary, staged as Resources/burrow (bundle-burrow.sh).
         // It replaced the old Resources/engine/mole digger — one binary that does the work AND
-        // speaks the envelope. Same file BurrowConductor.executableURL resolves.
-        guard let url = Bundle.main.url(forResource: "burrow", withExtension: nil) else { return nil }
-        return FileManager.default.isExecutableFile(atPath: url.path) ? url.path : nil
+        // speaks the envelope.
+        //
+        // Deliberately delegated rather than re-derived here with a second `Bundle` API: this and
+        // `BurrowConductor.executableURL()` name the SAME file, and two lookups for one file can
+        // silently disagree — see that function's doc for the elevated-run hazard if they ever do.
+        // Delegating also means `BurrowConductor.resourceDirectory` governs both, so a test can
+        // choose "conductor bundled / not bundled" once instead of per resolver.
+        return BurrowConductor.executableURL()?.path
     }
 
-    /// The known trusted locations ONLY — no PATH lookup. ELEVATED runs must resolve through
-    /// this: accepting a user-writable PATH entry would hand root to whatever binary shadowed
-    /// the engine first. Order: bundled engine → installed `burrow-engine` (the MIT fork) →
-    /// legacy upstream `mo` (back-compat for existing installs).
+    /// The only engine Burrow may run as root. Homebrew prefixes are normally
+    /// owned by the signed-in user, and `mo` is a shell program that sources
+    /// adjacent files; checking `/opt/homebrew/bin/mo` once and executing it
+    /// later would elevate replaceable code. Unprivileged discovery retains
+    /// the external fallbacks, but elevation requires the sealed bundle.
     static func trustedExecutable() -> String? {
-        if let bundled = bundledExecutable() { return bundled }
-        let candidates = [
-            "/opt/homebrew/bin/burrow-engine",  // MIT fork, if installed
-            "/usr/local/bin/burrow-engine",
-            "/opt/homebrew/bin/mo",             // legacy upstream (back-compat)
-            "/usr/local/bin/mo",
-            "/usr/bin/mo",
-        ]
-        for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
-            return path
-        }
-        return nil
+        bundledExecutable()
     }
 
     /// Build the `do shell script` source for one elevated invocation:
@@ -142,13 +137,72 @@ enum MoleCLI {
     ///     next — re-prompting per run is OS policy, not a Burrow bug.
     ///     Pooling them would take a resident privileged helper
     ///     (SMAppService daemon + XPC), a deliberate non-goal for now.
-    static func elevatedScript(executable: String, args: [String],
-                               redirectTo logPath: String? = nil) -> String {
-        func shQuote(_ s: String) -> String {
-            "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    static func shellQuote(_ s: String) -> String {
+        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    /// Compose a root command from values already captured before elevation.
+    /// The preamble rechecks every pinned inode and the app's resource seal at
+    /// the execution boundary, then supplies the invoking user's canonical
+    /// identity explicitly instead of inheriting root's HOME/USER.
+    static func elevatedScript(command: ValidatedElevatedCommand, args: [String],
+                               logSink: PrivilegedLogSink? = nil,
+                               cleanupPlan: CleanupExecutionPlan? = nil) -> String {
+        func identityCheck(_ identity: PinnedFileIdentity) -> String {
+            let stat = "/usr/bin/stat -f '%d:%i:%u:%p' -- \(shellQuote(identity.path)) 2>/dev/null"
+            return "[ \"$(\(stat))\" = \(shellQuote(identity.shellStatToken)) ] || exit \(ElevatedExitCode.executableRefused)"
         }
-        var raw = ([executable] + args).map(shQuote).joined(separator: " ")
-        if let logPath { raw += " > \(shQuote(logPath)) 2>&1" }
+
+        var statements = command.components.map(identityCheck)
+        statements.append(identityCheck(command.executable))
+        if let bundle = command.signedBundlePath {
+            statements.append("/usr/bin/codesign --verify --strict -- \(shellQuote(bundle)) >/dev/null 2>&1 || exit \(ElevatedExitCode.executableRefused)")
+        }
+
+        let user = command.invokingUser
+        let environment = [
+            "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+            "HOME=\(user.canonicalHome)",
+            "USER=\(user.username)",
+            "LOGNAME=\(user.username)",
+            "SUDO_USER=\(user.username)",
+            "SUDO_UID=\(user.uid)",
+            "LC_ALL=C",
+        ]
+        let isolatedEnvironment = ["/usr/bin/env", "-i"] + environment
+        let run: String
+        if let cleanupPlan {
+            // Boundary checks and deletes both come from the plan, so the
+            // authorization and what it authorizes cannot drift apart. Running
+            // them inside the redirect means a refused check explains itself in
+            // the run log rather than vanishing into osascript's stderr.
+            run = cleanupPlan.irreversibleCleanupShell()
+        } else {
+            // `do shell script … with administrator privileges` inherits the
+            // caller's PATH on current macOS releases. Start from an empty
+            // environment so no user-writable tool can be resolved by the
+            // root engine or one of its child scripts.
+            run = (isolatedEnvironment + [command.executable.path] + args)
+                .map(shellQuote).joined(separator: " ")
+        }
+
+        if let sink = logSink {
+            let dir = shellQuote(sink.directoryPath), file = shellQuote(sink.filePath)
+            statements.append("umask 022")
+            statements.append("/bin/mkdir -m 0755 -- \(dir) || exit \(ElevatedExitCode.logSinkUnavailable)")
+            statements.append("cleanup_burrow_log() { /bin/rm -f -- \(file); /bin/rmdir -- \(dir); }")
+            statements.append("trap cleanup_burrow_log EXIT HUP INT TERM")
+            statements.append("( set -C; : > \(file) ) || exit \(ElevatedExitCode.logSinkUnavailable)")
+            statements.append("( \(run) ) > \(file) 2>&1")
+            statements.append("burrow_status=$?")
+            // Let the app obtain a no-follow descriptor. The root shell then
+            // unlinks the sink; an open descriptor remains readable.
+            statements.append("/bin/sleep 0.35")
+            statements.append("exit $burrow_status")
+        } else {
+            statements.append(cleanupPlan == nil ? "exec \(run)" : run)
+        }
+        let raw = statements.joined(separator: "; ")
         let inner = raw.replacingOccurrences(of: "\\", with: "\\\\")
                        .replacingOccurrences(of: "\"", with: "\\\"")
         return "do shell script \"\(inner)\" with administrator privileges"

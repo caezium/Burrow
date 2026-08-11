@@ -1,0 +1,53 @@
+{
+  "exception": {
+    "value": "crash near sk-live-SECRET for alice@example.com in /Users/alice/Documents/customer.txt",
+    "type": "Fatal /Users/alice/Secret.swift",
+    "module": "/Users/alice/Downloads/Burrow.app/Contents/MacOS/Burrow",
+    "mechanismType": "signal /Users/alice",
+    "mechanismDescription": "argv --upload /Users/alice/customer.txt --token SECRET",
+    "mechanismHelp": "https://example.com/private?token=SECRET",
+    "mechanismData": {
+      "api_key": "sk-live-SECRET",
+      "command_arguments": "--upload /Users/alice/customer.txt",
+      "error_code": 17
+    }
+  },
+  "contexts": {
+    "burrow_runtime": {
+      "app_version": "0.11.2",
+      "app_build": "23",
+      "username": "alice",
+      "file_path": "/Users/alice/Documents/customer.txt"
+    },
+    "diagnostic": {
+      "phase": "launch_started",
+      "api_key": "sk-live-SECRET",
+      "command_arguments": "--upload /Users/alice/customer.txt"
+    },
+    "device": {
+      "name": "Alice's Mac",
+      "free_memory": 42
+    }
+  },
+  "debugMeta": {
+    "debugID": "B7C38183-66CD-4C76-895A-150D17B4E2D7",
+    "type": "macho",
+    "codeFile": "/Users/alice/Downloads/Burrow.app/Contents/MacOS/Burrow",
+    "imageAddress": "0x100000000",
+    "imageVmAddress": "0x100000000"
+  },
+  "frame": {
+    "function": "Burrow.Secret=/Users/alice/Documents/customer.txt",
+    "module": "/Users/alice/Downloads/Burrow.app/Contents/MacOS/Burrow",
+    "package": "/Users/alice/Downloads/Burrow.app",
+    "fileName": "customer.txt",
+    "contextLine": "let token = sk-live-SECRET",
+    "imageAddress": "0x100000000",
+    "instructionAddress": "0x100001234",
+    "symbolAddress": "0x100001000",
+    "vars": {
+      "api_key": "sk-live-SECRET",
+      "path": "/Users/alice/Documents/customer.txt"
+    }
+  }
+}

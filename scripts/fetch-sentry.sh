@@ -16,11 +16,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="9.16.1"
-# sha256 of Sentry.xcframework.zip — matches the checksum sentry-cocoa pins for
-# the `Sentry` (static) binaryTarget at this version. Bump both together.
-SHA256="7e3966c543697a8d51f337dc357cfcf99e80942c6931c6457e0a49c113133cd4"
-URL="https://github.com/getsentry/sentry-cocoa/releases/download/${VERSION}/Sentry.xcframework.zip"
+VERSION="$(python3 scripts/release-input.py frameworks.sentry.version)"
+# Matches the checksum sentry-cocoa pins for the static Sentry binary target.
+SHA256="$(python3 scripts/release-input.py frameworks.sentry.sha256)"
+URL="$(python3 scripts/release-input.py frameworks.sentry.url)"
 DEST="macos/vendor/Sentry.xcframework"
 STAMP="macos/vendor/.sentry-${VERSION}-${SHA256:0:12}.ok"
 

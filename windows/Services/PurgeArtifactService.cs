@@ -62,8 +62,12 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
     ];
 
     private readonly ISafeDeletionService _safeDeletionService;
+    private readonly IWindowsPathSafetyPolicy _pathSafetyPolicy;
+    private readonly IWindowsFileSystemInspector _fileSystem;
     private readonly string _userProfile;
     private readonly string _configFile;
+    private readonly object _previewLock = new();
+    private readonly HashSet<string> _approvedCandidateFingerprints = new(StringComparer.Ordinal);
 
     public PurgeArtifactService()
         : this(
@@ -73,7 +77,9 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
                 ".config",
                 "mole",
                 "purge_paths.txt"),
-            new RecycleBinDeletionService())
+            new RecycleBinDeletionService(),
+            new WindowsPathSafetyPolicy(),
+            new WindowsFileSystemInspector())
     {
     }
 
@@ -85,12 +91,19 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
                 ".config",
                 "mole",
                 "purge_paths.txt"),
-            safeDeletionService)
+            safeDeletionService,
+            new WindowsPathSafetyPolicy(),
+            new WindowsFileSystemInspector())
     {
     }
 
     public PurgeArtifactService(string userProfile, string configFile)
-        : this(userProfile, configFile, new RecycleBinDeletionService())
+        : this(
+            userProfile,
+            configFile,
+            new RecycleBinDeletionService(),
+            new WindowsPathSafetyPolicy(),
+            new WindowsFileSystemInspector())
     {
     }
 
@@ -98,8 +111,42 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
         string userProfile,
         string configFile,
         ISafeDeletionService safeDeletionService)
+        : this(
+            userProfile,
+            configFile,
+            safeDeletionService,
+            new WindowsPathSafetyPolicy(),
+            new WindowsFileSystemInspector())
+    {
+    }
+
+    public PurgeArtifactService(
+        ISafeDeletionService safeDeletionService,
+        IWindowsPathSafetyPolicy pathSafetyPolicy,
+        IWindowsFileSystemInspector fileSystem)
+        : this(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".config",
+                "mole",
+                "purge_paths.txt"),
+            safeDeletionService,
+            pathSafetyPolicy,
+            fileSystem)
+    {
+    }
+
+    public PurgeArtifactService(
+        string userProfile,
+        string configFile,
+        ISafeDeletionService safeDeletionService,
+        IWindowsPathSafetyPolicy pathSafetyPolicy,
+        IWindowsFileSystemInspector fileSystem)
     {
         _safeDeletionService = safeDeletionService;
+        _pathSafetyPolicy = pathSafetyPolicy;
+        _fileSystem = fileSystem;
         _userProfile = userProfile;
         _configFile = configFile;
     }
@@ -108,6 +155,7 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
         IReadOnlyList<string>? searchRoots = null,
         CancellationToken cancellationToken = default)
     {
+        ClearApprovedPreview();
         return Task.Run(() =>
         {
             var roots = ResolveSearchRoots(searchRoots);
@@ -145,32 +193,50 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
                 }
             }
 
-            return (IReadOnlyList<PurgeProjectCandidate>)projects.Values
+            var ordered = projects.Values
                 .OrderByDescending(project => project.TotalSizeBytes)
                 .ThenBy(project => project.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-        }, cancellationToken);
-    }
 
-    public Task<IReadOnlyList<LeftoverRemovalResult>> RemoveAsync(
-        IReadOnlyList<PurgeProjectCandidate> projects,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.Run(() =>
-        {
-            var results = new List<LeftoverRemovalResult>();
-            foreach (var project in projects)
+            lock (_previewLock)
             {
-                var projectRoot = Path.GetFullPath(project.Path);
-                foreach (var artifact in project.Artifacts)
+                foreach (var item in BuildWorkItems(ordered))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    results.Add(RemoveArtifact(projectRoot, artifact));
+                    _approvedCandidateFingerprints.Add(item.Descriptor.Fingerprint());
                 }
             }
 
-            return (IReadOnlyList<LeftoverRemovalResult>)results;
+            return (IReadOnlyList<PurgeProjectCandidate>)ordered;
         }, cancellationToken);
+    }
+
+    public ConfirmedDeletionAuthorization ConfirmRemoval(IReadOnlyList<PurgeProjectCandidate> projects)
+    {
+        var workItems = BuildWorkItems(projects);
+        return ConfirmedDeletionAuthorization.Confirm(
+            DestructiveFlow.Purge,
+            workItems.Select(item => item.Descriptor));
+    }
+
+    public Task<DeletionBatchResult> RemoveAsync(
+        IReadOnlyList<PurgeProjectCandidate> projects,
+        ConfirmedDeletionAuthorization authorization,
+        IProgress<DeletionProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(authorization);
+        var workItems = BuildWorkItems(projects);
+        var exactAuthorization = authorization.SourceFlow == DestructiveFlow.Purge &&
+                                 authorization.IsExactMatch(workItems.Select(item => item.Descriptor));
+
+        return Task.Run(() => DeletionBatchProcessor.RunAsync(
+                workItems,
+                authorization.OperationId,
+                item => item.Descriptor.OriginalPath,
+                item => RemoveArtifactAsync(item, authorization, exactAuthorization, cancellationToken),
+                progress,
+                cancellationToken));
     }
 
     private IReadOnlyList<string> ResolveSearchRoots(IReadOnlyList<string>? searchRoots)
@@ -184,13 +250,18 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
             candidates = BuildDefaultSearchRoots();
         }
 
-        return candidates
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => Environment.ExpandEnvironmentVariables(path))
-            .Select(path => Path.GetFullPath(path))
-            .Where(Directory.Exists)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var safeRoots = new List<string>();
+        foreach (var candidate in candidates.Where(path => !string.IsNullOrWhiteSpace(path)))
+        {
+            var expanded = Environment.ExpandEnvironmentVariables(candidate);
+            var safety = _pathSafetyPolicy.ValidateScopeRoot(expanded);
+            if (safety.IsSafe && safety.CanonicalScopeRoot is not null)
+            {
+                safeRoots.Add(safety.CanonicalScopeRoot);
+            }
+        }
+
+        return safeRoots.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private IReadOnlyList<string> ReadConfiguredSearchRoots()
@@ -228,6 +299,11 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
         CancellationToken cancellationToken)
     {
         var rootFullPath = Path.GetFullPath(root);
+        if (IsReparsePoint(rootFullPath))
+        {
+            yield break;
+        }
+
         yield return rootFullPath;
 
         var pending = new Queue<(string Path, int Depth)>();
@@ -245,9 +321,9 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
             IEnumerable<string> children;
             try
             {
-                children = Directory.EnumerateDirectories(current.Path);
+                children = Directory.EnumerateDirectories(current.Path).ToArray();
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
             {
                 continue;
             }
@@ -257,6 +333,11 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
                 cancellationToken.ThrowIfCancellationRequested();
                 var name = Path.GetFileName(child);
                 if (ShouldSkipDirectory(name))
+                {
+                    continue;
+                }
+
+                if (IsReparsePoint(child))
                 {
                     continue;
                 }
@@ -276,28 +357,34 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
 
     private static string? FindProjectMarker(string directory)
     {
-        foreach (var marker in ProjectMarkers)
+        try
         {
-            if (marker.StartsWith('*'))
+            foreach (var marker in ProjectMarkers)
             {
-                if (Directory.EnumerateFiles(directory, marker).Any())
+                if (marker.StartsWith('*'))
+                {
+                    if (Directory.EnumerateFiles(directory, marker).Any())
+                    {
+                        return marker;
+                    }
+
+                    continue;
+                }
+
+                if (File.Exists(Path.Combine(directory, marker)))
                 {
                     return marker;
                 }
-
-                continue;
             }
-
-            if (File.Exists(Path.Combine(directory, marker)))
-            {
-                return marker;
-            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
         }
 
         return null;
     }
 
-    private static IReadOnlyList<PurgeArtifactCandidate> FindArtifacts(
+    private IReadOnlyList<PurgeArtifactCandidate> FindArtifacts(
         string projectPath,
         string projectMarker,
         CancellationToken cancellationToken)
@@ -315,10 +402,10 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
             try
             {
                 matches = pattern.Kind == ArtifactKind.Directory
-                    ? Directory.EnumerateDirectories(projectPath, pattern.Name)
-                    : Directory.EnumerateFiles(projectPath, pattern.Name);
+                    ? Directory.EnumerateDirectories(projectPath, pattern.Name).ToArray()
+                    : Directory.EnumerateFiles(projectPath, pattern.Name).ToArray();
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
             {
                 continue;
             }
@@ -327,9 +414,12 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var fullPath = Path.GetFullPath(match);
-                var sizeBytes = pattern.Kind == ArtifactKind.Directory
-                    ? GetDirectorySize(fullPath, cancellationToken)
-                    : GetFileSize(fullPath);
+                var entry = _fileSystem.Inspect(fullPath);
+                if (!entry.Exists || entry.IsReparsePoint ||
+                    !_fileSystem.TryMeasureSize(fullPath, cancellationToken, out var sizeBytes))
+                {
+                    continue;
+                }
 
                 artifacts.Add(new PurgeArtifactCandidate(
                     Path.GetFileName(fullPath),
@@ -346,59 +436,134 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
             .ToList();
     }
 
-    private static long GetDirectorySize(string directory, CancellationToken cancellationToken)
+    private static bool IsReparsePoint(string path)
     {
-        long total = 0;
         try
         {
-            foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+            return File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return true;
+        }
+    }
+
+    private async Task<SafeDeletionResult> RemoveArtifactAsync(
+        PurgeWorkItem item,
+        ConfirmedDeletionAuthorization authorization,
+        bool exactAuthorization,
+        CancellationToken cancellationToken)
+    {
+        var descriptor = item.Descriptor;
+        var safety = _pathSafetyPolicy.Validate(descriptor.OriginalPath, descriptor.ExpectedScopeRoot);
+        bool approvedByPreview;
+        lock (_previewLock)
+        {
+            approvedByPreview = _approvedCandidateFingerprints.Contains(descriptor.Fingerprint());
+        }
+
+        var validation = exactAuthorization && approvedByPreview
+            ? ValidatePurgeCandidate(item, safety, cancellationToken)
+            : FlowSafetyValidation.Reject(
+                approvedByPreview ? "authorization_set_mismatch" : "not_previewed",
+                approvedByPreview
+                    ? "Explicit confirmation does not match the exact selected purge candidate set."
+                    : "The target is not an approved candidate from the current purge preview.");
+
+        return await _safeDeletionService.DeleteAsync(
+            new SafeDeletionRequest(
+                descriptor,
+                safety.CanonicalPath ?? descriptor.OriginalPath,
+                authorization.OperationId,
+                authorization,
+                validation),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private FlowSafetyValidation ValidatePurgeCandidate(
+        PurgeWorkItem item,
+        PathSafetyResult safety,
+        CancellationToken cancellationToken)
+    {
+        if (!safety.IsSafe || safety.CanonicalPath is null || safety.CanonicalScopeRoot is null)
+        {
+            return FlowSafetyValidation.Reject(safety.ReasonCode, safety.Message);
+        }
+
+        var marker = FindProjectMarker(safety.CanonicalScopeRoot);
+        if (marker is null || !string.Equals(marker, item.Project.Marker, StringComparison.OrdinalIgnoreCase))
+        {
+            return FlowSafetyValidation.Reject("project_marker_changed", "The previewed project marker is missing or changed.");
+        }
+
+        var parent = Path.GetDirectoryName(safety.CanonicalPath);
+        if (!string.Equals(parent?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                safety.CanonicalScopeRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase) ||
+            !IsAllowedArtifact(safety.CanonicalScopeRoot, safety.CanonicalPath, item.Artifact.Type))
+        {
+            return FlowSafetyValidation.Reject("artifact_rule_changed", "The target no longer matches the approved project artifact rule.");
+        }
+
+        var entry = safety.TargetInfo ?? _fileSystem.Inspect(safety.CanonicalPath);
+        if (!entry.Exists)
+        {
+            return FlowSafetyValidation.Allow();
+        }
+
+        if (entry.ItemType != item.Descriptor.ItemType)
+        {
+            return FlowSafetyValidation.Reject("candidate_type_changed", "The artifact type changed after preview.");
+        }
+
+        try
+        {
+            if (!_fileSystem.TryMeasureSize(safety.CanonicalPath, cancellationToken, out var observedSize))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                total += GetFileSize(file);
+                return FlowSafetyValidation.Reject("candidate_unverifiable", "The artifact size could not be verified safely.");
+            }
+
+            return observedSize == item.Artifact.SizeBytes
+                ? FlowSafetyValidation.Allow(observedSize)
+                : FlowSafetyValidation.Reject("candidate_changed", "The artifact contents changed after preview; rescan before removal.");
+        }
+        catch (OperationCanceledException)
+        {
+            return FlowSafetyValidation.Reject("cancelled", "Cancellation was requested while revalidating the artifact.");
+        }
+    }
+
+    private static IReadOnlyList<PurgeWorkItem> BuildWorkItems(IReadOnlyList<PurgeProjectCandidate> projects)
+    {
+        ArgumentNullException.ThrowIfNull(projects);
+        var items = new List<PurgeWorkItem>();
+        foreach (var project in projects)
+        {
+            foreach (var artifact in project.Artifacts)
+            {
+                var itemType = string.Equals(artifact.Type, ArtifactKind.Directory.ToString(), StringComparison.OrdinalIgnoreCase)
+                    ? DeletionItemType.Directory
+                    : DeletionItemType.File;
+                var descriptor = new DeletionCandidateDescriptor(
+                    artifact.Path,
+                    project.Path,
+                    DestructiveFlow.Purge,
+                    $"{artifact.Type}:{artifact.Language}",
+                    itemType,
+                    artifact.SizeBytes);
+                items.Add(new PurgeWorkItem(project, artifact, descriptor));
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
 
-        return total;
+        return items;
     }
 
-    private static long GetFileSize(string file)
+    private void ClearApprovedPreview()
     {
-        try
+        lock (_previewLock)
         {
-            return new FileInfo(file).Length;
+            _approvedCandidateFingerprints.Clear();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return 0;
-        }
-    }
-
-    private LeftoverRemovalResult RemoveArtifact(string projectRoot, PurgeArtifactCandidate artifact)
-    {
-        var artifactPath = Path.GetFullPath(artifact.Path);
-        if (!IsPathUnder(projectRoot, artifactPath) || !IsAllowedArtifact(projectRoot, artifactPath, artifact.Type))
-        {
-            return new LeftoverRemovalResult(artifact.Path, false, "Path is outside the purge preview scope.", artifact.SizeBytes);
-        }
-
-        try
-        {
-            return _safeDeletionService.DeleteFileOrDirectory(artifactPath, artifact.SizeBytes);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return new LeftoverRemovalResult(artifact.Path, false, ex.Message, artifact.SizeBytes);
-        }
-    }
-
-    private static bool IsPathUnder(string root, string path)
-    {
-        var normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        var normalizedPath = Path.GetFullPath(path);
-        return normalizedPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsAllowedArtifact(string projectRoot, string path, string type)
@@ -460,10 +625,22 @@ public sealed class PurgeArtifactService : IPurgeArtifactService
 
     private static bool HasAnyFile(string projectRoot, string pattern)
     {
-        return Directory.EnumerateFiles(projectRoot, pattern, SearchOption.TopDirectoryOnly).Any();
+        try
+        {
+            return Directory.EnumerateFiles(projectRoot, pattern, SearchOption.TopDirectoryOnly).Any();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return false;
+        }
     }
 
     private sealed record ArtifactPattern(string Name, ArtifactKind Kind, string Language);
+
+    private sealed record PurgeWorkItem(
+        PurgeProjectCandidate Project,
+        PurgeArtifactCandidate Artifact,
+        DeletionCandidateDescriptor Descriptor);
 
     private enum ArtifactKind
     {

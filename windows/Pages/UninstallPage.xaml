@@ -536,23 +536,43 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock
-                VerticalAlignment="Center"
-                FontFamily="{StaticResource BurrowMonoFont}"
-                FontSize="20"
-                FontWeight="Bold"
-                Foreground="{StaticResource BurrowMutedBrush}"
-                Text="{Binding AppsCountText}" />
+            <StackPanel VerticalAlignment="Center" Spacing="3">
+                <TextBlock
+                    FontFamily="{StaticResource BurrowMonoFont}"
+                    FontSize="16"
+                    FontWeight="Bold"
+                    Foreground="{StaticResource BurrowMutedBrush}"
+                    Text="{Binding AppsCountText}" />
+                <ProgressBar
+                    Width="360"
+                    Maximum="{Binding ProgressMaximum}"
+                    Value="{Binding ProgressValue}"
+                    IsIndeterminate="{Binding IsProgressIndeterminate}" />
+                <TextBlock
+                    FontFamily="{StaticResource BurrowMonoFont}"
+                    FontSize="11"
+                    Foreground="{StaticResource BurrowDimBrush}"
+                    Text="{Binding CurrentTarget}"
+                    TextTrimming="CharacterEllipsis" />
+            </StackPanel>
             <Button
                 Grid.Column="1"
+                Margin="0,0,12,0"
+                Command="{Binding CancelCommand}"
+                Content="Cancel"
+                IsEnabled="{Binding CanCancel}"
+                Style="{StaticResource BurrowSecondaryPillButtonStyle}" />
+            <Button
+                Grid.Column="2"
                 Margin="0,0,12,0"
                 Click="RemoveLeftoversButton_Click"
                 Content="Remove leftovers"
                 IsEnabled="{Binding CanRemoveSelectedLeftovers}"
                 Style="{StaticResource BurrowSecondaryPillButtonStyle}" />
             <Button
-                Grid.Column="2"
+                Grid.Column="3"
                 Click="UninstallButton_Click"
                 Content="Uninstall"
                 IsEnabled="{Binding CanLaunchUninstaller}"

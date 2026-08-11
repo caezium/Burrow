@@ -10,15 +10,50 @@ namespace BurrowWin.Tests;
 public sealed class LocalMcpServerServiceTests
 {
     [Fact]
-    public void RequestGate_AllowsOnlyLoopbackAndLocalOrigins()
+    public void RequestGate_RequiresCredentialAndRejectsHostOrBrowserRequests()
     {
-        Assert.True(LocalMcpServerService.IsRequestAllowed(IPAddress.Loopback, null));
-        Assert.True(LocalMcpServerService.IsRequestAllowed(IPAddress.IPv6Loopback, "http://localhost:3000"));
-        Assert.True(LocalMcpServerService.IsRequestAllowed(IPAddress.Loopback, "http://127.0.0.1:9277"));
+        const string token = "test-query-token";
+        Assert.Equal(LocalRequestDecision.Allowed, EvaluateRequest(token));
+        Assert.Equal(LocalRequestDecision.Unauthorized, EvaluateRequest(token, includeCredential: false));
+        Assert.Equal(LocalRequestDecision.Unauthorized, EvaluateRequest(token, authorization: "Bearer wrong"));
+        Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, host: "attacker.example"));
+        Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, host: null));
+        Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, origin: "http://localhost:3000"));
+        Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, origin: "https://example.com"));
+        Assert.Equal(LocalRequestDecision.Forbidden, EvaluateRequest(token, hasFetchMetadata: true));
+        Assert.Equal(LocalRequestDecision.Forbidden,
+            EvaluateRequest(token, remoteAddress: IPAddress.Parse("192.168.1.10")));
+    }
 
-        Assert.False(LocalMcpServerService.IsRequestAllowed(IPAddress.Parse("192.168.1.10"), null));
-        Assert.False(LocalMcpServerService.IsRequestAllowed(IPAddress.Loopback, "https://example.com"));
-        Assert.False(LocalMcpServerService.IsRequestAllowed(IPAddress.Loopback, "not a uri"));
+    [Fact]
+    public void RequestGate_ConstrainsMethodsContentTypesAndPayloadSize()
+    {
+        const string token = "test-query-token";
+        Assert.Equal(LocalRequestDecision.Allowed,
+            EvaluateRequest(token, path: "/mcp", method: "POST",
+                contentType: "application/json; charset=utf-8", contentLength: 512));
+        Assert.Equal(LocalRequestDecision.MethodNotAllowed,
+            EvaluateRequest(token, path: "/health", method: "POST",
+                contentType: "application/json", contentLength: 2));
+        Assert.Equal(LocalRequestDecision.UnsupportedMediaType,
+            EvaluateRequest(token, path: "/mcp", method: "POST",
+                contentType: "text/plain", contentLength: 2));
+        Assert.Equal(LocalRequestDecision.PayloadTooLarge,
+            EvaluateRequest(token, path: "/mcp", method: "POST",
+                contentType: "application/json", contentLength: 64 * 1024 + 1));
+        Assert.Equal(LocalRequestDecision.BadRequest,
+            EvaluateRequest(token, path: "/health", method: "GET", contentLength: 1));
+    }
+
+    [Fact]
+    public void RequestRateLimiter_RejectsBurstPastLimitAndRecovers()
+    {
+        var limiter = new LocalRequestRateLimiter(limit: 2, window: TimeSpan.FromSeconds(60));
+        var start = DateTimeOffset.Parse("2026-08-08T00:00:00Z");
+        Assert.True(limiter.Allow(start));
+        Assert.True(limiter.Allow(start.AddSeconds(1)));
+        Assert.False(limiter.Allow(start.AddSeconds(2)));
+        Assert.True(limiter.Allow(start.AddSeconds(61)));
     }
 
     [Fact]
@@ -156,6 +191,37 @@ public sealed class LocalMcpServerServiceTests
             settingsService ?? new FakeApplicationSettingsService());
     }
 
+    private static LocalRequestDecision EvaluateRequest(
+        string expectedToken,
+        IPAddress? remoteAddress = null,
+        string? host = "127.0.0.1:9277",
+        string? origin = null,
+        bool hasFetchMetadata = false,
+        bool includeCredential = true,
+        string? authorization = null,
+        string path = "/health",
+        string method = "GET",
+        string? contentType = null,
+        long contentLength = 0)
+    {
+        if (includeCredential && authorization is null)
+        {
+            authorization = $"Bearer {expectedToken}";
+        }
+        return LocalMcpServerService.EvaluateRequest(
+            remoteAddress ?? IPAddress.Loopback,
+            host,
+            origin,
+            hasFetchMetadata,
+            authorization,
+            expectedToken,
+            LocalMcpServerService.DefaultPort,
+            path,
+            method,
+            contentType,
+            contentLength);
+    }
+
     private static async Task<JsonObject> ExecuteToolAsync(
         LocalMcpServerService service,
         string name,
@@ -273,11 +339,26 @@ public sealed class LocalMcpServerServiceTests
             return Task.FromResult(new MoleCommandResult(0, "ok", string.Empty, false, TimeSpan.Zero));
         }
 
-        public Task<IReadOnlyList<LeftoverRemovalResult>> RemoveLeftoversAsync(
-            IEnumerable<LeftoverCandidate> leftovers,
+        public ConfirmedDeletionAuthorization ConfirmLeftoverRemoval(IReadOnlyList<LeftoverCandidate> leftovers)
+        {
+            return ConfirmedDeletionAuthorization.Confirm(
+                DestructiveFlow.UninstallLeftovers,
+                leftovers.Select(item => new DeletionCandidateDescriptor(
+                    item.Path,
+                    item.ApprovedScopeRoot,
+                    DestructiveFlow.UninstallLeftovers,
+                    item.Category,
+                    DeletionItemType.Directory,
+                    item.SizeBytes)));
+        }
+
+        public Task<DeletionBatchResult> RemoveLeftoversAsync(
+            IReadOnlyList<LeftoverCandidate> leftovers,
+            ConfirmedDeletionAuthorization authorization,
+            IProgress<DeletionProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<LeftoverRemovalResult>>([]);
+            return Task.FromResult(EmptyBatch(leftovers.Count, authorization.OperationId));
         }
     }
 
@@ -315,11 +396,27 @@ public sealed class LocalMcpServerServiceTests
             return Task.FromResult(_projects);
         }
 
-        public Task<IReadOnlyList<LeftoverRemovalResult>> RemoveAsync(
+        public ConfirmedDeletionAuthorization ConfirmRemoval(IReadOnlyList<PurgeProjectCandidate> projects)
+        {
+            return ConfirmedDeletionAuthorization.Confirm(
+                DestructiveFlow.Purge,
+                projects.SelectMany(project => project.Artifacts.Select(artifact =>
+                    new DeletionCandidateDescriptor(
+                        artifact.Path,
+                        project.Path,
+                        DestructiveFlow.Purge,
+                        artifact.Type,
+                        DeletionItemType.Directory,
+                        artifact.SizeBytes))));
+        }
+
+        public Task<DeletionBatchResult> RemoveAsync(
             IReadOnlyList<PurgeProjectCandidate> projects,
+            ConfirmedDeletionAuthorization authorization,
+            IProgress<DeletionProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<LeftoverRemovalResult>>([]);
+            return Task.FromResult(EmptyBatch(projects.Sum(project => project.ArtifactCount), authorization.OperationId));
         }
     }
 
@@ -349,13 +446,47 @@ public sealed class LocalMcpServerServiceTests
             return Task.FromResult(_candidates);
         }
 
-        public Task<IReadOnlyList<LeftoverRemovalResult>> RemoveAsync(
+        public ConfirmedDeletionAuthorization ConfirmRemoval(IReadOnlyList<InstallerCleanupCandidate> candidates)
+        {
+            return ConfirmedDeletionAuthorization.Confirm(
+                DestructiveFlow.Installer,
+                candidates.Select(candidate => new DeletionCandidateDescriptor(
+                    candidate.Path,
+                    Path.GetDirectoryName(candidate.Path)!,
+                    DestructiveFlow.Installer,
+                    candidate.Kind,
+                    DeletionItemType.File,
+                    candidate.SizeBytes,
+                    candidate.LastWriteTime)));
+        }
+
+        public Task<DeletionBatchResult> RemoveAsync(
             IReadOnlyList<InstallerCleanupCandidate> candidates,
+            ConfirmedDeletionAuthorization authorization,
+            IProgress<DeletionProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<LeftoverRemovalResult>>([]);
+            return Task.FromResult(EmptyBatch(candidates.Count, authorization.OperationId));
         }
     }
+
+    private static DeletionBatchResult EmptyBatch(int total, string operationId) =>
+        new(
+            [],
+            total,
+            0,
+            0,
+            0,
+            0,
+            total,
+            false,
+            0,
+            0,
+            null,
+            null,
+            DeletionBatchOutcome.Failed,
+            0,
+            operationId);
 
     private sealed class FakeOperationHistoryService : IOperationHistoryService
     {
