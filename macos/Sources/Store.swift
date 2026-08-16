@@ -195,7 +195,7 @@ enum Store {
     // MARK: - Language
 
     /// In-app language override. "" follows the system; otherwise a bundle
-    /// language code we ship ("en" / "zh-Hans" / "zh-Hant"). Writing it also sets the
+    /// language code we ship ("en" / "zh-Hans" / "zh-Hant" / "ru"). Writing it also sets the
     /// system `AppleLanguages` key the bundle loader reads at launch, so the
     /// choice takes effect on the next relaunch.
     static var appLanguage: String {

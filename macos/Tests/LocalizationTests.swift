@@ -73,6 +73,10 @@ final class LocalizationTests: XCTestCase {
         try assertCoversCoreInterface(language: "zh-Hant")
     }
 
+    func testRussianStringsCoverCoreInterface() throws {
+        try assertCoversCoreInterface(language: "ru")
+    }
+
     /// Both Chinese variants should translate the same set of keys, so a key
     /// added to one file isn't silently missing from the other.
     func testChineseVariantsShareTheSameKeys() throws {
@@ -80,6 +84,16 @@ final class LocalizationTests: XCTestCase {
         let hant = Set(try localizedStrings("zh-Hant").keys)
         XCTAssertEqual(hans.subtracting(hant).sorted(), [], "keys missing from zh-Hant")
         XCTAssertEqual(hant.subtracting(hans).sorted(), [], "keys missing from zh-Hans")
+    }
+
+    /// Russian should translate exactly the same key set as Simplified
+    /// Chinese, so a key added to the canonical table isn't silently missing
+    /// from the Russian table.
+    func testRussianSharesKeysWithChinese() throws {
+        let hans = Set(try localizedStrings("zh-Hans").keys)
+        let ru = Set(try localizedStrings("ru").keys)
+        XCTAssertEqual(ru.subtracting(hans).sorted(), [], "keys in ru missing from zh-Hans")
+        XCTAssertEqual(hans.subtracting(ru).sorted(), [], "keys missing from ru")
     }
 
     /// A translation that retypes or *plainly* reorders `%` placeholders is a
@@ -107,7 +121,7 @@ final class LocalizationTests: XCTestCase {
             }
             return byPosition.keys.sorted().map { byPosition[$0]! }
         }
-        for language in ["zh-Hans", "zh-Hant"] {
+        for language in ["zh-Hans", "zh-Hant", "ru"] {
             for (key, value) in try localizedStrings(language) {
                 XCTAssertEqual(argTypes(key), argTypes(value),
                                "format argument types drifted in \(language) translation of \"\(key)\"")
