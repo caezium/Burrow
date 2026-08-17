@@ -182,6 +182,14 @@ enum MoTUI {
 final class PTYTask: PTYPort {
     private var proc = Process()   // replaced on each launch (a Process runs once)
     private var master: FileHandle?
+    /// `isRunning` is `false` for BOTH a finished process and a never-launched
+    /// one, so it can't distinguish "already reaped" from "run() threw". Only a
+    /// process that actually launched may report `terminationStatus`; reading it
+    /// from a never-launched child raises `NSInvalidArgumentException` ("task not
+    /// launched"), which Swift cannot catch — Sentry BURROW-A5, issue #374. Track
+    /// the launch state so the EOF branch never asks a never-spawned child for
+    /// its exit code.
+    private var didLaunch = false
 
     var onOutput: ((String) -> Void)?
     var onExit: ((Int32) -> Void)?
@@ -210,6 +218,7 @@ final class PTYTask: PTYPort {
         proc = Process()
         // New child, new exactly-once exit report.
         reportedExit = false
+        didLaunch = false
         var amaster: Int32 = 0
         var aslave: Int32 = 0
         var ws = winsize(ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0)
@@ -243,7 +252,10 @@ final class PTYTask: PTYPort {
                 // report the exit ourselves; otherwise the now-unstarved
                 // terminationHandler will.
                 h.readabilityHandler = nil
-                if !self.proc.isRunning {
+                // Only a launched process has a valid exit code. If run() threw
+                // (the child never spawned), didLaunch is false and reading
+                // terminationStatus would raise "task not launched" (#374).
+                if self.didLaunch && !self.proc.isRunning {
                     let code = self.proc.terminationStatus
                     DispatchQueue.main.async { self.reportExitOnce(code) }
                 }
@@ -256,8 +268,18 @@ final class PTYTask: PTYPort {
         // Close the parent's slave fd whether or not the launch succeeds — on a
         // throw the child never starts, so nothing else would ever close it.
         do { try proc.run() }
-        catch { close(aslave); throw error }
+        catch {
+            // The child never started, so it can never report an exit. Drop the
+            // armed read handler and the master fd now — otherwise the EOF branch
+            // would fire later and, seeing a never-launched process, crash on
+            // terminationStatus (Sentry BURROW-A5, #374).
+            close(aslave)
+            m.readabilityHandler = nil
+            master = nil
+            throw error
+        }
         close(aslave)   // parent doesn't use the slave end
+        didLaunch = true
     }
 
     /// PTY writes go through a dedicated serial queue so a blocked `write()`
