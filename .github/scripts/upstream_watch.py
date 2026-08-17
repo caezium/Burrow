@@ -14,6 +14,10 @@ Dedup: a hidden marker in each issue body. We list the engine's labelled issues
 and check their bodies before filing, so the issue itself is the state -- it
 never double-files or misses.
 
+Quoting: upstream text is run through neutralize() before it lands in an issue,
+so quoting a release note never notifies an upstream contributor or
+cross-references an upstream PR. See the comment above that function.
+
 Env:
   GH_TOKEN           token for `gh` (needs issues: write)
   GITHUB_REPOSITORY  owner/repo to file issues into
@@ -21,6 +25,7 @@ Env:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -30,6 +35,44 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / ".github" / "upstream-watch.json"
 REPO = os.environ.get("GITHUB_REPOSITORY", "")
 DRY_RUN = False
+
+# --- quoting upstream text without notifying upstream people -----------------
+# Upstream release notes and commit subjects are full of `@handles`, `#123` refs
+# and issue/PR URLs. Pasted verbatim into an issue here, GitHub notifies those
+# people and cross-references those PRs, so upstream contributors get pinged by
+# tooling they never opted into. We keep the text, but wrap the parts GitHub
+# would linkify in code spans (GitHub does not link or notify inside code), and
+# fold issue/PR/discussion URLs down to a plain `owner/repo#N` ref.
+
+FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
+CODE_SPAN_RE = re.compile(r"(`+[^`]*`+)")
+MENTION_RE = re.compile(r"(?<![\w`/@!-])@([A-Za-z0-9][A-Za-z0-9-]{0,38}(?:/[A-Za-z0-9._-]+)?)")
+ISSUE_REF_RE = re.compile(r"(?<![\w`/#&-])((?:[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*)?#\d+)\b")
+ISSUE_URL = r"https?://(?:www\.)?github\.com/([A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*)/(?:issues|pull|discussions)/(\d+)(?:[#?][^\s)\]]*)?"
+ISSUE_URL_RE = re.compile(ISSUE_URL)
+MD_ISSUE_LINK_RE = re.compile(r"\[[^\]]*\]\(\s*" + ISSUE_URL + r"\s*\)")
+
+
+def _neutralize_span(s):
+    s = MD_ISSUE_LINK_RE.sub(lambda m: f"`{m.group(1)}#{m.group(2)}`", s)
+    s = ISSUE_URL_RE.sub(lambda m: f"`{m.group(1)}#{m.group(2)}`", s)
+    s = MENTION_RE.sub(lambda m: f"`@{m.group(1)}`", s)
+    return ISSUE_REF_RE.sub(lambda m: f"`{m.group(1)}`", s)
+
+
+def neutralize(text):
+    """Quote upstream-authored text so GitHub links nothing and notifies nobody."""
+    out, in_fence = [], False
+    for line in (text or "").splitlines():
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+        if in_fence or FENCE_RE.match(line):
+            out.append(line)
+            continue
+        # Odd indices are existing code spans -- already inert, leave them be.
+        parts = CODE_SPAN_RE.split(line)
+        out.append("".join(p if i % 2 else _neutralize_span(p) for i, p in enumerate(parts)))
+    return "\n".join(out)
 
 
 def log(msg):
@@ -112,7 +155,7 @@ def do_releases(cfg):
                 continue
             rel_name = rel.get("name") or ""
             pre = " (prerelease)" if rel.get("prerelease") else ""
-            notes = (rel.get("body") or "").strip() or "_(no release notes)_"
+            notes = neutralize((rel.get("body") or "").strip()) or "_(no release notes)_"
             html_url = rel.get("html_url") or f"https://github.com/{repo}/releases/tag/{tag}"
             title = f"[{name}] {tag}"
             if rel_name and rel_name not in (tag, ""):
@@ -134,6 +177,8 @@ Burrow drives `{name}` at runtime, so a new engine release can change behaviour,
 {notes}
 
 </details>
+
+<sub>Handles and issue refs above are quoted as code on purpose, so mirroring upstream notes here never notifies upstream contributors. Read them at the [source]({html_url}).</sub>
 
 <sub>Filed automatically by <code>.github/workflows/upstream-watch.yml</code>.</sub>
 """
@@ -163,7 +208,7 @@ def do_digest(cfg):
         rows = []
         for c in commits:
             sha = c["sha"]
-            msg = (c["commit"]["message"].splitlines() or [""])[0]
+            msg = neutralize((c["commit"]["message"].splitlines() or [""])[0])
             rows.append(f"- [`{sha[:7]}`](https://github.com/{repo}/commit/{sha}) {msg}")
         if not rows:
             log("  = no commits in window")
