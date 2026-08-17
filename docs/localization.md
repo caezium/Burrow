@@ -118,7 +118,23 @@ catalog is filled — which is a working site, not a broken one.
 | 日本語 | done | — | — | — | — |
 | the other eight | — | — | — | — | — |
 
-`releases.html` is worth a deliberate decision rather than a default: it is 513
-of the site's 824 strings, it is generated from `releases.json` on every
-release, and each release adds more untranslated strings forever. Translating a
-changelog may not be worth that treadmill.
+### releases.html is translated too, and that has a cost to manage
+
+`releases.html` is 513 of the site's 824 strings, and it is regenerated from
+`releases.json` by `site-release.py` on every release. So **every release adds
+new untranslated strings to all nine catalogs** — the changelog is a treadmill
+the other four pages are not.
+
+That is a known, accepted cost, not an oversight. What it means in practice:
+
+1. After `site-release.py` runs, run `site-i18n.py --extract`. The new release's
+   notes appear in every catalog as empty strings.
+2. Until someone fills them, that release's entry renders in English while every
+   older entry stays translated. The page still ships; the fallback is per
+   string, not per page.
+3. `--check` will not fail for this — untranslated is a legal state. It fails
+   only when a generated page has drifted from its source.
+
+If the treadmill ever stops being worth it, dropping `releases.html` from
+`PAGES` is a one-line change and the existing translations stay valid for the
+rest of the site.
