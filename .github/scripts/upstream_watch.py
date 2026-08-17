@@ -44,13 +44,22 @@ DRY_RUN = False
 # would linkify in code spans (GitHub does not link or notify inside code), and
 # fold issue/PR/discussion URLs down to a plain `owner/repo#N` ref.
 
-FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
-CODE_SPAN_RE = re.compile(r"(`+[^`]*`+)")
-MENTION_RE = re.compile(r"(?<![\w`/@!-])@([A-Za-z0-9][A-Za-z0-9-]{0,38}(?:/[A-Za-z0-9._-]+)?)")
+# A fenced block runs to a closer of the same character, at least as long -- a
+# ``` line does not close a ~~~ block. An inline span may wrap across a line but
+# not across a blank line, matching how GitHub itself parses one: if we treated a
+# stray backtick pair as code across a paragraph break, a live mention inside it
+# would slip through untouched.
+CODE_SPAN = r"`+(?:[^`\n]|\n(?![ \t]*\n))*`+"
+PROTECTED_RE = re.compile(
+    r"(?ms)^[ \t]*(?P<fence>`{3,}|~{3,})[^\n]*$.*?(?:^[ \t]*(?P=fence)[`~]*[ \t]*$|\Z)"
+    r"|" + CODE_SPAN
+)
+MENTION_RE = re.compile(r"(?<![\w`/@!+.%-])@([A-Za-z0-9][A-Za-z0-9-]{0,38}(?:/[A-Za-z0-9._-]+)?)")
 ISSUE_REF_RE = re.compile(r"(?<![\w`/#&-])((?:[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*)?#\d+)\b")
-ISSUE_URL = r"https?://(?:www\.)?github\.com/([A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*)/(?:issues|pull|discussions)/(\d+)(?:[#?][^\s)\]]*)?"
+ISSUE_URL = (r"https?://(?:www\.)?github\.com/([A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*)"
+             r"/(?:issues|pull|discussions)/(\d+)(?:/[A-Za-z0-9._-]+)*(?:[#?][^\s)\]]*)?")
 ISSUE_URL_RE = re.compile(ISSUE_URL)
-MD_ISSUE_LINK_RE = re.compile(r"\[[^\]]*\]\(\s*" + ISSUE_URL + r"\s*\)")
+MD_ISSUE_LINK_RE = re.compile(r"\[[^\]]*\]\(\s*" + ISSUE_URL + r"""\s*(?:"[^"]*"|'[^']*')?\s*\)""")
 
 
 def _neutralize_span(s):
@@ -61,18 +70,21 @@ def _neutralize_span(s):
 
 
 def neutralize(text):
-    """Quote upstream-authored text so GitHub links nothing and notifies nobody."""
-    out, in_fence = [], False
-    for line in (text or "").splitlines():
-        if FENCE_RE.match(line):
-            in_fence = not in_fence
-        if in_fence or FENCE_RE.match(line):
-            out.append(line)
-            continue
-        # Odd indices are existing code spans -- already inert, leave them be.
-        parts = CODE_SPAN_RE.split(line)
-        out.append("".join(p if i % 2 else _neutralize_span(p) for i, p in enumerate(parts)))
-    return "\n".join(out)
+    """Quote upstream-authored text so GitHub links nothing and notifies nobody.
+
+    Scans the whole text rather than line by line: a fenced block or an inline
+    span can cover several lines, and quoting only part of one would insert a
+    backtick that re-pairs the span and leaves the mention after it live.
+    """
+    text = text or ""
+    out, pos = [], 0
+    for m in PROTECTED_RE.finditer(text):
+        # Already code -- GitHub neither links nor notifies in there.
+        out.append(_neutralize_span(text[pos:m.start()]))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(_neutralize_span(text[pos:]))
+    return "".join(out)
 
 
 def log(msg):
