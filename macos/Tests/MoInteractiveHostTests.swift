@@ -125,6 +125,23 @@ final class MoInteractiveHostTests: XCTestCase {
         wait(for: [exited], timeout: 5)
     }
 
+    /// A launch that throws must not retire the generation before it. The failed
+    /// launch never spawns anything, so if it took over as the live generation it
+    /// would outrank the child that IS still out there and silently swallow its
+    /// exit — the host would then be waiting on a report that can never arrive.
+    func testPTYTask_failedRelaunch_stillReportsTheOldChildsExit() {
+        let pty = PTYTask()
+        pty.onOutput = { _ in }
+        try? pty.launch("/bin/cat", [])
+
+        let exited = expectation(description: "the old child's exit is still reported")
+        pty.onExit = { _ in exited.fulfill() }
+        pty.terminate()
+        XCTAssertThrowsError(try pty.launch("/nonexistent/mo", []),
+                             "a missing binary must surface as a thrown error")
+        wait(for: [exited], timeout: 5)
+    }
+
     func testHost_scanSelectConfirm_drivesKeystrokesAndFinishes() {
         let fake = FakePTY()
         // Large tick interval so the real timer never fires; we step manually.

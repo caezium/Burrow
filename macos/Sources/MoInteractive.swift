@@ -249,9 +249,6 @@ final class PTYTask: PTYPort {
         let proc = Process()
         launchCount &+= 1
         let gen = Generation(id: launchCount, child: proc)
-        current = gen
-        // New child, new exactly-once exit report.
-        reportedExit = false
         var amaster: Int32 = 0
         var aslave: Int32 = 0
         var ws = winsize(ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0)
@@ -321,6 +318,14 @@ final class PTYTask: PTYPort {
         // child that exits instantly would otherwise reach the EOF branch while
         // this launch still looked unlaunched, and its exit would go unreported.
         gen.didLaunch = true
+        // Retire the previous generation only once this one is actually running:
+        // a launch that threw must leave the old child still able to report its
+        // exit, rather than installing a never-started generation that silently
+        // outranks it. Safe to defer — launch() runs on main and every callback
+        // compares ids on main, so this assignment always lands first.
+        current = gen
+        // New child, new exactly-once exit report.
+        reportedExit = false
         close(aslave)   // parent doesn't use the slave end
     }
 
