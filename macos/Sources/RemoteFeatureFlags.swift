@@ -225,15 +225,14 @@ enum RemoteFeatureFlags {
     }
 
     /// Accept only an integral JSON number — never a Boolean (`true`/`false`
-    /// box as `NSNumber`) or a fractional double.
-    private static func integerValue(_ object: Any) -> Int? {
+    /// box as `NSNumber`) or a fractional/out-of-range double. `Int(exactly:)`
+    /// returns `nil` for fractional and out-of-range values, so `2^63`
+    /// (`Double(Int.max)` rounds up to it) cannot trap.
+    static func integerValue(_ object: Any) -> Int? {
         if object is Bool { return nil }
         if let value = object as? Int { return value }
         if let value = object as? Int64 { return Int(exactly: value) }
-        if let value = object as? Double, value.isFinite, value == value.rounded() {
-            guard value >= Double(Int.min), value <= Double(Int.max) else { return nil }
-            return Int(value)
-        }
+        if let value = object as? Double { return Int(exactly: value) }
         return nil
     }
 }

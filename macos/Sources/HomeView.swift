@@ -32,6 +32,7 @@ struct HomeView: View {
 
     @State private var section: Section = .overview
     @State private var showExplain = false
+    @ObservedObject private var featureFlags = FeatureFlags.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,7 +64,7 @@ struct HomeView: View {
                 Button { withAnimation(.easeOut(duration: 0.14)) { section = s } } label: {
                     HStack(spacing: 5) {
                         Text(NSLocalizedString(s.rawValue, comment: ""))
-                        if s == .tuneup, Telemetry.featureFlagBool(.tuneUpBadge) {
+                        if s == .tuneup, featureFlags.boolValue(.tuneUpBadge) {
                             Circle()
                                 .fill(Tool.tuneup.accent)
                                 .frame(width: 6, height: 6)

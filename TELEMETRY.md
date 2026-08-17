@@ -121,11 +121,12 @@ Sparkle verification, launch recovery, or telemetry consent.
   read the cache or contact PostHog.
 - **Fetched on the background queue.** Flags are fetched from PostHog's
   `POST {host}/decide/?v=3` on the private background telemetry queue — never on
-  a main-run-loop timer. The request carries exactly two fields: `token` (the
-  release-injected project key) and `distinct_id` (the random anonymous id
-  described above). Nothing else is sent. Retries are serialized with the same
-  bounded backoff as event delivery and are re-driven by later product events;
-  permanent rejections re-check no sooner than the cache trust window.
+  a main-run-loop timer. The JSON request body contains exactly two fields:
+  `token` (the release-injected project key) and `distinct_id` (the random
+  anonymous id described above). No additional PostHog payload properties are
+  sent. Retries are serialized with the same bounded backoff as event delivery
+  and are re-driven by later product events; permanent rejections re-check no
+  sooner than the cache trust window.
 - **Exposure events.** When a flag actually gates behavior, Burrow records one
   PostHog `$feature_flag_called` event per flag per launch with
   `$feature_flag` (the allowlisted key) and `$feature_flag_response` (the typed

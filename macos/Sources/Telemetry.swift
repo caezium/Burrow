@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import Combine
 
 enum Telemetry {
 
@@ -227,13 +228,19 @@ enum Telemetry {
         guard let request = featureFlagRequest(using: delivery) else { return }
         flagFetchInFlight = true
 
+        let requestID = UUID()
         deliveries.enter()
         let task = session.dataTask(with: request) { data, response, error in
             let status = (response as? HTTPURLResponse)?.statusCode
             let disposition = deliveryDisposition(statusCode: status, hasTransportError: error != nil)
             workQueue.async {
+                inFlightTasks.removeValue(forKey: requestID)
                 flagFetchInFlight = false
                 defer { deliveries.leave() }
+
+                // A mid-session opt-out must not be overwritten by a request
+                // that was already in flight when the user flipped the switch.
+                guard isEnabled else { return }
 
                 switch disposition {
                 case .delivered:
@@ -253,10 +260,12 @@ enum Telemetry {
                 case .discard:
                     // A permanent rejection cannot be usefully retried; re-check
                     // no sooner than the cache's own trust window.
+                    flagFetchFailures = 0
                     nextFlagFetchAt = Date().addingTimeInterval(RemoteFeatureFlags.maxCacheAge)
                 }
             }
         }
+        inFlightTasks[requestID] = task
         task.resume()
     }
 
@@ -343,6 +352,7 @@ enum Telemetry {
         stateLock.lock()
         flagSnapshot = snapshot
         stateLock.unlock()
+        publishFlagSnapshot(snapshot)
     }
 
     private static func clearFeatureFlagState() {
@@ -353,6 +363,13 @@ enum Telemetry {
         flagFetchInFlight = false
         flagFetchFailures = 0
         nextFlagFetchAt = .distantPast
+        publishFlagSnapshot(.empty)
+    }
+
+    /// Mirrors the evaluation snapshot to the SwiftUI-observable holder on the
+    /// main thread so views re-render when a background refresh lands.
+    private static func publishFlagSnapshot(_ snapshot: RemoteFeatureFlags.Snapshot) {
+        DispatchQueue.main.async { FeatureFlags.shared.update(snapshot) }
     }
 
     // MARK: - Bucketing (never send raw sizes/counts/durations)
@@ -726,5 +743,26 @@ enum Telemetry {
             for: .applicationSupportDirectory,
             in: .userDomainMask
         ).first
+    }
+}
+
+/// SwiftUI-observable holder for the accepted flag snapshot. Telemetry mirrors
+/// every snapshot change here on the main thread (see `publishFlagSnapshot`);
+/// views observe the shared instance so a background refresh re-renders them
+/// instead of leaving a static flag read stale.
+final class FeatureFlags: ObservableObject {
+    static let shared = FeatureFlags()
+
+    @Published private(set) var snapshot: RemoteFeatureFlags.Snapshot = .empty
+
+    func update(_ snapshot: RemoteFeatureFlags.Snapshot) {
+        self.snapshot = snapshot
+    }
+
+    /// Evaluates `key` and records its exposure via `Telemetry`, while reading
+    /// `snapshot` so the calling view also re-renders when the cache refreshes.
+    func boolValue(_ key: RemoteFeatureFlags.Key) -> Bool {
+        _ = snapshot
+        return Telemetry.featureFlagBool(key)
     }
 }
