@@ -11,6 +11,13 @@ final class LocalizationTests: XCTestCase {
     /// most complete one, so it is the reference rather than anything special.
     private static let canonicalLanguage = "zh-Hans"
 
+    /// Core keys a language may legitimately leave identical to English.
+    /// "Software", "Status" and "Updates" are the native spelling in German,
+    /// Spanish and Brazilian Portuguese — forcing a difference here would buy
+    /// the assertion nothing and cost the translation its accuracy. Every
+    /// other core value matching its key is an untranslated string.
+    private static let mayMatchEnglish: Set<String> = ["Software", "Status", "Updates"]
+
     private static let coreInterfaceKeys = [
         "Clean",
         "Software",
@@ -149,7 +156,9 @@ final class LocalizationTests: XCTestCase {
         for key in Self.coreInterfaceKeys {
             let value = try XCTUnwrap(strings[key], "missing \(language) translation for \(key)")
             XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            XCTAssertNotEqual(value, key)
+            if !Self.mayMatchEnglish.contains(key) {
+                XCTAssertNotEqual(value, key, "\(language) leaves \"\(key)\" untranslated")
+            }
         }
     }
 
