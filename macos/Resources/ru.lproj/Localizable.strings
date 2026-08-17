@@ -38,7 +38,7 @@
 "Preview" = "Предпросмотр";
 "Cancel" = "Отмена";
 "Failed: %@" = "Ошибка: %@";
-"%d items · %@" = "%d элементов · %@";
+"%d items · %@" = "элементов: %d · %@";
 "%@ in %d items" = "%@ в %d элементах";
 "Scanning…" = "Сканирование…";
 "Home" = "Главная";
@@ -49,7 +49,7 @@
 /* Status and HUD */
 "Waiting for the first sample…" = "Ожидание первого замера…";
 "Burrow runs `mo status --json` on a timer; the first row lands within a tick." = "Burrow запускает `mo status --json` по таймеру; первая строка появится в течение одного цикла.";
-"%d cores" = "%d ядер";
+"%d cores" = "ядер: %d";
 "load %.2f · %.2f · %.2f" = "нагрузка %.2f · %.2f · %.2f";
 "%.1f / %.1f GB · swap %.1f GB" = "%.1f / %.1f ГБ · своп %.1f ГБ";
 "normal" = "нормально";
@@ -67,7 +67,7 @@
 "AC Power" = "От сети";
 "charging" = "заряжается";
 "%@ left" = "осталось %@";
-"%@ left · %d cyc · %d%% cap" = "осталось %@ · %d циклов · ёмкость %d%%";
+"%@ left · %d cyc · %d%% cap" = "осталось %@ · циклов: %d · ёмкость %d%%";
 "NAME (%d)" = "ИМЯ (%d)";
 "PID" = "PID";
 "MEM" = "ПАМЯТЬ";
@@ -194,21 +194,21 @@
 "Name" = "Имя";
 "Recent" = "Недавние";
 "Source" = "Источник";
-"Uninstall" = "Удалить";
+"Uninstall" = "Удаление";
 "Updates" = "Обновления";
 "Search apps" = "Поиск приложений";
 "Reading installed apps…" = "Чтение установленных приложений…";
-"%d apps" = "%d приложений";
+"%d apps" = "приложений: %d";
 "%d selected · %@" = "выбрано %d · %@";
 "Uninstall (%d)" = "Удалить (%d)";
 "Uninstall %d app?" = "Удалить %d приложение?";
-"Uninstall %d apps?" = "Удалить %d приложений?";
+"Uninstall %d apps?" = "Удалить приложения (%d)?";
 "Move to Trash" = "Переместить в Корзину";
 "Checking Homebrew…" = "Проверка Homebrew…";
 "Everything's up to date" = "Всё обновлено";
 "Homebrew formulae & casks" = "Формулы и casks Homebrew";
 "%d update" = "%d обновление";
-"%d updates" = "%d обновлений";
+"%d updates" = "обновлений: %d";
 "Update all" = "Обновить всё";
 "Updating…" = "Обновление…";
 "Update" = "Обновить";
@@ -267,8 +267,8 @@
 "No samples in this window" = "В этом окне нет замеров";
 "peak across window" = "пик за окно";
 "No processes recorded" = "Процессы не записаны";
-"%d samples" = "%d замеров";
-"· latest %ds ago" = "· последний %d с назад";
+"%d samples" = "замеров: %d";
+"· latest %ds ago" = "· последний замер: %d с назад";
 
 /* Menus and alerts */
 "About Burrow" = "О Burrow";
@@ -319,9 +319,9 @@
 "Top processes in selection" = "Основные процессы в выделении";
 "No process samples in that window." = "В этом окне нет замеров процессов.";
 "Full in ~%@" = "Заполнится примерно через %@";
-"%d days" = "%d дней";
-"%d weeks" = "%d недель";
-"%d months" = "%d месяцев";
+"%d days" = "%d дн.";
+"%d weeks" = "%d нед.";
+"%d months" = "%d мес.";
 "Uncommitted or unpushed git changes in this repo" = "В этом репозитории есть незакоммиченные или незапушенные изменения git";
 "A new startup item appeared" = "Появился новый объект автозапуска";
 "“%@” now launches automatically. If you didn't add it, review it." = "«%@» теперь запускается автоматически. Если вы его не добавляли, проверьте его.";
@@ -354,9 +354,9 @@
 "Show menu bar icon" = "Показывать значок в строке меню";
 
 /* Tools — purge / installer labels + taglines */
-"purge" = "очистка";
+"purge" = "глубокая очистка";
 "installer" = "установщики";
-"Purge" = "Очистка";
+"Purge" = "Глубокая очистка";
 "Installers" = "Установщики";
 "Clear the diggings dev work leaves behind." = "Убери следы, которые оставляет работа разработчика.";
 "Sweep out the crates you unpacked." = "Вымети ящики, которые ты распаковал.";
@@ -406,7 +406,7 @@
 "What's my Mac's CPU and memory usage right now?" = "Какова сейчас загрузка CPU и памяти моего Mac?";
 "What's taking up space in my home folder?" = "Что занимает место в моей домашней папке?";
 "AI read of one snapshot — it can be wrong, and never acts on its own." = "ИИ читает один снимок — он может ошибаться и никогда не действует самостоятельно.";
-"Adds an “Explain” button to Status that reads your latest snapshot and explains it in plain English, optionally suggesting Clean/Purge/Installers." = "Добавляет кнопку «Объяснить» на страницу «Статус»: она читает последний снимок и объясняет его простым языком, при необходимости предлагая Очистку/Очистку/Установщики.";
+"Adds an “Explain” button to Status that reads your latest snapshot and explains it in plain English, optionally suggesting Clean/Purge/Installers." = "Добавляет кнопку «Объяснить» на страницу «Статус»: она читает последний снимок и объясняет его простым языком, при необходимости предлагая Очистку/Глубокую очистку/Установщики.";
 "Burrow exposes your Mac's recorded history to coding agents — Claude Code, Cursor, Codex, Cline — over MCP. Add the config below, then ask in plain language. The server starts on demand over stdio; there's no port and no always-on listener." = "Burrow открывает записанную историю вашего Mac агентам разработки — Claude Code, Cursor, Codex, Cline — через MCP. Добавьте конфигурацию ниже и спрашивайте простым языком. Сервер запускается по требованию через stdio; нет ни порта, ни постоянно работающего слушателя.";
 "OFF by default. Agents can always read metrics and run dry-run previews. With this on, an agent can run a real `mo clean` / `optimize` / `uninstall` — but ONLY when it also passes an explicit confirm flag, so a deletion is never one stray sentence away. Turn it off and agents are read-only again. Data stays on this Mac." = "По умолчанию ВЫКЛ. Агенты всегда могут читать метрики и выполнять предпросмотр (dry-run). Если включить, агент сможет выполнить настоящие `mo clean` / `optimize` / `uninstall` — но ТОЛЬКО если дополнительно передаст явный флаг подтверждения, так что удаление никогда не случится от одной случайной фразы. Выключите — и агенты снова только читают. Данные остаются на этом Mac.";
 "Runs against a local Ollama model — nothing leaves this Mac. Start it with `ollama run <model>`." = "Работает с локальной моделью Ollama — ничто не покидает этот Mac. Запустите её командой `ollama run <model>`.";
@@ -549,7 +549,7 @@
 "Burrow is free." = "Burrow бесплатен.";
 "Open source, local-first. No license, no trial, no upsell." = "Открытый исходный код, локальные данные. Без лицензии, без пробного периода, без допродаж.";
 "forever" = "навсегда";
-"Every tool unlocked — Clean, Purge, Installers, Software, Optimize, Analyze" = "Все инструменты разблокированы — Очистка, Очистка, Установщики, Программы, Оптимизация, Анализ";
+"Every tool unlocked — Clean, Purge, Installers, Software, Optimize, Analyze" = "Все инструменты разблокированы — Очистка, Глубокая очистка, Установщики, Программы, Оптимизация, Анализ";
 "Watches your Mac over weeks, not seconds — 30–90 day history" = "Наблюдает за вашим Mac неделями, а не секундами — история за 30–90 дней";
 "Agent-ready — MCP tools for Claude, Cursor, Codex (off until you opt in)" = "Готов к агентам — инструменты MCP для Claude, Cursor, Codex (выключены, пока вы не включите)";
 "Open source — read every line" = "Открытый исходный код — читайте каждую строку";
@@ -583,12 +583,12 @@
 "The scan is more than a few minutes old — caches that appeared since wouldn't have been reviewed. Rescan to get current numbers, then clean." = "Сканированию уже несколько минут — кэши, появившиеся с тех пор, не были проверены. Пересканируйте, чтобы получить актуальные цифры, затем очищайте.";
 "Couldn't protect deselected items" = "Не удалось защитить снятые с выбора элементы";
 "Writing the whitelist failed (%@), so the engine would clean everything it found. Nothing was cleaned." = "Не удалось записать белый список (%@), поэтому движок очистил бы всё, что найдёт. Ничего не было очищено.";
-"Move %d items (%@) to the Trash?" = "Переместить %1$d элементов (%2$@) в Корзину?";
+"Move %d items (%@) to the Trash?" = "Переместить элементы (%1$d, %2$@) в Корзину?";
 "They stay recoverable until you empty the Trash. Space frees when it empties; this run won't appear in `mo history`." = "Они остаются восстанавливаемыми, пока вы не очистите Корзину. Место освобождается при её очистке; этот запуск не появится в `mo history`.";
 "Moving caches to Trash" = "Перемещение кэшей в Корзину";
 "%d moved · %d failed" = "перемещено: %1$d · не удалось: %2$d";
-"Moved %d items (%@) to the Trash." = "Перемещено %1$d элементов (%2$@) в Корзину.";
-"Moved %d items; %d were locked or already gone." = "Перемещено %1$d элементов; %2$d были заблокированы или уже отсутствовали.";
+"Moved %d items (%@) to the Trash." = "Перемещено в Корзину элементов: %1$d (%2$@).";
+"Moved %d items; %d were locked or already gone." = "Перемещено элементов: %1$d; заблокированы или уже отсутствуют: %2$d.";
 "Moved to Trash" = "Перемещено в Корзину";
 "Freed %@" = "Освобождено %@";
 "Cleaned %@" = "Очищено %@";
@@ -598,14 +598,14 @@
 
 /* Clean — review screen */
 "Ready to clean" = "Готово к очистке";
-"Close %@ to clean another %@ · %d items" = "Закройте %1$@, чтобы очистить ещё %2$@ · %3$d элементов";
+"Close %@ to clean another %@ · %d items" = "Закройте %1$@, чтобы очистить ещё %2$@ · элементов: %3$d";
 "Everything below came from the scan — untick anything you'd rather keep." = "Всё ниже взято из сканирования — снимите отметку с того, что хотите сохранить.";
 "Back to results" = "Назад к результатам";
 "Select all" = "Выбрать все";
 "Deselect all" = "Снять выбор со всех";
 "%@, %d of %d selected, %@ of %@" = "%1$@, выбрано %2$d из %3$d, %4$@ из %5$@";
 "Toggle category" = "Переключить категорию";
-"%d items" = "%d элементов";
+"%d items" = "элементов: %d";
 "Safe" = "Безопасно";
 "App open" = "Приложение открыто";
 "System busy" = "Система занята";
@@ -652,7 +652,7 @@
 "Sort by %@" = "Сортировать по %@";
 "ascending" = "по возрастанию";
 "descending" = "по убыванию";
-"%d files · %@" = "%1$d файлов · %2$@";
+"%d files · %@" = "файлов: %1$d · %2$@";
 "Select %@" = "Выбрать %@";
 "Enumerating files…" = "Перечисление файлов…";
 "Auto selected" = "Выбрано автоматически";
@@ -670,17 +670,17 @@
 "Temporary Cache" = "Временный кэш";
 "Other" = "Другое";
 "%@ · 1 app · %@" = "%1$@ · 1 приложение · %2$@";
-"%d apps · %@" = "%1$d приложений · %2$@";
+"%d apps · %@" = "приложений: %1$d · %2$@";
 "Remove %d" = "Удалить %d";
 "Remove %d app?" = "Удалить %d приложение?";
-"Remove %d apps?" = "Удалить %d приложений?";
+"Remove %d apps?" = "Удалить приложения (%d)?";
 "These move to the Trash — the app itself and the support files it keeps in your Library (containers, caches, preferences, saved state). You can put them back:\n\n%@" = "Это переместит в Корзину — само приложение и вспомогательные файлы, которые оно хранит в вашей Библиотеке (контейнеры, кэши, настройки, сохранённое состояние). Вы можете вернуть их:\n\n%@";
 "Homebrew removes these by running `brew uninstall --cask --zap`. That doesn't use the Trash, and `--zap` also deletes configuration and data the cask declares — more than the file list can show:\n\n%@" = "Homebrew удалит их, выполнив `brew uninstall --cask --zap`. Это не использует Корзину, а `--zap` также удаляет конфигурацию и данные, заявленные cask — больше, чем может показать список файлов:\n\n%@";
 "If an app can't be removed, Burrow leaves its support files alone too, rather than half-removing it." = "Если приложение не может быть удалено, Burrow также оставляет его вспомогательные файлы нетронутыми, а не удаляет его наполовину.";
 "Skipped — these have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@" = "Пропущено — у них нет идентификатора пакета, поэтому Burrow не может сообщить движку, какое приложение имеется в виду:\n\n%@";
 "Nothing Burrow can remove" = "Burrow нечего удалять";
 "These have no bundle identifier, so Burrow can't tell the engine which app it means:\n\n%@" = "У них нет идентификатора пакета, поэтому Burrow не может сообщить движку, какое приложение имеется в виду:\n\n%@";
-"%d reviewed files" = "%d проверенных файлов";
+"%d reviewed files" = "проверенных файлов: %d";
 "Reviewed subsets are trashed by Burrow directly and appear in Burrow's Activity log, not `mo history`." = "Проверенные подмножества Burrow перемещает в Корзину напрямую, и они появляются в журнале активности Burrow, а не в `mo history`.";
 "Removing reviewed files" = "Удаление проверенных файлов";
 
@@ -799,12 +799,12 @@
 "Wipe away — press Esc when you're done." = "Протрите — нажмите Esc, когда закончите.";
 
 /* Status dashboard */
-"%d fans" = "%d вентиляторов";
+"%d fans" = "вентиляторов: %d";
 "macOS manages speed" = "macOS управляет скоростью";
 "No fan data on this Mac" = "Нет данных о вентиляторах на этом Mac";
 "Fan" = "Вентилятор";
 "%d%% Health" = "Состояние %d%%";
-"%d cyc" = "%d циклов";
+"%d cyc" = "циклов: %d";
 "Mac" = "Mac";
 "%d percent" = "%d процентов";
 "PWR" = "ЭНЕРГИЯ";

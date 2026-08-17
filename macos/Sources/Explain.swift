@@ -184,14 +184,16 @@ struct ExplainResult: Equatable {
 // MARK: - Prompt
 
 enum ExplainPrompt {
-    /// The Chinese variant of the running UI language, if any
-    /// ("zh-Hans" / "zh-Hant", explicit override or system).
-    static func chineseVariant() -> String? {
+    /// The non-English UI language the reply should be written in, if any
+    /// ("zh-Hans" / "zh-Hant" / "ru", explicit override or system). `nil`
+    /// means the UI is English and the model answers in English.
+    static func replyLanguage() -> String? {
         switch Store.appLanguage {
-        case "zh-Hans", "zh-Hant": return Store.appLanguage
-        case "en":                 return nil
+        case "zh-Hans", "zh-Hant", "ru": return Store.appLanguage
+        case "en":                       return nil
         default:
             let lang = Bundle.main.preferredLocalizations.first ?? Locale.current.identifier
+            if lang.hasPrefix("ru") { return "ru" }
             guard lang.hasPrefix("zh") else { return nil }
             let traditional = lang.contains("Hant") || lang.contains("TW") || lang.contains("HK") || lang.contains("MO")
             return traditional ? "zh-Hant" : "zh-Hans"
@@ -200,11 +202,13 @@ enum ExplainPrompt {
 
     static func make(_ ctx: ExplainContext) -> (system: String, user: String) {
         let language: String
-        switch chineseVariant() {
+        switch replyLanguage() {
         case "zh-Hans":
             language = "\n\nWrite the explanation in Simplified Chinese (简体中文). Keep the final ACTION line exactly as specified, in English."
         case "zh-Hant":
             language = "\n\nWrite the explanation in Traditional Chinese as used in Taiwan (繁體中文，台灣用語). Keep the final ACTION line exactly as specified, in English."
+        case "ru":
+            language = "\n\nWrite the explanation in Russian (русский). Keep the final ACTION line exactly as specified, in English."
         default:
             language = ""
         }
