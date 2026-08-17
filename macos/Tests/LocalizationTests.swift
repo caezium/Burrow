@@ -101,12 +101,15 @@ final class LocalizationTests: XCTestCase {
         }
     }
 
-    /// `AppLanguage.all` and the `.lproj` folders in the bundle have to agree
-    /// in both directions. A row without a table ships a picker entry that
-    /// silently renders English; a table without a row ships a translation no
-    /// one can select. Neither fails anywhere else.
+    /// `AppLanguage.translated` and the `.lproj` folders in the bundle have to
+    /// agree in both directions. A row without a table ships a picker entry
+    /// that silently renders English; a table without a row ships a
+    /// translation no one can select. Neither fails anywhere else.
+    ///
+    /// English is compared out: its strings *are* the keys, so it ships no
+    /// table and never will.
     func testShippedLanguagesMatchTheBundle() throws {
-        let declared = Set(AppLanguage.all.map(\.code))
+        let declared = Set(AppLanguage.translated.map(\.code))
         let bundled = Set(
             (Bundle.main.urls(forResourcesWithExtension: "lproj", subdirectory: nil) ?? [])
                 .map { $0.deletingPathExtension().lastPathComponent }

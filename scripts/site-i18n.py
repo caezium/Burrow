@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Generate the landing site's translated pages from the English source.
 
-The English pages under docs/ stay the only hand-written ones. This script
-walks them, pulls out every user-visible string, and writes the translated
-copies to docs/<lang>/. Nothing under docs/<lang>/ is ever edited by hand —
-it is build output, and editing the English page and re-running is the only
-way to change it.
+The English pages are rendered by scripts/site-release.py from JSON. This
+script reads them, pulls out every user-visible string, and writes the
+translated copies to docs/<lang>/. Nothing under docs/<lang>/ is ever edited by
+hand — it is build output.
+
+Run order matters: site-release.py first (it owns the English pages, their
+language picker and their hreflang links), then this. Running it the other way
+round leaves the copies rendered from a stale English source.
 
 That is the whole point: five hand-maintained copies per language would go
 stale on the first copy edit and nothing would notice. Here a new English
@@ -154,9 +157,8 @@ def strings_in(src):
 def render(src, table, lang, page_name="index.html"):
     """The English page with every known string swapped for its translation.
 
-    English passes through here too, with an empty table: it still needs the
-    switcher and the hreflang block, and generating them the same way keeps
-    the ten copies from disagreeing about what languages exist.
+    The English pages are rendered by site-release.py, picker and alternates
+    included; this only ever writes docs/<lang>/.
     """
     out, cursor = [], 0
     for start, end, kind, payload in slots(src):
@@ -299,20 +301,17 @@ def main():
         return 0
 
     stale, missing_total = [], {}
-    for code in ["en", *LANGUAGES]:
-        if code == "en":
-            table = {}
-        else:
-            path = CATALOGS / f"{code}.json"
-            if not path.exists():
-                print(f"no catalog for {code} — run --extract", file=sys.stderr)
-                return 1
-            table = {k: v for k, v in
-                     json.loads(path.read_text(encoding="utf-8")).items() if v}
-            missing_total[code] = len(wanted) - len(table)
+    for code in LANGUAGES:
+        path = CATALOGS / f"{code}.json"
+        if not path.exists():
+            print(f"no catalog for {code} — run --extract", file=sys.stderr)
+            return 1
+        table = {k: v for k, v in
+                 json.loads(path.read_text(encoding="utf-8")).items() if v}
+        missing_total[code] = len(wanted) - len(table)
         for name, src in sources.items():
             page = render(src, table, code, name)
-            out = (DOCS / name) if code == "en" else (DOCS / code / name)
+            out = DOCS / code / name
             if args.check:
                 if not out.exists() or out.read_text(encoding="utf-8") != page:
                     stale.append(f"{code}/{name}")
