@@ -249,6 +249,12 @@ final class PTYTask: PTYPort {
         let proc = Process()
         launchCount &+= 1
         let gen = Generation(id: launchCount, child: proc)
+        // Don't depend on the caller having terminated first. A relaunch over a
+        // live `master` would otherwise leave its read handler armed, and the
+        // dispatch source holding that handler keeps the FileHandle alive — so
+        // its fd would never close. Generation tagging already makes a late
+        // delivery harmless; this is about the descriptor, not correctness.
+        master?.readabilityHandler = nil
         var amaster: Int32 = 0
         var aslave: Int32 = 0
         var ws = winsize(ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0)
@@ -334,7 +340,9 @@ final class PTYTask: PTYPort {
     /// caller (issue #73 / Sentry BURROW-D: the 0.06 s selection-replay tick
     /// runs on the main queue). The serial queue preserves keystroke order;
     /// the captured handle keeps the fd alive for an in-flight write even if
-    /// `terminate()` clears `master` underneath it. The master fd is otherwise
+    /// `master` is swapped out underneath it — by a relaunch, or dropped by a
+    /// failed one. (`terminate()` only disarms the read handler; it leaves the
+    /// handle itself in place.) The master fd is otherwise
     /// only touched by the FileHandle read handler, and read/write on a pty are
     /// independent directions, so there's no fd race.
     private let writeQueue = DispatchQueue(label: "dev.caezium.burrow.pty-write")

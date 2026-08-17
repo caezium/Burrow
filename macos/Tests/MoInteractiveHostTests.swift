@@ -82,7 +82,7 @@ final class MoInteractiveHostTests: XCTestCase {
     /// list as "nothing to remove", the rescan collapsed straight to `.done`.
     /// `/bin/cat` stands in for `mo` at the selection screen: it holds the pty
     /// open and never exits on its own, so any exit seen here is the old one's.
-    func testPTYTask_relaunchWhileRunning_doesNotReportTheOldChildsExit() {
+    func testPTYTask_relaunchWhileRunning_doesNotReportTheOldChildsExit() throws {
         let pty = PTYTask()
 
         // First child up and running (it echoes, which proves the pty is live).
@@ -91,7 +91,7 @@ final class MoInteractiveHostTests: XCTestCase {
         // back, so "ready" can arrive in one read or two.
         greeted.assertForOverFulfill = false
         pty.onOutput = { if $0.contains("ready") { greeted.fulfill() } }
-        try? pty.launch("/bin/cat", [])
+        try pty.launch("/bin/cat", [])
         pty.send(Array("ready\n".utf8))
         wait(for: [greeted], timeout: 5)
 
@@ -99,10 +99,16 @@ final class MoInteractiveHostTests: XCTestCase {
         // down and relaunch, synchronously, on main.
         let stale = expectation(description: "no exit is reported for the new child")
         stale.isInverted = true
-        pty.onOutput = { _ in }
+        // An absent exit also "passes" when the second child never started, so
+        // prove this one is live before reading anything into that silence.
+        let relaunched = expectation(description: "second child is running")
+        relaunched.assertForOverFulfill = false
+        pty.onOutput = { if $0.contains("again") { relaunched.fulfill() } }
         pty.onExit = { _ in stale.fulfill() }
         pty.terminate()
-        try? pty.launch("/bin/cat", [])
+        try pty.launch("/bin/cat", [])
+        pty.send(Array("again\n".utf8))
+        wait(for: [relaunched], timeout: 5)
 
         // The second `cat` is still alive, so a fired onExit can only be the
         // first child's SIGTERM leaking across the relaunch.
