@@ -75,6 +75,56 @@ final class MoInteractiveHostTests: XCTestCase {
         wait(for: [second], timeout: 5)
     }
 
+    /// Regression: a rescan from the chooser terminates a child that is still
+    /// ALIVE, and that child's exit is reported asynchronously — after `launch()`
+    /// has already armed a fresh one. Untagged, the dead child's SIGTERM arrived
+    /// as the new scan's exit, and because the reducer reads an exit-before-any-
+    /// list as "nothing to remove", the rescan collapsed straight to `.done`.
+    /// `/bin/cat` stands in for `mo` at the selection screen: it holds the pty
+    /// open and never exits on its own, so any exit seen here is the old one's.
+    func testPTYTask_relaunchWhileRunning_doesNotReportTheOldChildsExit() {
+        let pty = PTYTask()
+
+        // First child up and running (it echoes, which proves the pty is live).
+        let greeted = expectation(description: "first child is running")
+        // The pty's own line discipline echoes the write and `cat` prints it
+        // back, so "ready" can arrive in one read or two.
+        greeted.assertForOverFulfill = false
+        pty.onOutput = { if $0.contains("ready") { greeted.fulfill() } }
+        try? pty.launch("/bin/cat", [])
+        pty.send(Array("ready\n".utf8))
+        wait(for: [greeted], timeout: 5)
+
+        // Exactly what InstallerView.start() does on Rescan: tear the old child
+        // down and relaunch, synchronously, on main.
+        let stale = expectation(description: "no exit is reported for the new child")
+        stale.isInverted = true
+        pty.onOutput = { _ in }
+        pty.onExit = { _ in stale.fulfill() }
+        pty.terminate()
+        try? pty.launch("/bin/cat", [])
+
+        // The second `cat` is still alive, so a fired onExit can only be the
+        // first child's SIGTERM leaking across the relaunch.
+        wait(for: [stale], timeout: 2)
+        pty.onExit = nil        // the teardown SIGTERM must not fulfil a settled expectation
+        pty.terminate()
+    }
+
+    /// The other half of the same guarantee: retiring the old generation must not
+    /// cost the NEW child its own exit report.
+    func testPTYTask_relaunchWhileRunning_stillReportsTheNewChildsExit() {
+        let pty = PTYTask()
+        pty.onOutput = { _ in }
+        try? pty.launch("/bin/cat", [])
+
+        let exited = expectation(description: "the new child's exit is reported")
+        pty.onExit = { _ in exited.fulfill() }
+        pty.terminate()
+        try? pty.launch("/bin/echo", ["done"])   // prints, then exits → pty EOF
+        wait(for: [exited], timeout: 5)
+    }
+
     func testHost_scanSelectConfirm_drivesKeystrokesAndFinishes() {
         let fake = FakePTY()
         // Large tick interval so the real timer never fires; we step manually.
