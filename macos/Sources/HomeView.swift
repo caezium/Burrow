@@ -61,12 +61,19 @@ struct HomeView: View {
             ForEach(Section.allCases) { s in
                 let on = s == section
                 Button { withAnimation(.easeOut(duration: 0.14)) { section = s } } label: {
-                    Text(NSLocalizedString(s.rawValue, comment: ""))
-                        .font(Brand.mono(12, on ? .semibold : .regular))
-                        .foregroundStyle(on ? Brand.base : Brand.textSecondary)
-                        .padding(.horizontal, 12).padding(.vertical, 5)
-                        .background { if on { Capsule().fill(Brand.textPrimary) } }
-                        .contentShape(Capsule())
+                    HStack(spacing: 5) {
+                        Text(NSLocalizedString(s.rawValue, comment: ""))
+                        if s == .tuneup, Telemetry.featureFlagBool(.tuneUpBadge) {
+                            Circle()
+                                .fill(Tool.tuneup.accent)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                    .font(Brand.mono(12, on ? .semibold : .regular))
+                    .foregroundStyle(on ? Brand.base : Brand.textSecondary)
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .background { if on { Capsule().fill(Brand.textPrimary) } }
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
