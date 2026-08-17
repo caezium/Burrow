@@ -1,0 +1,76 @@
+# Localization
+
+Burrow's macOS app ships ten languages. This is how they stay correct.
+
+## The rules, in one place
+
+1. **`AppLanguage.all` is the only list.** `macos/Sources/AppLanguage.swift` holds one row per language — code, endonym, and how to name the language to the Explain model. The Settings picker, the Explain prompt and the tests all read it. Adding a language is one row plus one `.strings` file; if you find yourself editing a third place, something has drifted.
+2. **`zh-Hans` is the canonical table.** Every other table must translate exactly its key set — no more, no fewer. It holds that role because it is the oldest and most complete, not because Simplified Chinese is special.
+3. **The key is the English string.** There is no separate English table; `NSLocalizedString("Clean")` falls back to `Clean`. This is why editing English copy is never a one-file change (see below).
+4. **Never translate a format specifier.** `%@`, `%d`, `%lld`, `%.1f` and `%%` survive verbatim. If the target language needs a different word order, reorder with positional specifiers (`%2$d … %1$@`) rather than moving the bare ones — moving them rebinds each conversion to the wrong argument, which is a runtime crash or garbage, not a compile error.
+5. **The `ACTION:` line in the Explain prompt stays English in every language.** It is a control token matched against `ExplainSuggestion`'s raw values and then dropped, so nobody reads it; translating it silently costs the user the action button.
+
+## Adding a language
+
+1. Add a row to `AppLanguage.all`. Put the endonym in its own language — a picker offering "German" to a German speaker labels the one option they can already read.
+2. Create `macos/Resources/<code>.lproj/Localizable.strings` with every key from `zh-Hans`, in the same order, keeping the section comments. XcodeGen picks the folder up automatically; no project change is needed.
+3. Run the test suite. Four tests gate the result, described below.
+4. Add the language to the README's Settings table.
+
+## What CI checks — and what it cannot
+
+`macos/Tests/LocalizationTests.swift` enforces four things across every language automatically, so none of them need a per-language test:
+
+- **Key parity** with the canonical table, both directions.
+- **Core interface coverage** — the tabs, the consent dialog and the destructive-action gates must never fall back to English.
+- **Format-argument survival**, honouring positional reordering.
+- **`AppLanguage.all` matches the shipped `.lproj` folders**, both directions. A row without a table ships a picker entry that silently renders English; a table without a row ships a translation nobody can select.
+
+What no test can tell you is whether a translation is *correct*. Key parity proves a string is present, not that it says the right thing — the Russian table shipped with `Clean` and `Purge` both rendered as "Очистка", two different tools under one name, and every test passed. **A new language needs a native speaker to read it before it ships.**
+
+### Translation status
+
+| Language | Code | Reviewed by a native speaker |
+| --- | --- | --- |
+| 简体中文 | `zh-Hans` | yes |
+| 繁體中文 | `zh-Hant` | yes |
+| Русский | `ru` | contributed by a speaker, machine-corrected since |
+| 日本語 | `ja` | **not yet** |
+| Deutsch | `de` | **not yet** |
+| Français | `fr` | **not yet** |
+| Español | `es` | **not yet** |
+| 한국어 | `ko` | **not yet** |
+| Português (Brasil) | `pt-BR` | **not yet** |
+
+Rows marked "not yet" are machine-drafted. They are structurally sound — parity, format specifiers and coverage are all enforced — but the wording has not been read by a speaker. Fixing one is a welcome first contribution: correct the `.strings` file and flip the row.
+
+## Editing English copy
+
+Changing an English string changes the key, which orphans that key in all nine tables at once and fails the parity test. That is deliberate: it is what stops a copy edit from silently leaving nine stale translations behind. The fix is to update every table in the same commit.
+
+The corollary is that **each language is a permanent tax on every copy change**, which is the real argument for restraint. Add a language because someone asked for it and will help maintain it, not to fill in a matrix.
+
+There is one gap this does not cover: a new `NSLocalizedString` in Swift that never reaches any table passes CI and just renders English. Nothing enforces that today.
+
+## Plurals
+
+Russian, Ukrainian, Polish, Czech, Arabic and Hebrew agree the counted noun with the number across three to six forms. Burrow's tables cannot express that: the scheme is two keys (`"%d update"` / `"%d updates"`), which covers exactly the languages with two forms.
+
+**A `.stringsdict` does not currently fix this.** Foundation resolves plural rules from the locale passed to the format call, and all 252 `String(format:)` call sites in the app pass none — so it applies English rules and renders "5 приложения". Adding a stringsdict would move the breakage rather than remove it.
+
+So languages in this family use count-neutral phrasing, which is grammatical at every number:
+
+```
+"%d apps" = "приложений: %d";        /* not "%d приложений" — wrong for 2-4 */
+"Remove %d apps?" = "Удалить приложения (%d)?";
+```
+
+To fix this properly, thread `locale: .current` through those call sites first; then a stringsdict becomes the right answer and the workaround can be unwound.
+
+## Languages by cost
+
+Popularity is not what makes a language expensive — its plural rules are.
+
+- **Free** (no number-noun agreement): Japanese, Korean, Chinese, Vietnamese, Thai. The two-key scheme is already more than these need.
+- **Cheap** (two forms, aligned with English): German, French, Spanish, Italian, Dutch, Portuguese.
+- **Blocked on the plural work above**: Russian (shipped with the workaround), Ukrainian, Polish, Czech, Arabic, Hebrew.
