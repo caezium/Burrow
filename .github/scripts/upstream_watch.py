@@ -44,17 +44,22 @@ DRY_RUN = False
 # would linkify in code spans (GitHub does not link or notify inside code), and
 # fold issue/PR/discussion URLs down to a plain `owner/repo#N` ref.
 
-# A fenced block runs to a closer of the same character, at least as long -- a
-# ``` line does not close a ~~~ block. An inline span may wrap across a line but
-# not across a blank line, matching how GitHub itself parses one: if we treated a
-# stray backtick pair as code across a paragraph break, a live mention inside it
-# would slip through untouched.
-CODE_SPAN = r"`+(?:[^`\n]|\n(?![ \t]*\n))*`+"
+# Regions we pass through untouched. Erring wide here is not safe: anything we
+# treat as code but GitHub does not is a live mention we skipped, so each shape
+# is matched the way GitHub parses it. A fenced block closes only on a run of
+# its own character, at least as long -- a ``` line does not close a ~~~ block.
+# An inline span closes on a run of equal length, and may wrap across a line but
+# not across a blank line. An e-mail address is passed through whole, which is
+# what stops us mangling a local part that ends in punctuation (ops+@x.com,
+# o'brien'@x.com) without having to guess at every character one may end with.
+FENCE = r"^[ \t]*(?P<fence>(?P<fchar>[`~])(?P=fchar){2,})[^\n]*$"
+CODE_SPAN = r"(?P<tick>`+)(?:[^`\n]|\n(?![ \t]*\n))*(?P=tick)(?!`)"
+EMAIL = r"(?<![@\w])[\w.!#$%&'*+/=?^{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9-]+)+"
 PROTECTED_RE = re.compile(
-    r"(?ms)^[ \t]*(?P<fence>`{3,}|~{3,})[^\n]*$.*?(?:^[ \t]*(?P=fence)[`~]*[ \t]*$|\Z)"
-    r"|" + CODE_SPAN
+    r"(?ms)" + FENCE + r".*?(?:^[ \t]*(?P=fence)(?P=fchar)*[ \t]*$|\Z)"
+    r"|" + CODE_SPAN + r"|" + EMAIL
 )
-MENTION_RE = re.compile(r"(?<![\w`/@!+.%-])@([A-Za-z0-9][A-Za-z0-9-]{0,38}(?:/[A-Za-z0-9._-]+)?)")
+MENTION_RE = re.compile(r"(?<![\w`/@])@([A-Za-z0-9][A-Za-z0-9-]{0,38}(?:/[A-Za-z0-9._-]+)?)")
 ISSUE_REF_RE = re.compile(r"(?<![\w`/#&-])((?:[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*)?#\d+)\b")
 ISSUE_URL = (r"https?://(?:www\.)?github\.com/([A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*)"
              r"/(?:issues|pull|discussions)/(\d+)(?:/[A-Za-z0-9._-]+)*(?:[#?][^\s)\]]*)?")
