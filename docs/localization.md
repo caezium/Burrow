@@ -74,3 +74,51 @@ Popularity is not what makes a language expensive — its plural rules are.
 - **Free** (no number-noun agreement): Japanese, Korean, Chinese, Vietnamese, Thai. The two-key scheme is already more than these need.
 - **Cheap** (two forms, aligned with English): German, French, Spanish, Italian, Dutch, Portuguese.
 - **Blocked on the plural work above**: Russian (shipped with the workaround), Ukrainian, Polish, Czech, Arabic, Hebrew.
+
+## The landing site
+
+The site is localized by a different mechanism than the app, for the same
+reason: nine hand-maintained copies of five pages would go stale on the first
+copy edit and nothing would catch it.
+
+`scripts/site-i18n.py` rebuilds every copy from the English page plus a string
+catalog. **The English pages under `docs/` are the only hand-written ones** —
+everything under `docs/<lang>/` is build output, and editing it directly is
+wasted work that the next run overwrites.
+
+```bash
+python3 scripts/site-i18n.py --extract   # pull new English strings into the catalogs
+python3 scripts/site-i18n.py             # rebuild docs/<lang>/*.html
+python3 scripts/site-i18n.py --check     # CI: fail if any copy has drifted
+```
+
+Three things follow from generating rather than copying:
+
+- **An untranslated string falls back to English on its own.** The catalogs hold
+  every string with `""` for the ones nobody has done yet; the renderer skips
+  those, so a page is never blocked on being finished. This is why a partly
+  translated site is safe to ship.
+- **Editing English copy is a one-file change again.** Re-run the script and all
+  nine copies follow. The new string arrives in the catalogs as untranslated.
+- **The picker, the `hreflang` alternates, the canonical URLs and the sitemap
+  rows are generated too**, so the ten copies cannot disagree about which
+  languages exist.
+
+`--check` runs in the compliance job, so a copy edit that skips the regenerate
+step fails CI rather than shipping ten pages that disagree.
+
+### Site translation status
+
+`index.html` is the page a non-English visitor uses to decide whether to
+download, so it is translated first. Everything else renders English until its
+catalog is filled — which is a working site, not a broken one.
+
+| | index | docs | compare | roadmap | releases |
+| --- | --- | --- | --- | --- | --- |
+| 日本語 | done | — | — | — | — |
+| the other eight | — | — | — | — | — |
+
+`releases.html` is worth a deliberate decision rather than a default: it is 513
+of the site's 824 strings, it is generated from `releases.json` on every
+release, and each release adds more untranslated strings forever. Translating a
+changelog may not be worth that treadmill.
