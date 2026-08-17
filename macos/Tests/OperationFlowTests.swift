@@ -84,6 +84,81 @@ final class OperationFlowTests: XCTestCase {
 
     // MARK: Tests
 
+    func testFeatureFailureCategoryUsesBoundedExitTaxonomy() {
+        XCTAssertEqual(
+            FeatureOperationFailurePolicy.category(
+                forExitCode: ElevatedExitCode.boundaryCheckFailed,
+                elevated: true,
+                isCleanup: true
+            ),
+            .boundaryChanged
+        )
+        for code in [
+            ElevatedExitCode.logSinkUnavailable,
+            ElevatedExitCode.executableRefused,
+            ElevatedExitCode.launchFailed,
+        ] {
+            XCTAssertEqual(
+                FeatureOperationFailurePolicy.category(
+                    forExitCode: code,
+                    elevated: true,
+                    isCleanup: false
+                ),
+                .privilegedLaunchRefused
+            )
+        }
+        XCTAssertEqual(
+            FeatureOperationFailurePolicy.category(
+                forExitCode: 1,
+                elevated: true,
+                isCleanup: false
+            ),
+            .engineNonzero
+        )
+        XCTAssertEqual(
+            FeatureOperationFailurePolicy.category(
+                forExitCode: ElevatedExitCode.boundaryCheckFailed,
+                elevated: true,
+                isCleanup: false
+            ),
+            .engineNonzero,
+            "an engine exit must not be mistaken for a changed reviewed-clean boundary"
+        )
+        XCTAssertEqual(
+            FeatureOperationFailurePolicy.category(
+                forExitCode: ElevatedExitCode.executableRefused,
+                elevated: false,
+                isCleanup: false
+            ),
+            .engineNonzero,
+            "unprivileged commands cannot produce privileged-wrapper refusals"
+        )
+        XCTAssertEqual(FeatureOperationFailureCategory.boundaryChanged.rawValue, "boundary_changed")
+        XCTAssertEqual(
+            FeatureOperationFailureCategory.privilegedLaunchRefused.rawValue,
+            "privileged_launch_refused"
+        )
+        XCTAssertEqual(FeatureOperationFailureCategory.engineNonzero.rawValue, "engine_nonzero")
+    }
+
+    func testFeatureCompletionTelemetryIncludesFailureCategoryOnlyForFailures() {
+        let failed = FeatureOperationTelemetry.completionProperties(
+            feature: "clean",
+            result: "failed",
+            duration: 1,
+            failureCategory: .boundaryChanged
+        )
+        XCTAssertEqual(failed["failure_category"] as? String, "boundary_changed")
+
+        let succeeded = FeatureOperationTelemetry.completionProperties(
+            feature: "clean",
+            result: "succeeded",
+            duration: 1,
+            failureCategory: nil
+        )
+        XCTAssertNil(succeeded["failure_category"])
+    }
+
     func testGate_blocksWithoutFDAThenGrantRuns() async throws {
         let port = FakeProcessPort(script: Self.cannedClean)
         var fda = false
@@ -224,7 +299,9 @@ final class OperationFlowTests: XCTestCase {
         let center = OperationCenter()
         let flow = makeFlow(port, center: center)
         var operation = Self.cleanOp(elevated: true)
+        operation.executable = .path("/usr/bin/find")
         operation.cleanupPlan = plan
+        XCTAssertEqual(FeatureOperationTelemetry.feature(for: operation), "clean")
         flow.start(operation)
         await settle(flow)
 

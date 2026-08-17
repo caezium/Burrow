@@ -49,6 +49,59 @@ protocol ProcessPort: Sendable {
     func events(_ spec: ProcessSpec) -> AsyncStream<ProcessEvent>
 }
 
+enum FeatureOperationFailureCategory: String, Equatable {
+    case boundaryChanged = "boundary_changed"
+    case privilegedLaunchRefused = "privileged_launch_refused"
+    case engineNonzero = "engine_nonzero"
+}
+
+enum FeatureOperationFailurePolicy {
+    static func category(
+        forExitCode exitCode: Int32,
+        elevated: Bool,
+        isCleanup: Bool
+    ) -> FeatureOperationFailureCategory {
+        guard elevated else { return .engineNonzero }
+        switch exitCode {
+        case ElevatedExitCode.boundaryCheckFailed where isCleanup:
+            return .boundaryChanged
+        case ElevatedExitCode.logSinkUnavailable,
+             ElevatedExitCode.executableRefused,
+             ElevatedExitCode.launchFailed:
+            return .privilegedLaunchRefused
+        default:
+            return .engineNonzero
+        }
+    }
+}
+
+enum FeatureOperationTelemetry {
+    static func feature<Report: Sendable>(for operation: ToolOperation<Report>) -> String? {
+        if operation.cleanupPlan != nil { return "clean" }
+        guard case .mo = operation.executable,
+              let command = operation.arguments.first,
+              ["clean", "optimize"].contains(command) else { return nil }
+        return command
+    }
+
+    static func completionProperties(
+        feature: String,
+        result: String,
+        duration: TimeInterval,
+        failureCategory: FeatureOperationFailureCategory?
+    ) -> [String: Any] {
+        var properties: [String: Any] = [
+            "feature": feature,
+            "result": result,
+            "duration_bucket": Telemetry.secondsBucket(duration),
+        ]
+        if let failureCategory {
+            properties["failure_category"] = failureCategory.rawValue
+        }
+        return properties
+    }
+}
+
 // MARK: - Tool descriptor
 
 /// All per-tool variation as data. `reduce` is a pure function from the
@@ -259,7 +312,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         rawLog = ""
         currentElevated = op.elevated
         currentLabel = op.label
-        telemetryFeature = Self.telemetryFeature(for: op)
+        telemetryFeature = FeatureOperationTelemetry.feature(for: op)
         telemetryStartedAt = Date()
         cancelRequested = false
         reactivated = false
@@ -322,7 +375,14 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                                                           isCleanup: op.cleanupPlan != nil)
                         self.state = .finished(.failed(message))
                         if op.label != nil { self.center.end(id, success: false, detail: message) }
-                        self.captureTelemetryCompletion(result: "failed")
+                        self.captureTelemetryCompletion(
+                            result: "failed",
+                            failureCategory: FeatureOperationFailurePolicy.category(
+                                forExitCode: code,
+                                elevated: op.elevated,
+                                isCleanup: op.cleanupPlan != nil
+                            )
+                        )
                     }
                 case .authCancelled:
                     // Auth-cancel is classified by the runner now (#48 taxonomy),
@@ -355,27 +415,16 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         rawLog = ""
     }
 
-    private static func telemetryFeature(for operation: ToolOperation<Report>) -> String? {
-        guard case .mo = operation.executable,
-              let command = operation.arguments.first,
-              ["clean", "optimize"].contains(command) else { return nil }
-        return command
-    }
-
     /// Turn an exit status into something a person can act on. The wrapper's
     /// own refusals (124–127) all mean NOTHING ran, which is the opposite of a
     /// partial delete, so they must never share wording with a command that
     /// ran and failed partway.
     private static func failureMessage(exitCode: Int32, isCleanup: Bool) -> String {
         switch exitCode {
-        case ElevatedExitCode.boundaryCheckFailed:
-            return isCleanup
-                ? NSLocalizedString(
-                    "Nothing was cleaned: the reviewed items changed before the run started. Rescan before trying again.",
-                    comment: "")
-                : NSLocalizedString(
-                    "Nothing ran: the files Burrow verified changed before the operation started.",
-                    comment: "")
+        case ElevatedExitCode.boundaryCheckFailed where isCleanup:
+            return NSLocalizedString(
+                "Nothing was cleaned: the reviewed items changed before the run started. Rescan before trying again.",
+                comment: "")
         case ElevatedExitCode.logSinkUnavailable,
              ElevatedExitCode.executableRefused,
              ElevatedExitCode.launchFailed:
@@ -392,14 +441,19 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         }
     }
 
-    private func captureTelemetryCompletion(result: String) {
+    private func captureTelemetryCompletion(
+        result: String,
+        failureCategory: FeatureOperationFailureCategory? = nil
+    ) {
         guard let telemetryFeature else { return }
         let duration = telemetryStartedAt.map { Date().timeIntervalSince($0) } ?? 0
-        Telemetry.capture("feature_operation_completed", [
-            "feature": telemetryFeature,
-            "result": result,
-            "duration_bucket": Telemetry.secondsBucket(duration),
-        ])
+        let properties = FeatureOperationTelemetry.completionProperties(
+            feature: telemetryFeature,
+            result: result,
+            duration: duration,
+            failureCategory: failureCategory
+        )
+        Telemetry.capture("feature_operation_completed", properties)
         self.telemetryFeature = nil
         telemetryStartedAt = nil
     }
