@@ -148,6 +148,31 @@ final class MoInteractiveHostTests: XCTestCase {
         wait(for: [exited], timeout: 5)
     }
 
+    /// A relaunch that fails must leave the child that IS running completely
+    /// untouched — still readable, master fd still open. Tearing its pty down on
+    /// the way to a launch that then threw would cost the live child its output
+    /// and hang up its terminal underneath it.
+    func testPTYTask_failedRelaunch_leavesThePreviousChildUsable() throws {
+        let pty = PTYTask()
+        let before = expectation(description: "child echoes before the failed relaunch")
+        before.assertForOverFulfill = false
+        pty.onOutput = { if $0.contains("before") { before.fulfill() } }
+        try pty.launch("/bin/cat", [])
+        pty.send(Array("before\n".utf8))
+        wait(for: [before], timeout: 5)
+
+        // Note there's no terminate() here: the running child is meant to survive.
+        XCTAssertThrowsError(try pty.launch("/nonexistent/mo", []),
+                             "a missing binary must surface as a thrown error")
+
+        let after = expectation(description: "child still echoes afterwards")
+        after.assertForOverFulfill = false
+        pty.onOutput = { if $0.contains("after") { after.fulfill() } }
+        pty.send(Array("after\n".utf8))
+        wait(for: [after], timeout: 5)
+        pty.terminate()
+    }
+
     func testHost_scanSelectConfirm_drivesKeystrokesAndFinishes() {
         let fake = FakePTY()
         // Large tick interval so the real timer never fires; we step manually.

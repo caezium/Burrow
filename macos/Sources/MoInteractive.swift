@@ -249,12 +249,11 @@ final class PTYTask: PTYPort {
         let proc = Process()
         launchCount &+= 1
         let gen = Generation(id: launchCount, child: proc)
-        // Don't depend on the caller having terminated first. A relaunch over a
-        // live `master` would otherwise leave its read handler armed, and the
-        // dispatch source holding that handler keeps the FileHandle alive — so
-        // its fd would never close. Generation tagging already makes a late
-        // delivery harmless; this is about the descriptor, not correctness.
-        master?.readabilityHandler = nil
+        // Everything below builds the replacement WITHOUT touching the pty that's
+        // already installed. A relaunch that fails partway must leave the running
+        // child exactly as it found it — still readable, its master fd still open
+        // (closing it would raise SIGHUP on a child that's very much alive).
+        let previousMaster = master
         var amaster: Int32 = 0
         var aslave: Int32 = 0
         var ws = winsize(ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0)
@@ -306,17 +305,17 @@ final class PTYTask: PTYPort {
             guard let s = String(data: d, encoding: .utf8) else { return }
             DispatchQueue.main.async { self.deliverOutput(s, from: gen.id) }
         }
-        master = m
         // Close the parent's slave fd whether or not the launch succeeds — on a
         // throw the child never starts, so nothing else would ever close it.
         do { try proc.run() }
         catch {
             // The child never started, so it can never report an exit. Disarm the
-            // read handler and drop the master fd BEFORE closing the slave: that
-            // close is what makes the master see EOF, and a handler firing then
-            // would ask a never-launched child for terminationStatus (#374).
+            // read handler BEFORE closing the slave: that close is what makes this
+            // master see EOF, and a handler firing then would ask a never-launched
+            // child for terminationStatus (#374). `m` was never installed as
+            // `master`, so the previous child keeps its own pty untouched; letting
+            // `m` go out of scope closes this abandoned master fd.
             m.readabilityHandler = nil
-            master = nil
             close(aslave)
             throw error
         }
@@ -332,6 +331,13 @@ final class PTYTask: PTYPort {
         current = gen
         // New child, new exactly-once exit report.
         reportedExit = false
+        // Only now hand the task over to the new pty. Disarming the old handler
+        // releases the dispatch source that was keeping that FileHandle alive, so
+        // its fd finally closes — a relaunch over a live master used to strand it
+        // open. Callers terminate first in practice; this just stops the fd's fate
+        // depending on their remembering to.
+        previousMaster?.readabilityHandler = nil
+        master = m
         close(aslave)   // parent doesn't use the slave end
     }
 
