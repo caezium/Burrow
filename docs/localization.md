@@ -81,10 +81,15 @@ The site is localized by a different mechanism than the app, for the same
 reason: nine hand-maintained copies of five pages would go stale on the first
 copy edit and nothing would catch it.
 
-`scripts/site-i18n.py` rebuilds every copy from the English page plus a string
-catalog. **The English pages under `docs/` are the only hand-written ones** —
-everything under `docs/<lang>/` is build output, and editing it directly is
-wasted work that the next run overwrites.
+Two scripts share the work, and the split matters: `site-release.py` renders the
+**English** pages from JSON, including their language picker and `hreflang`
+links; `site-i18n.py` reads those pages and writes the **translated** copies
+under `docs/<lang>/`. Neither writes the other's files — two generators editing
+one page is how they end up disagreeing.
+
+Run order is `site-release.py` first, then `site-i18n.py`. Everything under
+`docs/` and `docs/<lang>/` is build output; editing either by hand is wasted
+work that the next run overwrites.
 
 ```bash
 python3 scripts/site-i18n.py --extract   # pull new English strings into the catalogs
@@ -115,8 +120,11 @@ catalog is filled — which is a working site, not a broken one.
 
 | | index | docs | compare | roadmap | releases |
 | --- | --- | --- | --- | --- | --- |
-| 日本語 | done | — | — | — | — |
-| the other eight | — | — | — | — | — |
+| all nine languages | done | — | — | — | — |
+
+155 strings per language, covering the hero, the sixteen tool cards, the
+screenshot captions, the trust section, install and the FAQ. Proper nouns,
+version strings and shell commands are deliberately left untranslated.
 
 ### releases.html is translated too, and that has a cost to manage
 
