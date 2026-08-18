@@ -17,6 +17,7 @@ enum UpdateStartPolicy {
 }
 
 enum UpdateRecovery {
+    // Keep this stable: it is the canonical recovery endpoint when an in-app update cannot finish.
     static let manualDownloadURL = URL(string: "https://burrow.computer/install")!
 }
 

@@ -78,6 +78,21 @@ final class LocalizationTests: XCTestCase {
         try assertCoversCoreInterface(language: "ru")
     }
 
+    func testLocalizedResourcesAreStagedInApplicationBundle() throws {
+        for language in ["zh-Hans", "zh-Hant", "ru"] {
+            let lproj = try XCTUnwrap(
+                Bundle.main.url(forResource: language, withExtension: "lproj"),
+                "\(language).lproj missing from the app bundle"
+            )
+            XCTAssertTrue(
+                FileManager.default.fileExists(
+                    atPath: lproj.appendingPathComponent("Localizable.strings").path
+                ),
+                "\(language) Localizable.strings missing from the app bundle"
+            )
+        }
+    }
+
     /// Both Chinese variants should translate the same set of keys, so a key
     /// added to one file isn't silently missing from the other.
     func testChineseVariantsShareTheSameKeys() throws {
@@ -139,24 +154,24 @@ final class LocalizationTests: XCTestCase {
         }
     }
 
-    // Read the lproj from the BUILT app bundle (the test host), not the
-    // repo checkout: it validates the artifact that actually ships, and
-    // it keeps the suite off TCC-protected user folders — a repo on
-    // ~/Desktop made every Data(contentsOf:) here block on a tccd that
-    // had wedged, hanging the whole suite.
+    // Data-quality assertions read the checked-in tables directly so a stale
+    // staged app resource cannot hide a missing or malformed source entry.
     private func localizedStrings(_ language: String) throws -> [String: String] {
-        let url = try lprojURL(language).appendingPathComponent("Localizable.strings")
+        let url = sourceLprojURL(language).appendingPathComponent("Localizable.strings")
         let data = try Data(contentsOf: url)
         let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
         return try XCTUnwrap(plist as? [String: String])
     }
 
     private func lprojBundle(_ language: String) throws -> Bundle {
-        try XCTUnwrap(Bundle(url: lprojURL(language)))
+        try XCTUnwrap(Bundle(url: sourceLprojURL(language)))
     }
 
-    private func lprojURL(_ language: String) throws -> URL {
-        try XCTUnwrap(Bundle.main.url(forResource: language, withExtension: "lproj"),
-                      "\(language).lproj missing from the app bundle")
+    private func sourceLprojURL(_ language: String, file: StaticString = #filePath) -> URL {
+        URL(fileURLWithPath: "\(file)")
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources")
+            .appendingPathComponent("\(language).lproj")
     }
 }

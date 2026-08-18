@@ -109,7 +109,8 @@ so no IP is attached to events either.
 | `engine_missing`, `install_window_ready`, `onboarding_completed` | none |
 | `telemetry_opt_in_changed` | enabled boolean |
 | PostHog `$screen` | fixed name: `home`, `settings`, or `tool.<known tool>` |
-| `feature_operation_started`, `feature_operation_completed` | `clean`/`optimize`, dry-run/elevated booleans, fixed result, bucketed duration; failed completions add fixed `boundary_changed`, `privileged_launch_refused`, or `engine_nonzero` category |
+| `feature_operation_started` | `feature` (`clean` or `optimize`), `dry_run` boolean, `elevated` boolean |
+| `feature_operation_completed` | `feature` (`clean` or `optimize`), fixed `result` (`succeeded`, `failed`, `authorization_cancelled`, or `cancelled`), `duration_bucket`; failed completions may add `failure_category` (`boundary_changed`, `privileged_launch_refused`, or `engine_nonzero`) |
 | `previous_launch_incomplete` | previous phase, app version/build, OS build, bucketed elapsed time |
 | `compatibility_fallback_activated`, `compatibility_fallback_reaffirmed` | fixed reason, OS build, menu-bar mode |
 | `status_item_creation_scheduled`, `status_item_stability_started`, `status_item_stabilized` | fixed `launch` or `settings` source |

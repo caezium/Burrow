@@ -865,7 +865,7 @@ def render_install(version, downloads, stars=None):
     body = f"""    <div class="pick">
       <p class="lede">Pick your platform to download the latest build.</p>
 {render_platforms(version, "install")}
-      <p class="recovery"><strong>Updating an older copy?</strong> If the in-app update can’t complete, quit Burrow, download the latest macOS ZIP above, and replace Burrow.app in Applications. Your settings and history stay on this Mac.</p>
+      <p class="recovery"><strong>Updating an older copy?</strong> If the in-app update can't complete, quit Burrow, download the latest macOS ZIP above, and replace Burrow.app in Applications. Your settings and history stay on this Mac.</p>
       <p class="dlcount">Already downloaded by <b>{downloads:,}</b> people</p>
       <p class="rel">Latest release v{version}, a {MAC_SIZE} universal build.
         Looking for an older version, the Windows preview notes, or the checksums?
