@@ -23,6 +23,7 @@ Stdlib only. Keep it that way, this runs in the Pages deploy job.
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import date
@@ -684,10 +685,16 @@ def render_readme_roadmap(data):
 def gh_json(path):
     """GET one GitHub API path. Raises on any failure; callers decide."""
     import urllib.request
-    req = urllib.request.Request(
-        f"https://api.github.com/{path}",
-        headers={"Accept": "application/vnd.github+json",
-                 "User-Agent": "burrow-site-release"})
+    headers = {"Accept": "application/vnd.github+json",
+               "User-Agent": "burrow-site-release"}
+    # Anonymous API access is 60 requests/hour per source IP, and Actions
+    # runners share IPs with every other repo on the fleet, so the scheduled
+    # refresh 403s at random without a token. Locally there is usually no
+    # token and the anonymous path is plenty for the handful of calls here.
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(f"https://api.github.com/{path}", headers=headers)
     with urllib.request.urlopen(req, timeout=20) as r:
         return json.loads(r.read().decode("utf-8"))
 
