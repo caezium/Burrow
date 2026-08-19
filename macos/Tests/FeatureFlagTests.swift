@@ -78,15 +78,18 @@ final class FeatureFlagTests: XCTestCase {
 
     // A malformed cache (bad JSON, wrong version, wrong types, missing or
     // stale timestamp) discards the whole file; only a strict, fresh shape
-    // decodes.
+    // decodes. This keeps a corrupt or malicious file from ever overriding
+    // the conservative defaults.
     func testMalformedOrStaleCachesAreDiscarded() throws {
         let stale = now.addingTimeInterval(-FeatureFlags.maxCacheAge - 60)
         let fresh = now.addingTimeInterval(-FeatureFlags.maxCacheAge + 60)
+        let future = now.addingTimeInterval(60)
 
         XCTAssertNil(FeatureFlags.decodeCache(Data("not json".utf8), now: now))
         XCTAssertNil(FeatureFlags.decodeCache(Data("[]".utf8), now: now))
 
-        // Wrong top-level types.
+        // A cache with the wrong schema or types is unsafe to use; it
+        // must be discarded rather than partially decoded.
         XCTAssertNil(
             FeatureFlags.decodeCache(Data(#"{"version":1,"fetched_at":"oops","flags":{}}"#.utf8), now: now)
         )
@@ -94,22 +97,15 @@ final class FeatureFlagTests: XCTestCase {
             FeatureFlags.decodeCache(Data(#"{"version":2,"fetched_at":"2026-01-01T00:00:00Z","flags":{}}"#.utf8), now: now)
         )
 
-        // Stale timestamp → discard; fresh-but-unknown flag keys inside a
-        // well-formed envelope → valid empty set (defaults stay in force).
+        // Future or stale timestamps are both untrustworthy.
         try encodeAndWrite([.aboutReleaseNotesLink: true], fetchedAt: stale)
         XCTAssertNil(FeatureFlags.loadCached(from: directory, now: now), "stale cache must be discarded")
 
-        let freshData = try XCTUnwrap(
-            FeatureFlags.encodeCache([:], fetchedAt: fresh),
-            "encoder must produce data"
-        )
-        XCTAssertEqual(
-            FeatureFlags.decodeCache(freshData, now: now),
-            [:],
-            "valid envelope with no allowlisted keys is fine — defaults apply"
-        )
+        let futureData = try XCTUnwrap(FeatureFlags.encodeCache([.aboutReleaseNotesLink: true], fetchedAt: future))
+        XCTAssertNil(FeatureFlags.decodeCache(futureData, now: now), "future cache timestamp must be rejected")
 
-        // Roundtrip preserves values.
+        // Persisting and reloading must reproduce the accepted snapshot
+        // exactly while discarding unknown keys.
         let roundtrip = try XCTUnwrap(FeatureFlags.encodeCache([.aboutReleaseNotesLink: true], fetchedAt: fresh))
         XCTAssertEqual(FeatureFlags.decodeCache(roundtrip, now: now), [.aboutReleaseNotesLink: true])
     }
@@ -159,13 +155,21 @@ final class FeatureFlagTests: XCTestCase {
     }
 
     // The decide URL is fixed by the validated HTTPS host root; only the
-    // API version appears as a query.
+    // API version appears as a query. Trailing slashes must not create
+    // double path separators.
     func testDecideEndpointIsHTTPSWithFixedVersion() throws {
         let host = try XCTUnwrap(Telemetry.postHogHostRoot(host: "https://us.i.posthog.com"))
         XCTAssertEqual(
             Telemetry.decideEndpoint(on: host)?.absoluteString,
             "https://us.i.posthog.com/decide/?v=3"
         )
+
+        let hostWithSlash = try XCTUnwrap(Telemetry.postHogHostRoot(host: "https://us.i.posthog.com/"))
+        XCTAssertEqual(
+            Telemetry.decideEndpoint(on: hostWithSlash)?.absoluteString,
+            "https://us.i.posthog.com/decide/?v=3"
+        )
+
         XCTAssertNil(Telemetry.postHogHostRoot(host: "http://insecure.example.com"))
     }
 }

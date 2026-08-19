@@ -74,10 +74,12 @@ enum FeatureFlags {
     }
 
     /// One fixed-name exposure event per flag per launch, carrying only the
-    /// allowlisted key and its boolean. `Telemetry.capture` drops it while
-    /// opted out or before `start()`, so an opted-out launch reports
-    /// nothing even when a lookup happens.
+    /// allowlisted key and its boolean. The key is only marked reported
+    /// when `Telemetry` can actually queue the event; while opted out,
+    /// before `start()`, or without a release key, the lookup remains
+    /// eligible so a later enabled session can emit the exposure.
     private static func expose(_ key: Key, value: Bool) {
+        guard Telemetry.canCapture else { return }
         lock.lock()
         let alreadyReported = !exposedThisLaunch.insert(key).inserted
         lock.unlock()
@@ -126,8 +128,9 @@ enum FeatureFlags {
               (object["version"] as? Int) == 1,
               let fetchedAt = (object["fetched_at"] as? String)
                   .flatMap(timestampFormatter.date(from:)),
-              let values = object["flags"] as? [String: Any],
-              now.timeIntervalSince(fetchedAt) <= maxCacheAge else { return nil }
+              fetchedAt <= now,
+              now.timeIntervalSince(fetchedAt) <= maxCacheAge,
+              let values = object["flags"] as? [String: Any] else { return nil }
 
         var flags: [Key: Bool] = [:]
         for key in Key.allCases {

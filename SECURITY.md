@@ -190,10 +190,11 @@ This is the part people rightly scrutinize in cleaners. Burrow's model:
   historical event at a time with bounded backoff, discards permanent HTTP
   rejections, and runs only while telemetry is enabled; an opted-out launch
   does not read it or contact PostHog. Feature flags use the same gate and
-  queue (issue #322): one decide request per enabled launch, an allowlist of
-  UI-only boolean keys with baked-in OFF defaults, a 7-day bounded local cache
-  that an opted-out launch never reads, and a conservative local fallback on
-  every failure — details in **[TELEMETRY.md](TELEMETRY.md)**.
+  queue (issue #322): one decide request per enabled launch and once more on
+  opt-in, an allowlist of UI-only boolean keys with baked-in OFF defaults, a
+  7-day bounded local cache that an opted-out launch never reads, and a
+  conservative local fallback on every failure — details in
+  **[TELEMETRY.md](TELEMETRY.md)**.
 - **Local launch recovery journal.** Burrow atomically stores a coarse launch
   phase plus app/OS versions under Application Support so it can avoid a
   status-item path that failed on the same macOS build. This local safety file

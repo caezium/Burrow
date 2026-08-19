@@ -220,6 +220,11 @@ enum Telemetry {
         return deliveryConfiguration
     }
 
+    /// Whether a feature-flag exposure would actually be queued. Used by
+    /// `FeatureFlags` to commit an exposure key only when the event is
+    /// admitted; otherwise the key stays eligible for a later lookup.
+    static var canCapture: Bool { activeDeliveryConfiguration() != nil }
+
     private static func configuredDelivery() -> DeliveryConfiguration? {
         stateLock.lock()
         defer { stateLock.unlock() }
@@ -459,7 +464,11 @@ enum Telemetry {
         guard var components = URLComponents(url: host, resolvingAgainstBaseURL: false) else {
             return nil
         }
-        components.path = components.path + "/decide/"
+        // Normalize a trailing slash so both "https://host" and
+        // "https://host/" produce exactly one separator.
+        var path = components.path
+        if path.hasSuffix("/") { path.removeLast() }
+        components.path = path + "/decide/"
         components.query = "v=3"
         return components.url
     }

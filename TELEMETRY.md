@@ -99,12 +99,14 @@ behavior, permissions, security controls, signing/notarization, Sparkle
 verification, launch recovery, or telemetry consent. Client code:
 [`macos/Sources/FeatureFlags.swift`](macos/Sources/FeatureFlags.swift).
 
-**Request.** One HTTPS `POST` to `https://us.i.posthog.com/decide/?v=3`
-per enabled launch (and once more on opt-in), serialized on the telemetry
-queue with no timer and no retry — a failure falls back to local state and
-waits for the next launch. The request body contains exactly two fields:
-`api_key` and the same random `distinct_id` events already use. No person
-properties, groups, or locale.
+**Request.** One HTTPS `POST` to `{validated PHPostHogHost}/decide/?v=3`
+per enabled launch (and once more on opt-in). The validated `PHPostHogHost`
+build setting overrides the default `https://us.i.posthog.com`; otherwise the
+default is used. The request is serialized on the telemetry queue with no
+timer and no retry — a failure falls back to local state and waits for the
+next launch. The request body contains exactly two fields: `api_key` and the
+same random `distinct_id` events already use. No person properties, groups,
+or locale.
 
 **Flags.** The complete allowlist, with its conservative (OFF) default:
 
@@ -125,13 +127,16 @@ in force until a later successful fetch rewrites it. An opted-out launch
 neither reads nor writes it, exactly like the event outbox.
 
 **Exposure event.** The first lookup of each flag per launch emits
-`feature_flag_exposed` with exactly two properties — `flag` (the allowlisted
-key) and `value` (boolean). Like every event it is dropped while opted out.
+`feature_flag_exposed` with exactly two feature-flag-specific properties —
+`flag` (the allowlisted key) and `value` (boolean). The usual telemetry super
+properties (app version, OS build, platform, locale, etc.) are also attached,
+just like any other event. Like every event it is dropped while opted out.
 
 **Failure model.** Opt-out, missing release key, network error, non-2xx
-status, malformed payload, and stale cache all produce the same result: the
-app runs fully on baked-in defaults, indistinguishable from a flag-free
-build.
+status, malformed payload, or stale cache all fall back to local values. If a
+usable cached snapshot exists, it is applied before the decide request and
+retained if the request fails; only a launch with no usable cache runs fully
+on the baked-in defaults, indistinguishable from a flag-free build.
 
 **IP address:** as with any HTTPS request, the TCP connection still exposes
 your IP to the receiving service at the network layer, but neither pipeline
