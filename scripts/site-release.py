@@ -23,6 +23,7 @@ Stdlib only. Keep it that way, this runs in the Pages deploy job.
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import date
@@ -715,10 +716,16 @@ def render_readme_roadmap(data):
 def gh_json(path):
     """GET one GitHub API path. Raises on any failure; callers decide."""
     import urllib.request
-    req = urllib.request.Request(
-        f"https://api.github.com/{path}",
-        headers={"Accept": "application/vnd.github+json",
-                 "User-Agent": "burrow-site-release"})
+    headers = {"Accept": "application/vnd.github+json",
+               "User-Agent": "burrow-site-release"}
+    # Anonymous API access is 60 requests/hour per source IP, and Actions
+    # runners share IPs with every other repo on the fleet, so the scheduled
+    # refresh 403s at random without a token. Locally there is usually no
+    # token and the anonymous path is plenty for the handful of calls here.
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(f"https://api.github.com/{path}", headers=headers)
     with urllib.request.urlopen(req, timeout=20) as r:
         return json.loads(r.read().decode("utf-8"))
 
@@ -818,6 +825,10 @@ INSTALL_CSS = """  /* Centered platform picker; the cards themselves come from c
   .pick > .lede { font-size:12.5px; color:var(--ink-3); margin:0 0 22px; text-align:center; }
   .dlcount { margin-top:34px; text-align:center; font-size:12.5px; color:var(--ink-3); }
   .dlcount b { font-weight:600; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+  .recovery { max-width:48rem; margin:24px auto 0; padding:14px 16px; text-align:left;
+    font-size:13px; line-height:1.6; color:var(--ink-2); background:var(--surface);
+    border:1px solid var(--hair-2); border-radius:16px; }
+  .recovery strong { color:var(--ink); font-weight:600; }
   .rel { margin-top:9px; text-align:center; font-size:12.5px; line-height:1.6; color:var(--ink-3); }
   .rel a { color:var(--accent); text-decoration:underline; text-underline-offset:2px; }
 """
@@ -892,6 +903,7 @@ def render_install(version, downloads, stars=None):
     body = f"""    <div class="pick">
       <p class="lede">Pick your platform to download the latest build.</p>
 {render_platforms(version, "install")}
+      <p class="recovery"><strong>Updating an older copy?</strong> If the in-app update can't complete, quit Burrow, download the latest macOS ZIP above, and replace Burrow.app in Applications. Your settings and history stay on this Mac.</p>
       <p class="dlcount">Already downloaded by <b>{downloads:,}</b> people</p>
       <p class="rel">Latest release v{version}, a {MAC_SIZE} universal build.
         Looking for an older version, the Windows preview notes, or the checksums?

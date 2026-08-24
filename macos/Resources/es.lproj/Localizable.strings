@@ -414,6 +414,7 @@
 "Sparkle checks Burrow's signed update feed after startup settles and about once a day. It asks before downloading or installing anything." = "Sparkle consulta el canal de actualizaciones firmado de Burrow cuando el arranque se estabiliza y después una vez al día aproximadamente. Pide confirmación antes de descargar o instalar nada.";
 "Check for updates automatically" = "Buscar actualizaciones automáticamente";
 "Check for Updates" = "Buscar actualizaciones";
+"Download Latest Version" = "Descargar la última versión";
 "About Burrow" = "Acerca de Burrow";
 "Update didn't complete" = "La actualización no se completó";
 "Update external engine" = "Actualizar el motor externo";

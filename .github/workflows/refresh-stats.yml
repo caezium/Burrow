@@ -1,0 +1,68 @@
+name: Refresh site stats
+
+# The landing page's "Already downloaded by N people" line and the star counts
+# are baked into docs/stats.json at generate time, so they freeze the moment
+# someone stops running scripts/site-release.py --stats by hand. (They sat at
+# 13,091 downloads for nine days while the real total passed 23,000.) This
+# refreshes them daily from the GitHub API — the same per-asset download sum
+# the README's shields.io badge renders — and redeploys when they move.
+#
+# Scheduled runs only fire from the default branch once this is merged. Before
+# then, test on the branch: gh workflow run "Refresh site stats" --ref <branch>
+
+on:
+  schedule:
+    - cron: "41 7 * * *"    # daily 07:41 UTC, clear of the upstream watcher
+  workflow_dispatch:
+
+permissions:
+  contents: write           # commit the refreshed counts
+  actions: write            # dispatch the site deploy (see the last step)
+
+concurrency:
+  group: site-stats
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    if: github.repository == 'caezium/Burrow'
+    steps:
+      # Pinned to a SHA, not a tag: this job holds a token that can write to
+      # the default branch, so a moved tag must not be able to run new code.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Refresh counts from the GitHub API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # --stats rewrites docs/stats.json, then regenerates every page that
+        # prints a count. If an unrelated generated file is already stale in
+        # main, its regeneration rides along in this commit; that is a drift
+        # signal worth reading, not a failure.
+        run: python3 scripts/site-release.py --stats
+
+      - name: Commit when the numbers moved
+        id: commit
+        run: |
+          # --porcelain, not `git diff --quiet`: a new blog page would be
+          # untracked, which a diff of tracked files reports as no change.
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "::notice::Counts unchanged — nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "site: refresh download and star counts"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # A push made with GITHUB_TOKEN deliberately does not start other
+      # workflows, so deploy-site.yml would never see this commit. Dispatching
+      # it explicitly is the documented exception to that rule.
+      - name: Deploy the refreshed site
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-site.yml --ref ${{ github.ref_name }}

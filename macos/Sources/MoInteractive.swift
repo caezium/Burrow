@@ -180,7 +180,36 @@ enum MoTUI {
 /// owns its read loop and delivers output/exit on the main thread so the host
 /// reducer stays single-threaded. The only impure seam — kept tiny.
 final class PTYTask: PTYPort {
-    private var proc = Process()   // replaced on each launch (a Process runs once)
+    /// One launch's private state. Both callbacks close over their own instance,
+    /// so a handler still armed from an earlier child can never read the CURRENT
+    /// child's process, launch flag, or exit code.
+    ///
+    /// A rescan makes that concrete: it's only reachable from the chooser, where
+    /// the old `mo` is still sitting at the selection screen, so `terminate()`
+    /// SIGTERMs a live child and its terminationHandler fires on a background
+    /// thread *after* `launch()` has already reset the exactly-once flag for the
+    /// new one. Reported untagged, that stale exit lands on the fresh scan, and
+    /// `SelectionSession.exited` turns an exit-before-any-list into `.done` — so
+    /// the rescan finished instantly with the previous child's SIGTERM status.
+    private final class Generation {
+        let id: UInt64
+        let child: Process
+        /// `isRunning` is `false` for BOTH a finished process and a never-launched
+        /// one, so it can't distinguish "already reaped" from "run() threw". Only a
+        /// process that actually launched may report `terminationStatus`; reading it
+        /// from a never-launched child raises `NSInvalidArgumentException` ("task not
+        /// launched"), which Swift cannot catch — Sentry BURROW-A5, issue #374. Track
+        /// the launch state so the EOF branch never asks a never-spawned child for
+        /// its exit code.
+        var didLaunch = false
+        init(id: UInt64, child: Process) { self.id = id; self.child = child }
+    }
+
+    /// The launch entitled to speak for this task. Main-confined: `launch()`
+    /// replaces it, and every callback's captured id is compared against it on
+    /// main, so the check never races the swap.
+    private var current: Generation?
+    private var launchCount: UInt64 = 0
     private var master: FileHandle?
 
     var onOutput: ((String) -> Void)?
@@ -190,10 +219,20 @@ final class PTYTask: PTYPort {
     /// exit; the session must hear about it exactly once. Main-confined —
     /// both reporters dispatch here.
     private var reportedExit = false
-    private func reportExitOnce(_ code: Int32) {
-        guard !reportedExit else { return }
+
+    /// Report only for the live launch. A callback carrying a retired id belongs
+    /// to a child the host has already torn down and moved past.
+    private func reportExitOnce(_ code: Int32, from id: UInt64) {
+        guard id == current?.id, !reportedExit else { return }
         reportedExit = true
         onExit?(code)
+    }
+
+    /// Same gate for output: bytes a dead child wrote must never be parsed as
+    /// the new scan's screen.
+    private func deliverOutput(_ text: String, from id: UInt64) {
+        guard id == current?.id else { return }
+        onOutput?(text)
     }
 
     private let cols: UInt16
@@ -207,9 +246,14 @@ final class PTYTask: PTYPort {
         // A Process can only be run ONCE; a rescan calls launch again, so start
         // from a fresh instance each time. (Reusing the old one left the second
         // scan with a dead, never-spawning child — the UI hung on "Scanning…".)
-        proc = Process()
-        // New child, new exactly-once exit report.
-        reportedExit = false
+        let proc = Process()
+        launchCount &+= 1
+        let gen = Generation(id: launchCount, child: proc)
+        // Everything below builds the replacement WITHOUT touching the pty that's
+        // already installed. A relaunch that fails partway must leave the running
+        // child exactly as it found it — still readable, its master fd still open
+        // (closing it would raise SIGHUP on a child that's very much alive).
+        let previousMaster = master
         var amaster: Int32 = 0
         var aslave: Int32 = 0
         var ws = winsize(ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0)
@@ -226,9 +270,13 @@ final class PTYTask: PTYPort {
         var env = Foundation.ProcessInfo.processInfo.environment
         env["TERM"] = "xterm-256color"
         proc.environment = env
+        // Capture the id, not `gen` — a Process retains its terminationHandler,
+        // so closing over the Generation (which holds the Process) would be a
+        // retain cycle that outlives the child.
+        let id = gen.id
         proc.terminationHandler = { [weak self] p in
             let code = p.terminationStatus
-            DispatchQueue.main.async { self?.reportExitOnce(code) }
+            DispatchQueue.main.async { self?.reportExitOnce(code, from: id) }
         }
         let m = FileHandle(fileDescriptor: amaster, closeOnDealloc: true)
         m.readabilityHandler = { [weak self] h in
@@ -243,20 +291,53 @@ final class PTYTask: PTYPort {
                 // report the exit ourselves; otherwise the now-unstarved
                 // terminationHandler will.
                 h.readabilityHandler = nil
-                if !self.proc.isRunning {
-                    let code = self.proc.terminationStatus
-                    DispatchQueue.main.async { self.reportExitOnce(code) }
+                // This launch's own child and flag — never `current`'s, which
+                // after a rescan is a different process whose status says nothing
+                // about this EOF. Only a launched process has a valid exit code:
+                // if run() threw, didLaunch is false and reading terminationStatus
+                // would raise "task not launched" (#374).
+                if gen.didLaunch && !gen.child.isRunning {
+                    let code = gen.child.terminationStatus
+                    DispatchQueue.main.async { self.reportExitOnce(code, from: gen.id) }
                 }
                 return
             }
             guard let s = String(data: d, encoding: .utf8) else { return }
-            DispatchQueue.main.async { self.onOutput?(s) }
+            DispatchQueue.main.async { self.deliverOutput(s, from: gen.id) }
         }
-        master = m
         // Close the parent's slave fd whether or not the launch succeeds — on a
         // throw the child never starts, so nothing else would ever close it.
         do { try proc.run() }
-        catch { close(aslave); throw error }
+        catch {
+            // The child never started, so it can never report an exit. Disarm the
+            // read handler BEFORE closing the slave: that close is what makes this
+            // master see EOF, and a handler firing then would ask a never-launched
+            // child for terminationStatus (#374). `m` was never installed as
+            // `master`, so the previous child keeps its own pty untouched; letting
+            // `m` go out of scope closes this abandoned master fd.
+            m.readabilityHandler = nil
+            close(aslave)
+            throw error
+        }
+        // Also set before the slave closes, for the same reason in reverse: a
+        // child that exits instantly would otherwise reach the EOF branch while
+        // this launch still looked unlaunched, and its exit would go unreported.
+        gen.didLaunch = true
+        // Retire the previous generation only once this one is actually running:
+        // a launch that threw must leave the old child still able to report its
+        // exit, rather than installing a never-started generation that silently
+        // outranks it. Safe to defer — launch() runs on main and every callback
+        // compares ids on main, so this assignment always lands first.
+        current = gen
+        // New child, new exactly-once exit report.
+        reportedExit = false
+        // Only now hand the task over to the new pty. Disarming the old handler
+        // releases the dispatch source that was keeping that FileHandle alive, so
+        // its fd finally closes — a relaunch over a live master used to strand it
+        // open. Callers terminate first in practice; this just stops the fd's fate
+        // depending on their remembering to.
+        previousMaster?.readabilityHandler = nil
+        master = m
         close(aslave)   // parent doesn't use the slave end
     }
 
@@ -265,7 +346,9 @@ final class PTYTask: PTYPort {
     /// caller (issue #73 / Sentry BURROW-D: the 0.06 s selection-replay tick
     /// runs on the main queue). The serial queue preserves keystroke order;
     /// the captured handle keeps the fd alive for an in-flight write even if
-    /// `terminate()` clears `master` underneath it. The master fd is otherwise
+    /// `master` is swapped out underneath it — by a relaunch, or dropped by a
+    /// failed one. (`terminate()` only disarms the read handler; it leaves the
+    /// handle itself in place.) The master fd is otherwise
     /// only touched by the FileHandle read handler, and read/write on a pty are
     /// independent directions, so there's no fd race.
     private let writeQueue = DispatchQueue(label: "dev.caezium.burrow.pty-write")
@@ -275,8 +358,12 @@ final class PTYTask: PTYPort {
         let data = Data(bytes)
         writeQueue.async { try? master.write(contentsOf: data) }
     }
+    /// Deliberately does NOT retire the current generation: a terminate with no
+    /// relaunch behind it (the reducer's `.terminate` effect, `cancel()`) still
+    /// wants to hear the child's exit. Only `launch()` retires a generation,
+    /// because only a relaunch means the host has moved on to another child.
     func terminate() {
         master?.readabilityHandler = nil
-        if proc.isRunning { proc.terminate() }
+        if let child = current?.child, child.isRunning { child.terminate() }
     }
 }

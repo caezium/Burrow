@@ -75,6 +75,104 @@ final class MoInteractiveHostTests: XCTestCase {
         wait(for: [second], timeout: 5)
     }
 
+    /// Regression: a rescan from the chooser terminates a child that is still
+    /// ALIVE, and that child's exit is reported asynchronously — after `launch()`
+    /// has already armed a fresh one. Untagged, the dead child's SIGTERM arrived
+    /// as the new scan's exit, and because the reducer reads an exit-before-any-
+    /// list as "nothing to remove", the rescan collapsed straight to `.done`.
+    /// `/bin/cat` stands in for `mo` at the selection screen: it holds the pty
+    /// open and never exits on its own, so any exit seen here is the old one's.
+    func testPTYTask_relaunchWhileRunning_doesNotReportTheOldChildsExit() throws {
+        let pty = PTYTask()
+
+        // First child up and running (it echoes, which proves the pty is live).
+        let greeted = expectation(description: "first child is running")
+        // The pty's own line discipline echoes the write and `cat` prints it
+        // back, so "ready" can arrive in one read or two.
+        greeted.assertForOverFulfill = false
+        pty.onOutput = { if $0.contains("ready") { greeted.fulfill() } }
+        try pty.launch("/bin/cat", [])
+        pty.send(Array("ready\n".utf8))
+        wait(for: [greeted], timeout: 5)
+
+        // Exactly what InstallerView.start() does on Rescan: tear the old child
+        // down and relaunch, synchronously, on main.
+        let stale = expectation(description: "no exit is reported for the new child")
+        stale.isInverted = true
+        // An absent exit also "passes" when the second child never started, so
+        // prove this one is live before reading anything into that silence.
+        let relaunched = expectation(description: "second child is running")
+        relaunched.assertForOverFulfill = false
+        pty.onOutput = { if $0.contains("again") { relaunched.fulfill() } }
+        pty.onExit = { _ in stale.fulfill() }
+        pty.terminate()
+        try pty.launch("/bin/cat", [])
+        pty.send(Array("again\n".utf8))
+        wait(for: [relaunched], timeout: 5)
+
+        // The second `cat` is still alive, so a fired onExit can only be the
+        // first child's SIGTERM leaking across the relaunch.
+        wait(for: [stale], timeout: 2)
+        pty.onExit = nil        // the teardown SIGTERM must not fulfil a settled expectation
+        pty.terminate()
+    }
+
+    /// The other half of the same guarantee: retiring the old generation must not
+    /// cost the NEW child its own exit report.
+    func testPTYTask_relaunchWhileRunning_stillReportsTheNewChildsExit() {
+        let pty = PTYTask()
+        pty.onOutput = { _ in }
+        try? pty.launch("/bin/cat", [])
+
+        let exited = expectation(description: "the new child's exit is reported")
+        pty.onExit = { _ in exited.fulfill() }
+        pty.terminate()
+        try? pty.launch("/bin/echo", ["done"])   // prints, then exits → pty EOF
+        wait(for: [exited], timeout: 5)
+    }
+
+    /// A launch that throws must not retire the generation before it. The failed
+    /// launch never spawns anything, so if it took over as the live generation it
+    /// would outrank the child that IS still out there and silently swallow its
+    /// exit — the host would then be waiting on a report that can never arrive.
+    func testPTYTask_failedRelaunch_stillReportsTheOldChildsExit() {
+        let pty = PTYTask()
+        pty.onOutput = { _ in }
+        try? pty.launch("/bin/cat", [])
+
+        let exited = expectation(description: "the old child's exit is still reported")
+        pty.onExit = { _ in exited.fulfill() }
+        pty.terminate()
+        XCTAssertThrowsError(try pty.launch("/nonexistent/mo", []),
+                             "a missing binary must surface as a thrown error")
+        wait(for: [exited], timeout: 5)
+    }
+
+    /// A relaunch that fails must leave the child that IS running completely
+    /// untouched — still readable, master fd still open. Tearing its pty down on
+    /// the way to a launch that then threw would cost the live child its output
+    /// and hang up its terminal underneath it.
+    func testPTYTask_failedRelaunch_leavesThePreviousChildUsable() throws {
+        let pty = PTYTask()
+        let before = expectation(description: "child echoes before the failed relaunch")
+        before.assertForOverFulfill = false
+        pty.onOutput = { if $0.contains("before") { before.fulfill() } }
+        try pty.launch("/bin/cat", [])
+        pty.send(Array("before\n".utf8))
+        wait(for: [before], timeout: 5)
+
+        // Note there's no terminate() here: the running child is meant to survive.
+        XCTAssertThrowsError(try pty.launch("/nonexistent/mo", []),
+                             "a missing binary must surface as a thrown error")
+
+        let after = expectation(description: "child still echoes afterwards")
+        after.assertForOverFulfill = false
+        pty.onOutput = { if $0.contains("after") { after.fulfill() } }
+        pty.send(Array("after\n".utf8))
+        wait(for: [after], timeout: 5)
+        pty.terminate()
+    }
+
     func testHost_scanSelectConfirm_drivesKeystrokesAndFinishes() {
         let fake = FakePTY()
         // Large tick interval so the real timer never fires; we step manually.

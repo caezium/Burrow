@@ -190,6 +190,14 @@ test('every public HTML page loads analytics and generated pages remain reproduc
     execFileSync('python3', ['scripts/site-release.py', '--check'], { cwd: root, stdio: 'pipe' })
 })
 
+test('install page explains the manual recovery path for failed in-app updates', () => {
+    const install = fs.readFileSync(path.join(root, 'docs', 'install.html'), 'utf8')
+
+    assert.match(install, /If the in-app update can.t complete, quit Burrow/)
+    assert.match(install, /replace Burrow\.app in Applications/)
+    assert.match(install, /Your settings and history stay on this Mac/)
+})
+
 test('deployment injection validates the key and replaces exactly one placeholder', (t) => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'burrow-site-analytics-'))
     t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }))

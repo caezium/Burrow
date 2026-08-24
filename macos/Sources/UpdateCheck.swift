@@ -16,6 +16,11 @@ enum UpdateStartPolicy {
     static func shouldStartForAutomaticChecks(enabled: Bool) -> Bool { enabled }
 }
 
+enum UpdateRecovery {
+    // Keep this stable: it is the canonical recovery endpoint when an in-app update cannot finish.
+    static let manualDownloadURL = URL(string: "https://burrow.computer/install")!
+}
+
 enum UpdateFailureCategory: String, Equatable {
     case appTranslocation = "app_translocation"
     case transientDownload = "transient_download"

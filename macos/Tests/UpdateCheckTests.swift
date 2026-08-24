@@ -31,6 +31,13 @@ final class UpdateCheckTests: XCTestCase {
         XCTAssertTrue(UpdateStartPolicy.shouldStartForAutomaticChecks(enabled: true))
     }
 
+    func testManualUpdateRecoveryUsesCanonicalInstallPage() {
+        XCTAssertEqual(
+            UpdateRecovery.manualDownloadURL.absoluteString,
+            "https://burrow.computer/install"
+        )
+    }
+
     func testTranslocatedSparkleFailureRequiresMovingTheAppWithoutCreatingASentryIssue() {
         let error = NSError(domain: SUSparkleErrorDomain, code: 1005)
 

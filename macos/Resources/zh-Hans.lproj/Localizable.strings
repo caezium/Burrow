@@ -414,6 +414,7 @@
 "Sparkle checks Burrow's signed update feed after startup settles and about once a day. It asks before downloading or installing anything." = "Sparkle 会在启动稳定后及大约每天一次检查 Burrow 的签名更新源。下载或安装前都会先询问。";
 "Check for updates automatically" = "自动检查更新";
 "Check for Updates" = "检查更新";
+"Download Latest Version" = "下载最新版本";
 "About Burrow" = "关于 Burrow";
 "Update didn't complete" = "更新未完成";
 "Update external engine" = "更新外部引擎";

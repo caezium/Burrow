@@ -373,9 +373,20 @@ struct SettingsView: View {
                     PillButton(title: "Check for Updates", filled: false) { UpdateCheck.checkNow() }
                     PillButton(title: "About Burrow", filled: false) { AppDelegate.shared?.showAboutPanel() }
                     Spacer()
-                    Link(NSLocalizedString("Source on GitHub", comment: ""),
-                         destination: URL(string: "https://github.com/caezium/Burrow")!)
-                        .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.green)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Link(NSLocalizedString("Download Latest Version", comment: ""),
+                             destination: UpdateRecovery.manualDownloadURL)
+                        Link(NSLocalizedString("Source on GitHub", comment: ""),
+                             destination: URL(string: "https://github.com/caezium/Burrow")!)
+                        // The harmless UI-only rollout validator (issue #322):
+                        // a cached, telemetry-gated boolean that adds one
+                        // factual link and does nothing else. OFF by default.
+                        if FeatureFlags.isEnabled(.aboutReleaseNotesLink) {
+                            Link(NSLocalizedString("Release Notes", comment: ""),
+                                 destination: URL(string: "https://github.com/caezium/Burrow/releases")!)
+                        }
+                    }
+                    .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.green)
                 }
             }
         }

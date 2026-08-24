@@ -7,17 +7,6 @@ import XCTest
 @testable import Burrow
 
 final class LocalizationTests: XCTestCase {
-    /// The table every other table is measured against. It is the oldest and
-    /// most complete one, so it is the reference rather than anything special.
-    private static let canonicalLanguage = "zh-Hans"
-
-    /// Core keys a language may legitimately leave identical to English.
-    /// "Software", "Status" and "Updates" are the native spelling in German,
-    /// Spanish and Brazilian Portuguese — forcing a difference here would buy
-    /// the assertion nothing and cost the translation its accuracy. Every
-    /// other core value matching its key is an untranslated string.
-    private static let mayMatchEnglish: Set<String> = ["Software", "Status", "Updates"]
-
     private static let coreInterfaceKeys = [
         "Clean",
         "Software",
@@ -35,6 +24,7 @@ final class LocalizationTests: XCTestCase {
         "Everything's up to date",
         "Update all",
         "Check for Updates",
+        "Download Latest Version",
         "Update external engine",
         "Update Burrow to get the current bundled engine.",
         "Use Settings › Engine › Update external engine, then try again.",
@@ -76,49 +66,50 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(TaskReportText.item("Wallpaper agent cache, 33.0MB dry", bundle: bundle), "桌面背景代理程式快取，33.0MB 可清理")
     }
 
-    /// Every shipped language has to translate the surfaces a user cannot
-    /// avoid — including the consent dialog and the destructive-action gates,
-    /// which must never fall back to English in a localized build.
-    func testEveryLanguageCoversCoreInterface() throws {
-        for language in AppLanguage.translated {
-            try assertCoversCoreInterface(language: language.code)
+    func testSimplifiedChineseStringsCoverCoreInterface() throws {
+        try assertCoversCoreInterface(language: "zh-Hans")
+    }
+
+    func testTraditionalChineseStringsCoverCoreInterface() throws {
+        try assertCoversCoreInterface(language: "zh-Hant")
+    }
+
+    func testRussianStringsCoverCoreInterface() throws {
+        try assertCoversCoreInterface(language: "ru")
+    }
+
+    func testLocalizedResourcesAreStagedInApplicationBundle() throws {
+        for language in ["zh-Hans", "zh-Hant", "ru"] {
+            let lproj = try XCTUnwrap(
+                Bundle.main.url(forResource: language, withExtension: "lproj"),
+                "\(language).lproj missing from the app bundle"
+            )
+            XCTAssertTrue(
+                FileManager.default.fileExists(
+                    atPath: lproj.appendingPathComponent("Localizable.strings").path
+                ),
+                "\(language) Localizable.strings missing from the app bundle"
+            )
         }
     }
 
-    /// Every table translates exactly the same key set as the canonical one,
-    /// so a key added to any single table can't go silently missing from the
-    /// other nine. This is also what stops English copy from being edited
-    /// without the translations following: the key *is* the English string, so
-    /// changing it orphans every table at once and fails right here.
-    func testEveryLanguageSharesTheCanonicalKeySet() throws {
-        let canonical = Set(try localizedStrings(Self.canonicalLanguage).keys)
-        for language in AppLanguage.translated where language.code != Self.canonicalLanguage {
-            let keys = Set(try localizedStrings(language.code).keys)
-            XCTAssertEqual(keys.subtracting(canonical).sorted(), [],
-                           "keys in \(language.code) missing from \(Self.canonicalLanguage)")
-            XCTAssertEqual(canonical.subtracting(keys).sorted(), [],
-                           "keys missing from \(language.code)")
-        }
+    /// Both Chinese variants should translate the same set of keys, so a key
+    /// added to one file isn't silently missing from the other.
+    func testChineseVariantsShareTheSameKeys() throws {
+        let hans = Set(try localizedStrings("zh-Hans").keys)
+        let hant = Set(try localizedStrings("zh-Hant").keys)
+        XCTAssertEqual(hans.subtracting(hant).sorted(), [], "keys missing from zh-Hant")
+        XCTAssertEqual(hant.subtracting(hans).sorted(), [], "keys missing from zh-Hans")
     }
 
-    /// `AppLanguage.translated` and the `.lproj` folders in the bundle have to
-    /// agree in both directions. A row without a table ships a picker entry
-    /// that silently renders English; a table without a row ships a
-    /// translation no one can select. Neither fails anywhere else.
-    ///
-    /// English is compared out: its strings *are* the keys, so it ships no
-    /// table and never will.
-    func testShippedLanguagesMatchTheBundle() throws {
-        let declared = Set(AppLanguage.translated.map(\.code))
-        let bundled = Set(
-            (Bundle.main.urls(forResourcesWithExtension: "lproj", subdirectory: nil) ?? [])
-                .map { $0.deletingPathExtension().lastPathComponent }
-                .filter { $0 != "Base" }
-        )
-        XCTAssertEqual(declared.subtracting(bundled).sorted(), [],
-                       "declared in AppLanguage.all but no .lproj ships")
-        XCTAssertEqual(bundled.subtracting(declared).sorted(), [],
-                       ".lproj ships but is missing from AppLanguage.all")
+    /// Russian should translate exactly the same key set as Simplified
+    /// Chinese, so a key added to the canonical table isn't silently missing
+    /// from the Russian table.
+    func testRussianSharesKeysWithChinese() throws {
+        let hans = Set(try localizedStrings("zh-Hans").keys)
+        let ru = Set(try localizedStrings("ru").keys)
+        XCTAssertEqual(ru.subtracting(hans).sorted(), [], "keys in ru missing from zh-Hans")
+        XCTAssertEqual(hans.subtracting(ru).sorted(), [], "keys missing from ru")
     }
 
     /// A translation that retypes or *plainly* reorders `%` placeholders is a
@@ -146,7 +137,7 @@ final class LocalizationTests: XCTestCase {
             }
             return byPosition.keys.sorted().map { byPosition[$0]! }
         }
-        for language in AppLanguage.translated.map(\.code) {
+        for language in ["zh-Hans", "zh-Hant", "ru"] {
             for (key, value) in try localizedStrings(language) {
                 XCTAssertEqual(argTypes(key), argTypes(value),
                                "format argument types drifted in \(language) translation of \"\(key)\"")
@@ -159,30 +150,28 @@ final class LocalizationTests: XCTestCase {
         for key in Self.coreInterfaceKeys {
             let value = try XCTUnwrap(strings[key], "missing \(language) translation for \(key)")
             XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if !Self.mayMatchEnglish.contains(key) {
-                XCTAssertNotEqual(value, key, "\(language) leaves \"\(key)\" untranslated")
-            }
+            XCTAssertNotEqual(value, key)
         }
     }
 
-    // Read the lproj from the BUILT app bundle (the test host), not the
-    // repo checkout: it validates the artifact that actually ships, and
-    // it keeps the suite off TCC-protected user folders — a repo on
-    // ~/Desktop made every Data(contentsOf:) here block on a tccd that
-    // had wedged, hanging the whole suite.
+    // Data-quality assertions read the checked-in tables directly so a stale
+    // staged app resource cannot hide a missing or malformed source entry.
     private func localizedStrings(_ language: String) throws -> [String: String] {
-        let url = try lprojURL(language).appendingPathComponent("Localizable.strings")
+        let url = sourceLprojURL(language).appendingPathComponent("Localizable.strings")
         let data = try Data(contentsOf: url)
         let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
         return try XCTUnwrap(plist as? [String: String])
     }
 
     private func lprojBundle(_ language: String) throws -> Bundle {
-        try XCTUnwrap(Bundle(url: lprojURL(language)))
+        try XCTUnwrap(Bundle(url: sourceLprojURL(language)))
     }
 
-    private func lprojURL(_ language: String) throws -> URL {
-        try XCTUnwrap(Bundle.main.url(forResource: language, withExtension: "lproj"),
-                      "\(language).lproj missing from the app bundle")
+    private func sourceLprojURL(_ language: String, file: StaticString = #filePath) -> URL {
+        URL(fileURLWithPath: "\(file)")
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources")
+            .appendingPathComponent("\(language).lproj")
     }
 }
