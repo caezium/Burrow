@@ -183,7 +183,7 @@
           <div class="slabel mono">added</div>
           <ul class="slist">
             <li><b>The scan tells you when it's done.</b> A cache scan can run for minutes and used to end by just sitting there with a number. It now posts a completion notification saying what it found, honouring <b>Settings ▸ Notify when long operations finish</b>. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
-            <li><b>Two more agent tools.</b> <code>burrow_anomalies</code> and <code>burrow_agent_audit</code> join the MCP surface. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+            <li><b>Two more agent tools.</b> <code>burrow_anomalies</code> und <code>burrow_agent_audit</code> join the MCP surface. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
           </ul>
         </div>
         <div class="sblock">
@@ -557,7 +557,7 @@
         <div class="sblock">
           <div class="slabel mono">clean, software &amp; analyze</div>
           <ul class="slist">
-            <li><b>Bereinigen</b> now sorts the review <b>by reclaimable impact</b> and <b>flags sensitive paths</b> (keychain/credential locations) before you delete; the done screen shows your <b>all-time cleaned total</b>.</li>
+            <li><b>Bereinigen</b> now sorts the review <b>by reclaimable impact</b> und <b>flags sensitive paths</b> (keychain/credential locations) before you delete; the done screen shows your <b>all-time cleaned total</b>.</li>
             <li><b>Software</b>: App Store updates that need a newer macOS are hidden; ⌘R refreshes with a cache bypass; app search is alias-aware.</li>
             <li><b>Uninstall</b>: a Clear-Data-only subset, plus an input-method leftover warning.</li>
             <li><b>Analysieren</b>: one-tap whole-disk scan, and a treemap “Other” fold for tiny entries.</li>
@@ -576,7 +576,7 @@
         <div class="sblock">
           <div class="slabel mono">windows</div>
           <ul class="slist">
-            <li><b>Windows preview</b>: version-aligned to 0.9.0; no Windows-specific changes this release.</li>
+            <li><b>Windows-Vorschau</b>: version-aligned to 0.9.0; no Windows-specific changes this release.</li>
           </ul>
         </div>
       </div>
@@ -624,7 +624,7 @@
         <div class="sblock">
           <div class="slabel mono">windows</div>
           <ul class="slist">
-            <li><b>Windows preview</b>: a version-aligned 0.8.3 build is attached (<code>BurrowWin-0.8.3-win-x64.zip</code>). No Windows-specific changes this release.</li>
+            <li><b>Windows-Vorschau</b>: a version-aligned 0.8.3 build is attached (<code>BurrowWin-0.8.3-win-x64.zip</code>). No Windows-specific changes this release.</li>
           </ul>
         </div>
       </div>
@@ -714,9 +714,9 @@
           <div class="slabel mono">changed</div>
           <ul class="slist">
             <li>A warm, tactile redesign, a warm-coffee adaptive palette, film grain over a soft gradient, a floating icon rail in place of the top tabs, borderless cards, and the Geist / Cal Sans type system.</li>
-            <li><b>Overview</b>: Health pulled up into an open hero band over a cleaner three-up vitals grid.</li>
+            <li><b>Überblick</b>: Health pulled up into an open hero band over a cleaner three-up vitals grid.</li>
             <li><b>Verlauf</b>: a focal hero chart with a selectable metric strip; drag-select a span to surface the top processes for that spike.</li>
-            <li><b>Menu-bar HUD</b>: borderless tiles on the same warm ground, with Doctor and Restore reskinned to match and edge-fade scrollers throughout.</li>
+            <li><b>HUD in der Menüleiste</b>: borderless tiles on the same warm ground, with Doctor and Restore reskinned to match and edge-fade scrollers throughout.</li>
           </ul>
         </div>
         <div class="sblock">
@@ -756,7 +756,7 @@
             <li><b>Self-update</b>: Burrow checks itself for new versions (opt-in, default on) and shows a banner plus a menu-bar dot. It never installs on its own.</li>
             <li><b>Homebrew updates</b> appear the moment you open the Apps tab, and your own login items get on/off toggles.</li>
             <li>An optional <b>camera &amp; mic in-use indicator</b> in the menu-bar popover (off by default), reading the same signal as Control Center.</li>
-            <li><b>About</b> and <b>Check for Updates</b> now live in Settings too.</li>
+            <li><b>About</b> und <b>Check for Updates</b> now live in Settings too.</li>
           </ul>
         </div>
         <div class="sblock">
@@ -992,13 +992,13 @@
         <div class="sblock">
           <div class="slabel mono">added</div>
           <ul class="slist">
-            <li>New read-only MCP tools: <code>burrow_cleanup_history</code> and <code>burrow_deleted_files</code>.</li>
+            <li>New read-only MCP tools: <code>burrow_cleanup_history</code> und <code>burrow_deleted_files</code>.</li>
           </ul>
         </div>
         <div class="sblock">
           <div class="slabel mono">performance</div>
           <ul class="slist">
-            <li>Less energy in Software, dropped the per-app Spotlight query that kept <code>mds</code> and <code>mdworker</code> awake.</li>
+            <li>Less energy in Software, dropped the per-app Spotlight query that kept <code>mds</code> und <code>mdworker</code> awake.</li>
           </ul>
         </div>
       </div>
@@ -1016,7 +1016,7 @@
           <div class="slabel mono">added</div>
           <ul class="slist">
             <li><b>Touch ID for sudo</b>: cleanups that need admin rights authenticate with a fingerprint, via the engine's Touch ID support.</li>
-            <li><b>Menu-bar HUD</b>: live job status from the menu bar, or run without the icon entirely in Dock mode.</li>
+            <li><b>HUD in der Menüleiste</b>: live job status from the menu bar, or run without the icon entirely in Dock mode.</li>
             <li><b>MCP server</b>: ask Claude Code about your Mac through a read-only stdio server, including <code>burrow_process_usage</code>.</li>
             <li><b>简体中文</b>: Simplified Chinese localization.</li>
             <li><b>Verlauf</b>: long-range charts, five minutes out to ninety days, over a local SQLite store.</li>

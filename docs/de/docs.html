@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Burrow Documentation</title>
-<meta name="description" content="What every Burrow tool does, what it touches, the safety rules it follows, and how to connect it to a coding agent over MCP.">
+<title>Burrow-Dokumentation</title>
+<meta name="description" content="Was jedes Burrow-Werkzeug tut, woran es rührt, welche Sicherheitsregeln es befolgt und wie du es über MCP mit einem Coding-Agenten verbindest.">
 <meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="../burrow-icon.png">
 <link rel="canonical" href="https://burrow.computer/de/docs">
@@ -24,14 +24,14 @@
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://burrow.computer/#org","name":"Burrow","url":"https://burrow.computer","logo":"https://burrow.computer/burrow-icon-512.png","sameAs":["https://github.com/caezium/Burrow"]},{"@type":"WebSite","@id":"https://burrow.computer/#site","url":"https://burrow.computer","name":"Burrow","publisher":{"@id":"https://burrow.computer/#org"}}]}</script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Burrow","applicationCategory":"UtilitiesApplication","operatingSystem":"macOS 14+, Windows 10/11","description":"A free, open-source desktop utility that clears junk, finds duplicate and leftover files, maps disk usage, and watches live system status, with an MCP server so coding agents can read the machine.","url":"https://burrow.computer","downloadUrl":"https://burrow.computer/install","license":"https://github.com/caezium/Burrow/blob/main/LICENSE","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="Burrow Documentation">
-<meta property="og:description" content="What every Burrow tool does, what it touches, the safety rules it follows, and how to connect it to a coding agent over MCP.">
+<meta property="og:title" content="Burrow-Dokumentation">
+<meta property="og:description" content="Was jedes Burrow-Werkzeug tut, woran es rührt, welche Sicherheitsregeln es befolgt und wie du es über MCP mit einem Coding-Agenten verbindest.">
 <meta property="og:image" content="https://burrow.computer/burrow-icon-512.png">
 <meta property="og:url" content="https://burrow.computer/docs">
 <meta property="og:site_name" content="Burrow">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Burrow Documentation">
-<meta name="twitter:description" content="What every Burrow tool does, what it touches, the safety rules it follows, and how to connect it to a coding agent over MCP.">
+<meta name="twitter:title" content="Burrow-Dokumentation">
+<meta name="twitter:description" content="Was jedes Burrow-Werkzeug tut, woran es rührt, welche Sicherheitsregeln es befolgt und wie du es über MCP mit einem Coding-Agenten verbindest.">
 <script src="/analytics.js" defer></script>
 <style>
   @font-face { font-family: "Geist"; src: url("assets/fonts/Geist[wght].woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
@@ -130,97 +130,97 @@
 </div>
 
 <header class="hero page">
-  <h1>Documentation</h1>
-  <p>Everything Burrow does, what each tool touches, and the rules it follows before it removes anything.</p>
+  <h1>Dokumentation</h1>
+  <p>Alles, was Burrow tut, woran jedes Werkzeug rührt, und die Regeln, die es befolgt, bevor es irgendetwas entfernt.</p>
 </header>
 
 <main class="page">
   <div class="dwrap">
     <nav class="dtoc">
-      <h2>Contents</h2>
-      <a href="#overview">Overview</a>
-      <a href="#install">Installing</a>
-      <a href="#cleanup">Reclaiming space</a>
-      <a href="#apps">Applications</a>
-      <a href="#maintenance">Maintenance</a>
-      <a href="#disk">Understanding the disk</a>
-      <a href="#machine">Watching the machine</a>
-      <a href="#agents">Agents and MCP</a>
-      <a href="#safety">Safety model</a>
-      <a href="#privacy">Privacy and telemetry</a>
-      <a href="#troubleshooting">Troubleshooting</a>
+      <h2>Inhalt</h2>
+      <a href="#overview">Überblick</a>
+      <a href="#install">Installieren</a>
+      <a href="#cleanup">Platz zurückgewinnen</a>
+      <a href="#apps">Programme</a>
+      <a href="#maintenance">Wartung</a>
+      <a href="#disk">Die Festplatte verstehen</a>
+      <a href="#machine">Den Mac beobachten</a>
+      <a href="#agents">Agenten und MCP</a>
+      <a href="#safety">Sicherheitsmodell</a>
+      <a href="#privacy">Datenschutz und Telemetrie</a>
+      <a href="#troubleshooting">Fehlerbehebung</a>
     </nav>
     <div class="dbody">
     <section class="dsec" id="overview">
-      <h2>Overview</h2>
-      <p>Burrow is a native desktop app for macOS, with a WinUI 3 build for Windows in beta. It covers the jobs people usually split across a cleaner, an uninstaller, a duplicate finder, a disk mapper, and a menu-bar monitor, and it exposes all of it to coding agents over MCP.</p>
-      <p>Fourteen tools share one window. Each re-themes the interface in its own colour, because the colour is how a tool tells you what it is about to touch. Two surfaces have no command-line equivalent at all: the long-range history, and the MCP server.</p>
-      <p>Everything runs locally. Scans, metrics, and history stay on the machine, and the MCP server binds to loopback only.</p>
+      <h2>Überblick</h2>
+      <p>Burrow ist eine native Desktop-App für macOS, mit einer WinUI-3-Version für Windows als Beta. Sie übernimmt die Aufgaben, die sonst auf ein Aufräumwerkzeug, einen Deinstallierer, eine Duplikatsuche, eine Festplattenkarte und einen Monitor in der Menüleiste verteilt sind — und öffnet all das über MCP für Coding-Agenten.</p>
+      <p>Vierzehn Werkzeuge teilen sich ein Fenster. Jedes färbt die Oberfläche in seiner eigenen Farbe, denn die Farbe sagt dir, woran es gleich rührt. Für zwei davon gibt es überhaupt keine Entsprechung auf der Kommandozeile: den Langzeitverlauf und den MCP-Server.</p>
+      <p>Alles läuft lokal. Scans, Messwerte und Verlauf bleiben auf dem Mac, und der MCP-Server lauscht ausschließlich auf dem Loopback.</p>
     </section>
     <section class="dsec" id="install">
-      <h2>Installing</h2>
-      <p>Homebrew is the shortest path on macOS. It installs the Developer ID signed, Apple-notarized build with its engine bundled, and preserves quarantine so Gatekeeper can validate the ticket.</p>
+      <h2>Installieren</h2>
+      <p>Auf macOS ist Homebrew der kürzeste Weg. Es installiert die mit Developer ID signierte, von Apple notarisierte Version samt mitgelieferter Engine und behält die Quarantäne bei, damit Gatekeeper das Ticket prüfen kann.</p>
       <pre><code>brew install --cask caezium/tap/burrow</code></pre>
-      <p>Direct downloads and the Windows preview are on the <a href="../install" target="_blank" rel="noopener">Installationsseite</a>. Updates arrive in-app over a signed Sparkle feed; Homebrew installs update with <code>brew upgrade</code>.</p>
-      <h3 id="full-disk-access">Full Disk Access</h3>
-      <p>Burrow runs a safe scan without it. Granting Full Disk Access lets it reach deeper Application Support and container caches that macOS otherwise hides. You can grant or revoke it at any time in System Settings under Privacy &amp; Security.</p>
+      <p>Direkte Downloads und die Windows-Vorschau findest du auf der <a href="../install" target="_blank" rel="noopener">Installationsseite</a>. Updates kommen über einen signierten Sparkle-Feed in der App an; Homebrew-Installationen aktualisierst du mit <code>brew upgrade</code>.</p>
+      <h3 id="full-disk-access">Vollständiger Festplattenzugriff</h3>
+      <p>Ohne ihn führt Burrow einen sicheren Scan aus. Mit vollständigem Festplattenzugriff erreicht es tiefer liegende Application-Support- und Container-Caches, die macOS sonst verbirgt. Du kannst ihn jederzeit in den Systemeinstellungen unter „Datenschutz &amp; Sicherheit“ erteilen oder entziehen.</p>
     </section>
     <section class="dsec" id="cleanup">
-      <h2>Reclaiming space</h2>
+      <h2>Platz zurückgewinnen</h2>
       <h3 id="clean">Bereinigen</h3>
-      <p>Scans more than ten categories: application caches, system caches, logs, developer tool caches, AI tool caches, browser data, cloud storage clients, design tools, communication apps, and miscellaneous temporary files.</p>
-      <p>The review list is sorted by how safe each item is to remove. Regenerable caches come first, user-visible state last. Sizing is hardlink aware, so files shared between tools are counted once rather than once per path.</p>
+      <p>Durchsucht mehr als zehn Kategorien: App-Caches, System-Caches, Protokolle, Caches von Entwicklerwerkzeugen, Caches von KI-Werkzeugen, Browserdaten, Cloud-Speicher-Clients, Design-Werkzeuge, Kommunikations-Apps und sonstige temporäre Dateien.</p>
+      <p>Die Prüfliste ist danach sortiert, wie sicher jeder Eintrag zu entfernen ist. Neu erzeugbare Caches stehen oben, sichtbarer Zustand unten. Die Größenberechnung kennt Hardlinks, sodass Dateien, die sich zwei Werkzeuge teilen, einmal zählen statt einmal pro Pfad.</p>
       <h3 id="purge">Tiefenreinigung</h3>
-      <p>The diggings development work leaves behind, kept separate from ordinary caches because the trade-offs differ. Build output such as <code>dist</code>, <code>build</code>, <code>target</code>, <code>.next</code>, <code>.build</code>, <code>DerivedData</code>, <code>__pycache__</code> und  <code>coverage</code> rebuilds locally with no network. Dependency directories such as <code>node_modules</code>, <code>Pods</code> und  <code>venv</code> need to be refetched, so they are shown with that cost attached and stay unchecked until you confirm them.</p>
+      <p>Der Aushub, den Entwicklungsarbeit hinterlässt — getrennt von gewöhnlichen Caches, weil die Abwägung eine andere ist. Build-Ausgaben wie <code>dist</code>, <code>build</code>, <code>target</code>, <code>.next</code>, <code>.build</code>, <code>DerivedData</code>, <code>__pycache__</code> und  <code>coverage</code> entstehen lokal und ohne Netz neu. Abhängigkeitsordner wie <code>node_modules</code>, <code>Pods</code> und  <code>venv</code> müssen erneut geladen werden; sie werden deshalb mit diesen Kosten angezeigt und bleiben abgewählt, bis du sie bestätigst.</p>
       <h3 id="installers">Installationsdateien</h3>
-      <p>Finds <code>.dmg</code> and <code>.pkg</code> files still sitting in Downloads long after the application was installed. Small individually, frequently tens of gigabytes in aggregate on a machine that has been running for a few years.</p>
+      <p>Findet <code>.dmg</code> und <code>.pkg</code> -Dateien, die noch lange nach der Installation im Download-Ordner liegen. Einzeln klein, in Summe auf einem seit ein paar Jahren laufenden Mac häufig zweistellige Gigabytebeträge.</p>
       <h3 id="duplicates">Duplikate</h3>
-      <p>A staged content hash: group by size, hash a prefix of the candidates, then hash in full only what still matches. Hardlinked and cloned files are treated as one object, so the reclaimable figure is the figure you actually recover.</p>
+      <p>Ein gestufter Inhalts-Hash: erst nach Größe gruppieren, dann einen Anfangsteil der Kandidaten hashen und nur das vollständig hashen, was danach noch übereinstimmt. Hardlinks und Klone gelten als ein Objekt, sodass die angezeigte Menge auch die ist, die du wirklich zurückbekommst.</p>
       <h3 id="similar-photos">Ähnliche Fotos</h3>
-      <p>Perceptual matching for images that are visually near-identical but differ byte for byte, such as burst frames and re-exports. Content hashing cannot see these; this can.</p>
+      <p>Visueller Abgleich für Bilder, die fast gleich aussehen, sich aber Byte für Byte unterscheiden — Serienbilder etwa oder erneute Exporte. Ein Inhalts-Hash sieht die nicht; das hier schon.</p>
     </section>
     <section class="dsec" id="apps">
-      <h2>Applications</h2>
+      <h2>Programme</h2>
       <h3 id="apps">Apps</h3>
-      <p>Every installed application, sortable by size, name, recency, or source. Multi-select uninstall removes the bundle along with its preferences, Application Support data, containers, saved state, and launch agents.</p>
-      <p>A Homebrew tab checks which casks and formulae are outdated and can update them in place. Burrow resolves the cask token rather than the display name, because a dozen popular apps use tokens that differ from what the app calls itself.</p>
+      <p>Jedes installierte Programm, sortierbar nach Größe, Name, letzter Nutzung oder Herkunft. Beim Deinstallieren mehrerer auf einmal verschwindet das Bundle samt Einstellungen, Application-Support-Daten, Containern, gesichertem Zustand und Launch Agents.</p>
+      <p>Ein Homebrew-Tab prüft, welche Casks und Formulae veraltet sind, und kann sie an Ort und Stelle aktualisieren. Burrow löst dabei das Cask-Token auf statt den angezeigten Namen, weil ein Dutzend verbreiteter Apps Tokens benutzt, die anders lauten als der Name der App.</p>
       <h3 id="leftovers">Reste</h3>
-      <p>The other direction: support files, preferences, and launch agents belonging to applications that are already gone. Burrow matches each orphan back to the application that left it, so you are approving a named app's remains rather than a list of paths.</p>
-      <p>Launch agents for deleted apps are the ones worth clearing first. <code>launchd</code> keeps trying to start a binary that no longer exists, which produces log noise on every boot.</p>
+      <p>Die andere Richtung: zugehörige Dateien, Einstellungen und Launch Agents von Programmen, die längst weg sind. Burrow ordnet jede verwaiste Datei der App zu, die sie hinterlassen hat — du bestätigst also die Reste einer benannten App statt einer Liste von Pfaden.</p>
+      <p>Launch Agents gelöschter Apps lohnen sich zuerst. <code>launchd</code> versucht weiter, ein Programm zu starten, das es nicht mehr gibt — und erzeugt bei jedem Start Rauschen im Protokoll.</p>
     </section>
     <section class="dsec" id="maintenance">
-      <h2>Maintenance</h2>
+      <h2>Wartung</h2>
       <h3 id="optimize">Optimieren</h3>
-      <p>The routine chores, batched behind one prompt: rebuild Quick Look, repair caches and metadata, flush DNS, and audit login items.</p>
+      <p>Die Routinearbeiten, gebündelt hinter einer Abfrage: Quick Look neu aufbauen, Caches und Metadaten reparieren, DNS leeren und Anmeldeobjekte prüfen.</p>
       <h3 id="tune-up">Feinschliff</h3>
-      <p>Smart-Care in a single pass. Burrow picks the maintenance that actually applies to this machine right now and runs it end to end, rather than offering a fixed checklist that mostly does not apply.</p>
+      <p>Rundum-Pflege in einem Durchgang. Burrow wählt die Wartung, die auf diesen Mac gerade wirklich zutrifft, und führt sie vollständig aus, statt eine feste Liste anzubieten, die meist nicht passt.</p>
     </section>
     <section class="dsec" id="disk">
-      <h2>Understanding the disk</h2>
+      <h2>Die Festplatte verstehen</h2>
       <h3 id="analyze">Analysieren</h3>
-      <p>A squarified treemap of the whole volume, sized by real allocated bytes. Drill into any branch to see the same breakdown one level down, then reveal in Finder or move to the Trash from the context menu.</p>
-      <p>A treemap answers "what is using my disk" better than a sorted list because the largest consumer is the largest shape rather than the first row you have to scroll to find.</p>
-      <div class="cta">If free space does not increase after you delete something large, local Time Machine snapshots are usually pinning it. See <a href="../blog/mac-says-disk-is-full-but-it-isnt" target="_blank" rel="noopener">why your Mac says the disk is full when it isn't</a>.</div>
+      <p>Eine Treemap des ganzen Volumes, skaliert nach tatsächlich belegten Bytes. Steig in jeden Zweig hinab, um dieselbe Aufschlüsselung eine Ebene tiefer zu sehen, und zeig ihn dann im Finder oder leg ihn aus dem Kontextmenü in den Papierkorb.</p>
+      <p>Auf die Frage „was belegt meine Festplatte“ antwortet eine Treemap besser als eine sortierte Liste, weil der größte Verbraucher die größte Fläche ist statt die erste Zeile, zu der du erst scrollen musst.</p>
+      <div class="cta">Wenn der freie Platz nach dem Löschen von etwas Großem nicht wächst, halten das meist lokale Time-Machine-Schnappschüsse fest. Siehe <a href="../blog/mac-says-disk-is-full-but-it-isnt" target="_blank" rel="noopener">warum dein Mac die Festplatte für voll hält, obwohl sie es nicht ist</a>.</div>
     </section>
     <section class="dsec" id="machine">
-      <h2>Watching the machine</h2>
+      <h2>Den Mac beobachten</h2>
       <h3 id="status">Status</h3>
-      <p>CPU, memory, GPU, disk, network, and battery on one page, each with a sparkline. The process table sorts by any column and pins the rows you want to keep in view. On Apple Silicon, fan speed and die temperatures are read natively from the SMC.</p>
+      <p>CPU, Arbeitsspeicher, GPU, Festplatte, Netzwerk und Batterie auf einer Seite, jeweils mit Verlaufskurve. Die Prozessliste sortiert nach jeder Spalte und heftet die Zeilen an, die im Blick bleiben sollen. Auf Apple Silicon werden Lüfterdrehzahl und Chiptemperaturen nativ aus dem SMC gelesen.</p>
       <h3 id="history">Verlauf</h3>
-      <p>Every sample Status takes lands in a local SQLite file. Scrub from five minutes out to ninety days, with peak-per-process tables for the moments the fans actually spun up. Nothing is uploaded.</p>
+      <p>Jede Messung, die Status nimmt, landet in einer lokalen SQLite-Datei. Spul von fünf Minuten bis neunzig Tage zurück, mit Spitzenwerten je Prozess für die Momente, in denen die Lüfter wirklich hochgingen. Nichts wird hochgeladen.</p>
       <h3 id="ports">Ports</h3>
-      <p>Every listening port with the process behind it, its binary path, and its owning user, refreshed live. Answers "what is holding 3000" without reaching for <code>lsof</code>.</p>
+      <p>Jeder offene Port samt Prozess dahinter, dessen Programmpfad und dem Benutzer, dem er gehört — live aktualisiert. Beantwortet „was belegt Port 3000“, ohne dass du zu <code>lsof</code>.</p>
       <h3 id="network">Netzwerk</h3>
-      <p>Live throughput per interface and per process. Unlike Activity Monitor's cumulative totals, this is a rate, so the process saturating your connection right now is the one at the top.</p>
+      <p>Live-Durchsatz pro Schnittstelle und pro Prozess. Anders als die aufsummierten Werte der Aktivitätsanzeige ist das eine Rate — der Prozess, der deine Leitung gerade auslastet, steht also oben.</p>
       <h3 id="get-online">Wieder online</h3>
-      <p>A guided path back to the surface when the connection drops: interface state, DNS resolution, gateway reachability, and captive portal detection, checked in order.</p>
-      <h3 id="menu-bar-hud">Menu-bar HUD</h3>
-      <p>The whole picture drops down from the menu bar without opening the app: live metrics, top processes, and a jump into whichever tool you need.</p>
+      <p>Ein geführter Weg zurück an die Oberfläche, wenn die Verbindung abreißt: Zustand der Schnittstelle, DNS-Auflösung, Erreichbarkeit des Gateways und Erkennung einer Anmeldeseite, der Reihe nach geprüft.</p>
+      <h3 id="menu-bar-hud">HUD in der Menüleiste</h3>
+      <p>Das ganze Bild klappt aus der Menüleiste herunter, ohne die App zu öffnen: Live-Messwerte, Top-Prozesse und ein Sprung in das Werkzeug, das du gerade brauchst.</p>
     </section>
     <section class="dsec" id="agents">
-      <h2>Agents and MCP</h2>
-      <p>Burrow doubles as an MCP server, so a coding agent can ask the machine questions rather than guessing from your source code. Twenty-six tools are exposed. Fourteen are read-only and available immediately; the ones that change your machine require their own explicit opt-in in Settings before an agent can call them at all.</p>
-      <p>Point Claude Code at the app:</p>
+      <h2>Agenten und MCP</h2>
+      <p>Burrow ist zugleich ein MCP-Server, sodass ein Coding-Agent den Mac befragen kann, statt aus deinem Quelltext zu raten. Sechsundzwanzig Werkzeuge stehen bereit. Vierzehn lesen nur und sind sofort verfügbar; die, die deinen Mac verändern, brauchen jeweils eine eigene ausdrückliche Freigabe in den Einstellungen, bevor ein Agent sie überhaupt aufrufen kann.</p>
+      <p>Richte Claude Code auf die App:</p>
       <pre><code>{
   "mcpServers": {
     "burrow": {
@@ -229,41 +229,41 @@
     }
   }
 }</code></pre>
-      <h3 id="read-only-tools">Read-only tools</h3>
+      <h3 id="read-only-tools">Nur lesende Werkzeuge</h3>
       <p><code>burrow_snapshot</code>, <code>burrow_history</code>, <code>burrow_top_processes</code>, <code>burrow_process_usage</code>, <code>burrow_info</code>, <code>burrow_analyze</code>, <code>burrow_dupes</code>, <code>burrow_orphans</code>, <code>burrow_photos</code>, <code>burrow_ports</code>, <code>burrow_net</code>, <code>burrow_doctor</code>, <code>burrow_disk_forecast</code> und  <code>burrow_list_apps</code>.</p>
-      <h3 id="gated-tools">Gated tools</h3>
-      <p><code>burrow_clean</code>, <code>burrow_purge</code>, <code>burrow_uninstall</code>, <code>burrow_optimize</code> und  <code>burrow_installer</code> change the machine and stay unavailable until you turn them on.</p>
+      <h3 id="gated-tools">Freizuschaltende Werkzeuge</h3>
+      <p><code>burrow_clean</code>, <code>burrow_purge</code>, <code>burrow_uninstall</code>, <code>burrow_optimize</code> und  <code>burrow_installer</code> verändern den Mac und bleiben unerreichbar, bis du sie einschaltest.</p>
       <h3 id="http-api">HTTP API</h3>
-      <p>A loopback HTTP API on <code>127.0.0.1:9277</code> serves the same read-only data for tools that speak HTTP rather than MCP. It is on by default and can be turned off in Settings. It binds to loopback only and is never reachable from another machine.</p>
+      <p>Eine HTTP-API auf dem Loopback unter <code>127.0.0.1:9277</code> liefert dieselben nur lesenden Daten für Werkzeuge, die HTTP statt MCP sprechen. Sie ist standardmäßig an und lässt sich in den Einstellungen abschalten. Sie lauscht ausschließlich auf dem Loopback und ist von einem anderen Rechner aus nie erreichbar.</p>
     </section>
     <section class="dsec" id="safety">
-      <h2>Safety model</h2>
-      <p>Burrow is built so that a mistake costs you a rebuild rather than your data. Four rules hold everywhere in the app.</p>
+      <h2>Sicherheitsmodell</h2>
+      <p>Burrow ist so gebaut, dass ein Fehler dich einen erneuten Build kostet und nicht deine Daten. Vier Regeln gelten überall in der App.</p>
       <ul>
-        <li><b>Erst zeigen, dann löschen.</b> Every action lists the files and the byte count before anything moves. You confirm; Burrow acts.</li>
-        <li><b>Sorted by consequence.</b> Categories are ordered by how safe they are to remove, and anything with real rebuild cost stays unchecked until you tick it yourself.</li>
-        <li><b>No background root helper.</b> When a task needs administrator rights, macOS's own authorization dialog asks you, Burrow runs that one command, and the process exits. There is no privileged daemon left running.</li>
-        <li><b>A protection list you can read.</b> Paths that are never eligible for removal are enforced in code rather than by convention, and the source is public.</li>
+        <li><b>Erst zeigen, dann löschen.</b> Jede Aktion listet Dateien und Bytes auf, bevor sich etwas bewegt. Du bestätigst, Burrow handelt.</li>
+        <li><b>Nach Tragweite sortiert.</b> Die Kategorien sind danach geordnet, wie sicher sie zu entfernen sind, und alles mit echten Kosten fürs Neuerzeugen bleibt abgewählt, bis du es selbst ankreuzt.</li>
+        <li><b>Kein Root-Helfer im Hintergrund.</b> Braucht eine Aufgabe Administratorrechte, fragt dich der Autorisierungsdialog von macOS selbst, Burrow führt genau diesen einen Befehl aus, und der Prozess endet. Es bleibt kein privilegierter Dienst zurück.</li>
+        <li><b>Eine Schutzliste, die du lesen kannst.</b> Pfade, die nie zum Entfernen infrage kommen, sind im Code erzwungen und nicht bloß Konvention — und der Quelltext ist öffentlich.</li>
       </ul>
-      <h3 id="signing-and-notarization">Signing and notarization</h3>
-      <p>Version 0.11.0 and every later macOS release is Developer ID signed and Apple-notarized, and a tag cannot publish unless signing, notarization, ticket stapling, and Gatekeeper assessment all succeed. Archived 0.10.5-and-earlier builds predate that guarantee: right-click and choose Open if Gatekeeper blocks one.</p>
+      <h3 id="signing-and-notarization">Signatur und Notarisierung</h3>
+      <p>Version 0.11.0 und jede spätere macOS-Version ist mit Developer ID signiert und von Apple notarisiert, und ein Tag kann nur veröffentlichen, wenn Signatur, Notarisierung, Ticket-Anheftung und Gatekeeper-Prüfung sämtlich gelingen. Archivierte Builds bis 0.10.5 stammen aus der Zeit vor dieser Zusage: Rechtsklick und „Öffnen“ wählen, falls Gatekeeper eine blockiert.</p>
     </section>
     <section class="dsec" id="privacy">
-      <h2>Privacy and telemetry</h2>
-      <p>No files, paths, URLs, or metrics leave the machine. Scans, history, and the MCP server are entirely local.</p>
-      <p>Burrow does send anonymous, opt-out usage and diagnostics: crash and hang reports, launch and update outcomes, and sampled fixed-name performance spans. It never records the screen and never sends user files or their contents. One switch in Settings stops both services, and builds made from source ship with telemetry inert.</p>
-      <p>Every field is listed in <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>. This website separately uses cookieless analytics that create no person profile, store no browser identifier, strip URL queries and fragments, and honour Do Not Track.</p>
+      <h2>Datenschutz und Telemetrie</h2>
+      <p>Keine Dateien, Pfade, URLs oder Messwerte verlassen den Mac. Scans, Verlauf und der MCP-Server sind vollständig lokal.</p>
+      <p>Burrow sendet allerdings anonyme, abschaltbare Nutzungs- und Diagnosedaten: Berichte über Abstürze und Hänger, Ergebnisse von Start und Update sowie stichprobenartige Leistungsmessungen mit festen Namen. Es zeichnet nie den Bildschirm auf und sendet nie Dateien der Nutzenden oder deren Inhalte. Ein Schalter in den Einstellungen stoppt beide Dienste, und aus dem Quelltext gebaute Versionen senden von vornherein nichts.</p>
+      <p>Jedes Feld ist aufgeführt in <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>. Diese Website nutzt davon unabhängig eine Analyse ohne Cookies, die kein Personenprofil anlegt, keine Browserkennung speichert, Abfragen und Fragmente aus der URL entfernt und Do Not Track beachtet.</p>
     </section>
     <section class="dsec" id="troubleshooting">
-      <h2>Troubleshooting</h2>
-      <h3 id="gatekeeper-blocks-the-app">Gatekeeper blocks the app</h3>
-      <p>For 0.11.0 and later this should not happen; if it does, the download was likely modified in transit, so fetch it again from GitHub. For archived builds, right-click the app and choose Open.</p>
-      <h3 id="full-disk-access-looks-granted-but-scans-stay-shallow">Full Disk Access looks granted but scans stay shallow</h3>
-      <p>macOS ties the grant to the app's code signature. Replacing the app with a differently signed build invalidates it. Remove Burrow from the Full Disk Access list, then add it again.</p>
-      <h3 id="free-space-did-not-increase">Free space did not increase</h3>
-      <p>Deleting a file does not release blocks that a local Time Machine snapshot still references. macOS thins snapshots automatically under pressure. <code>tmutil listlocalsnapshots /</code> shows what exists.</p>
-      <h3 id="an-agent-cannot-see-the-gated-tools">An agent cannot see the gated tools</h3>
-      <p>Cleaning, uninstalling, and the other actuating tools stay hidden until you enable agent actions in Settings. This is deliberate: an agent should not be able to delete anything you have not separately authorised.</p>
+      <h2>Fehlerbehebung</h2>
+      <h3 id="gatekeeper-blocks-the-app">Gatekeeper blockiert die App</h3>
+      <p>Ab 0.11.0 sollte das nicht passieren; tut es das doch, wurde der Download unterwegs vermutlich verändert — lade ihn dann erneut von GitHub. Bei archivierten Builds: Rechtsklick auf die App und „Öffnen“ wählen.</p>
+      <h3 id="full-disk-access-looks-granted-but-scans-stay-shallow">Der Festplattenzugriff sieht erteilt aus, die Scans bleiben aber flach</h3>
+      <p>macOS knüpft die Erlaubnis an die Codesignatur der App. Ersetzt du die App durch eine anders signierte Version, verfällt sie. Entferne Burrow aus der Liste für den vollständigen Festplattenzugriff und füge es erneut hinzu.</p>
+      <h3 id="free-space-did-not-increase">Der freie Speicher ist nicht gewachsen</h3>
+      <p>Eine Datei zu löschen gibt keine Blöcke frei, auf die ein lokaler Time-Machine-Schnappschuss noch verweist. macOS dünnt die Schnappschüsse bei Platzmangel automatisch aus. <code>tmutil listlocalsnapshots /</code> zeigt, was vorhanden ist.</p>
+      <h3 id="an-agent-cannot-see-the-gated-tools">Ein Agent sieht die freizuschaltenden Werkzeuge nicht</h3>
+      <p>Bereinigen, Deinstallieren und die übrigen handelnden Werkzeuge bleiben verborgen, bis du Agentenaktionen in den Einstellungen aktivierst. Das ist Absicht: Ein Agent soll nichts löschen können, das du nicht eigens freigegeben hast.</p>
     </section>
     </div>
   </div>
