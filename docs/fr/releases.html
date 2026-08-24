@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Burrow · Changelog</title>
-<meta name="description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<title>Burrow · Nouveautés</title>
+<meta name="description" content="Toutes les versions de Burrow en un coup d'œil : ce que chacune a ajouté, corrigé et resserré.">
 <meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="../burrow-icon.png">
 <link rel="canonical" href="https://burrow.computer/fr/releases">
@@ -23,14 +23,14 @@
 <link rel="stylesheet" href="../assets/chrome.css">
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://burrow.computer/#org","name":"Burrow","url":"https://burrow.computer","logo":"https://burrow.computer/burrow-icon-512.png","sameAs":["https://github.com/caezium/Burrow"]},{"@type":"WebSite","@id":"https://burrow.computer/#site","url":"https://burrow.computer","name":"Burrow","publisher":{"@id":"https://burrow.computer/#org"}}]}</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="Burrow · Changelog">
-<meta property="og:description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<meta property="og:title" content="Burrow · Nouveautés">
+<meta property="og:description" content="Toutes les versions de Burrow en un coup d'œil : ce que chacune a ajouté, corrigé et resserré.">
 <meta property="og:image" content="https://burrow.computer/burrow-icon-512.png">
 <meta property="og:url" content="https://burrow.computer/releases">
 <meta property="og:site_name" content="Burrow">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Burrow · Changelog">
-<meta name="twitter:description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<meta name="twitter:title" content="Burrow · Nouveautés">
+<meta name="twitter:description" content="Toutes les versions de Burrow en un coup d'œil : ce que chacune a ajouté, corrigé et resserré.">
 <script src="/analytics.js" defer></script>
 <style>
   @font-face { font-family: "Geist"; src: url("assets/fonts/Geist[wght].woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
@@ -143,29 +143,29 @@
 
 <header class="hero page">
   <h1>Nouveautés</h1>
-  <p>Every version at a glance, what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">26 releases · latest 0.14.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p>Chaque version en un coup d'œil : ce qu'elle a ajouté, changé et corrigé. Les notes complètes de chacune sont sur GitHub.</p>
+  <p class="count">26 versions · dernière 0.14.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">Versions sur GitHub ↗</a></p>
 </header>
 
 <main class="page">
     <article class="entry" id="v0.14.0">
       <div class="ver-col">
-        <h2 class="ver">0.14.0<span class="latest">latest</span></h2>
-        <span class="date mono">Aug 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.14.0" target="_blank" rel="noopener">full notes ↗</a>
+        <h2 class="ver">0.14.0<span class="latest">dernière</span></h2>
+        <span class="date mono">11 août 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.14.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The Touch ID helper now offers itself instead of hiding in Settings, and the reviewed clean says what it removed instead of finishing silently.</p>
+        <p class="lead">L'assistant Touch ID se propose désormais de lui-même au lieu de se cacher dans les réglages, et le nettoyage vérifié dit ce qu'il a supprimé au lieu de finir en silence.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Burrow offers the privileged helper.</b> The Touch ID helper shipped in 0.13.0 behind a single button in <b>Settings ▸ Advanced</b>, and nothing pointed anyone at it — upgraders learned about it from the release notes, fresh installs not at all. It is now offered from an ambient banner, at most one notice at a time, and the dismissal persists. (<a href="https://github.com/caezium/Burrow/pull/379" target="_blank" rel="noopener">#379</a>)</li>
+            <li><b>Burrow propose l'assistant privilégié.</b> L'assistant Touch ID est arrivé en 0.13.0 derrière un unique bouton dans <b>Réglages ▸ Avancé</b>, et rien n'y renvoyait — ceux qui mettaient à jour l'apprenaient par les notes de version, les nouvelles installations pas du tout. Il est désormais proposé par une bannière discrète, un seul avis à la fois, et sa fermeture est définitive. (<a href="https://github.com/caezium/Burrow/pull/379" target="_blank" rel="noopener">#379</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>The reviewed clean reports what it removed.</b> It deleted exactly what was ticked and then looked like it had done nothing — that path deletes each reviewed path with <code>find</code>, which succeeds silently, leaving the result screen with no output to show. It now reports what it was authorized to remove, which the run only claims after confirming every planned path is gone. (<a href="https://github.com/caezium/Burrow/pull/380" target="_blank" rel="noopener">#380</a>)</li>
+            <li><b>Le nettoyage vérifié indique ce qu'il a supprimé.</b> Il supprimait exactement ce qui était coché puis donnait l'impression de n'avoir rien fait — ce chemin supprime chaque élément vérifié avec <code>find</code>, qui réussit en silence, si bien que l'écran de résultat n'avait rien à afficher. Il indique maintenant ce qu'il avait le droit de supprimer — et ne l'affirme qu'après avoir vérifié que chaque chemin prévu a bien disparu. (<a href="https://github.com/caezium/Burrow/pull/380" target="_blank" rel="noopener">#380</a>)</li>
           </ul>
         </div>
       </div>
@@ -174,35 +174,35 @@
     <article class="entry" id="v0.13.0">
       <div class="ver-col">
         <h2 class="ver">0.13.0</h2>
-        <span class="date mono">Aug 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.13.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">11 août 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.13.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Headings that rendered as empty boxes render as text again, the MCP server speaks the 2026-07-28 spec without dropping older clients, and the cache scan tells you when it has finished.</p>
+        <p class="lead">Les titres qui s'affichaient en carrés vides redeviennent du texte, le serveur MCP parle la spécification du 28/07/2026 sans abandonner les clients plus anciens, et l'analyse des caches prévient quand elle a terminé.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>The scan tells you when it's done.</b> A cache scan can run for minutes and used to end by just sitting there with a number. It now posts a completion notification saying what it found, honouring <b>Settings ▸ Notify when long operations finish</b>. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
-            <li><b>Two more agent tools.</b> <code>burrow_anomalies</code> et <code>burrow_agent_audit</code> join the MCP surface. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+            <li><b>L'analyse prévient quand elle a fini.</b> Une analyse des caches peut durer plusieurs minutes et se terminait jusqu'ici en restant simplement là avec un chiffre. Elle envoie maintenant une notification de fin indiquant ce qu'elle a trouvé, en respectant <b>Réglages ▸ Prévenir à la fin des opérations longues</b>. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
+            <li><b>Deux outils d'agent de plus.</b> <code>burrow_anomalies</code> et <code>burrow_agent_audit</code> rejoignent la surface MCP. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li><b>MCP now speaks the 2026-07-28 revision</b>, including its task and cancellation semantics. Older clients are unaffected: 2025-11-25 through 2024-11-05 are still served, and a client that skips <code>initialize</code> entirely still works. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+            <li><b>MCP parle désormais la révision du 28/07/2026</b>, y compris sa sémantique de tâches et d'annulation. Les clients plus anciens ne sont pas touchés : du 25/11/2025 au 05/11/2024, tout est encore servi, et un client qui saute <code>initialize</code> entièrement fonctionne quand même. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>Headings rendered as empty boxes.</b> Burrow now ships real static faces for every weight it uses instead of deriving them from a variable font at render time. (<a href="https://github.com/caezium/Burrow/pull/372" target="_blank" rel="noopener">#372</a>)</li>
-            <li><b>One bad exit no longer disables the menu bar</b> until macOS updates. (<a href="https://github.com/caezium/Burrow/pull/365" target="_blank" rel="noopener">#365</a>)</li>
-            <li><b>The window can be made smaller again</b> — its minimum height is derived from the sidebar rather than hardcoded. (<a href="https://github.com/caezium/Burrow/pull/364" target="_blank" rel="noopener">#364</a>)</li>
-            <li><b>“Stop after current” now responds.</b> The stop was always queued, but nothing on screen said so until the in-flight update finished. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
-            <li><b>The clean review no longer promises what closing an app can't deliver.</b> An entry the scan refused was counted in “Close X to clean another N” even though no app was holding it. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>A cancelled app update no longer blocks later update checks</b> for the rest of the session. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>Root operations can't interleave their output.</b> stdout and stderr shared one line buffer, which could splice half a line from one stream onto the other. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>Update archives are size-capped</b> before they're kept or expanded, and diagnostics reject more credential shapes before anything is uploaded. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>Les titres s'affichaient en carrés vides.</b> Burrow livre désormais de vraies fontes statiques pour chaque graisse utilisée, au lieu de les dériver d'une police variable au moment du rendu. (<a href="https://github.com/caezium/Burrow/pull/372" target="_blank" rel="noopener">#372</a>)</li>
+            <li><b>Une seule sortie ratée ne désactive plus la barre des menus</b> jusqu'à la mise à jour de macOS. (<a href="https://github.com/caezium/Burrow/pull/365" target="_blank" rel="noopener">#365</a>)</li>
+            <li><b>La fenêtre peut de nouveau être réduite</b>  — sa hauteur minimale se déduit de la barre latérale au lieu d'être figée dans le code. (<a href="https://github.com/caezium/Burrow/pull/364" target="_blank" rel="noopener">#364</a>)</li>
+            <li><b>« Arrêter après l'élément en cours » répond enfin.</b> L'arrêt était toujours mis en file, mais rien à l'écran ne le disait tant que la mise à jour en cours n'était pas terminée. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
+            <li><b>La vérification du nettoyage ne promet plus ce que la fermeture d'une app ne peut pas tenir.</b> Un élément refusé par l'analyse était compté dans « Ferme X pour nettoyer N de plus » alors qu'aucune app ne le retenait. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>Une mise à jour d'app annulée ne bloque plus les recherches suivantes</b> pour le reste de la session. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>Les opérations en root ne peuvent plus entremêler leurs sorties.</b> stdout et stderr partageaient un même tampon de ligne, ce qui pouvait greffer une demi-ligne d'un flux sur l'autre. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>Les archives de mise à jour ont une taille plafonnée</b> avant d'être conservées ou décompressées, et les diagnostics rejettent davantage de formes d'identifiants avant tout envoi. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
           </ul>
         </div>
       </div>
@@ -211,38 +211,38 @@
     <article class="entry" id="v0.12.0">
       <div class="ver-col">
         <h2 class="ver">0.12.0</h2>
-        <span class="date mono">Aug 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.12.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">8 août 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.12.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Admin operations can authenticate with Touch ID, through an opt-in signed helper that runs a fixed set of operations and nothing else.</p>
+        <p class="lead">Les opérations d'administration peuvent être validées par Touch ID, via un assistant signé et facultatif qui exécute un ensemble fixe d'opérations et rien d'autre.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Touch ID for admin operations.</b> Install the helper in <b>Settings ▸ Advanced ▸ Privileged helper</b> and Burrow's elevated work authenticates through the system's normal prompt instead of the password-only dialog. That older path is password-only by construction — the <code>system.privilege.admin</code> right authenticates through SecurityAgent's classic mechanism, which never offers Touch ID. (<a href="https://github.com/caezium/Burrow/pull/346" target="_blank" rel="noopener">#346</a>)</li>
-            <li><b>The Login Items list is now complete.</b> Reading the Background Task Management database needs root, so an unelevated read raised macOS's own “sfltool wants to make changes” prompt — attributed to sfltool rather than Burrow — and still returned only a partial list. Through the helper it is one authentication you recognise, and the whole list.</li>
+            <li><b>Touch ID pour les opérations d'administration.</b> Installe l'assistant dans <b>Réglages ▸ Avancé ▸ Assistant privilégié</b> et le travail de Burrow nécessitant des droits élevés passe par la fenêtre habituelle du système au lieu du dialogue réservé au mot de passe. Cet ancien chemin ne connaît que le mot de passe par construction : le droit <code>system.privilege.admin</code> est validé par le mécanisme classique de SecurityAgent, qui ne propose jamais Touch ID. (<a href="https://github.com/caezium/Burrow/pull/346" target="_blank" rel="noopener">#346</a>)</li>
+            <li><b>La liste des ouvertures de session est désormais complète.</b> Lire la base Background Task Management exige les droits root ; une lecture sans eux déclenchait la fenêtre de macOS « sfltool souhaite apporter des modifications » — attribuée à sfltool et non à Burrow — et ne renvoyait malgré tout qu'une liste partielle. Via l'assistant, c'est une seule authentification que tu reconnais, et la liste entière.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li><b>Flush DNS no longer runs a root shell.</b> It previously elevated <code>/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"</code>, handing a command string to a shell running as root. It is now two separate processes with fixed arguments and no shell involved.</li>
-            <li><b>Removed the “Touch ID for sudo” setting.</b> It configured <code>pam_tid</code> for terminal <code>sudo</code> and never affected Burrow's own admin prompts, which is what people expected it to do — and those prompts are exactly what the privileged helper now covers. Nothing already configured on your Mac changes by removing it; run <code>mo touchid disable</code> to undo it yourself.</li>
+            <li><b>Vider le DNS n'ouvre plus de shell root.</b> Auparavant, <code>/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"</code>était élevé et une chaîne de commande passée à un shell exécuté en root. Ce sont maintenant deux processus distincts, aux arguments fixes, sans aucun shell.</li>
+            <li><b>Le réglage « Touch ID pour sudo » a été retiré.</b> Il configurait <code>pam_tid</code> pour le terminal <code>sudo</code> et n'a jamais agi sur les demandes d'administration de Burrow lui-même, ce que les gens attendaient pourtant — et ce sont précisément ces demandes que couvre désormais l'assistant privilégié. Rien de ce qui est déjà configuré sur ton Mac ne change en le retirant ; lance <code>mo touchid disable</code> pour le défaire toi-même.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>A failed elevated run could report success.</b> When an elevated operation could not start, the empty transcript was reduced to “Done — caches cleared”. Failures now say so.</li>
+            <li><b>Un lancement avec droits élevés en échec pouvait annoncer un succès.</b> Quand une opération avec droits élevés ne parvenait pas à démarrer, la transcription vide se réduisait à « Terminé — caches vidés ». Les échecs le disent désormais.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">sécurité</div>
           <ul class="slist">
-            <li>The helper is opt-in and takes its own one-time macOS approval. Installing it authorizes nothing: you authenticate for each operation you start.</li>
-            <li>Only Burrow can talk to it — callers are pinned to the app's bundle identifier, an Apple-issued chain, and the same signing team, evaluated by the system against the real peer rather than by a PID lookup.</li>
-            <li>It runs the engine sealed inside the signed app plus four Apple tools by absolute path, each as a separate process. The app bundle's signature is verified before anything runs as root, which covers the engine and every library it loads.</li>
-            <li>One honest caveat: the credential from your authentication stays valid for ten seconds, because it has to survive the hop from the app to the helper. A second operation begun inside that window will not prompt again. Detail in <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</li>
+            <li>L'assistant est facultatif et demande sa propre autorisation macOS, une seule fois. L'installer n'autorise rien : tu t'authentifies pour chaque opération que tu lances.</li>
+            <li>Seul Burrow peut lui parler — les appelants sont épinglés à l'identifiant de paquet de l'app, à une chaîne délivrée par Apple et à la même équipe de signature, le tout évalué par le système face au véritable interlocuteur plutôt que par une recherche de PID.</li>
+            <li>Il exécute le moteur scellé dans l'app signée, plus quatre outils Apple désignés par chemin absolu, chacun dans un processus distinct. La signature du paquet est vérifiée avant que quoi que ce soit ne tourne en root, ce qui couvre le moteur et chaque bibliothèque qu'il charge.</li>
+            <li>Une réserve, en toute franchise : le justificatif issu de ton authentification reste valable dix secondes, car il doit survivre au saut de l'app vers l'assistant. Une seconde opération lancée dans cet intervalle ne redemandera rien. Détails dans <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</li>
           </ul>
         </div>
       </div>
@@ -251,36 +251,36 @@
     <article class="entry" id="v0.11.2">
       <div class="ver-col">
         <h2 class="ver">0.11.2</h2>
-        <span class="date mono">Aug 5, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">5 août 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.2" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A system-metrics, updater, and launch-reliability patch with accurate CPU sampling, accurate Sparkle outcomes, a settled AppKit start, and reliable hang reports.</p>
+        <p class="lead">Un correctif sur les mesures système, la mise à jour et la fiabilité du démarrage : mesure du processeur exacte, résultats Sparkle honnêtes, démarrage AppKit apaisé et rapports de blocage fiables.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>CPU usage now reflects a representative sampling interval.</b> The bundled engine keeps a tick baseline across refreshes, samples before the other collectors fan out, and derives total usage from summed tick deltas. This removes the roughly doubled readings and coarse per-core fractions reported in <a href="https://github.com/caezium/Burrow/issues/335" target="_blank" rel="noopener">#335</a>. A cold one-shot status command can take about 600 ms longer; ongoing GUI sampling reuses its existing refresh interval and adds no wait. (<a href="https://github.com/caezium/Burrow/pull/340" target="_blank" rel="noopener">#340</a>)</li>
-            <li><b>Updater failures now mean what they say.</b> Running from a disk image or translocated location, ordinary network failures, and user cancellation remain measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of its native move-to-Applications and scheduled-retry UI. Configuration, signature, installation, and unknown failures still create exactly one scrubbed Sentry diagnostic per cycle. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
-            <li><b>The normal menu-bar path no longer races the first AppKit launch turn.</b> Burrow waits one second before creating its status item, then retains the existing 30-second stability window. The safeguard for macOS 27 Beta 4 build <code>26A5388g</code> remains exact-build-only; a later macOS build returns to the normal guarded path automatically. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>L'utilisation du processeur reflète désormais un intervalle de mesure représentatif.</b> Le moteur intégré conserve une base de ticks d'une actualisation à l'autre, mesure avant que les autres collecteurs ne se déploient, et déduit l'utilisation totale de la somme des écarts de ticks. Cela supprime les valeurs environ doublées et les fractions grossières par cœur signalées dans <a href="https://github.com/caezium/Burrow/issues/335" target="_blank" rel="noopener">#335</a>. Une commande d'état isolée à froid peut prendre environ 600 ms de plus ; la mesure continue dans l'interface réutilise son intervalle existant et n'ajoute aucune attente. (<a href="https://github.com/caezium/Burrow/pull/340" target="_blank" rel="noopener">#340</a>)</li>
+            <li><b>Les échecs de mise à jour veulent dire ce qu'ils disent.</b> L'exécution depuis une image disque ou un emplacement translocalisé, les pannes réseau ordinaires et l'annulation par l'utilisateur restent mesurables dans PostHog sans ouvrir de ticket Sentry. Sparkle conserve son interface pour le déplacement vers Applications et les nouvelles tentatives planifiées. Les échecs de configuration, de signature, d'installation et d'origine inconnue créent toujours exactement un diagnostic Sentry expurgé par cycle. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>Le chemin normal de la barre des menus ne court plus après le premier tour de démarrage d'AppKit.</b> Burrow attend une seconde avant de créer son élément d'état, puis conserve la fenêtre de stabilité de 30 secondes déjà en place. La protection pour macOS 27 Beta 4, build <code>26A5388g</code> , reste limitée à ce build précis ; un build macOS ultérieur revient automatiquement au chemin protégé habituel. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">amélioré</div>
           <ul class="slist">
-            <li><b>App-hang evidence can no longer disappear at the Sentry bridge.</b> Sampled hangs are collected into bounded weekly GitHub digests instead of being silently skipped. Cursor pagination reaches older unseen groups, full digests roll into numbered parts, and deferred groups remain eligible for the next run. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
-            <li><b>Launch and updater health now have explicit lifecycle outcomes.</b> Fixed-name scheduled, stabilizing, and stable milestones include bounded app release, macOS build, launch phase, and status-item state, so future failures can be separated without collecting free text or user data.</li>
+            <li><b>Les preuves de blocage d'app ne peuvent plus disparaître au passage vers Sentry.</b> Les blocages échantillonnés sont rassemblés dans des résumés hebdomadaires GitHub de taille limitée au lieu d'être ignorés en silence. La pagination par curseur atteint les groupes plus anciens jamais vus, les résumés trop pleins se poursuivent en parties numérotées, et les groupes reportés restent éligibles au tour suivant. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>La santé du démarrage et de la mise à jour a désormais des résultats explicites par étape.</b> Les jalons à noms fixes « planifié », « en stabilisation » et « stable » comprennent, de façon bornée, la version de l'app, le build macOS, la phase de démarrage et l'état de l'élément d'état, afin de distinguer les futurs échecs sans collecter de texte libre ni de données personnelles.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">vie privée</div>
           <ul class="slist">
-            <li><b>Telemetry remains optional, unlinked, and non-tracking.</b> One Settings switch disables both PostHog analytics and Sentry diagnostics. Updater diagnostics contain fixed categories and bounded error domains/codes, never descriptions, URLs, response bodies, network names, paths, screen content, or files. The privacy manifest remains unchanged and accurate.</li>
+            <li><b>La télémétrie reste facultative, non reliée à toi et sans pistage.</b> Un réglage désactive à la fois l'analyse PostHog et les diagnostics Sentry. Les diagnostics de mise à jour contiennent des catégories fixes et des domaines et codes d'erreur bornés, jamais de descriptions, d'URL, de corps de réponse, de noms de réseau, de chemins, de contenu d'écran ni de fichiers. Le manifeste de confidentialité reste inchangé et exact.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">sécurité</div>
           <ul class="slist">
-            <li><b>Publishing still fails closed, including the external Homebrew tap.</b> Before any release build begins, CI requires every signing, notarization, Sparkle, and tap credential, then proves the tap token with a reversible Git write. The tap credential is isolated from the engine checkout so a successful notarized release cannot fail at the final cask push because the wrong token was left in Git configuration.</li>
+            <li><b>La publication échoue toujours du côté sûr, y compris pour le tap Homebrew externe.</b> Avant même qu'une compilation de version ne commence, la CI exige tous les identifiants de signature, de notarisation, de Sparkle et du tap, puis éprouve le jeton du tap par une écriture Git réversible. L'identifiant du tap est isolé du dépôt du moteur, afin qu'une version notarisée avec succès ne puisse pas échouer au dernier envoi du cask parce qu'un mauvais jeton traînait dans la configuration Git.</li>
           </ul>
         </div>
       </div>
@@ -289,36 +289,36 @@
     <article class="entry" id="v0.11.1">
       <div class="ver-col">
         <h2 class="ver">0.11.1</h2>
-        <span class="date mono">Aug 3, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">3 août 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.1" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A guarded-startup and diagnostics patch for the system-wide input freeze reported on macOS 27 Beta 4, with a safer exact-build fallback and privacy-hardened hang telemetry.</p>
+        <p class="lead">Un correctif de démarrage protégé et de diagnostic pour le gel des entrées à l'échelle du système signalé sur macOS 27 Beta 4, avec un repli plus sûr limité à ce build et une télémétrie des blocages durcie côté vie privée.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>The affected macOS 27 beta gets a safer launch path.</b> On Beta 4 build <code>26A5388g</code>, Burrow starts with a Dock icon instead of creating its menu-bar status item. The fallback is limited to that exact build; a new macOS build restores the normal guarded path. Manual update checks remain available even when automatic Sparkle startup is paused.</li>
-            <li><b>Interrupted launches recover one component at a time.</b> A durable launch journal gives the status item and Sparkle separate 30-second stability windows. If launch is interrupted, the next run suppresses only the component whose window was active, shows a recovery alert, and offers a one-click redacted diagnostic report. (<a href="https://github.com/caezium/Burrow/pull/321" target="_blank" rel="noopener">#321</a>)</li>
+            <li><b>La bêta macOS 27 concernée reçoit un chemin de démarrage plus sûr.</b> Sur le build Beta 4 <code>26A5388g</code>, Burrow démarre avec une icône dans le Dock au lieu de créer son élément dans la barre des menus. Ce repli se limite à ce build précis ; un nouveau build macOS rétablit le chemin protégé habituel. La recherche manuelle de mises à jour reste possible même lorsque le démarrage automatique de Sparkle est suspendu.</li>
+            <li><b>Les démarrages interrompus se rétablissent un composant à la fois.</b> Un journal de démarrage persistant donne à l'élément d'état et à Sparkle des fenêtres de stabilité distinctes de 30 secondes. Si le démarrage est interrompu, le lancement suivant ne neutralise que le composant dont la fenêtre était active, affiche une alerte de récupération et propose en un clic un rapport de diagnostic expurgé. (<a href="https://github.com/caezium/Burrow/pull/321" target="_blank" rel="noopener">#321</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">amélioré</div>
           <ul class="slist">
-            <li><b>Sentry can now explain hangs that never become crashes.</b> Release-health sessions, hang tracking, low-memory context, fixed-name sampled performance spans, and coarse launch/updater state cover failure modes that a normal crash report misses. Outbound data is scrubbed fail closed, with no screenshots, view hierarchies, user paths, URLs, request bodies, or automatic UI, file, database, and network tracing.</li>
-            <li><b>PostHog analytics no longer bring an AppKit-facing SDK into startup.</b> Burrow still sends the same opt-out semantic product, screen, and operation events to PostHog, but a small background HTTPS transport replaces <code>posthog-ios</code>. It has a bounded serialized retry queue and no session replay, autocapture, remote feature flags, AppKit timer, or main-thread disk I/O. Existing 0.11.0 anonymous identities are migrated once so release-to-release funnels remain accurate.</li>
-            <li><b>The first signed Sparkle successor passed a real update.</b> An installed Developer ID-signed 0.11.0 copy found, downloaded, installed, and relaunched 0.11.1 through Sparkle's native UI without Terminal or Homebrew. The updated app then passed strict signing, stapler, and Gatekeeper checks, completing <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
+            <li><b>Sentry peut désormais expliquer les blocages qui ne deviennent jamais des plantages.</b> Les sessions de santé des versions, le suivi des blocages, le contexte de mémoire basse, les mesures de performance échantillonnées à noms fixes et un état grossier du démarrage et de la mise à jour couvrent des défaillances qu'un rapport de plantage ordinaire manque. Les données sortantes sont expurgées par défaut : ni captures d'écran, ni hiérarchies de vues, ni chemins utilisateur, ni URL, ni corps de requête, ni traçage automatique de l'interface, des fichiers, de la base ou du réseau.</li>
+            <li><b>L'analyse PostHog n'introduit plus de SDK tourné vers AppKit au démarrage.</b> Burrow envoie toujours à PostHog les mêmes événements de produit, d'écran et d'opération, désactivables, mais un petit transport HTTPS en arrière-plan remplace <code>posthog-ios</code>. Il dispose d'une file de reprise sérialisée et bornée, sans rejeu de session, capture automatique, drapeaux de fonctionnalités distants, minuterie AppKit ni accès disque sur le fil principal. Les identités anonymes existantes de 0.11.0 sont migrées une fois, afin que les comparaisons d'une version à l'autre restent justes.</li>
+            <li><b>La première succession signée par Sparkle a réussi une vraie mise à jour.</b> Une copie 0.11.0 installée et signée avec un Developer ID a trouvé, téléchargé, installé et relancé 0.11.1 via l'interface native de Sparkle, sans Terminal ni Homebrew. L'app mise à jour a ensuite passé les contrôles stricts de signature, d'agrafage et de Gatekeeper, achevant <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">vie privée</div>
           <ul class="slist">
-            <li><b>Telemetry remains optional, unlinked, and non-tracking.</b> One Settings switch disables both PostHog analytics and Sentry diagnostics. The privacy manifest continues to declare Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data; this release adds no signing-specific telemetry and records no screen content.</li>
+            <li><b>La télémétrie reste facultative, non reliée à toi et sans pistage.</b> Un réglage désactive à la fois l'analyse PostHog et les diagnostics Sentry. Le manifeste de confidentialité continue de déclarer les données d'interaction produit, d'usage divers, de plantage, de performance et de diagnostic divers ; cette version n'ajoute aucune télémétrie propre à la signature et n'enregistre aucun contenu d'écran.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">sécurité</div>
           <ul class="slist">
-            <li><b>The release chain remains fail closed.</b> The tag cannot publish unless the app is Developer ID signed, notarized, stapled, accepted by Gatekeeper, and both the update archive and appcast pass Sparkle signature verification.</li>
+            <li><b>La chaîne de publication reste en échec sûr.</b> Un tag ne peut publier que si l'app est signée avec un Developer ID, notarisée, agrafée, acceptée par Gatekeeper, et si l'archive de mise à jour comme l'appcast passent la vérification de signature de Sparkle.</li>
           </ul>
         </div>
       </div>
@@ -327,32 +327,32 @@
     <article class="entry" id="v0.11.0">
       <div class="ver-col">
         <h2 class="ver">0.11.0</h2>
-        <span class="date mono">Aug 1, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">1er août 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's first Developer ID-signed and Apple-notarized release, Gatekeeper can verify the app, Full Disk Access gets a stable identity, and Sparkle establishes the signed foundation for native updates.</p>
+        <p class="lead">La première version de Burrow signée avec un Developer ID et notarisée par Apple : Gatekeeper peut vérifier l'app, l'accès complet au disque obtient une identité stable, et Sparkle pose les fondations signées des mises à jour natives.</p>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">amélioré</div>
           <ul class="slist">
-            <li><b>Official downloads are trusted by Gatekeeper.</b> The app and every bundled executable carry a Developer ID signature, hardened runtime, secure timestamp, and a stapled Apple notarization ticket. Direct-download users no longer need to strip quarantine or use the right-click Open workaround. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
-            <li><b>Full Disk Access has a stable identity.</b> Developer ID gives macOS one consistent code identity across releases, so privacy grants can survive normal updates after the one-time transition from an older ad-hoc build. (<a href="https://github.com/caezium/Burrow/issues/177" target="_blank" rel="noopener">#177</a>, <a href="https://github.com/caezium/Burrow/issues/181" target="_blank" rel="noopener">#181</a>)</li>
-            <li><b>The signed update foundation is in place.</b> Burrow now uses Sparkle's native UI. Automatic checks remain on by default, but downloads and installs wait for approval. The update ZIP and appcast carry Ed25519 signatures that CI and the app verify; the first live 0.11.0-to-0.11.1 upgrade later completed successfully in <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
-            <li><b>The bundled engine no longer rewrites the app.</b> It updates only with a signed Burrow release, preserving the Developer ID resource seal. Source builds using an external engine still expose its manual updater.</li>
+            <li><b>Les téléchargements officiels ont la confiance de Gatekeeper.</b> L'app et chaque exécutable fourni portent une signature Developer ID, un runtime durci, un horodatage sécurisé et un ticket de notarisation Apple agrafé. Ceux qui téléchargent directement n'ont plus à retirer la quarantaine ni à passer par le clic droit et « Ouvrir ». (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
+            <li><b>L'accès complet au disque a une identité stable.</b> Le Developer ID donne à macOS une identité de code cohérente d'une version à l'autre, si bien que les autorisations de confidentialité survivent aux mises à jour ordinaires, après la transition unique depuis une ancienne version signée à la volée. (<a href="https://github.com/caezium/Burrow/issues/177" target="_blank" rel="noopener">#177</a>, <a href="https://github.com/caezium/Burrow/issues/181" target="_blank" rel="noopener">#181</a>)</li>
+            <li><b>Les fondations des mises à jour signées sont en place.</b> Burrow utilise désormais l'interface native de Sparkle. Les recherches automatiques restent actives par défaut, mais les téléchargements et installations attendent ton accord. L'archive ZIP et l'appcast portent des signatures Ed25519 que la CI et l'app vérifient ; la première mise à niveau réelle de 0.11.0 vers 0.11.1 a ensuite abouti dans <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
+            <li><b>Le moteur intégré ne réécrit plus l'app.</b> Il ne se met à jour qu'avec une version signée de Burrow, ce qui préserve le sceau de ressources du Developer ID. Les versions compilées depuis les sources avec un moteur externe exposent encore son outil de mise à jour manuel.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">vie privée</div>
           <ul class="slist">
-            <li><b>The privacy manifest matches the shipped app.</b> Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data are declared unlinked and non-tracking. Analytics and crash reporting remain opt-out, and signing adds no telemetry.</li>
+            <li><b>Le manifeste de confidentialité correspond à l'app livrée.</b> Les données d'interaction produit, d'usage divers, de plantage, de performance et de diagnostic divers sont déclarées non reliées et sans pistage. L'analyse et les rapports de plantage restent désactivables, et la signature n'ajoute aucune télémétrie.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">sécurité</div>
           <ul class="slist">
-            <li><b>A tag cannot publish a partially trusted build.</b> CI stops before publication unless signing, notarization, ticket stapling, strict code-sign verification, Gatekeeper assessment, the Sparkle keypair match, and both update signatures all succeed. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
-            <li><b>Delayed Apple responses stay fail closed.</b> The release retains Apple's submission ID, waits up to 60 minutes, and checks that same submission once more at the timeout boundary; it never treats an unknown or in-progress result as accepted. (<a href="https://github.com/caezium/Burrow/pull/317" target="_blank" rel="noopener">#317</a>)</li>
-            <li><b>Homebrew keeps Apple's security checks intact.</b> The live cask preserves quarantine, removes the old unsigned warning, and is marked <code>auto_updates true</code> because Sparkle owns future in-app updates.</li>
+            <li><b>Un tag ne peut pas publier une version seulement partiellement fiable.</b> La CI s'arrête avant publication sauf si la signature, la notarisation, l'agrafage du ticket, la vérification stricte de signature, l'évaluation Gatekeeper, la correspondance de la paire de clés Sparkle et les deux signatures de mise à jour réussissent toutes. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
+            <li><b>Les réponses tardives d'Apple restent en échec sûr.</b> La publication conserve l'identifiant de soumission d'Apple, attend jusqu'à 60 minutes et vérifie cette même soumission une dernière fois à la limite du délai ; elle ne considère jamais un résultat inconnu ou en cours comme accepté. (<a href="https://github.com/caezium/Burrow/pull/317" target="_blank" rel="noopener">#317</a>)</li>
+            <li><b>Homebrew laisse intacts les contrôles de sécurité d'Apple.</b> Le cask en ligne préserve la quarantaine, supprime l'ancien avertissement sur l'absence de signature et est marqué <code>auto_updates true</code> car Sparkle prend en charge les futures mises à jour dans l'app.</li>
           </ul>
         </div>
       </div>
@@ -361,23 +361,23 @@
     <article class="entry" id="v0.10.5">
       <div class="ver-col">
         <h2 class="ver">0.10.5</h2>
-        <span class="date mono">Jul 25, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">25 juillet 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.5" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's MCP tools, tuned against real agent transcripts, one analyze call maps disk hotspots, killed runs say so instead of failing silently, and slow scans warn you up front.</p>
+        <p class="lead">Les outils MCP de Burrow, réglés sur de vraies transcriptions d'agents : un seul appel d'analyse cartographie les points chauds du disque, les exécutions interrompues le disent au lieu d'échouer en silence, et les analyses lentes préviennent d'avance.</p>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">amélioré</div>
           <ul class="slist">
-            <li><b>One <code>burrow_analyze</code> call now maps disk hotspots.</b> The engine reports one directory level per run, which forced agents into a call per directory (a real session made 15 in a row). <code>analyze</code> gains <code>depth</code> (descend into the largest subdirectories), <code>limit</code> et  <code>min_size</code>, emits compact JSON instead of 35–60 KB pretty-printed blobs, and always reports what it pruned (<code>entries_omitted</code> / <code>omitted_bytes</code>, <code>partial: true</code> when the descent hits its time budget). (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
-            <li><b>The slow tools now say they're slow.</b> <code>analyze</code>, <code>clean</code>, <code>purge</code> et  <code>installer</code> descriptions warn that big scans take minutes, so agents scope to a specific folder instead of hanging past their client's patience and falling back to shell commands. The agent docs and the <code>burrow-system-tools</code> skill now lead with the low-disk emergency playbook, the pattern that actually fires in practice. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>Un seul appel de <code>burrow_analyze</code> cartographie désormais les points chauds du disque.</b> Le moteur ne rapporte qu'un niveau de dossier par exécution, ce qui obligeait les agents à un appel par dossier (une vraie session en a enchaîné 15). <code>analyze</code> gagne <code>depth</code> (descendre dans les plus gros sous-dossiers), <code>limit</code> et  <code>min_size</code>, produit un JSON compact au lieu de pavés formatés de 35 à 60 Ko, et signale toujours ce qu'il a élagué (<code>entries_omitted</code> / <code>omitted_bytes</code>, <code>partial: true</code> lorsque la descente atteint son budget de temps). (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>Les outils lents disent maintenant qu'ils sont lents.</b> <code>analyze</code>, <code>clean</code>, <code>purge</code> et  <code>installer</code> précisent dans leur description que les grosses analyses prennent des minutes, pour que les agents se limitent à un dossier précis au lieu de dépasser la patience de leur client et de se rabattre sur des commandes shell. La documentation destinée aux agents et la <code>burrow-system-tools</code> commencent désormais par la marche à suivre d'urgence quand le disque est plein, le cas qui se présente vraiment en pratique. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>Killed runs no longer fail silently.</b> A <code>burrow_clean</code> that hit its time limit rendered as <code>{"exit_code": 9, "output": ""}</code>: nothing an agent could act on. Timed-out actions (and analyze) now return <code>timed_out: true</code> plus a hint. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
-            <li><b><code>burrow_cleanup_history</code> explains itself.</b> When engine history is unavailable, the error now points at <code>burrow_info</code> to check whether Burrow is recording at all. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>Les exécutions interrompues n'échouent plus en silence.</b> Un <code>burrow_clean</code> qui atteignait sa limite de temps s'affichait comme <code>{"exit_code": 9, "output": ""}</code> — rien sur quoi un agent puisse agir. Les actions expirées (et l'analyse) renvoient maintenant <code>timed_out: true</code> accompagné d'une indication. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b><code>burrow_cleanup_history</code> s'explique.</b> Quand l'historique du moteur est indisponible, l'erreur renvoie désormais vers <code>burrow_info</code> pour vérifier si Burrow enregistre seulement quelque chose. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
           </ul>
         </div>
       </div>
@@ -386,17 +386,17 @@
     <article class="entry" id="v0.10.2">
       <div class="ver-col">
         <h2 class="ver">0.10.2</h2>
-        <span class="date mono">Jul 24, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">24 juillet 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.2" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A fix release, three crashes squashed (the menu-bar popover, the streaming task report, and a nil-font HUD metric), and the in-app updater no longer silently reopens the same build.</p>
+        <p class="lead">Une version corrective : trois plantages écrasés (la fenêtre de la barre des menus, le rapport de tâche en flux et une mesure du HUD avec police nulle), et l'outil de mise à jour intégré ne rouvre plus en silence la même version.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>No more menu-bar popover or streaming-report crashes.</b> Two <code>EXC_BAD_ACCESS</code> faults inside SwiftUI's view graph, one in the popover header button, one in the live task report/ticker as a job streamed, are fixed by keeping those view subtrees structurally stable across snapshot and scroll updates instead of restructuring them mid-update. (<a href="https://github.com/caezium/Burrow/pull/299" target="_blank" rel="noopener">#299</a>)</li>
-            <li><b>The menu-bar metric no longer crashes on a nil font.</b> <code>NSFont.monospacedSystemFont</code> is declared non-null but can transiently return nil under memory pressure; that null reached CoreText and crashed at draw time (Sentry BURROW-8Y). The metric widgets now fall back to the plain system font, cosmetic at worst, never a crash. (<a href="https://github.com/caezium/Burrow/pull/290" target="_blank" rel="noopener">#290</a>)</li>
-            <li><b>In-app update actually updates.</b> When the cask “cannot be upgraded as-is,” Homebrew prints a warning but exits 0, so the one-click updater reported success and reopened the same build. It now detects the refusal by message and runs the <code>brew reinstall --force</code> Homebrew recommends. (<a href="https://github.com/caezium/Burrow/pull/287" target="_blank" rel="noopener">#287</a>)</li>
+            <li><b>Plus de plantages de la fenêtre de la barre des menus ni du rapport en flux.</b> Deux fautes <code>EXC_BAD_ACCESS</code> dans le graphe de vues de SwiftUI — l'une dans le bouton d'en-tête de la fenêtre, l'autre dans le rapport de tâche en direct pendant qu'un travail diffusait — sont corrigées en gardant ces sous-arbres structurellement stables au fil des mises à jour d'instantané et de défilement, au lieu de les restructurer en cours de route. (<a href="https://github.com/caezium/Burrow/pull/299" target="_blank" rel="noopener">#299</a>)</li>
+            <li><b>La mesure de la barre des menus ne plante plus sur une police nulle.</b> <code>NSFont.monospacedSystemFont</code> est déclaré non nul mais peut renvoyer nil de façon passagère sous pression mémoire ; ce nul atteignait CoreText et plantait au moment du tracé (Sentry BURROW-8Y). Les widgets de mesure se rabattent désormais sur la police système simple : au pire un défaut d'apparence, jamais un plantage. (<a href="https://github.com/caezium/Burrow/pull/290" target="_blank" rel="noopener">#290</a>)</li>
+            <li><b>La mise à jour intégrée met vraiment à jour.</b> Quand le cask « ne peut pas être mis à niveau tel quel », Homebrew affiche un avertissement mais se termine par 0 ; l'outil en un clic annonçait donc un succès et rouvrait la même version. Il détecte maintenant ce refus au message et lance ce que <code>brew reinstall --force</code> Homebrew recommande. (<a href="https://github.com/caezium/Burrow/pull/287" target="_blank" rel="noopener">#287</a>)</li>
           </ul>
         </div>
       </div>
@@ -405,27 +405,27 @@
     <article class="entry" id="v0.10.1">
       <div class="ver-col">
         <h2 class="ver">0.10.1</h2>
-        <span class="date mono">Jul 13, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">13 juillet 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.1" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Three new panes, Leftovers, Similar Photos, and Network, and Duplicates now works out of the box, plus menu-bar HUD and HEIC fixes.</p>
+        <p class="lead">Trois nouveaux volets — Restes, Photos similaires et Réseau — et Doublons fonctionne désormais sans rien installer, avec en prime des correctifs pour le HUD de la barre des menus et le HEIC.</p>
         <div class="sblock">
-          <div class="slabel mono">New</div>
+          <div class="slabel mono">Nouveau</div>
           <ul class="slist">
-            <li>Leftovers pane: find and clear the caches, preferences, and support files an app leaves behind</li>
-            <li>Similar Photos pane: cluster near-duplicate images by perceptual hash, reveal in Finder</li>
-            <li>Network pane: per-app bandwidth</li>
+            <li>Volet Restes : trouve et nettoie les caches, préférences et fichiers annexes qu'une app laisse derrière elle</li>
+            <li>Volet Photos similaires : regroupe les images quasi identiques par empreinte visuelle et les affiche dans le Finder</li>
+            <li>Volet Réseau : débit par app</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">Corrections</div>
           <ul class="slist">
-            <li>Duplicates works with zero install, the fclones sidecar is now bundled universal</li>
-            <li>Similar Photos reports HEIC it can't decode (“N HEIC couldn't be read”) instead of a bare empty result</li>
-            <li>Menu-bar HUD popover no longer shifts sideways and clips; the tool strip wraps instead of overflowing</li>
-            <li>Tool panes mount lazily, no more ~2-second layout hang on open or pane switch</li>
-            <li>Finder-launched app augments its PATH with the Homebrew bins so installed helpers resolve</li>
+            <li>Doublons fonctionne sans rien installer : le compagnon fclones est désormais fourni en version universelle</li>
+            <li>Photos similaires signale les HEIC qu'il ne peut pas décoder (« N HEIC n'ont pas pu être lus ») au lieu d'un résultat vide sans explication</li>
+            <li>La fenêtre du HUD ne se décale plus latéralement et n'est plus tronquée ; la barre d'outils passe à la ligne au lieu de déborder</li>
+            <li>Les volets d'outils se chargent à la demande : fini le blocage de mise en page d'environ deux secondes à l'ouverture ou au changement de volet</li>
+            <li>Lancée depuis le Finder, l'app complète son PATH avec les dossiers de Homebrew pour retrouver les utilitaires installés</li>
           </ul>
         </div>
       </div>
@@ -434,43 +434,43 @@
     <article class="entry" id="v0.10.0">
       <div class="ver-col">
         <h2 class="ver">0.10.0</h2>
-        <span class="date mono">Jul 12, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">12 juillet 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The conductor release, Burrow ships its own command layer, a brand-new Duplicates pane, and the sudo, uninstall, and Tune-Up fixes you reported.</p>
+        <p class="lead">La version « chef d'orchestre » : Burrow embarque sa propre couche de commandes, un tout nouveau volet Doublons, et les corrections que vous avez signalées sur sudo, la désinstallation et la mise au point.</p>
         <div class="sblock">
-          <div class="slabel mono">New</div>
+          <div class="slabel mono">Nouveau</div>
           <ul class="slist">
-            <li>Duplicates pane: scan, review checklist-style with a keep-one guard, move extras to the Trash or reclaim via APFS clones</li>
-            <li>Bundled <code>burrow</code> conductor (universal): analysis, status, history, clean, and optimize route through one stable JSON contract with direct-engine fallback</li>
-            <li>7 read-only MCP tools through the conductor, 21 total for agents</li>
+            <li>Volet Doublons : analyser, vérifier sous forme de liste à cocher avec un garde-fou qui en conserve toujours un, mettre les surplus à la corbeille ou récupérer l'espace via les clones APFS</li>
+            <li>Chef d'orchestre <code>burrow</code> intégré (universel) : analyse, état, historique, nettoyage et optimisation passent par un contrat JSON stable, avec repli sur le moteur direct</li>
+            <li>7 outils MCP en lecture seule via le chef d'orchestre, 21 au total pour les agents</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">Corrections</div>
           <ul class="slist">
-            <li>Admin password dialog appears again for root-owned app uninstalls (the engine now opens /dev/tty instead of permission-testing it)</li>
-            <li>Failed uninstalls keep the list and selection and surface the engine's error</li>
-            <li>Tune-Up reclaim sizes no longer show raw ANSI color codes</li>
-            <li>Analyze bounds per-child scans so a huge cache folder can't freeze the scan</li>
-            <li>Menu-bar popover no longer rubber-bands into empty space</li>
-            <li>Self-update refreshes Homebrew before upgrading</li>
+            <li>La demande de mot de passe administrateur réapparaît pour désinstaller les apps appartenant à root (le moteur ouvre désormais /dev/tty au lieu d'en tester les droits)</li>
+            <li>Les désinstallations échouées conservent la liste et la sélection et remontent l'erreur du moteur</li>
+            <li>Les tailles récupérées par la mise au point n'affichent plus de codes de couleur ANSI bruts</li>
+            <li>L'analyse borne les parcours par sous-élément, pour qu'un énorme dossier de cache ne puisse pas geler l'ensemble</li>
+            <li>La fenêtre de la barre des menus ne rebondit plus dans le vide</li>
+            <li>L'autoréactualisation rafraîchit Homebrew avant de mettre à niveau</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Also</div>
+          <div class="slabel mono">Aussi</div>
           <ul class="slist">
-            <li>Per-metric menu-bar text sizing, stable widths, flipped net in/out ordering</li>
-            <li>HUD popover re-pins when the menu bar auto-hides</li>
+            <li>Taille de texte par mesure dans la barre des menus, largeurs stables, ordre entrée/sortie du réseau inversé</li>
+            <li>La fenêtre du HUD se réancre quand la barre des menus se masque automatiquement</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li>Downloadable at last: BurrowWin-0.10.0-win-x64.zip ships on this release, the unpackaged app with burrow.exe and the engine bundled (unzip, run BurrowWin.exe; Windows 10/11)</li>
-            <li>Agent-triggered clean/optimize route through burrow.exe with the same envelope contract as macOS</li>
-            <li>burrow.exe grew real Windows powers: Recycle-Bin safe delete, guarded BCU uninstalls, czkawka duplicates + similar photos, provider-aware OneDrive eviction, IP Helper network attribution</li>
+            <li>Enfin téléchargeable : BurrowWin-0.10.0-win-x64.zip accompagne cette version — l'app non empaquetée avec burrow.exe et le moteur inclus (décompresser, lancer BurrowWin.exe ; Windows 10/11)</li>
+            <li>Le nettoyage et l'optimisation déclenchés par un agent passent par burrow.exe, avec le même contrat d'enveloppe que sur macOS</li>
+            <li>burrow.exe a gagné de vrais pouvoirs Windows : suppression sûre via la corbeille, désinstallations BCU encadrées, doublons et photos similaires via czkawka, libération OneDrive tenant compte du fournisseur, et attribution réseau via IP Helper</li>
           </ul>
         </div>
       </div>
@@ -479,36 +479,36 @@
     <article class="entry" id="v0.9.2">
       <div class="ver-col">
         <h2 class="ver">0.9.2</h2>
-        <span class="date mono">Jul 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">8 juillet 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.2" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability and battery release, fixes to Cleanup, Analyze, and the menu bar, plus performance work that makes Burrow noticeably lighter while it sits idle.</p>
+        <p class="lead">Une version pour la stabilité et l'autonomie : corrections dans Nettoyage, Analyse et la barre des menus, plus un travail de performance qui rend Burrow nettement plus léger au repos.</p>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">Corrections</div>
           <ul class="slist">
-            <li>Purge (Cleanup → Project build artifacts) applies your selection instead of aborting with “Couldn't confirm the selection safely”</li>
-            <li>Analyze cancels superseded scans and caps engine concurrency, no more runaway pile of processes</li>
-            <li>Camera/mic in-use indicator ignores virtual audio/video devices and clears when capture ends</li>
-            <li>Menu-bar popover no longer flies to a screen edge or mis-sizes on multi-display setups</li>
-            <li>Fewer spurious “App Hang” reports</li>
+            <li>Le nettoyage en profondeur (Nettoyage → Artefacts de compilation) applique ta sélection au lieu d'abandonner sur « Impossible de confirmer la sélection en toute sécurité »</li>
+            <li>L'analyse annule les parcours devenus obsolètes et plafonne le nombre de moteurs simultanés : fini l'empilement incontrôlé de processus</li>
+            <li>L'indicateur d'utilisation de la caméra et du micro ignore les périphériques audio et vidéo virtuels et s'efface à la fin de la capture</li>
+            <li>La fenêtre de la barre des menus ne file plus vers un bord d'écran et ne se dimensionne plus de travers sur plusieurs écrans</li>
+            <li>Moins de faux rapports « l'app ne répond pas »</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Performance &amp; battery</div>
+          <div class="slabel mono">Performance &amp; autonomie</div>
           <ul class="slist">
-            <li>Metrics engine caches slow SMC/GPU sensor reads and skips idle stream frames when no window is open</li>
-            <li>Analyze walk and icon caches are now bounded (evict under memory pressure)</li>
-            <li>Live sparklines window their data instead of scanning the full history each frame</li>
-            <li>Doctor security/SMART/backup probes are timeout-guarded and cached across reopens</li>
-            <li>Network-usage views share one sample instead of each running a 1-second scan</li>
+            <li>Le moteur de mesures met en cache les lectures lentes des capteurs SMC et GPU et saute les images inutiles quand aucune fenêtre n'est ouverte</li>
+            <li>Le parcours de l'analyse et les caches d'icônes sont désormais bornés (vidés sous pression mémoire)</li>
+            <li>Les courbes en direct ne regardent qu'une fenêtre de leurs données au lieu de parcourir tout l'historique à chaque image</li>
+            <li>Les sondes de sécurité, SMART et sauvegarde du diagnostic sont protégées par un délai et mises en cache d'une ouverture à l'autre</li>
+            <li>Les vues d'usage réseau partagent une seule mesure au lieu d'en lancer chacune une d'une seconde</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Under the hood</div>
+          <div class="slabel mono">Sous le capot</div>
           <ul class="slist">
-            <li>Dead-code prune</li>
-            <li>Homebrew cask no longer depends on a system engine (engine bundled since 0.9.0)</li>
+            <li>Élagage du code mort</li>
+            <li>Le cask Homebrew ne dépend plus d'un moteur système (le moteur est fourni depuis la 0.9.0)</li>
           </ul>
         </div>
       </div>
@@ -517,66 +517,66 @@
     <article class="entry" id="v0.9.0">
       <div class="ver-col">
         <h2 class="ver">0.9.0</h2>
-        <span class="date mono">Jun 30, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">30 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's biggest release, it now bundles its own engine (no separate install), and adds an Activity-Monitor-class process inspector, a Get Online connectivity companion, and a security-aware Doctor.</p>
+        <p class="lead">La plus grosse version de Burrow : il embarque désormais son propre moteur (aucune installation séparée) et ajoute un inspecteur de processus digne du Moniteur d'activité, un compagnon pour retrouver le réseau, et un diagnostic attentif à la sécurité.</p>
         <div class="sblock">
-          <div class="slabel mono">engine</div>
+          <div class="slabel mono">moteur</div>
           <ul class="slist">
-            <li><b>Burrow bundles its own engine now.</b> The app ships an MIT-licensed <code>burrow-engine</code> (forked at its last MIT release) inside <code>Burrow.app</code> and runs it directly, so a fresh install needs <b>no separate engine install</b>. Burrow prefers the bundled engine, then an installed <code>burrow-engine</code>, then a legacy system engine for existing setups.</li>
+            <li><b>Burrow embarque désormais son propre moteur.</b> L'app livre un <code>burrow-engine</code> sous licence MIT (dérivé de sa dernière version MIT) à l'intérieur de <code>Burrow.app</code> et l'exécute directement : une nouvelle installation ne demande donc <b>aucune installation séparée du moteur</b>. Burrow préfère le moteur intégré, puis un <code>burrow-engine</code>installé, puis un ancien moteur système pour les configurations existantes.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">process inspector</div>
+          <div class="slabel mono">inspecteur de processus</div>
           <ul class="slist">
-            <li><b>Per-process inspector</b>: click any process for a structured panel: identity (path, code signature, Mach-O architecture), live CPU/memory, runtime, and the process's open network connections.</li>
-            <li><b>Process tree</b>: the parent/child hierarchy around any process.</li>
-            <li><b>CPU watchdog</b>: set per-process CPU thresholds and get notified when something runs hot, with an editor in Settings.</li>
-            <li><b>Filter, suspend/resume, export</b>: a typed predicate filter over the process table, suspend or resume a process, and export the table.</li>
+            <li><b>Inspecteur par processus</b> : clique sur n'importe quel processus pour ouvrir un panneau structuré — identité (chemin, signature de code, architecture Mach-O), processeur et mémoire en direct, durée d'exécution et connexions réseau ouvertes du processus.</li>
+            <li><b>Arbre des processus</b> : la hiérarchie parent/enfant autour de n'importe quel processus.</li>
+            <li><b>Surveillance du processeur</b> : fixe des seuils par processus et sois prévenu quand quelque chose chauffe, avec un éditeur dans les réglages.</li>
+            <li><b>Filtrer, suspendre/reprendre, exporter</b> : un filtre typé sur le tableau des processus, la suspension ou la reprise d'un processus, et l'export du tableau.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">get online</div>
+          <div class="slabel mono">retrouver le réseau</div>
           <ul class="slist">
-            <li><b>On-demand speed test</b>: measure real down/up throughput.</li>
-            <li><b>Nearby Wi-Fi scan</b>: surrounding networks and channel congestion (Home mode), so you can pick a clearer channel.</li>
-            <li><b>Venue captive-portal tips</b>: venue-specific help for hotel/airport/café portals that won't load.</li>
-            <li><b>Connection history</b>: a log of connectivity events (SSID changes, drops).</li>
+            <li><b>Test de débit à la demande</b> : mesure le débit réel en réception et en émission.</li>
+            <li><b>Analyse des Wi-Fi voisins</b> : les réseaux alentour et l'encombrement des canaux (mode Maison), pour choisir un canal plus dégagé.</li>
+            <li><b>Conseils pour les portails captifs</b> : aide adaptée au lieu pour les portails d'hôtel, d'aéroport ou de café qui refusent de s'afficher.</li>
+            <li><b>Historique de connexion</b> : un journal des événements réseau (changements de SSID, coupures).</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">doctor</div>
+          <div class="slabel mono">diagnostic</div>
           <ul class="slist">
-            <li><b>Security posture</b>: SIP, Gatekeeper, FileVault, and firewall at a glance, plus a high-CPU check and one-click <b>Copy diagnostics</b>.</li>
-            <li><b>Battery health</b>: capacity % and condition (omitted on desktops).</li>
-            <li><b>More context</b>: display, external-volume, and network context.</li>
+            <li><b>Posture de sécurité</b> : SIP, Gatekeeper, FileVault et pare-feu d'un coup d'œil, plus un contrôle de charge processeur et <b>Copier les diagnostics</b>.</li>
+            <li><b>Santé de la batterie</b> : pourcentage de capacité et état (absent sur les ordinateurs de bureau).</li>
+            <li><b>Plus de contexte</b> : informations sur l'écran, les volumes externes et le réseau.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">clean, software &amp; analyze</div>
+          <div class="slabel mono">nettoyage et logiciels &amp; analyse</div>
           <ul class="slist">
-            <li><b>Nettoyage</b> now sorts the review <b>by reclaimable impact</b> et <b>flags sensitive paths</b> (keychain/credential locations) before you delete; the done screen shows your <b>all-time cleaned total</b>.</li>
-            <li><b>Software</b>: App Store updates that need a newer macOS are hidden; ⌘R refreshes with a cache bypass; app search is alias-aware.</li>
-            <li><b>Uninstall</b>: a Clear-Data-only subset, plus an input-method leftover warning.</li>
-            <li><b>Analyse</b>: one-tap whole-disk scan, and a treemap “Other” fold for tiny entries.</li>
-            <li><b>Optimisation</b>: a pre-run safety banner when a VPN or external display is active.</li>
-            <li><b>Login items</b>: modern Login (BTM) items appear in the startup inventory; a LaunchAgent on an unplugged drive is no longer flagged broken.</li>
-            <li><b>Keep Screen On</b> keeps working with the lid closed.</li>
+            <li><b>Nettoyage</b> trie désormais la vérification <b>par espace récupérable</b> et <b>signale les chemins sensibles</b> (trousseau, identifiants) avant que tu ne supprimes ; l'écran final affiche ton <b>total nettoyé depuis toujours</b>.</li>
+            <li><b>Logiciels</b> : les mises à jour de l'App Store exigeant un macOS plus récent sont masquées ; ⌘R recharge en contournant le cache ; la recherche d'apps reconnaît les alias.</li>
+            <li><b>Désinstallation</b> : une option qui n'efface que les données, et un avertissement sur les restes de méthodes de saisie.</li>
+            <li><b>Analyse</b> : analyse du disque entier en un geste, et un repli « Autres » dans la carte pour les entrées minuscules.</li>
+            <li><b>Optimisation</b> : une bannière de prudence avant exécution quand un VPN ou un écran externe est actif.</li>
+            <li><b>Ouvertures de session</b> : les éléments d'ouverture modernes (BTM) apparaissent dans l'inventaire de démarrage ; un LaunchAgent sur un disque débranché n'est plus signalé comme cassé.</li>
+            <li><b>Garder l'écran allumé</b> continue de fonctionner écran rabattu.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>Three main-thread hangs</b> on the new process/parity surfaces (suspend/resume, inspector, tree).</li>
-            <li>A missing <code>paths:</code> label on a data-only uninstall plan.</li>
+            <li><b>Trois blocages du fil principal</b> sur les nouvelles surfaces liées aux processus (suspendre/reprendre, inspecteur, arbre).</li>
+            <li>Une étiquette <code>paths:</code> manquante sur un plan de désinstallation ne portant que sur les données.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li><b>Préversion Windows</b>: version-aligned to 0.9.0; no Windows-specific changes this release.</li>
+            <li><b>Préversion Windows</b> : aligné sur la 0.9.0 ; aucun changement propre à Windows dans cette version.</li>
           </ul>
         </div>
       </div>
@@ -585,46 +585,46 @@
     <article class="entry" id="v0.8.3">
       <div class="ver-col">
         <h2 class="ver">0.8.3</h2>
-        <span class="date mono">Jun 25, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.3" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">25 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.3" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A metrics &amp; menu-bar release, real memory-pressure reporting, a power-draw widget, a live menu-bar preview, and a snappier popover.</p>
+        <p class="lead">Une version consacrée aux mesures &amp; et à la barre des menus : véritable pression mémoire, widget de consommation électrique, aperçu en direct de la barre des menus et une fenêtre plus vive.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Power-draw widget</b>: live system wattage (W) as a menu-bar metric.</li>
-            <li><b>Real memory pressure.</b> “By pressure” now reads actual macOS memory pressure, <code>(wired + compressed) / total</code> via <code>host_statistics64</code>, the same figure Activity Monitor reports, instead of reusing the CPU-style utilization ramp. Shown as a percentage on the memory tiles, colored green ≤59% / orange 60–79% / red ≥80%.</li>
-            <li><b>Memory detail card</b>: the Status dashboard breaks memory down into used / free / cached / swap.</li>
-            <li><b>Live menu-bar preview + layout presets</b>: Settings previews your real metrics as you configure them, with one-tap layout presets.</li>
-            <li><b>Two new runner animations</b>: Wave and Bars.</li>
+            <li><b>Widget de consommation</b> : la puissance du système en watts, en direct, comme mesure de la barre des menus.</li>
+            <li><b>La vraie pression mémoire.</b> « Par pression » lit désormais la véritable pression mémoire de macOS, <code>(wired + compressed) / total</code> via <code>host_statistics64</code>, le chiffre même que rapporte le Moniteur d'activité, au lieu de réutiliser l'échelle d'utilisation du processeur. Affichée en pourcentage sur les tuiles mémoire, en vert jusqu'à 59 %, orange de 60 à 79 %, rouge à partir de 80 %.</li>
+            <li><b>Fiche détaillée de la mémoire</b> : le tableau de bord État décompose la mémoire en utilisée, libre, en cache et swap.</li>
+            <li><b>Aperçu en direct de la barre des menus et modèles de disposition</b> : les réglages affichent tes vraies mesures pendant que tu les configures, avec des dispositions prêtes à l'emploi en un geste.</li>
+            <li><b>Deux nouvelles animations de coureur</b> : Wave et Bars.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li><b>Consistent pressure coloring</b> across the dashboard tile, popover, memory-detail card, and menu bar.</li>
-            <li><b>Live popover sparklines</b>: CPU / memory / GPU tick every second (about a minute of history).</li>
-            <li><b>Honest color picker</b>: “By pressure” is offered only where it applies (memory); the temperature color ramp was corrected.</li>
+            <li><b>Couleurs de pression cohérentes</b> entre la tuile du tableau de bord, la fenêtre, la fiche mémoire et la barre des menus.</li>
+            <li><b>Courbes en direct dans la fenêtre</b> : processeur, mémoire et GPU battent à la seconde (environ une minute d'historique).</li>
+            <li><b>Choix de couleur honnête</b> : « Par pression » n'est proposé que là où cela s'applique (la mémoire) ; l'échelle de couleurs de température a été corrigée.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>Brewfile import/export pickers no longer trip the hang detector</b> (ANR false-positives).</li>
-            <li><b>App-Hang reports from memory-starved machines are dropped</b> before sending, they were environmental, not Burrow bugs.</li>
+            <li><b>Les sélecteurs de fichiers pour l'import et l'export de Brewfile ne déclenchent plus le détecteur de blocage</b> (faux positifs « ne répond pas »).</li>
+            <li><b>Les rapports « l'app ne répond pas » venant de machines à court de mémoire sont écartés</b> avant l'envoi : ils tenaient à l'environnement, pas à des bogues de Burrow.</li>
           </ul>
         </div>
         <div class="sblock">
           <div class="slabel mono">performance</div>
           <ul class="slist">
-            <li><b>Snappier popover</b>: the metric grid no longer re-renders on unrelated state changes.</li>
+            <li><b>Fenêtre plus vive</b> : la grille des mesures ne se redessine plus lors de changements d'état sans rapport.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li><b>Préversion Windows</b>: a version-aligned 0.8.3 build is attached (<code>BurrowWin-0.8.3-win-x64.zip</code>). No Windows-specific changes this release.</li>
+            <li><b>Préversion Windows</b> : une version 0.8.3 alignée est jointe (<code>BurrowWin-0.8.3-win-x64.zip</code>). Aucun changement propre à Windows dans cette version.</li>
           </ul>
         </div>
       </div>
@@ -633,21 +633,21 @@
     <article class="entry" id="v0.8.2">
       <div class="ver-col">
         <h2 class="ver">0.8.2</h2>
-        <span class="date mono">Jun 23, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">23 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.2" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A fix release, a Full Disk Access grant now actually takes effect, and Burrow asks for notification permission up front.</p>
+        <p class="lead">Une version corrective : l'accès complet au disque prend enfin réellement effet, et Burrow demande d'emblée l'autorisation de notifier.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>Full Disk Access is honored again.</b> The shipped app's embedded framework signatures were malformed (<code>codesign --verify --strict</code> failed on <code>Sentry.framework</code>), so macOS couldn't validate Burrow's identity and silently ignored a Full Disk Access grant, turning it on in System Settings appeared to do nothing. The release now re-signs the app and every nested framework inside-out so the signature is valid and the grant takes effect. After updating, toggle Full Disk Access off and back on once. _(Burrow is still ad-hoc-signed, so a re-grant is needed after each update until it ships with a Developer ID signature.)_</li>
+            <li><b>L'accès complet au disque est de nouveau respecté.</b> Les signatures des frameworks embarqués dans l'app livrée étaient mal formées (<code>codesign --verify --strict</code> échouait sur <code>Sentry.framework</code>), si bien que macOS ne pouvait pas valider l'identité de Burrow et ignorait en silence l'accès complet au disque : l'activer dans les Réglages Système semblait sans effet. Cette version resigne l'app et chaque framework imbriqué de l'intérieur vers l'extérieur, pour que la signature soit valide et l'autorisation effective. Après la mise à jour, désactive puis réactive une fois l'accès complet au disque. _(Burrow est encore signé à la volée : il faut donc réaccorder l'autorisation après chaque mise à jour, jusqu'à ce qu'il soit livré avec une signature Developer ID.)_</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li><b>Notification permission is requested up front</b>: Burrow now asks once, when you finish onboarding or first enable a notifying feature, instead of springing the system prompt the moment a notification tries to fire.</li>
+            <li><b>L'autorisation de notifier est demandée d'emblée</b> : Burrow demande une seule fois, à la fin de la configuration initiale ou lorsque tu actives pour la première fois une fonction qui notifie, au lieu de faire surgir la demande système au moment où une notification cherche à s'afficher.</li>
           </ul>
         </div>
       </div>
@@ -656,35 +656,35 @@
     <article class="entry" id="v0.8.1">
       <div class="ver-col">
         <h2 class="ver">0.8.1</h2>
-        <span class="date mono">Jun 23, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">23 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.1" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability release, no more dashboard freezes, live status now streams, a one-click Homebrew update, and the Windows preview's review closeout.</p>
+        <p class="lead">Une version de stabilité : plus de gel du tableau de bord, l'état en direct est diffusé en flux, une mise à jour Homebrew en un clic, et la clôture de la revue de la préversion Windows.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>No more App-Hang freezes.</b> The Overview dashboard re-rendered its whole grid, every chart tile and the full process table, once a second; now only the small Disk / Network tiles update that often, the rest on the snapshot.</li>
-            <li>Opening <b>Settings</b> and the <b>About</b> panel no longer blocks the main thread (login-item status, metrics-folder sizing, and the engine-version lookup moved off it).</li>
-            <li><b>PostHog telemetry</b> now flushes off the main thread instead of on a main-run-loop timer.</li>
+            <li><b>Fini les gels « l'app ne répond pas ».</b> Le tableau de bord redessinait toute sa grille — chaque tuile de graphique et le tableau complet des processus — une fois par seconde ; désormais, seules les petites tuiles Disque et Réseau se rafraîchissent à ce rythme, le reste suivant l'instantané.</li>
+            <li>Ouvrir <b>Réglages</b> et le panneau <b>À propos</b> ne bloque plus le fil principal (l'état des ouvertures de session, le calcul de la taille du dossier de mesures et la recherche de version du moteur en ont été sortis).</li>
+            <li><b>La télémétrie PostHog</b> est désormais envoyée hors du fil principal, et non plus par une minuterie de la boucle principale.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li><b>Live status streams by default</b>: with engine 1.44+, Burrow streams the engine's streaming status command (NDJSON) instead of polling the engine's one-shot status command: lower latency and less subprocess churn. Falls back to polling on an older engine or a dropped stream.</li>
+            <li><b>L'état en direct est diffusé en flux par défaut</b> : à partir du moteur 1.44, Burrow utilise la commande d'état en flux (NDJSON) au lieu d'interroger la commande ponctuelle — moins de latence et moins de sous-processus. Il revient à l'interrogation avec un moteur plus ancien ou si le flux se coupe.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Update with Homebrew</b>: for cask installs, the update prompt has a one-click button that runs <code>brew upgrade --cask burrow</code> and relaunches.</li>
+            <li><b>Mettre à jour avec Homebrew</b> : pour les installations par cask, l'invite de mise à jour propose un bouton qui lance <code>brew upgrade --cask burrow</code> et relance l'app.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows preview</div>
+          <div class="slabel mono">préversion Windows</div>
           <ul class="slist">
-            <li>Closed out the port review: MCP tool parity with macOS (<code>burrow_list_apps</code>, <code>burrow_purge</code>, <code>burrow_installer</code>: preview-only over MCP), stdio MCP that survives the HTTP toggle, brand assets / palette / fonts / icon aligned to the Mac, honest docs, and MCP + deletion-guard tests. Earlier rounds added Recycle-Bin routing, a drive-root guard, and SHA-256 verification of the bundled engine. Still an unsigned, build-from-source preview.</li>
+            <li>Revue du portage close : parité des outils MCP avec macOS (<code>burrow_list_apps</code>, <code>burrow_purge</code>, <code>burrow_installer</code> : en aperçu seulement via MCP), un MCP stdio qui survit au basculement HTTP, éléments de marque, palette, polices et icône alignés sur le Mac, documentation honnête, et tests MCP et garde-fou de suppression. Les tours précédents avaient ajouté le passage par la corbeille, une protection de la racine des disques et la vérification SHA-256 du moteur fourni. Toujours une préversion non signée, à compiler soi-même.</li>
           </ul>
         </div>
       </div>
@@ -693,49 +693,49 @@
     <article class="entry" id="v0.8.0">
       <div class="ver-col">
         <h2 class="ver">0.8.0</h2>
-        <span class="date mono">Jun 20, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">20 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A top-to-bottom visual redesign, a wave of new tools, a deeper agent surface, and an early Windows preview.</p>
+        <p class="lead">Une refonte visuelle de fond en comble, une vague de nouveaux outils, une surface plus riche pour les agents, et une première préversion Windows.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Ports</b>: live connections, bandwidth, reverse-DNS peers, service labels, conflicts, sortable columns, and a per-connection detail view.</li>
-            <li><b>Retrouver le réseau</b>: MDM and gateway checks, the active-interface IP, captive-portal and device-side rescue, and one-click fixes.</li>
-            <li><b>Mise au point</b>: a Smart-Care flow (scan → results → run) that auto-scans the moment you open it.</li>
-            <li><b>Homebrew</b>: Services (start / stop / restart), Brewfile snapshots (export / restore), and live <code>brew upgrade</code> progress in Updates.</li>
-            <li><b>Menu bar</b>: a customizable popup, Stats-depth widgets, a RunCat-style runner, and live metric widgets in the status item.</li>
-            <li><b>Disk</b> now forecasts when you'll run out of space (“Full in ~N”); <b>Doctor</b> gains SMART-health and backup-awareness checks with overdue reminders, multi-select bulk reclaim, and a git purge-safety badge.</li>
-            <li><b>For your agent</b>: a deeper MCP surface: a token-gated <code>/events</code> SSE stream and <code>burrow_diff</code>, so an agent can watch and compare your machine over time.</li>
+            <li><b>Ports</b> : connexions en direct, débit, pairs résolus par DNS inverse, libellés de services, conflits, colonnes triables et une vue détaillée par connexion.</li>
+            <li><b>Retrouver le réseau</b> : contrôles MDM et passerelle, adresse IP de l'interface active, secours côté portail captif et côté appareil, et corrections en un clic.</li>
+            <li><b>Mise au point</b> : un parcours d'entretien (analyse → résultats → exécution) qui lance l'analyse dès l'ouverture.</li>
+            <li><b>Homebrew</b> : services (démarrer, arrêter, redémarrer), instantanés Brewfile (export, restauration) et progression <code>brew upgrade</code> en direct dans Mises à jour.</li>
+            <li><b>Barre des menus</b> : une fenêtre personnalisable, des widgets détaillés, un coureur façon RunCat, et des widgets de mesure en direct dans l'élément d'état.</li>
+            <li><b>Disque</b> prévoit désormais quand l'espace manquera (« Plein dans ~N ») ; <b>Diagnostic</b> gagne des contrôles de santé SMART et de sauvegarde avec rappels en cas de retard, une récupération groupée par sélection multiple, et un badge de sûreté pour le nettoyage git.</li>
+            <li><b>Pour ton agent</b> : une surface MCP plus riche — un flux SSE <code>/events</code> protégé par jeton et <code>burrow_diff</code>, pour qu'un agent puisse observer et comparer ta machine dans la durée.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li>A warm, tactile redesign, a warm-coffee adaptive palette, film grain over a soft gradient, a floating icon rail in place of the top tabs, borderless cards, and the Geist / Cal Sans type system.</li>
-            <li><b>Vue d'ensemble</b>: Health pulled up into an open hero band over a cleaner three-up vitals grid.</li>
-            <li><b>Historique</b>: a focal hero chart with a selectable metric strip; drag-select a span to surface the top processes for that spike.</li>
-            <li><b>HUD de la barre des menus</b>: borderless tiles on the same warm ground, with Doctor and Restore reskinned to match and edge-fade scrollers throughout.</li>
+            <li>Une refonte chaleureuse et tactile : une palette adaptative aux tons café, un grain argentique sur un dégradé doux, une barre d'icônes flottante à la place des onglets du haut, des cartes sans bordure, et le système typographique Geist / Cal Sans.</li>
+            <li><b>Vue d'ensemble</b> : la santé remonte dans un bandeau ouvert au-dessus d'une grille de constantes à trois colonnes, plus nette.</li>
+            <li><b>Historique</b> : un graphique principal avec une bande de mesures sélectionnables ; sélectionne une plage par glissement pour faire remonter les principaux processus de ce pic.</li>
+            <li><b>HUD de la barre des menus</b> : des tuiles sans bordure sur le même fond chaleureux, avec Diagnostic et Restauration retravaillés pour s'accorder, et des zones de défilement aux bords estompés partout.</li>
           </ul>
         </div>
         <div class="sblock">
           <div class="slabel mono">performance</div>
           <ul class="slist">
-            <li>Killed several main-thread app-hangs, the process table, sort, ICU on the render path, app icons, clean reports, and the software list.</li>
-            <li>Onboarding now auto-detects the engine.</li>
+            <li>Plusieurs blocages du fil principal éliminés : tableau des processus, tri, ICU sur le chemin de rendu, icônes d'apps, rapports de nettoyage et liste des logiciels.</li>
+            <li>La configuration initiale détecte désormais le moteur toute seule.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows preview</div>
+          <div class="slabel mono">préversion Windows</div>
           <ul class="slist">
-            <li>An early native <b>WinUI 3 / .NET 8</b> app now lives under <code>windows/</code>: Status, History, Analyze, Apps, a tray HUD, local telemetry/history, and an MCP stdio bridge. Build from source; unsigned preview.</li>
+            <li>Une première app native <b>WinUI 3 / .NET 8</b> vit désormais sous <code>windows/</code> : État, Historique, Analyse, Apps, un HUD dans la zone de notification, télémétrie et historique locaux, et un pont MCP en stdio. À compiler soi-même ; préversion non signée.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">under the hood</div>
+          <div class="slabel mono">sous le capot</div>
           <ul class="slist">
-            <li>The repo is now a monorepo (<code>macos/</code> + <code>windows/</code>), with inside-out framework signing for notarization and an automated upstream engine release watcher.</li>
+            <li>Le dépôt est maintenant un monorepo (<code>macos/</code> + <code>windows/</code>), avec une signature des frameworks de l'intérieur vers l'extérieur pour la notarisation et une veille automatique des versions du moteur en amont.</li>
           </ul>
         </div>
       </div>
@@ -744,34 +744,34 @@
     <article class="entry" id="v0.7.2">
       <div class="ver-col">
         <h2 class="ver">0.7.2</h2>
-        <span class="date mono">Jun 15, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">15 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.2" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A feature pass on the redesign, cleanup, software and the live dashboard get more capable, with opt-in update and privacy surfaces.</p>
+        <p class="lead">Une passe de fonctionnalités après la refonte : le nettoyage, les logiciels et le tableau de bord en direct gagnent en capacités, avec des surfaces de mise à jour et de confidentialité facultatives.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Cleanup, unified</b>: Purge and Installers fold into Clean as category cards, each with a real result screen and the raw log tucked behind a View Log toggle.</li>
-            <li><b>Self-update</b>: Burrow checks itself for new versions (opt-in, default on) and shows a banner plus a menu-bar dot. It never installs on its own.</li>
-            <li><b>Homebrew updates</b> appear the moment you open the Apps tab, and your own login items get on/off toggles.</li>
-            <li>An optional <b>camera &amp; mic in-use indicator</b> in the menu-bar popover (off by default), reading the same signal as Control Center.</li>
-            <li><b>About</b> et <b>Check for Updates</b> now live in Settings too.</li>
+            <li><b>Nettoyage unifié</b> : le nettoyage en profondeur et les programmes d'installation rejoignent Nettoyage sous forme de cartes de catégorie, chacune avec un véritable écran de résultat et le journal brut rangé derrière un bouton « Voir le journal ».</li>
+            <li><b>Autoréactualisation</b> : Burrow cherche lui-même de nouvelles versions (facultatif, activé par défaut) et affiche une bannière et un point dans la barre des menus. Il n'installe jamais de son propre chef.</li>
+            <li><b>Les mises à jour Homebrew</b> apparaissent dès l'ouverture de l'onglet Apps, et tes propres ouvertures de session gagnent des interrupteurs.</li>
+            <li>Un indicateur facultatif d'utilisation de la <b>caméra &amp; et du micro</b> dans la fenêtre de la barre des menus (désactivé par défaut), lisant le même signal que le Centre de contrôle.</li>
+            <li><b>À propos</b> et <b>Rechercher les mises à jour</b> se trouve aussi dans les réglages désormais.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li>Network charts in Status and History draw download and upload as two separate lines.</li>
-            <li>Analyze shows live per-folder progress on the first scan.</li>
-            <li>A View Log toggle on every result screen, Clean, Optimize, Purge, and Installers.</li>
+            <li>Les graphiques réseau dans État et Historique tracent la réception et l'émission en deux courbes distinctes.</li>
+            <li>L'analyse affiche la progression dossier par dossier lors du premier parcours.</li>
+            <li>Un bouton « Voir le journal » sur chaque écran de résultat : Nettoyage, Optimisation, Nettoyage en profondeur et Programmes d'installation.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li>Confirm dialogs and Touch ID are no longer reported as app-hangs.</li>
-            <li>Live App Store / Sparkle update checks stay click-gated, no silent network.</li>
+            <li>Les fenêtres de confirmation et Touch ID ne sont plus signalés comme des blocages.</li>
+            <li>Les recherches de mises à jour App Store et Sparkle restent déclenchées par un clic : aucun trafic silencieux.</li>
           </ul>
         </div>
       </div>
@@ -780,26 +780,26 @@
     <article class="entry" id="v0.7.1">
       <div class="ver-col">
         <h2 class="ver">0.7.1</h2>
-        <span class="date mono">Jun 14, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">14 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.1" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability pass, every freeze and the crash reported since the 0.7.0 redesign, fixed.</p>
+        <p class="lead">Une passe de stabilité : tous les gels et le plantage signalés depuis la refonte de la 0.7.0 sont corrigés.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li>The History view no longer freezes on wide time ranges.</li>
-            <li>Typing in Uninstall and Purge is smooth again.</li>
-            <li>Fixed a crash opening the menu-bar popover charts, it and the Status mini-charts could segfault on a transition, and now draw as one stable shape.</li>
-            <li>GPU history bars draw again on Apple Silicon.</li>
+            <li>La vue Historique ne gèle plus sur les longues plages de temps.</li>
+            <li>La saisie dans Désinstallation et Nettoyage en profondeur est de nouveau fluide.</li>
+            <li>Un plantage à l'ouverture des graphiques de la barre des menus est corrigé : eux et les mini-graphiques d'État pouvaient s'effondrer lors d'une transition, et se tracent désormais comme une seule forme stable.</li>
+            <li>Les barres d'historique du GPU se tracent de nouveau sur Apple Silicon.</li>
           </ul>
         </div>
         <div class="sblock">
           <div class="slabel mono">performance</div>
           <ul class="slist">
-            <li>Faster launch, engine discovery moved off the main thread.</li>
-            <li>The HUD, Status, and Activity panels share one refresh pump now.</li>
-            <li>The process-row Quit / Force-Kill menu is no longer rebuilt on every refresh.</li>
+            <li>Démarrage plus rapide : la découverte du moteur a quitté le fil principal.</li>
+            <li>Les panneaux HUD, État et Activité partagent désormais une seule cadence de rafraîchissement.</li>
+            <li>Le menu Quitter / Forcer à quitter d'une ligne de processus n'est plus reconstruit à chaque rafraîchissement.</li>
           </ul>
         </div>
       </div>
@@ -808,44 +808,44 @@
     <article class="entry" id="v0.7.0">
       <div class="ver-col">
         <h2 class="ver">0.7.0</h2>
-        <span class="date mono">Jun 13, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">13 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The big one, every tool redesigned, a real Clean review pipeline, a new Software tab, and notifications when work finishes.</p>
+        <p class="lead">La grande version : tous les outils redessinés, un vrai circuit de vérification pour le nettoyage, un nouvel onglet Logiciels, et des notifications quand le travail se termine.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>New Software tab</b>: per-app uninstall review, a unified Updates list with source badges, and a startup inventory.</li>
-            <li><b>Review before you clean</b>: Scan streams a live count-up into a per-item review screen, and deselected paths are protected for exactly one run.</li>
-            <li><b>Finish-line alerts</b>: get notified when a clean, optimize, or uninstall finishes, plus opt-in low-disk and Trash reminders.</li>
-            <li>Keep Screen On, Clean Screen, and global shortcuts.</li>
+            <li><b>Nouvel onglet Logiciels</b> : vérification de la désinstallation app par app, une liste de mises à jour unifiée avec badges d'origine, et un inventaire du démarrage.</li>
+            <li><b>Vérifier avant de nettoyer</b> : l'analyse fait défiler un décompte en direct vers un écran de vérification élément par élément, et les chemins décochés sont protégés pour exactement une exécution.</li>
+            <li><b>Alertes de fin</b> : sois prévenu quand un nettoyage, une optimisation ou une désinstallation se termine, avec en option des rappels de disque plein et de corbeille.</li>
+            <li>Garder l'écran allumé, Nettoyer l'écran et des raccourcis globaux.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li>Every tool redesigned, Onboarding, Clean, Software, Status, the menu-bar popover, Analyze, and Settings, all rebuilt.</li>
-            <li>History CPU, GPU, and health render as bars, and GPU usage is read natively on Apple Silicon.</li>
-            <li>A compact, scrollable process table.</li>
-            <li>MCP cleanup tools share the app's gate, return structured summaries, and surface data-freshness on a stable contract.</li>
-            <li>~230 strings localized in 简体中文 / 繁體中文.</li>
+            <li>Tous les outils redessinés : configuration initiale, Nettoyage, Logiciels, État, la fenêtre de la barre des menus, Analyse et Réglages — tout a été rebâti.</li>
+            <li>Dans l'historique, processeur, GPU et santé s'affichent en barres, et l'usage du GPU est lu nativement sur Apple Silicon.</li>
+            <li>Un tableau des processus compact et défilant.</li>
+            <li>Les outils de nettoyage MCP partagent la même autorisation que l'app, renvoient des résumés structurés et exposent la fraîcheur des données selon un contrat stable.</li>
+            <li>Environ 230 textes traduits en 简体中文 et 繁體中文.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li>One-click relaunch the moment Full Disk Access is granted.</li>
-            <li>First-run onboarding checks the engine and version.</li>
-            <li>Truthful Touch ID copy.</li>
-            <li>The dashboard survives a bad metrics sample (skipped and counted) instead of stalling.</li>
+            <li>Relance en un clic dès que l'accès complet au disque est accordé.</li>
+            <li>La configuration au premier lancement vérifie le moteur et sa version.</li>
+            <li>Des formulations honnêtes sur Touch ID.</li>
+            <li>Le tableau de bord survit à une mesure erronée (ignorée et comptée) au lieu de se figer.</li>
           </ul>
         </div>
         <div class="sblock">
           <div class="slabel mono">performance</div>
           <ul class="slist">
-            <li>History auto-refresh is demand-driven, no idle timer.</li>
-            <li>A deepened, test-covered engine runner / metrics / actions core.</li>
+            <li>Le rafraîchissement automatique de l'historique se fait à la demande : aucune minuterie au repos.</li>
+            <li>Un cœur approfondi et couvert par les tests pour l'exécution du moteur, les mesures et les actions.</li>
           </ul>
         </div>
       </div>
@@ -854,36 +854,36 @@
     <article class="entry" id="v0.6.7">
       <div class="ver-col">
         <h2 class="ver">0.6.7</h2>
-        <span class="date mono">Jun 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.7" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">11 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.7" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The biggest release yet, one Home dashboard, 繁體中文, native sensors, live 1-second charts.</p>
+        <p class="lead">La plus grosse version à ce jour : un tableau de bord d'accueil, le 繁體中文, des capteurs natifs et des graphiques en direct à la seconde.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>One Home dashboard</b>: Status, History, and Activity fold into a single live view: vitals, charts, and recent jobs in one place.</li>
-            <li><b>繁體中文</b>: Traditional Chinese joins English and 简体, with an in-app switch, so you're not tied to the system language.</li>
-            <li><b>Real fans &amp; temps</b>: fan RPM and CPU/GPU die temperatures, read straight from the SMC, the gaps the engine leaves on Apple Silicon, filled.</li>
-            <li><b>1-second live charts</b>: net and disk sampled every second, so bursts show up instead of being averaged away.</li>
-            <li><b>Trash from the treemap</b>: spot a forgotten folder in Analyze and send it to the Trash right there, no detour to Finder.</li>
-            <li><b>Sharper AI Explain</b>: it briefs the whole picture now: the current snapshot, the recent trend, and your recent cleanups, in your language.</li>
+            <li><b>Un tableau de bord d'accueil</b> : État, Historique et Activité fusionnent en une seule vue en direct — constantes, graphiques et travaux récents au même endroit.</li>
+            <li><b>繁體中文</b> : le chinois traditionnel rejoint l'anglais et le 简体, avec un sélecteur dans l'app : tu n'es plus lié à la langue du système.</li>
+            <li><b>De vrais ventilateurs &amp; et températures</b> : régime des ventilateurs et températures des puces processeur et GPU, lus directement depuis le SMC — les trous que laisse le moteur sur Apple Silicon sont comblés.</li>
+            <li><b>Graphiques en direct à la seconde</b> : réseau et disque mesurés chaque seconde, pour que les pointes apparaissent au lieu d'être noyées dans la moyenne.</li>
+            <li><b>Corbeille depuis la carte</b> : repère un dossier oublié dans l'Analyse et mets-le à la corbeille sur place, sans détour par le Finder.</li>
+            <li><b>Une explication par IA plus fine</b> : elle résume désormais l'ensemble — l'instantané actuel, la tendance récente et tes derniers nettoyages — dans ta langue.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li>Opt-out anonymous telemetry, one switch, listed in <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>.</li>
-            <li>AI keys moved to the Keychain.</li>
-            <li>Deletes and uninstalls need a second agent opt-in.</li>
+            <li>Télémétrie anonyme désactivable, un seul réglage, détaillée dans <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>.</li>
+            <li>Les clés d'IA sont passées dans le trousseau.</li>
+            <li>Les suppressions et désinstallations exigent une seconde autorisation pour les agents.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li>The loopback API is hardened, no CORS grant.</li>
-            <li>Treemap hover and breadcrumb fixed.</li>
-            <li>Tests grew 124 → 244.</li>
+            <li>L'API en boucle locale est durcie : aucune autorisation CORS.</li>
+            <li>Le survol et le fil d'Ariane de la carte sont corrigés.</li>
+            <li>Les tests sont passés de 124 à 244.</li>
           </ul>
         </div>
       </div>
@@ -892,23 +892,23 @@
     <article class="entry" id="v0.6.5">
       <div class="ver-col">
         <h2 class="ver">0.6.5</h2>
-        <span class="date mono">Jun 9, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">9 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.5" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A reliability release, the selection flows stop hanging, and the engine integration is now driven by tests.</p>
+        <p class="lead">Une version de fiabilité : les parcours de sélection cessent de se bloquer, et l'intégration du moteur est désormais pilotée par les tests.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li>Installers and Purge no longer freeze when the engine finds nothing, or on a second scan, the “Scanning…” hang is gone.</li>
+            <li>Programmes d'installation et Nettoyage en profondeur ne gèlent plus quand le moteur ne trouve rien, ni au second passage : le blocage sur « Analyse… » a disparu.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li>The “remove exactly what you picked, or nothing” flow is now a pure state machine, verified in CI.</li>
-            <li>One ANSI cleaner, one typed client, one snapshot store.</li>
-            <li>Tests grew 90 → 124.</li>
+            <li>Le principe « supprimer exactement ce que tu as choisi, ou rien » est désormais un automate à états pur, vérifié en intégration continue.</li>
+            <li>Un seul nettoyeur ANSI, un seul client typé, un seul magasin d'instantanés.</li>
+            <li>Les tests sont passés de 90 à 124.</li>
           </ul>
         </div>
       </div>
@@ -917,31 +917,31 @@
     <article class="entry" id="v0.6.0">
       <div class="ver-col">
         <h2 class="ver">0.6.0</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">8 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Fix-and-polish, cleanup flows actually complete, and the trackers show real data.</p>
+        <p class="lead">Corrections et finitions : les parcours de nettoyage vont vraiment jusqu'au bout, et les indicateurs affichent de vraies données.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>Installer &amp; Uninstall complete</b>: the confirm-screen timeout and the silent <code>[y/N]</code> hang are gone; both flows finish now.</li>
-            <li>Settings flush immediately.</li>
+            <li><b>Programme d'installation &amp; Désinstallation terminée</b> : le délai d'attente de l'écran de confirmation et le blocage silencieux de <code>[y/N]</code> ont disparu ; les deux parcours vont maintenant jusqu'au bout.</li>
+            <li>Les réglages sont écrits immédiatement.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Native disk I/O &amp; GPU</b>: read natively where the engine reports zero on Apple Silicon, so charts show real numbers.</li>
-            <li><b>Purge → Show all</b>: pull in the complete find list and pick from everything, not just the ~50 biggest.</li>
-            <li><b>More history charts</b>: Battery, GPU, and Fans join the lineup; Top Processes ranks by CPU or RAM.</li>
-            <li>The thermal chart plots a real temperature.</li>
+            <li><b>E/S disque natives &amp; GPU</b> : lus nativement là où le moteur renvoie zéro sur Apple Silicon, pour que les graphiques affichent de vrais chiffres.</li>
+            <li><b>Nettoyage en profondeur → Tout afficher</b> : récupère la liste complète des trouvailles pour choisir dans l'ensemble, et non parmi la cinquantaine des plus gros seulement.</li>
+            <li><b>Plus de graphiques d'historique</b> : batterie, GPU et ventilateurs rejoignent la série ; les principaux processus se classent par processeur ou par mémoire.</li>
+            <li>Le graphique thermique trace une véritable température.</li>
           </ul>
         </div>
         <div class="sblock">
           <div class="slabel mono">performance</div>
           <ul class="slist">
-            <li>Faster live sampling catches short spikes.</li>
+            <li>Une mesure plus rapide attrape les pointes brèves.</li>
           </ul>
         </div>
       </div>
@@ -950,25 +950,25 @@
     <article class="entry" id="v0.5.5">
       <div class="ver-col">
         <h2 class="ver">0.5.5</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">8 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.5" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Two new cleanup tools, an AI lens on Status, and agents that can act, safely.</p>
+        <p class="lead">Deux nouveaux outils de nettoyage, un regard d'IA sur l'État, et des agents qui peuvent agir — en toute sûreté.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Nettoyage en profondeur</b>: find and clear old build artifacts (<code>node_modules</code>, <code>target/</code>, <code>build/</code>), ticking exactly what goes.</li>
-            <li><b>Programmes d'installation</b>: sweep leftover <code>.dmg</code> / <code>.pkg</code> / <code>.iso</code> / <code>.zip</code> with the same pick-what-to-remove flow.</li>
-            <li><b>Explain (AI), opt-in</b>: a lens that reads one snapshot and explains it in plain English; local Ollama by default, nothing leaves the Mac.</li>
-            <li><b>Agents can act over MCP</b>: <code>burrow_clean</code>, <code>_optimize</code>, <code>_uninstall</code> and friends, each dry-running unless you flip the real-cleanups switch.</li>
+            <li><b>Nettoyage en profondeur</b> : trouve et efface les vieux artefacts de compilation (<code>node_modules</code>, <code>target/</code>, <code>build/</code>), en cochant exactement ce qui part.</li>
+            <li><b>Programmes d'installation</b> : balaie les <code>.dmg</code> / <code>.pkg</code> / <code>.iso</code> / <code>.zip</code> oubliés, avec le même parcours de sélection.</li>
+            <li><b>Expliquer (IA), facultatif</b> : un regard qui lit un instantané et l'explique simplement ; Ollama en local par défaut, rien ne quitte le Mac.</li>
+            <li><b>Les agents peuvent agir via MCP</b>: <code>burrow_clean</code>, <code>_optimize</code>, <code>_uninstall</code> et consorts, chacun en simulation tant que tu n'as pas activé les nettoyages réels.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li>Every agent action defaults to <code>--dry-run</code>.</li>
-            <li>LM Studio and OpenAI-compatible backends are supported.</li>
+            <li>Chaque action d'agent vaut par défaut <code>--dry-run</code>.</li>
+            <li>LM Studio et les backends compatibles OpenAI sont pris en charge.</li>
           </ul>
         </div>
       </div>
@@ -977,28 +977,28 @@
     <article class="entry" id="v0.5.1">
       <div class="ver-col">
         <h2 class="ver">0.5.1</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">8 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.1" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Maintenance, Full Disk Access actually sticks now.</p>
+        <p class="lead">Maintenance : l'accès complet au disque tient enfin.</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">corrigé</div>
           <ul class="slist">
-            <li><b>Full Disk Access works</b>: ad-hoc signing gives the app a stable code identity, so the TCC grant finally binds.</li>
-            <li>A Quit &amp; Reopen path after granting Full Disk Access.</li>
+            <li><b>L'accès complet au disque fonctionne</b> : la signature à la volée donne à l'app une identité de code stable, si bien que l'autorisation TCC s'attache enfin.</li>
+            <li>Un parcours Quitter &amp; puis Rouvrir après avoir accordé l'accès complet au disque.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li>New read-only MCP tools: <code>burrow_cleanup_history</code> et <code>burrow_deleted_files</code>.</li>
+            <li>Nouveaux outils MCP en lecture seule : <code>burrow_cleanup_history</code> et <code>burrow_deleted_files</code>.</li>
           </ul>
         </div>
         <div class="sblock">
           <div class="slabel mono">performance</div>
           <ul class="slist">
-            <li>Less energy in Software, dropped the per-app Spotlight query that kept <code>mds</code> et <code>mdworker</code> awake.</li>
+            <li>Moins d'énergie dans Logiciels : la requête Spotlight par app, qui tenait <code>mds</code> et <code>mdworker</code> éveillé, a été supprimée.</li>
           </ul>
         </div>
       </div>
@@ -1007,28 +1007,28 @@
     <article class="entry" id="v0.5.0">
       <div class="ver-col">
         <h2 class="ver">0.5.0</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">8 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow grows up, Touch ID, a live menu-bar HUD, an MCP server, 简体中文, and a one-command install.</p>
+        <p class="lead">Burrow grandit : Touch ID, un HUD en direct dans la barre des menus, un serveur MCP, le 简体中文 et une installation en une seule commande.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Touch ID for sudo</b>: cleanups that need admin rights authenticate with a fingerprint, via the engine's Touch ID support.</li>
-            <li><b>HUD de la barre des menus</b>: live job status from the menu bar, or run without the icon entirely in Dock mode.</li>
-            <li><b>MCP server</b>: ask Claude Code about your Mac through a read-only stdio server, including <code>burrow_process_usage</code>.</li>
-            <li><b>简体中文</b>: Simplified Chinese localization.</li>
-            <li><b>Historique</b>: long-range charts, five minutes out to ninety days, over a local SQLite store.</li>
-            <li><b>Homebrew cask</b>: <code>brew install --cask caezium/tap/burrow</code>: one command, engine included, quarantine cleared.</li>
-            <li>An Activity pane with cleanup history in-app.</li>
+            <li><b>Touch ID pour sudo</b> : les nettoyages exigeant des droits d'administrateur se valident par empreinte, via la prise en charge de Touch ID par le moteur.</li>
+            <li><b>HUD de la barre des menus</b> : l'état des travaux en direct depuis la barre des menus, ou bien sans icône du tout en mode Dock.</li>
+            <li><b>Serveur MCP</b> : interroge Claude Code sur ton Mac via un serveur stdio en lecture seule, y compris <code>burrow_process_usage</code>.</li>
+            <li><b>简体中文</b> : traduction en chinois simplifié.</li>
+            <li><b>Historique</b> : des graphiques au long cours, de cinq minutes à quatre-vingt-dix jours, sur un magasin SQLite local.</li>
+            <li><b>Cask Homebrew</b>: <code>brew install --cask caezium/tap/burrow</code> : une commande, moteur inclus, quarantaine levée.</li>
+            <li>Un volet Activité avec l'historique des nettoyages dans l'app.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">modifié</div>
           <ul class="slist">
-            <li>A Full Disk Access gate stops the per-folder permission flood.</li>
-            <li>Guided engine setup on first run.</li>
+            <li>Une étape sur l'accès complet au disque arrête le déluge d'autorisations dossier par dossier.</li>
+            <li>Une configuration guidée du moteur au premier lancement.</li>
           </ul>
         </div>
       </div>
@@ -1037,23 +1037,23 @@
     <article class="entry" id="v0.4.0">
       <div class="ver-col">
         <h2 class="ver">0.4.0</h2>
-        <span class="date mono">Jun 4, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.4.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">4 juin 2026</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.4.0" target="_blank" rel="noopener">notes complètes ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">First public release, five tools, one native window, built on a bundled CLI engine.</p>
+        <p class="lead">Première version publique : cinq outils, une fenêtre native, bâtie sur un moteur en ligne de commande fourni avec l'app.</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">ajouté</div>
           <ul class="slist">
-            <li><b>Five tools, one window</b>: Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited engine.</li>
-            <li><b>Status + History</b>: a live dashboard with per-metric sparklines, and long-range charts on a local store.</li>
-            <li><b>MCP server, day one</b>: HTTP + stdio endpoints so Claude Code can ask what's happening on this Mac.</li>
+            <li><b>Cinq outils, une fenêtre</b> : État, Analyse, Logiciels, Nettoyage et Optimisation — une interface macOS native pour le moteur audité.</li>
+            <li><b>État et Historique</b> : un tableau de bord en direct avec une courbe par mesure, et des graphiques au long cours sur un magasin local.</li>
+            <li><b>Serveur MCP dès le premier jour</b> : des points d'accès HTTP et stdio pour que Claude Code puisse demander ce qui se passe sur ce Mac.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">notes</div>
+          <div class="slabel mono">remarques</div>
           <ul class="slist">
-            <li>macOS 14+; requires a separate engine install; unsigned, pre-1.0.</li>
+            <li>macOS 14+ ; nécessite une installation séparée du moteur ; non signé, avant la 1.0.</li>
           </ul>
         </div>
       </div>
