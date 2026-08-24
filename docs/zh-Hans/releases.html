@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Burrow · Changelog</title>
-<meta name="description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<title>Burrow · 更新日志</title>
+<meta name="description" content="一览 Burrow 的每一个版本：各自新增了什么、修好了什么、又收紧了什么。">
 <meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="../burrow-icon.png">
 <link rel="canonical" href="https://burrow.computer/zh-Hans/releases">
@@ -23,14 +23,14 @@
 <link rel="stylesheet" href="../assets/chrome.css">
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://burrow.computer/#org","name":"Burrow","url":"https://burrow.computer","logo":"https://burrow.computer/burrow-icon-512.png","sameAs":["https://github.com/caezium/Burrow"]},{"@type":"WebSite","@id":"https://burrow.computer/#site","url":"https://burrow.computer","name":"Burrow","publisher":{"@id":"https://burrow.computer/#org"}}]}</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="Burrow · Changelog">
-<meta property="og:description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<meta property="og:title" content="Burrow · 更新日志">
+<meta property="og:description" content="一览 Burrow 的每一个版本：各自新增了什么、修好了什么、又收紧了什么。">
 <meta property="og:image" content="https://burrow.computer/burrow-icon-512.png">
 <meta property="og:url" content="https://burrow.computer/releases">
 <meta property="og:site_name" content="Burrow">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Burrow · Changelog">
-<meta name="twitter:description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<meta name="twitter:title" content="Burrow · 更新日志">
+<meta name="twitter:description" content="一览 Burrow 的每一个版本：各自新增了什么、修好了什么、又收紧了什么。">
 <script src="/analytics.js" defer></script>
 <style>
   @font-face { font-family: "Geist"; src: url("assets/fonts/Geist[wght].woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
@@ -143,29 +143,29 @@
 
 <header class="hero page">
   <h1>更新日志</h1>
-  <p>Every version at a glance, what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">26 releases · latest 0.14.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p>一览每个版本新增、变更与修复了什么。各自的完整记录都在 GitHub 上。</p>
+  <p class="count">26 个版本 · 最新 0.14.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub 上的版本 ↗</a></p>
 </header>
 
 <main class="page">
     <article class="entry" id="v0.14.0">
       <div class="ver-col">
-        <h2 class="ver">0.14.0<span class="latest">latest</span></h2>
-        <span class="date mono">Aug 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.14.0" target="_blank" rel="noopener">full notes ↗</a>
+        <h2 class="ver">0.14.0<span class="latest">最新</span></h2>
+        <span class="date mono">2026 年 8 月 11 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.14.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The Touch ID helper now offers itself instead of hiding in Settings, and the reviewed clean says what it removed instead of finishing silently.</p>
+        <p class="lead">触控 ID 助手不再藏在设置里，而是主动出面；确认后的清理也不再默默收场，而是说清自己删了什么。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>Burrow offers the privileged helper.</b> The Touch ID helper shipped in 0.13.0 behind a single button in <b>Settings ▸ Advanced</b>, and nothing pointed anyone at it — upgraders learned about it from the release notes, fresh installs not at all. It is now offered from an ambient banner, at most one notice at a time, and the dismissal persists. (<a href="https://github.com/caezium/Burrow/pull/379" target="_blank" rel="noopener">#379</a>)</li>
+            <li><b>Burrow 会主动提供特权助手。</b> 触控 ID 助手在 0.13.0 中随版本发布，藏在 <b>设置 ▸ 高级</b>里的一个按钮后面，而没有任何地方指向它——升级的人是从更新日志里得知的，全新安装的人则毫不知情。现在它由一条低调的横幅来告知，同一时间最多一条提示，关掉之后便不再出现。（<a href="https://github.com/caezium/Burrow/pull/379" target="_blank" rel="noopener">#379</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>The reviewed clean reports what it removed.</b> It deleted exactly what was ticked and then looked like it had done nothing — that path deletes each reviewed path with <code>find</code>, which succeeds silently, leaving the result screen with no output to show. It now reports what it was authorized to remove, which the run only claims after confirming every planned path is gone. (<a href="https://github.com/caezium/Burrow/pull/380" target="_blank" rel="noopener">#380</a>)</li>
+            <li><b>确认后的清理会报告自己删除了什么。</b> 它准确删掉了勾选的内容，看上去却像什么都没做——这条路径用 <code>find</code>删除每一条确认过的路径，成功时不输出任何内容，于是结果页无从展示。现在它会报告被授权删除的内容，而且只有在确认每一条计划中的路径都已消失之后才会这么说。（<a href="https://github.com/caezium/Burrow/pull/380" target="_blank" rel="noopener">#380</a>)</li>
           </ul>
         </div>
       </div>
@@ -174,35 +174,35 @@
     <article class="entry" id="v0.13.0">
       <div class="ver-col">
         <h2 class="ver">0.13.0</h2>
-        <span class="date mono">Aug 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.13.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 11 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.13.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Headings that rendered as empty boxes render as text again, the MCP server speaks the 2026-07-28 spec without dropping older clients, and the cache scan tells you when it has finished.</p>
+        <p class="lead">曾变成空方块的标题重新显示为文字，MCP 服务在不抛下旧客户端的前提下讲 2026-07-28 版规范，缓存扫描也会在结束时告知你。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>The scan tells you when it's done.</b> A cache scan can run for minutes and used to end by just sitting there with a number. It now posts a completion notification saying what it found, honouring <b>Settings ▸ Notify when long operations finish</b>. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
-            <li><b>Two more agent tools.</b> <code>burrow_anomalies</code> 与 <code>burrow_agent_audit</code> join the MCP surface. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+            <li><b>扫描结束时会告诉你。</b> 缓存扫描可能跑上几分钟，过去结束时只是停在那里显示一个数字。现在它会发出完成通知，说明找到了什么，并遵循 <b>设置 ▸ 长时间操作完成时通知</b>. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
+            <li><b>再添两个智能体工具。</b> <code>burrow_anomalies</code> 与 <code>burrow_agent_audit</code> 加入了 MCP 的工具集。（<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li><b>MCP now speaks the 2026-07-28 revision</b>, including its task and cancellation semantics. Older clients are unaffected: 2025-11-25 through 2024-11-05 are still served, and a client that skips <code>initialize</code> entirely still works. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+            <li><b>MCP 现在讲 2026-07-28 修订版</b>，包括其中的任务与取消语义。旧客户端不受影响：2025-11-25 到 2024-11-05 仍然照常支持，完全跳过 <code>initialize</code> 的客户端也照样能用。（<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>Headings rendered as empty boxes.</b> Burrow now ships real static faces for every weight it uses instead of deriving them from a variable font at render time. (<a href="https://github.com/caezium/Burrow/pull/372" target="_blank" rel="noopener">#372</a>)</li>
-            <li><b>One bad exit no longer disables the menu bar</b> until macOS updates. (<a href="https://github.com/caezium/Burrow/pull/365" target="_blank" rel="noopener">#365</a>)</li>
-            <li><b>The window can be made smaller again</b> — its minimum height is derived from the sidebar rather than hardcoded. (<a href="https://github.com/caezium/Burrow/pull/364" target="_blank" rel="noopener">#364</a>)</li>
-            <li><b>“Stop after current” now responds.</b> The stop was always queued, but nothing on screen said so until the in-flight update finished. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
-            <li><b>The clean review no longer promises what closing an app can't deliver.</b> An entry the scan refused was counted in “Close X to clean another N” even though no app was holding it. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>A cancelled app update no longer blocks later update checks</b> for the rest of the session. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>Root operations can't interleave their output.</b> stdout and stderr shared one line buffer, which could splice half a line from one stream onto the other. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>Update archives are size-capped</b> before they're kept or expanded, and diagnostics reject more credential shapes before anything is uploaded. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>标题变成了空方块。</b> Burrow 不再在绘制时从可变字体推导字重，而是为用到的每一种字重都随附真正的静态字形。（<a href="https://github.com/caezium/Burrow/pull/372" target="_blank" rel="noopener">#372</a>)</li>
+            <li><b>一次异常退出不会再让菜单栏失效</b> ，也不必等到 macOS 更新。（<a href="https://github.com/caezium/Burrow/pull/365" target="_blank" rel="noopener">#365</a>)</li>
+            <li><b>窗口又可以缩得更小了</b> ——最小高度改由侧栏推算，而不是写死在代码里。（<a href="https://github.com/caezium/Burrow/pull/364" target="_blank" rel="noopener">#364</a>)</li>
+            <li><b>“完成当前后停止”现在有反应了。</b> 停止指令一直都已排入队列，只是在进行中的更新结束之前，屏幕上没有任何提示。（<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
+            <li><b>清理确认页不再承诺关闭应用也做不到的事。</b> 被扫描排除的条目，即便没有任何应用占着它，也被算进了“关闭 X 可再清理 N”。（<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>取消一次应用更新，不会再挡住之后的更新检查</b> ，也不会持续到本次会话结束。（<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>root 权限的操作不会再把输出搅在一起。</b> 标准输出与标准错误共用同一个行缓冲，可能把其中一路的半行接到另一路上。（<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>更新压缩包设了体积上限</b> ，在保存或解压之前就先行判断；诊断信息也会在上传任何内容之前，拦下更多形态的凭据。（<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
           </ul>
         </div>
       </div>
@@ -211,38 +211,38 @@
     <article class="entry" id="v0.12.0">
       <div class="ver-col">
         <h2 class="ver">0.12.0</h2>
-        <span class="date mono">Aug 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.12.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.12.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Admin operations can authenticate with Touch ID, through an opt-in signed helper that runs a fixed set of operations and nothing else.</p>
+        <p class="lead">管理员操作可以用触控 ID 验证，方式是一个可自行选择安装的签名助手，它只执行固定的一组操作，别的一概不做。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>Touch ID for admin operations.</b> Install the helper in <b>Settings ▸ Advanced ▸ Privileged helper</b> and Burrow's elevated work authenticates through the system's normal prompt instead of the password-only dialog. That older path is password-only by construction — the <code>system.privilege.admin</code> right authenticates through SecurityAgent's classic mechanism, which never offers Touch ID. (<a href="https://github.com/caezium/Burrow/pull/346" target="_blank" rel="noopener">#346</a>)</li>
-            <li><b>The Login Items list is now complete.</b> Reading the Background Task Management database needs root, so an unelevated read raised macOS's own “sfltool wants to make changes” prompt — attributed to sfltool rather than Burrow — and still returned only a partial list. Through the helper it is one authentication you recognise, and the whole list.</li>
+            <li><b>管理员操作支持触控 ID。</b> 在 <b>设置 ▸ 高级 ▸ 特权助手</b> 中安装助手之后，Burrow 需要提权的工作会走系统常规的验证窗口，而不是只能输密码的对话框。旧路径在结构上就只认密码： <code>system.privilege.admin</code> 权限由 SecurityAgent 的老机制来验证，那里从来不会出现触控 ID。（<a href="https://github.com/caezium/Burrow/pull/346" target="_blank" rel="noopener">#346</a>)</li>
+            <li><b>登录项列表现在是完整的了。</b> 读取后台任务管理数据库需要 root 权限，因此未提权的读取会弹出 macOS 自己的“sfltool 想要进行更改”提示——署名的是 sfltool 而不是 Burrow——而且返回的仍然只是部分列表。经由助手，这就变成一次你认得出的验证，外加完整的列表。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li><b>Flush DNS no longer runs a root shell.</b> It previously elevated <code>/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"</code>, handing a command string to a shell running as root. It is now two separate processes with fixed arguments and no shell involved.</li>
-            <li><b>Removed the “Touch ID for sudo” setting.</b> It configured <code>pam_tid</code> for terminal <code>sudo</code> and never affected Burrow's own admin prompts, which is what people expected it to do — and those prompts are exactly what the privileged helper now covers. Nothing already configured on your Mac changes by removing it; run <code>mo touchid disable</code> to undo it yourself.</li>
+            <li><b>清空 DNS 不再启动 root 权限的 shell。</b> 此前它会提权运行 <code>/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"</code>，把一串命令交给以 root 身份运行的 shell。现在则是两个参数固定的独立进程，完全不经过 shell。</li>
+            <li><b>移除了“为 sudo 启用触控 ID”这项设置。</b> 它配置的是 <code>pam_tid</code> ，面向终端 <code>sudo</code> ，从不影响 Burrow 自己的管理员验证窗口，而后者恰恰是大家以为它会管的——如今这些验证正由特权助手接手。移除这项设置不会改变你 Mac 上已有的配置；想自行还原，请运行 <code>mo touchid disable</code> 。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>A failed elevated run could report success.</b> When an elevated operation could not start, the empty transcript was reduced to “Done — caches cleared”. Failures now say so.</li>
+            <li><b>提权运行失败时可能报告成功。</b> 当提权操作根本没能启动时，空白的执行记录被简化成了“完成——缓存已清理”。现在失败会如实说明。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">安全</div>
           <ul class="slist">
-            <li>The helper is opt-in and takes its own one-time macOS approval. Installing it authorizes nothing: you authenticate for each operation you start.</li>
-            <li>Only Burrow can talk to it — callers are pinned to the app's bundle identifier, an Apple-issued chain, and the same signing team, evaluated by the system against the real peer rather than by a PID lookup.</li>
-            <li>It runs the engine sealed inside the signed app plus four Apple tools by absolute path, each as a separate process. The app bundle's signature is verified before anything runs as root, which covers the engine and every library it loads.</li>
-            <li>One honest caveat: the credential from your authentication stays valid for ten seconds, because it has to survive the hop from the app to the helper. A second operation begun inside that window will not prompt again. Detail in <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</li>
+            <li>助手需要你主动选择安装，并且要经过 macOS 一次性的批准。安装本身不授权任何事：你启动的每一个操作都要单独验证。</li>
+            <li>只有 Burrow 能与它通信——调用方被钉死在应用的 Bundle ID、Apple 签发的证书链以及同一个签名团队上，而且由系统对照真正的通信对端来判定，而不是靠查 PID。</li>
+            <li>它只运行封在签名应用内部的引擎，以及四个按绝对路径指定的 Apple 工具，各自作为独立进程。在任何东西以 root 身份运行之前，都会先校验应用包的签名，这涵盖引擎及其加载的每一个库。</li>
+            <li>有一点得如实说明：验证得到的凭据会保持十秒有效，因为它必须撑过从应用交到助手手里的那一跳。在这段时间内发起的第二个操作不会再次询问。详见 <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</li>
           </ul>
         </div>
       </div>
@@ -251,36 +251,36 @@
     <article class="entry" id="v0.11.2">
       <div class="ver-col">
         <h2 class="ver">0.11.2</h2>
-        <span class="date mono">Aug 5, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 5 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.2" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A system-metrics, updater, and launch-reliability patch with accurate CPU sampling, accurate Sparkle outcomes, a settled AppKit start, and reliable hang reports.</p>
+        <p class="lead">针对系统指标、更新机制与启动可靠性的修补：CPU 采样准确了，Sparkle 的结果诚实了，AppKit 的启动安定了，卡顿报告也靠得住了。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>CPU usage now reflects a representative sampling interval.</b> The bundled engine keeps a tick baseline across refreshes, samples before the other collectors fan out, and derives total usage from summed tick deltas. This removes the roughly doubled readings and coarse per-core fractions reported in <a href="https://github.com/caezium/Burrow/issues/335" target="_blank" rel="noopener">#335</a>. A cold one-shot status command can take about 600 ms longer; ongoing GUI sampling reuses its existing refresh interval and adds no wait. (<a href="https://github.com/caezium/Burrow/pull/340" target="_blank" rel="noopener">#340</a>)</li>
-            <li><b>Updater failures now mean what they say.</b> Running from a disk image or translocated location, ordinary network failures, and user cancellation remain measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of its native move-to-Applications and scheduled-retry UI. Configuration, signature, installation, and unknown failures still create exactly one scrubbed Sentry diagnostic per cycle. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
-            <li><b>The normal menu-bar path no longer races the first AppKit launch turn.</b> Burrow waits one second before creating its status item, then retains the existing 30-second stability window. The safeguard for macOS 27 Beta 4 build <code>26A5388g</code> remains exact-build-only; a later macOS build returns to the normal guarded path automatically. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>CPU 占用现在反映的是有代表性的采样区间。</b> 内置引擎会跨刷新保留 tick 基准值，在其他采集器铺开之前先行采样，并由 tick 差值之和推算总占用。这消除了 <a href="https://github.com/caezium/Burrow/issues/335" target="_blank" rel="noopener">#335</a>中报告的、大约翻了一倍的读数和粗糙的各核比例。冷启动时单次的 status 命令可能多花约 600 毫秒；界面上持续的采样沿用原有的刷新间隔，不会增加等待。（<a href="https://github.com/caezium/Burrow/pull/340" target="_blank" rel="noopener">#340</a>)</li>
+            <li><b>更新失败现在就是字面意思。</b> 从磁盘映像或被隔离迁移的位置运行、寻常的网络故障以及用户主动取消，仍可在 PostHog 中统计，而不会在 Sentry 里立案。“移动到应用程序文件夹”和定时重试的界面依旧由 Sparkle 自己负责。配置、签名、安装以及原因不明的失败，仍然每个周期恰好生成一条已脱敏的 Sentry 诊断。（<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>常规的菜单栏路径不再与 AppKit 的首个启动回合抢跑。</b> Burrow 会先等一秒再创建状态项，之后仍保留原有的 30 秒稳定观察期。针对 macOS 27 Beta 4 构建 <code>26A5388g</code> 的保护措施依旧只限定于该构建；更新的 macOS 构建会自动回到常规的受保护路径。（<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">改进</div>
           <ul class="slist">
-            <li><b>App-hang evidence can no longer disappear at the Sentry bridge.</b> Sampled hangs are collected into bounded weekly GitHub digests instead of being silently skipped. Cursor pagination reaches older unseen groups, full digests roll into numbered parts, and deferred groups remain eligible for the next run. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
-            <li><b>Launch and updater health now have explicit lifecycle outcomes.</b> Fixed-name scheduled, stabilizing, and stable milestones include bounded app release, macOS build, launch phase, and status-item state, so future failures can be separated without collecting free text or user data.</li>
+            <li><b>应用卡顿的证据不会再在通往 Sentry 的桥上消失。</b> 被采样到的卡顿会汇入有容量上限的每周 GitHub 摘要，而不是被悄悄跳过。基于游标的翻页能触及尚未看过的旧分组，装满的摘要会顺延为带编号的分册，被推迟的分组仍有资格进入下一轮。（<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>启动与更新的健康状况现在有了明确的阶段性结果。</b> 名称固定的“已计划”“稳定中”“稳定”三个节点，包含范围受限的应用版本、macOS 构建、启动阶段与状态项状态，从而在不收集自由文本和用户数据的前提下，把日后的故障区分开来。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">隐私</div>
           <ul class="slist">
-            <li><b>Telemetry remains optional, unlinked, and non-tracking.</b> One Settings switch disables both PostHog analytics and Sentry diagnostics. Updater diagnostics contain fixed categories and bounded error domains/codes, never descriptions, URLs, response bodies, network names, paths, screen content, or files. The privacy manifest remains unchanged and accurate.</li>
+            <li><b>数据收集依旧是可选的、不与你关联、也不做追踪。</b> 设置里一个开关即可同时关闭 PostHog 分析与 Sentry 诊断。更新诊断只包含固定的类别和范围受限的错误域与错误码，绝不包含描述文本、网址、响应正文、网络名称、路径、屏幕内容或文件。隐私清单未作改动，内容依旧准确。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">安全</div>
           <ul class="slist">
-            <li><b>Publishing still fails closed, including the external Homebrew tap.</b> Before any release build begins, CI requires every signing, notarization, Sparkle, and tap credential, then proves the tap token with a reversible Git write. The tap credential is isolated from the engine checkout so a successful notarized release cannot fail at the final cask push because the wrong token was left in Git configuration.</li>
+            <li><b>发布依旧在出问题时安全中止，外部的 Homebrew tap 也不例外。</b> 在任何发布构建开始之前，CI 都会要求齐备的签名、公证、Sparkle 与 tap 凭据，再用一次可撤销的 Git 写入来验证 tap 令牌。tap 凭据与引擎的检出目录相互隔离，这样一个已成功公证的版本，才不会因为 Git 配置里残留了错误的令牌，而在最后推送 cask 时功亏一篑。</li>
           </ul>
         </div>
       </div>
@@ -289,36 +289,36 @@
     <article class="entry" id="v0.11.1">
       <div class="ver-col">
         <h2 class="ver">0.11.1</h2>
-        <span class="date mono">Aug 3, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 3 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.1" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A guarded-startup and diagnostics patch for the system-wide input freeze reported on macOS 27 Beta 4, with a safer exact-build fallback and privacy-hardened hang telemetry.</p>
+        <p class="lead">针对 macOS 27 Beta 4 上报的全系统输入冻结，做的启动保护与诊断修补：为该构建提供更安全的退路，并强化了卡顿数据在隐私上的处理。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>The affected macOS 27 beta gets a safer launch path.</b> On Beta 4 build <code>26A5388g</code>, Burrow starts with a Dock icon instead of creating its menu-bar status item. The fallback is limited to that exact build; a new macOS build restores the normal guarded path. Manual update checks remain available even when automatic Sparkle startup is paused.</li>
-            <li><b>Interrupted launches recover one component at a time.</b> A durable launch journal gives the status item and Sparkle separate 30-second stability windows. If launch is interrupted, the next run suppresses only the component whose window was active, shows a recovery alert, and offers a one-click redacted diagnostic report. (<a href="https://github.com/caezium/Burrow/pull/321" target="_blank" rel="noopener">#321</a>)</li>
+            <li><b>受影响的 macOS 27 测试版会走更安全的启动路径。</b> 在 Beta 4 构建 <code>26A5388g</code>上，Burrow 会以 Dock 图标启动，而不去创建菜单栏状态项。这条退路只限于该构建；新的 macOS 构建会恢复常规的受保护路径。即便 Sparkle 的自动启动被暂停，手动检查更新依然可用。</li>
+            <li><b>启动被打断后，会一个组件一个组件地恢复。</b> 一份持久的启动日志，为状态项和 Sparkle 各自分配 30 秒的稳定观察期。若启动被打断，下一次运行只会抑制当时处于观察期的那个组件，并显示恢复提示，同时提供一键生成的、已脱敏的诊断报告。（<a href="https://github.com/caezium/Burrow/pull/321" target="_blank" rel="noopener">#321</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">改进</div>
           <ul class="slist">
-            <li><b>Sentry can now explain hangs that never become crashes.</b> Release-health sessions, hang tracking, low-memory context, fixed-name sampled performance spans, and coarse launch/updater state cover failure modes that a normal crash report misses. Outbound data is scrubbed fail closed, with no screenshots, view hierarchies, user paths, URLs, request bodies, or automatic UI, file, database, and network tracing.</li>
-            <li><b>PostHog analytics no longer bring an AppKit-facing SDK into startup.</b> Burrow still sends the same opt-out semantic product, screen, and operation events to PostHog, but a small background HTTPS transport replaces <code>posthog-ios</code>. It has a bounded serialized retry queue and no session replay, autocapture, remote feature flags, AppKit timer, or main-thread disk I/O. Existing 0.11.0 anonymous identities are migrated once so release-to-release funnels remain accurate.</li>
-            <li><b>The first signed Sparkle successor passed a real update.</b> An installed Developer ID-signed 0.11.0 copy found, downloaded, installed, and relaunched 0.11.1 through Sparkle's native UI without Terminal or Homebrew. The updated app then passed strict signing, stapler, and Gatekeeper checks, completing <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
+            <li><b>Sentry 现在能解释那些始终没有演变成崩溃的卡顿。</b> 版本健康会话、卡顿追踪、低内存时的上下文、名称固定的性能区间采样，以及粗粒度的启动与更新状态，覆盖了普通崩溃报告漏掉的故障形态。外发数据以从严为准做脱敏，不含截图、视图层级、用户路径、网址、请求正文，也不做界面、文件、数据库与网络的自动追踪。</li>
+            <li><b>PostHog 分析不再把面向 AppKit 的 SDK 带进启动流程。</b> Burrow 发往 PostHog 的，仍是同样那批可关闭的产品、页面与操作事件，只是改用一个小巧的后台 HTTPS 传输，取代了 <code>posthog-ios</code>。它有一个容量受限的串行重试队列，且没有会话录制、自动采集、远程功能开关、AppKit 定时器，也不在主线程读写磁盘。0.11.0 已有的匿名标识会被一次性迁移，好让版本之间的对比依旧准确。</li>
+            <li><b>首次经由签名 Sparkle 的接续更新，在真实环境中成功了。</b> 一份已安装的、带 Developer ID 签名的 0.11.0，在不借助终端和 Homebrew 的情况下，通过 Sparkle 原生界面找到、下载、安装并重新启动了 0.11.1。更新后的应用随即通过了严格的签名、装订与 Gatekeeper 检查，完成了 <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">隐私</div>
           <ul class="slist">
-            <li><b>Telemetry remains optional, unlinked, and non-tracking.</b> One Settings switch disables both PostHog analytics and Sentry diagnostics. The privacy manifest continues to declare Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data; this release adds no signing-specific telemetry and records no screen content.</li>
+            <li><b>数据收集依旧是可选的、不与你关联、也不做追踪。</b> 设置里一个开关即可同时关闭 PostHog 分析与 Sentry 诊断。隐私清单仍旧声明产品交互、其他使用、崩溃、性能与其他诊断数据；本次发布没有新增与签名相关的数据收集，也不记录屏幕内容。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">安全</div>
           <ul class="slist">
-            <li><b>The release chain remains fail closed.</b> The tag cannot publish unless the app is Developer ID signed, notarized, stapled, accepted by Gatekeeper, and both the update archive and appcast pass Sparkle signature verification.</li>
+            <li><b>发布链条依旧在出问题时安全中止。</b> 除非应用经过 Developer ID 签名、公证、装订票据、被 Gatekeeper 接受，且更新压缩包与 appcast 都通过 Sparkle 的签名校验，否则标签无法发布任何内容。</li>
           </ul>
         </div>
       </div>
@@ -327,32 +327,32 @@
     <article class="entry" id="v0.11.0">
       <div class="ver-col">
         <h2 class="ver">0.11.0</h2>
-        <span class="date mono">Aug 1, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 1 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's first Developer ID-signed and Apple-notarized release, Gatekeeper can verify the app, Full Disk Access gets a stable identity, and Sparkle establishes the signed foundation for native updates.</p>
+        <p class="lead">Burrow 首个带 Developer ID 签名并经 Apple 公证的版本：Gatekeeper 能够验证这个应用，完全磁盘访问权限获得了稳定的身份，Sparkle 也为原生更新打下了带签名的基础。</p>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">改进</div>
           <ul class="slist">
-            <li><b>Official downloads are trusted by Gatekeeper.</b> The app and every bundled executable carry a Developer ID signature, hardened runtime, secure timestamp, and a stapled Apple notarization ticket. Direct-download users no longer need to strip quarantine or use the right-click Open workaround. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
-            <li><b>Full Disk Access has a stable identity.</b> Developer ID gives macOS one consistent code identity across releases, so privacy grants can survive normal updates after the one-time transition from an older ad-hoc build. (<a href="https://github.com/caezium/Burrow/issues/177" target="_blank" rel="noopener">#177</a>, <a href="https://github.com/caezium/Burrow/issues/181" target="_blank" rel="noopener">#181</a>)</li>
-            <li><b>The signed update foundation is in place.</b> Burrow now uses Sparkle's native UI. Automatic checks remain on by default, but downloads and installs wait for approval. The update ZIP and appcast carry Ed25519 signatures that CI and the app verify; the first live 0.11.0-to-0.11.1 upgrade later completed successfully in <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
-            <li><b>The bundled engine no longer rewrites the app.</b> It updates only with a signed Burrow release, preserving the Developer ID resource seal. Source builds using an external engine still expose its manual updater.</li>
+            <li><b>官方下载获得了 Gatekeeper 的信任。</b> 应用及其内附的每一个可执行文件，都带有 Developer ID 签名、强化运行时、安全时间戳，以及装订好的 Apple 公证票据。直接下载的用户不必再去掉隔离属性，也不必用右键“打开”这条变通办法。（<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
+            <li><b>完全磁盘访问权限有了稳定的身份。</b> Developer ID 让 macOS 在各个版本之间看到一致的代码身份，因此从旧的临时签名版本一次性过渡之后，隐私授权便能挺过寻常的更新。（<a href="https://github.com/caezium/Burrow/issues/177" target="_blank" rel="noopener">#177</a>, <a href="https://github.com/caezium/Burrow/issues/181" target="_blank" rel="noopener">#181</a>)</li>
+            <li><b>带签名的更新基础已经就位。</b> Burrow 现已改用 Sparkle 的原生界面。自动检查默认仍然开启，但下载与安装都会等你同意。更新压缩包与 appcast 带有 Ed25519 签名，CI 和应用都会校验；真实环境中从 0.11.0 到 0.11.1 的首次升级，后来在 <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
+            <li><b>内置引擎不再改写应用本身。</b> 它只随签名的 Burrow 版本一同更新，从而保住 Developer ID 的资源封印。使用外部引擎的源码构建，仍可使用引擎自带的手动更新功能。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">隐私</div>
           <ul class="slist">
-            <li><b>The privacy manifest matches the shipped app.</b> Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data are declared unlinked and non-tracking. Analytics and crash reporting remain opt-out, and signing adds no telemetry.</li>
+            <li><b>隐私清单与实际发布的应用一致。</b> 产品交互、其他使用、崩溃、性能与其他诊断数据，均声明为不与你关联、也不做追踪。分析与崩溃报告依旧可以关闭，签名本身不会增加任何数据收集。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">安全</div>
           <ul class="slist">
-            <li><b>A tag cannot publish a partially trusted build.</b> CI stops before publication unless signing, notarization, ticket stapling, strict code-sign verification, Gatekeeper assessment, the Sparkle keypair match, and both update signatures all succeed. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
-            <li><b>Delayed Apple responses stay fail closed.</b> The release retains Apple's submission ID, waits up to 60 minutes, and checks that same submission once more at the timeout boundary; it never treats an unknown or in-progress result as accepted. (<a href="https://github.com/caezium/Burrow/pull/317" target="_blank" rel="noopener">#317</a>)</li>
-            <li><b>Homebrew keeps Apple's security checks intact.</b> The live cask preserves quarantine, removes the old unsigned warning, and is marked <code>auto_updates true</code> because Sparkle owns future in-app updates.</li>
+            <li><b>标签不会发布一个只部分可信的构建。</b> 除非签名、公证、票据装订、严格的代码签名校验、Gatekeeper 评估、Sparkle 密钥对匹配以及两份更新签名全部成功，否则 CI 会在发布前停下。（<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
+            <li><b>Apple 回应迟迟不来时，依旧安全中止。</b> 发布流程会保留 Apple 的提交 ID，最多等待 60 分钟，并在超时的临界点再查一次同一份提交；它绝不会把未知或仍在处理的结果当作通过。（<a href="https://github.com/caezium/Burrow/pull/317" target="_blank" rel="noopener">#317</a>)</li>
+            <li><b>在 Homebrew 中，Apple 的安全检查完整保留。</b> 线上的 cask 保留隔离属性，去掉了过去关于未签名的警告，并标记为 <code>auto_updates true</code> ，因为此后应用内的更新由 Sparkle 负责。</li>
           </ul>
         </div>
       </div>
@@ -361,23 +361,23 @@
     <article class="entry" id="v0.10.5">
       <div class="ver-col">
         <h2 class="ver">0.10.5</h2>
-        <span class="date mono">Jul 25, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 25 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.5" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's MCP tools, tuned against real agent transcripts, one analyze call maps disk hotspots, killed runs say so instead of failing silently, and slow scans warn you up front.</p>
+        <p class="lead">对照真实的智能体会话记录调校 Burrow 的 MCP 工具：一次 analyze 调用即可摸清磁盘热点，被中止的运行会明说而不是悄悄失败，耗时长的扫描也会事先提醒你。</p>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">改进</div>
           <ul class="slist">
-            <li><b>One <code>burrow_analyze</code> call now maps disk hotspots.</b> The engine reports one directory level per run, which forced agents into a call per directory (a real session made 15 in a row). <code>analyze</code> gains <code>depth</code> (descend into the largest subdirectories), <code>limit</code>、 <code>min_size</code>, emits compact JSON instead of 35–60 KB pretty-printed blobs, and always reports what it pruned (<code>entries_omitted</code> / <code>omitted_bytes</code>, <code>partial: true</code> when the descent hits its time budget). (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
-            <li><b>The slow tools now say they're slow.</b> <code>analyze</code>, <code>clean</code>, <code>purge</code>、 <code>installer</code> descriptions warn that big scans take minutes, so agents scope to a specific folder instead of hanging past their client's patience and falling back to shell commands. The agent docs and the <code>burrow-system-tools</code> skill now lead with the low-disk emergency playbook, the pattern that actually fires in practice. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>一次 <code>burrow_analyze</code>  调用现在就能摸清磁盘热点。</b> 引擎每次运行只报告一层目录，这逼得智能体只能一个目录一次调用（真实会话里曾连着调了 15 次）。 <code>analyze</code>  新增了 <code>depth</code> （深入最大的那些子目录）， <code>limit</code>、 <code>min_size</code>，输出紧凑的 JSON 而不是 35–60 KB 的美化文本块，并且总会报告自己剪掉了什么（<code>entries_omitted</code> / <code>omitted_bytes</code>, <code>partial: true</code> ，当深入过程耗尽时间预算时）。（<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>耗时长的工具现在会说自己慢。</b> <code>analyze</code>, <code>clean</code>, <code>purge</code>、 <code>installer</code> 的描述会提醒大范围扫描要花上几分钟，于是智能体会把范围收窄到具体文件夹，而不是耗尽客户端的耐心、最后退回去敲 shell 命令。智能体文档与 <code>burrow-system-tools</code> 技能，如今都以磁盘告急的应急手册开篇——这才是实际中真正会用到的套路。（<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>Killed runs no longer fail silently.</b> A <code>burrow_clean</code> that hit its time limit rendered as <code>{"exit_code": 9, "output": ""}</code>: nothing an agent could act on. Timed-out actions (and analyze) now return <code>timed_out: true</code> plus a hint. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
-            <li><b><code>burrow_cleanup_history</code> explains itself.</b> When engine history is unavailable, the error now points at <code>burrow_info</code> to check whether Burrow is recording at all. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>被中止的运行不再悄无声息地失败。</b> 一次 <code>burrow_clean</code>  若撞上时间上限，会显示成 <code>{"exit_code": 9, "output": ""}</code>：智能体对此无从下手。现在超时的操作（以及 analyze）会返回 <code>timed_out: true</code> ，并附上一条提示。（<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b><code>burrow_cleanup_history</code>  会解释自己。</b> 当引擎历史不可用时，错误信息现在会指向 <code>burrow_info</code> ，让你查明 Burrow 究竟有没有在记录。（<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
           </ul>
         </div>
       </div>
@@ -386,17 +386,17 @@
     <article class="entry" id="v0.10.2">
       <div class="ver-col">
         <h2 class="ver">0.10.2</h2>
-        <span class="date mono">Jul 24, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 24 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.2" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A fix release, three crashes squashed (the menu-bar popover, the streaming task report, and a nil-font HUD metric), and the in-app updater no longer silently reopens the same build.</p>
+        <p class="lead">一个修复版本：拍掉三处崩溃（菜单栏浮窗、流式任务报告，以及字体为空时的 HUD 指标），应用内更新也不会再默默地把同一个构建重新打开。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>No more menu-bar popover or streaming-report crashes.</b> Two <code>EXC_BAD_ACCESS</code> faults inside SwiftUI's view graph, one in the popover header button, one in the live task report/ticker as a job streamed, are fixed by keeping those view subtrees structurally stable across snapshot and scroll updates instead of restructuring them mid-update. (<a href="https://github.com/caezium/Burrow/pull/299" target="_blank" rel="noopener">#299</a>)</li>
-            <li><b>The menu-bar metric no longer crashes on a nil font.</b> <code>NSFont.monospacedSystemFont</code> is declared non-null but can transiently return nil under memory pressure; that null reached CoreText and crashed at draw time (Sentry BURROW-8Y). The metric widgets now fall back to the plain system font, cosmetic at worst, never a crash. (<a href="https://github.com/caezium/Burrow/pull/290" target="_blank" rel="noopener">#290</a>)</li>
-            <li><b>In-app update actually updates.</b> When the cask “cannot be upgraded as-is,” Homebrew prints a warning but exits 0, so the one-click updater reported success and reopened the same build. It now detects the refusal by message and runs the <code>brew reinstall --force</code> Homebrew recommends. (<a href="https://github.com/caezium/Burrow/pull/287" target="_blank" rel="noopener">#287</a>)</li>
+            <li><b>菜单栏浮窗与流式报告不再崩溃。</b> 两处 <code>EXC_BAD_ACCESS</code>  故障发生在 SwiftUI 的视图图内部：一处在浮窗的标题按钮，一处在任务流式推送时的实时报告与滚动条。修法是让这些视图子树在快照与滚动更新之间保持结构稳定，而不是在更新途中重建它们。（<a href="https://github.com/caezium/Burrow/pull/299" target="_blank" rel="noopener">#299</a>)</li>
+            <li><b>字体为空时，菜单栏指标不再崩溃。</b> <code>NSFont.monospacedSystemFont</code> 声明为非空，但在内存吃紧时可能短暂返回 nil；这个空值一路传到 CoreText，在绘制时崩溃（Sentry BURROW-8Y）。指标控件现在会退回到普通的系统字体，最差不过是外观差一点，绝不会崩溃。（<a href="https://github.com/caezium/Burrow/pull/290" target="_blank" rel="noopener">#290</a>)</li>
+            <li><b>应用内更新真的会更新了。</b> 当 cask “无法就地升级”时，Homebrew 只打印一条警告却以 0 退出，于是一键更新报告成功，又把同一个构建重新打开了。现在它会依据这条提示识别出这次拒绝，并执行 Homebrew 建议的 <code>brew reinstall --force</code> 。（<a href="https://github.com/caezium/Burrow/pull/287" target="_blank" rel="noopener">#287</a>)</li>
           </ul>
         </div>
       </div>
@@ -405,27 +405,27 @@
     <article class="entry" id="v0.10.1">
       <div class="ver-col">
         <h2 class="ver">0.10.1</h2>
-        <span class="date mono">Jul 13, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 13 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.1" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Three new panes, Leftovers, Similar Photos, and Network, and Duplicates now works out of the box, plus menu-bar HUD and HEIC fixes.</p>
+        <p class="lead">三个新面板——残留、相似照片与网络；重复文件开箱即用；另有菜单栏 HUD 与 HEIC 的修复。</p>
         <div class="sblock">
-          <div class="slabel mono">New</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li>Leftovers pane: find and clear the caches, preferences, and support files an app leaves behind</li>
-            <li>Similar Photos pane: cluster near-duplicate images by perceptual hash, reveal in Finder</li>
-            <li>Network pane: per-app bandwidth</li>
+            <li>残留面板：找出并清除应用留下的缓存、偏好设置与支持文件</li>
+            <li>相似照片面板：按感知哈希把近似重复的图片聚成一类，可在访达中显示</li>
+            <li>网络面板：各应用的带宽占用</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li>Duplicates works with zero install, the fclones sidecar is now bundled universal</li>
-            <li>Similar Photos reports HEIC it can't decode (“N HEIC couldn't be read”) instead of a bare empty result</li>
-            <li>Menu-bar HUD popover no longer shifts sideways and clips; the tool strip wraps instead of overflowing</li>
-            <li>Tool panes mount lazily, no more ~2-second layout hang on open or pane switch</li>
-            <li>Finder-launched app augments its PATH with the Homebrew bins so installed helpers resolve</li>
+            <li>重复文件无需任何安装即可使用，fclones 附属程序现已作为通用二进制随附</li>
+            <li>相似照片会报告自己解不开的 HEIC（“N 个 HEIC 无法读取”），而不是给出一个光秃秃的空结果</li>
+            <li>菜单栏 HUD 浮窗不再向一侧偏移并被裁切；工具条改为换行，不再溢出</li>
+            <li>工具面板改为按需加载，打开或切换面板时不再有约 2 秒的布局卡顿</li>
+            <li>从访达启动的应用会把 Homebrew 的可执行目录并入 PATH，好让装好的辅助程序能被找到</li>
           </ul>
         </div>
       </div>
@@ -434,43 +434,43 @@
     <article class="entry" id="v0.10.0">
       <div class="ver-col">
         <h2 class="ver">0.10.0</h2>
-        <span class="date mono">Jul 12, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 12 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The conductor release, Burrow ships its own command layer, a brand-new Duplicates pane, and the sudo, uninstall, and Tune-Up fixes you reported.</p>
+        <p class="lead">“指挥层”版本：Burrow 带上了自己的命令层、一个全新的重复文件面板，以及你反馈的 sudo、卸载与调优修复。</p>
         <div class="sblock">
-          <div class="slabel mono">New</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li>Duplicates pane: scan, review checklist-style with a keep-one guard, move extras to the Trash or reclaim via APFS clones</li>
-            <li>Bundled <code>burrow</code> conductor (universal): analysis, status, history, clean, and optimize route through one stable JSON contract with direct-engine fallback</li>
-            <li>7 read-only MCP tools through the conductor, 21 total for agents</li>
+            <li>重复文件面板：扫描，以清单方式逐项确认（有“至少保留一份”的护栏），把多余的移入废纸篓，或借助 APFS 克隆回收空间</li>
+            <li>内置 <code>burrow</code> 指挥层（通用二进制）：分析、状态、历史、清理与优化统一走一份稳定的 JSON 约定，并可退回直连引擎</li>
+            <li>经由指挥层新增 7 个只读 MCP 工具，面向智能体共计 21 个</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li>Admin password dialog appears again for root-owned app uninstalls (the engine now opens /dev/tty instead of permission-testing it)</li>
-            <li>Failed uninstalls keep the list and selection and surface the engine's error</li>
-            <li>Tune-Up reclaim sizes no longer show raw ANSI color codes</li>
-            <li>Analyze bounds per-child scans so a huge cache folder can't freeze the scan</li>
-            <li>Menu-bar popover no longer rubber-bands into empty space</li>
-            <li>Self-update refreshes Homebrew before upgrading</li>
+            <li>卸载归 root 所有的应用时，管理员密码对话框重新出现了（引擎现在直接打开 /dev/tty，而不是先去试探权限）</li>
+            <li>卸载失败时会保留列表与所选项，并把引擎给出的错误呈现出来</li>
+            <li>调优回收的体积数字不再夹带原始 ANSI 颜色码</li>
+            <li>分析会为每个子项的扫描设界，好让一个超大的缓存文件夹卡不住整场扫描</li>
+            <li>菜单栏浮窗不再回弹到空白处</li>
+            <li>自我更新会在升级前先刷新 Homebrew</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Also</div>
+          <div class="slabel mono">另外</div>
           <ul class="slist">
-            <li>Per-metric menu-bar text sizing, stable widths, flipped net in/out ordering</li>
-            <li>HUD popover re-pins when the menu bar auto-hides</li>
+            <li>菜单栏文字可按指标分别设定大小，宽度保持稳定，网络进出的顺序作了对调</li>
+            <li>菜单栏自动隐藏时，HUD 浮窗会重新定位</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li>Downloadable at last: BurrowWin-0.10.0-win-x64.zip ships on this release, the unpackaged app with burrow.exe and the engine bundled (unzip, run BurrowWin.exe; Windows 10/11)</li>
-            <li>Agent-triggered clean/optimize route through burrow.exe with the same envelope contract as macOS</li>
-            <li>burrow.exe grew real Windows powers: Recycle-Bin safe delete, guarded BCU uninstalls, czkawka duplicates + similar photos, provider-aware OneDrive eviction, IP Helper network attribution</li>
+            <li>总算能下载了：本次发布附带 BurrowWin-0.10.0-win-x64.zip，是未打包的应用，内含 burrow.exe 与引擎（解压后运行 BurrowWin.exe；Windows 10/11）</li>
+            <li>由智能体触发的清理与优化经 burrow.exe 执行，采用与 macOS 相同的信封约定</li>
+            <li>burrow.exe 长出了真正的 Windows 本事：回收站安全删除、带护栏的 BCU 卸载、基于 czkawka 的重复文件与相似照片、知晓服务商的 OneDrive 腾空、借助 IP Helper 的网络归因</li>
           </ul>
         </div>
       </div>
@@ -479,36 +479,36 @@
     <article class="entry" id="v0.9.2">
       <div class="ver-col">
         <h2 class="ver">0.9.2</h2>
-        <span class="date mono">Jul 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.2" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability and battery release, fixes to Cleanup, Analyze, and the menu bar, plus performance work that makes Burrow noticeably lighter while it sits idle.</p>
+        <p class="lead">一个关乎稳定性与续航的版本：修好了清理、分析与菜单栏，另有一批性能改动，让 Burrow 闲置时明显轻快了许多。</p>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li>Purge (Cleanup → Project build artifacts) applies your selection instead of aborting with “Couldn't confirm the selection safely”</li>
-            <li>Analyze cancels superseded scans and caps engine concurrency, no more runaway pile of processes</li>
-            <li>Camera/mic in-use indicator ignores virtual audio/video devices and clears when capture ends</li>
-            <li>Menu-bar popover no longer flies to a screen edge or mis-sizes on multi-display setups</li>
-            <li>Fewer spurious “App Hang” reports</li>
+            <li>清除（清理 → 项目构建产物）会照你的勾选执行，而不是以“无法安全确认所选内容”中止</li>
+            <li>分析会取消被取代的扫描，并给引擎的并发数设上限，不会再堆出一片失控的进程</li>
+            <li>摄像头与麦克风的使用指示会忽略虚拟音视频设备，并在采集结束时消失</li>
+            <li>多显示器下，菜单栏浮窗不再飞到屏幕边缘，尺寸也不再算错</li>
+            <li>虚报的“应用无响应”报告变少了</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Performance &amp; battery</div>
+          <div class="slabel mono">性能 &amp; 续航</div>
           <ul class="slist">
-            <li>Metrics engine caches slow SMC/GPU sensor reads and skips idle stream frames when no window is open</li>
-            <li>Analyze walk and icon caches are now bounded (evict under memory pressure)</li>
-            <li>Live sparklines window their data instead of scanning the full history each frame</li>
-            <li>Doctor security/SMART/backup probes are timeout-guarded and cached across reopens</li>
-            <li>Network-usage views share one sample instead of each running a 1-second scan</li>
+            <li>指标引擎会缓存缓慢的 SMC 与 GPU 传感器读数，并在没有窗口打开时跳过空闲的数据帧</li>
+            <li>分析的目录遍历与图标缓存现已设界（内存吃紧时会淘汰）</li>
+            <li>实时迷你折线图改为只取一段窗口的数据，而不是每一帧都扫一遍完整历史</li>
+            <li>诊断中的安全、SMART 与备份探测加了超时护栏，并在多次打开之间保留缓存</li>
+            <li>网络用量的各个视图共用同一次采样，而不是各自跑一秒的扫描</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Under the hood</div>
+          <div class="slabel mono">内部改动</div>
           <ul class="slist">
-            <li>Dead-code prune</li>
-            <li>Homebrew cask no longer depends on a system engine (engine bundled since 0.9.0)</li>
+            <li>清理了无用代码</li>
+            <li>Homebrew cask 不再依赖系统上的引擎（自 0.9.0 起引擎已随应用附带）</li>
           </ul>
         </div>
       </div>
@@ -517,66 +517,66 @@
     <article class="entry" id="v0.9.0">
       <div class="ver-col">
         <h2 class="ver">0.9.0</h2>
-        <span class="date mono">Jun 30, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 30 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's biggest release, it now bundles its own engine (no separate install), and adds an Activity-Monitor-class process inspector, a Get Online connectivity companion, and a security-aware Doctor.</p>
+        <p class="lead">Burrow 迄今最大的一次发布：它现在自带引擎（无需另行安装），并新增了媲美活动监视器的进程检查器、一位名为“联网”的连通性帮手，以及一个懂安全的诊断。</p>
         <div class="sblock">
-          <div class="slabel mono">engine</div>
+          <div class="slabel mono">引擎</div>
           <ul class="slist">
-            <li><b>Burrow bundles its own engine now.</b> The app ships an MIT-licensed <code>burrow-engine</code> (forked at its last MIT release) inside <code>Burrow.app</code> and runs it directly, so a fresh install needs <b>no separate engine install</b>. Burrow prefers the bundled engine, then an installed <code>burrow-engine</code>, then a legacy system engine for existing setups.</li>
+            <li><b>Burrow 现在自带引擎。</b> 应用内附一份采用 MIT 许可的 <code>burrow-engine</code> （在其最后一个 MIT 版本处分叉），位于 <code>Burrow.app</code> ，并直接运行它，因此全新安装 <b>无需另行安装引擎</b>。Burrow 优先使用内置引擎，其次是已安装的 <code>burrow-engine</code>，最后才是为老配置保留的系统引擎。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">process inspector</div>
+          <div class="slabel mono">进程检查器</div>
           <ul class="slist">
-            <li><b>Per-process inspector</b>: click any process for a structured panel: identity (path, code signature, Mach-O architecture), live CPU/memory, runtime, and the process's open network connections.</li>
-            <li><b>Process tree</b>: the parent/child hierarchy around any process.</li>
-            <li><b>CPU watchdog</b>: set per-process CPU thresholds and get notified when something runs hot, with an editor in Settings.</li>
-            <li><b>Filter, suspend/resume, export</b>: a typed predicate filter over the process table, suspend or resume a process, and export the table.</li>
+            <li><b>逐进程检查器</b>：点开任意进程即得一份条理清晰的面板——身份（路径、代码签名、Mach-O 架构）、实时 CPU 与内存、运行时长，以及该进程打开的网络连接。</li>
+            <li><b>进程树</b>：任意进程周围的父子层级。</li>
+            <li><b>CPU 看门狗</b>：为各个进程设定 CPU 阈值，谁跑热了就通知你；设置里备有编辑界面。</li>
+            <li><b>筛选、暂停/继续、导出</b>：对进程表使用带类型的条件筛选，暂停或恢复某个进程，并可导出整张表。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">get online</div>
+          <div class="slabel mono">联网</div>
           <ul class="slist">
-            <li><b>On-demand speed test</b>: measure real down/up throughput.</li>
-            <li><b>Nearby Wi-Fi scan</b>: surrounding networks and channel congestion (Home mode), so you can pick a clearer channel.</li>
-            <li><b>Venue captive-portal tips</b>: venue-specific help for hotel/airport/café portals that won't load.</li>
-            <li><b>Connection history</b>: a log of connectivity events (SSID changes, drops).</li>
+            <li><b>随时可用的测速</b>：测量真实的上下行吞吐。</li>
+            <li><b>附近 Wi-Fi 扫描</b>：周边网络与信道拥挤程度（家庭模式），好让你挑一条更清静的信道。</li>
+            <li><b>场所网页认证提示</b>：针对酒店、机场与咖啡馆那些打不开的认证页，给出因地制宜的办法。</li>
+            <li><b>连接历史</b>：一份连通性事件的记录（SSID 变更、掉线）。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">doctor</div>
+          <div class="slabel mono">诊断</div>
           <ul class="slist">
-            <li><b>Security posture</b>: SIP, Gatekeeper, FileVault, and firewall at a glance, plus a high-CPU check and one-click <b>Copy diagnostics</b>.</li>
-            <li><b>Battery health</b>: capacity % and condition (omitted on desktops).</li>
-            <li><b>More context</b>: display, external-volume, and network context.</li>
+            <li><b>安全状况</b>：SIP、Gatekeeper、FileVault 与防火墙一目了然，另有高 CPU 检查与一键 <b>复制诊断信息</b>.</li>
+            <li><b>电池健康</b>：容量百分比与状况（台式机上不显示）。</li>
+            <li><b>更多背景</b>：显示器、外置卷宗与网络方面的信息。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">clean, software &amp; analyze</div>
+          <div class="slabel mono">清理与软件 &amp; 分析</div>
           <ul class="slist">
-            <li><b>清理</b> now sorts the review <b>by reclaimable impact</b> 与 <b>flags sensitive paths</b> (keychain/credential locations) before you delete; the done screen shows your <b>all-time cleaned total</b>.</li>
-            <li><b>Software</b>: App Store updates that need a newer macOS are hidden; ⌘R refreshes with a cache bypass; app search is alias-aware.</li>
-            <li><b>Uninstall</b>: a Clear-Data-only subset, plus an input-method leftover warning.</li>
-            <li><b>分析</b>: one-tap whole-disk scan, and a treemap “Other” fold for tiny entries.</li>
-            <li><b>优化</b>: a pre-run safety banner when a VPN or external display is active.</li>
-            <li><b>Login items</b>: modern Login (BTM) items appear in the startup inventory; a LaunchAgent on an unplugged drive is no longer flagged broken.</li>
-            <li><b>Keep Screen On</b> keeps working with the lid closed.</li>
+            <li><b>清理</b> 现在会把确认清单 <b>按可回收的多少排序</b> 与 <b>标出敏感路径</b> （钥匙串与凭据所在位置）；完成页面还会显示你的 <b>历来清理总量</b>.</li>
+            <li><b>软件</b>：需要更新 macOS 才能装的 App Store 更新会被隐藏；⌘R 刷新时绕过缓存；应用搜索认得别名。</li>
+            <li><b>卸载</b>：新增“仅清除数据”这一档，另有输入法残留的提醒。</li>
+            <li><b>分析</b>：一键扫描整块磁盘，树图中把细碎条目折进“其他”。</li>
+            <li><b>优化</b>：当 VPN 或外接显示器正在使用时，运行前会给出安全提示横幅。</li>
+            <li><b>登录项</b>：新式的登录（BTM）项会出现在启动项清单里；位于已拔出磁盘上的 LaunchAgent 不再被判为损坏。</li>
+            <li><b>保持屏幕常亮</b> 在合盖时依然有效。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>Three main-thread hangs</b> on the new process/parity surfaces (suspend/resume, inspector, tree).</li>
-            <li>A missing <code>paths:</code> label on a data-only uninstall plan.</li>
+            <li><b>三处主线程卡顿</b> ，出现在新的进程与对齐界面上（暂停/继续、检查器、进程树）。</li>
+            <li>缺失的 <code>paths:</code> 标签，出现在仅清除数据的卸载方案上。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li><b>Windows 预览版</b>: version-aligned to 0.9.0; no Windows-specific changes this release.</li>
+            <li><b>Windows 预览版</b>：版本号对齐到 0.9.0；本次发布没有 Windows 专属改动。</li>
           </ul>
         </div>
       </div>
@@ -585,46 +585,46 @@
     <article class="entry" id="v0.8.3">
       <div class="ver-col">
         <h2 class="ver">0.8.3</h2>
-        <span class="date mono">Jun 25, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.3" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 25 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.3" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A metrics &amp; menu-bar release, real memory-pressure reporting, a power-draw widget, a live menu-bar preview, and a snappier popover.</p>
+        <p class="lead">一个关于指标与 &amp; 菜单栏的版本：真正的内存压力读数、功耗控件、菜单栏实时预览，以及更利落的浮窗。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>Power-draw widget</b>: live system wattage (W) as a menu-bar metric.</li>
-            <li><b>Real memory pressure.</b> “By pressure” now reads actual macOS memory pressure, <code>(wired + compressed) / total</code> via <code>host_statistics64</code>, the same figure Activity Monitor reports, instead of reusing the CPU-style utilization ramp. Shown as a percentage on the memory tiles, colored green ≤59% / orange 60–79% / red ≥80%.</li>
-            <li><b>Memory detail card</b>: the Status dashboard breaks memory down into used / free / cached / swap.</li>
-            <li><b>Live menu-bar preview + layout presets</b>: Settings previews your real metrics as you configure them, with one-tap layout presets.</li>
-            <li><b>Two new runner animations</b>: Wave and Bars.</li>
+            <li><b>功耗控件</b>：把系统实时功率（瓦）作为一项菜单栏指标。</li>
+            <li><b>真正的内存压力。</b> “按压力”现在读取的是 macOS 真实的内存压力， <code>(wired + compressed) / total</code> 取自 <code>host_statistics64</code>，与活动监视器显示的是同一个数字，而不再套用 CPU 那套占用率梯度。它在内存卡片上以百分比呈现，配色为 ≤59% 绿、60–79% 橙、≥80% 红。</li>
+            <li><b>内存详情卡片</b>：状态面板会把内存拆成已用 / 空闲 / 缓存 / 交换。</li>
+            <li><b>菜单栏实时预览 + 布局预设</b>：设置会一边配置一边用你真实的指标预览效果，并提供一键套用的布局预设。</li>
+            <li><b>两种新的奔跑动画</b>：波浪与竖条。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li><b>Consistent pressure coloring</b> across the dashboard tile, popover, memory-detail card, and menu bar.</li>
-            <li><b>Live popover sparklines</b>: CPU / memory / GPU tick every second (about a minute of history).</li>
-            <li><b>Honest color picker</b>: “By pressure” is offered only where it applies (memory); the temperature color ramp was corrected.</li>
+            <li><b>一致的压力配色</b> ，贯穿面板卡片、浮窗、内存详情卡片与菜单栏。</li>
+            <li><b>浮窗中的实时迷你折线图</b>：CPU / 内存 / GPU 每秒跳动一次（保留约一分钟的历史）。</li>
+            <li><b>诚实的配色选项</b>：“按压力”只在适用之处（内存）出现；温度的配色梯度也已更正。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>Brewfile import/export pickers no longer trip the hang detector</b> (ANR false-positives).</li>
-            <li><b>App-Hang reports from memory-starved machines are dropped</b> before sending, they were environmental, not Burrow bugs.</li>
+            <li><b>Brewfile 的导入导出选择器不再触发卡顿检测</b> （虚报的无响应）。</li>
+            <li><b>来自内存告急机器的“应用无响应”报告会被丢弃</b> ，不再发送——那是环境所致，并非 Burrow 的缺陷。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">性能</div>
           <ul class="slist">
-            <li><b>Snappier popover</b>: the metric grid no longer re-renders on unrelated state changes.</li>
+            <li><b>更利落的浮窗</b>：无关的状态变化不会再让指标网格重绘。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li><b>Windows 预览版</b>: a version-aligned 0.8.3 build is attached (<code>BurrowWin-0.8.3-win-x64.zip</code>). No Windows-specific changes this release.</li>
+            <li><b>Windows 预览版</b>：随附一份版本号对齐的 0.8.3 构建（<code>BurrowWin-0.8.3-win-x64.zip</code>）。本次发布没有 Windows 专属改动。</li>
           </ul>
         </div>
       </div>
@@ -633,21 +633,21 @@
     <article class="entry" id="v0.8.2">
       <div class="ver-col">
         <h2 class="ver">0.8.2</h2>
-        <span class="date mono">Jun 23, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 23 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.2" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A fix release, a Full Disk Access grant now actually takes effect, and Burrow asks for notification permission up front.</p>
+        <p class="lead">一个修复版本：授予完全磁盘访问权限现在真的会生效，Burrow 也会在一开始就请求通知权限。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>Full Disk Access is honored again.</b> The shipped app's embedded framework signatures were malformed (<code>codesign --verify --strict</code> failed on <code>Sentry.framework</code>), so macOS couldn't validate Burrow's identity and silently ignored a Full Disk Access grant, turning it on in System Settings appeared to do nothing. The release now re-signs the app and every nested framework inside-out so the signature is valid and the grant takes effect. After updating, toggle Full Disk Access off and back on once. _(Burrow is still ad-hoc-signed, so a re-grant is needed after each update until it ships with a Developer ID signature.)_</li>
+            <li><b>完全磁盘访问权限重新被认可了。</b> 已发布应用中内嵌框架的签名格式有误（<code>codesign --verify --strict</code> 在 <code>Sentry.framework</code>上失败），于是 macOS 无法验证 Burrow 的身份，便悄悄无视了完全磁盘访问的授权——在系统设置里打开它看上去毫无作用。本次发布会由内而外地为应用及其每一层嵌套框架重新签名，使签名有效、授权生效。更新之后，请把完全磁盘访问关掉再打开一次。_（Burrow 目前仍是临时签名，因此在它带上 Developer ID 签名发布之前，每次更新后都需要重新授权。）_</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li><b>Notification permission is requested up front</b>: Burrow now asks once, when you finish onboarding or first enable a notifying feature, instead of springing the system prompt the moment a notification tries to fire.</li>
+            <li><b>通知权限会在一开始就请求</b>：Burrow 会在你完成引导、或首次启用某个会发通知的功能时问你一次，而不是等到通知真要弹出的那一刻才冷不丁地叫出系统提示。</li>
           </ul>
         </div>
       </div>
@@ -656,35 +656,35 @@
     <article class="entry" id="v0.8.1">
       <div class="ver-col">
         <h2 class="ver">0.8.1</h2>
-        <span class="date mono">Jun 23, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 23 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.1" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability release, no more dashboard freezes, live status now streams, a one-click Homebrew update, and the Windows preview's review closeout.</p>
+        <p class="lead">一个稳定性版本：面板不再卡死，实时状态改为流式传输，Homebrew 更新只需一键，Windows 预览版的评审也就此收尾。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>No more App-Hang freezes.</b> The Overview dashboard re-rendered its whole grid, every chart tile and the full process table, once a second; now only the small Disk / Network tiles update that often, the rest on the snapshot.</li>
-            <li>Opening <b>Settings</b> and the <b>About</b> panel no longer blocks the main thread (login-item status, metrics-folder sizing, and the engine-version lookup moved off it).</li>
-            <li><b>PostHog telemetry</b> now flushes off the main thread instead of on a main-run-loop timer.</li>
+            <li><b>不再有“应用无响应”式的卡死。</b> 概览面板过去每秒重绘整张网格——每一块图表卡片外加完整的进程表；现在只有小小的磁盘与网络卡片保持这个频率，其余的随快照更新。</li>
+            <li>打开 <b>设置</b> 与 <b>关于</b> 面板不再阻塞主线程（登录项状态、指标文件夹的体积统计与引擎版本查询都挪走了）。</li>
+            <li><b>PostHog 数据</b> 现在在主线程之外发送，而不是挂在主运行循环的定时器上。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li><b>Live status streams by default</b>: with engine 1.44+, Burrow streams the engine's streaming status command (NDJSON) instead of polling the engine's one-shot status command: lower latency and less subprocess churn. Falls back to polling on an older engine or a dropped stream.</li>
+            <li><b>实时状态默认走流式</b>：搭配 1.44 以上的引擎时，Burrow 会订阅引擎的流式 status 命令（NDJSON），而不是反复调用单次的 status——延迟更低，子进程也少折腾。遇到旧引擎或数据流中断时会退回轮询。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>Update with Homebrew</b>: for cask installs, the update prompt has a one-click button that runs <code>brew upgrade --cask burrow</code> and relaunches.</li>
+            <li><b>用 Homebrew 更新</b>：对于 cask 安装，更新提示里有一个按钮，一键执行 <code>brew upgrade --cask burrow</code> 并重新启动。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows preview</div>
+          <div class="slabel mono">Windows 预览版</div>
           <ul class="slist">
-            <li>Closed out the port review: MCP tool parity with macOS (<code>burrow_list_apps</code>, <code>burrow_purge</code>, <code>burrow_installer</code>: preview-only over MCP), stdio MCP that survives the HTTP toggle, brand assets / palette / fonts / icon aligned to the Mac, honest docs, and MCP + deletion-guard tests. Earlier rounds added Recycle-Bin routing, a drive-root guard, and SHA-256 verification of the bundled engine. Still an unsigned, build-from-source preview.</li>
+            <li>移植评审就此收尾：MCP 工具与 macOS 对齐（<code>burrow_list_apps</code>, <code>burrow_purge</code>, <code>burrow_installer</code>：经 MCP 只能预览），stdio 版 MCP 在切换 HTTP 后依然可用，品牌素材、配色、字体与图标都向 Mac 看齐，文档如实，另有 MCP 与删除护栏的测试。更早几轮还加入了回收站路由、磁盘根目录护栏，以及对内置引擎的 SHA-256 校验。它仍是一个未签名、需自行从源码构建的预览版。</li>
           </ul>
         </div>
       </div>
@@ -693,49 +693,49 @@
     <article class="entry" id="v0.8.0">
       <div class="ver-col">
         <h2 class="ver">0.8.0</h2>
-        <span class="date mono">Jun 20, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 20 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A top-to-bottom visual redesign, a wave of new tools, a deeper agent surface, and an early Windows preview.</p>
+        <p class="lead">一次自上而下的视觉重构、一批新工具、更深的智能体接口，以及一个早期的 Windows 预览版。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>端口</b>: live connections, bandwidth, reverse-DNS peers, service labels, conflicts, sortable columns, and a per-connection detail view.</li>
-            <li><b>恢复联网</b>: MDM and gateway checks, the active-interface IP, captive-portal and device-side rescue, and one-click fixes.</li>
-            <li><b>调优</b>: a Smart-Care flow (scan → results → run) that auto-scans the moment you open it.</li>
-            <li><b>Homebrew</b>: Services (start / stop / restart), Brewfile snapshots (export / restore), and live <code>brew upgrade</code> progress in Updates.</li>
-            <li><b>Menu bar</b>: a customizable popup, Stats-depth widgets, a RunCat-style runner, and live metric widgets in the status item.</li>
-            <li><b>Disk</b> now forecasts when you'll run out of space (“Full in ~N”); <b>Doctor</b> gains SMART-health and backup-awareness checks with overdue reminders, multi-select bulk reclaim, and a git purge-safety badge.</li>
-            <li><b>For your agent</b>: a deeper MCP surface: a token-gated <code>/events</code> SSE stream and <code>burrow_diff</code>, so an agent can watch and compare your machine over time.</li>
+            <li><b>端口</b>：实时连接、带宽、经反向 DNS 解析的对端、服务标签、冲突、可排序的列，以及逐连接的详情视图。</li>
+            <li><b>恢复联网</b>：MDM 与网关检查、当前网络接口的 IP、网页认证与设备侧的补救办法，以及一键修复。</li>
+            <li><b>调优</b>：一条“智能养护”流程（扫描 → 结果 → 执行），一打开就自动开扫。</li>
+            <li><b>Homebrew</b>：服务（启动 / 停止 / 重启）、Brewfile 快照（导出 / 恢复），以及更新页中实时的 <code>brew upgrade</code> 进度。</li>
+            <li><b>菜单栏</b>：可自定义的弹窗、深度堪比 Stats 的控件、一只 RunCat 风格的奔跑小人，以及状态项里的实时指标控件。</li>
+            <li><b>磁盘</b> 现在会预测你何时会把空间用完（“约 N 后满”）； <b>诊断</b> 新增了 SMART 健康与备份状况检查（含逾期提醒）、多选批量回收，以及一枚 git 清除安全标记。</li>
+            <li><b>给你的智能体</b>：更深的 MCP 接口——一条需令牌的 <code>/events</code> SSE 数据流，加上 <code>burrow_diff</code>，让智能体能长期观察并比较你这台机器。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li>A warm, tactile redesign, a warm-coffee adaptive palette, film grain over a soft gradient, a floating icon rail in place of the top tabs, borderless cards, and the Geist / Cal Sans type system.</li>
-            <li><b>概览</b>: Health pulled up into an open hero band over a cleaner three-up vitals grid.</li>
-            <li><b>历史</b>: a focal hero chart with a selectable metric strip; drag-select a span to surface the top processes for that spike.</li>
-            <li><b>菜单栏悬浮面板</b>: borderless tiles on the same warm ground, with Doctor and Restore reskinned to match and edge-fade scrollers throughout.</li>
+            <li>一次温暖而有质感的重构：暖咖色自适应配色、柔和渐变上的胶片颗粒、以浮动图标栏取代顶部标签、无边框卡片，以及 Geist / Cal Sans 字体体系。</li>
+            <li><b>概览</b>：把“健康”提到一条开阔的主视觉带里，其下是更清爽的三栏关键指标。</li>
+            <li><b>历史</b>：一张作为视觉焦点的主图，配一条可切换指标的横条；拖选一段时间，即可看出那次尖峰背后最耗资源的进程。</li>
+            <li><b>菜单栏悬浮面板</b>：同一片暖色底上的无边框卡片，诊断与恢复也一并换上相配的外观，滚动处处带边缘渐隐。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">性能</div>
           <ul class="slist">
-            <li>Killed several main-thread app-hangs, the process table, sort, ICU on the render path, app icons, clean reports, and the software list.</li>
-            <li>Onboarding now auto-detects the engine.</li>
+            <li>干掉了若干主线程卡顿——进程表、排序、绘制路径上的 ICU、应用图标、清理报告与软件列表。</li>
+            <li>引导流程现在会自动检测引擎。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows preview</div>
+          <div class="slabel mono">Windows 预览版</div>
           <ul class="slist">
-            <li>An early native <b>WinUI 3 / .NET 8</b> app now lives under <code>windows/</code>: Status, History, Analyze, Apps, a tray HUD, local telemetry/history, and an MCP stdio bridge. Build from source; unsigned preview.</li>
+            <li>一个早期的原生 <b>WinUI 3 / .NET 8</b> 应用现已置于 <code>windows/</code>：状态、历史、分析、应用、托盘 HUD、本地数据与历史，以及一座 MCP stdio 桥。需自行从源码构建；未签名的预览版。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">under the hood</div>
+          <div class="slabel mono">内部改动</div>
           <ul class="slist">
-            <li>The repo is now a monorepo (<code>macos/</code> + <code>windows/</code>), with inside-out framework signing for notarization and an automated upstream engine release watcher.</li>
+            <li>仓库现已改为单体仓库（<code>macos/</code> + <code>windows/</code>），为公证采用由内而外的框架签名，并配有一个自动盯着上游引擎发布的监视器。</li>
           </ul>
         </div>
       </div>
@@ -744,34 +744,34 @@
     <article class="entry" id="v0.7.2">
       <div class="ver-col">
         <h2 class="ver">0.7.2</h2>
-        <span class="date mono">Jun 15, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 15 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.2" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A feature pass on the redesign, cleanup, software and the live dashboard get more capable, with opt-in update and privacy surfaces.</p>
+        <p class="lead">在重构之上再走一遍功能：清理、软件与实时面板都更能干了，更新与隐私相关的功能则由你自行选择开启。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>Cleanup, unified</b>: Purge and Installers fold into Clean as category cards, each with a real result screen and the raw log tucked behind a View Log toggle.</li>
-            <li><b>Self-update</b>: Burrow checks itself for new versions (opt-in, default on) and shows a banner plus a menu-bar dot. It never installs on its own.</li>
-            <li><b>Homebrew updates</b> appear the moment you open the Apps tab, and your own login items get on/off toggles.</li>
-            <li>An optional <b>camera &amp; mic in-use indicator</b> in the menu-bar popover (off by default), reading the same signal as Control Center.</li>
-            <li><b>About</b> 与 <b>Check for Updates</b> now live in Settings too.</li>
+            <li><b>清理，归于一处</b>：清除与安装包并入“清理”，成为分类卡片，各有一个货真价实的结果页，原始日志则收在“查看日志”开关后面。</li>
+            <li><b>自我更新</b>：Burrow 会自行检查新版本（可自行选择，默认开启），并显示横幅与菜单栏上的小圆点。它绝不会擅自安装。</li>
+            <li><b>Homebrew 更新</b> 在你打开“应用”标签的那一刻就已呈现，你自己的登录项也有了开关。</li>
+            <li>一个可选的 <b>摄像头与 &amp; 麦克风使用指示</b> ，位于菜单栏浮窗中（默认关闭），读取的信号与控制中心相同。</li>
+            <li><b>关于</b> 与 <b>检查更新</b> 现在设置里也有了。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li>Network charts in Status and History draw download and upload as two separate lines.</li>
-            <li>Analyze shows live per-folder progress on the first scan.</li>
-            <li>A View Log toggle on every result screen, Clean, Optimize, Purge, and Installers.</li>
+            <li>状态与历史中的网络图表，会把下载与上传画成两条独立的线。</li>
+            <li>首次扫描时，分析会实时显示每个文件夹的进度。</li>
+            <li>每个结果页都有“查看日志”开关——清理、优化、清除与安装包皆然。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li>Confirm dialogs and Touch ID are no longer reported as app-hangs.</li>
-            <li>Live App Store / Sparkle update checks stay click-gated, no silent network.</li>
+            <li>确认对话框与触控 ID 不会再被报成应用无响应。</li>
+            <li>App Store 与 Sparkle 的实时更新检查仍需你点击才会发生，不做无声的网络请求。</li>
           </ul>
         </div>
       </div>
@@ -780,26 +780,26 @@
     <article class="entry" id="v0.7.1">
       <div class="ver-col">
         <h2 class="ver">0.7.1</h2>
-        <span class="date mono">Jun 14, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 14 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.1" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability pass, every freeze and the crash reported since the 0.7.0 redesign, fixed.</p>
+        <p class="lead">一轮稳定性整治：自 0.7.0 重构以来所报告的每一次卡死，以及那次崩溃，都已修复。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li>The History view no longer freezes on wide time ranges.</li>
-            <li>Typing in Uninstall and Purge is smooth again.</li>
-            <li>Fixed a crash opening the menu-bar popover charts, it and the Status mini-charts could segfault on a transition, and now draw as one stable shape.</li>
-            <li>GPU history bars draw again on Apple Silicon.</li>
+            <li>历史视图在跨度很大的时间范围上不再卡死。</li>
+            <li>在卸载与清除里打字重新变得顺滑。</li>
+            <li>修复了打开菜单栏浮窗图表时的崩溃——它与状态页的小图在过渡时可能触发段错误，如今都以同一个稳定的形状绘制。</li>
+            <li>在 Apple 芯片上，GPU 历史柱状图重新画得出来了。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">性能</div>
           <ul class="slist">
-            <li>Faster launch, engine discovery moved off the main thread.</li>
-            <li>The HUD, Status, and Activity panels share one refresh pump now.</li>
-            <li>The process-row Quit / Force-Kill menu is no longer rebuilt on every refresh.</li>
+            <li>启动更快，引擎的探测挪出了主线程。</li>
+            <li>HUD、状态与活动三个面板现在共用同一套刷新节拍。</li>
+            <li>进程行上的“退出 / 强制结束”菜单不会再每次刷新都重建。</li>
           </ul>
         </div>
       </div>
@@ -808,44 +808,44 @@
     <article class="entry" id="v0.7.0">
       <div class="ver-col">
         <h2 class="ver">0.7.0</h2>
-        <span class="date mono">Jun 13, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 13 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The big one, every tool redesigned, a real Clean review pipeline, a new Software tab, and notifications when work finishes.</p>
+        <p class="lead">重头戏：每个工具都重新设计，清理有了一条真正的确认流程，新增“软件”标签，工作完成时还会通知你。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>New Software tab</b>: per-app uninstall review, a unified Updates list with source badges, and a startup inventory.</li>
-            <li><b>Review before you clean</b>: Scan streams a live count-up into a per-item review screen, and deselected paths are protected for exactly one run.</li>
-            <li><b>Finish-line alerts</b>: get notified when a clean, optimize, or uninstall finishes, plus opt-in low-disk and Trash reminders.</li>
-            <li>Keep Screen On, Clean Screen, and global shortcuts.</li>
+            <li><b>全新的“软件”标签</b>：逐个应用的卸载确认、一份带来源标记的统一更新列表，以及一份启动项清单。</li>
+            <li><b>先过目，再清理</b>：扫描会把实时累加的数字送进逐项确认的界面，被取消勾选的路径则在这一次运行中受到保护。</li>
+            <li><b>完工提醒</b>：清理、优化或卸载结束时通知你，另有可自行开启的磁盘告急与废纸篓提醒。</li>
+            <li>保持屏幕常亮、清洁屏幕，以及全局快捷键。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li>Every tool redesigned, Onboarding, Clean, Software, Status, the menu-bar popover, Analyze, and Settings, all rebuilt.</li>
-            <li>History CPU, GPU, and health render as bars, and GPU usage is read natively on Apple Silicon.</li>
-            <li>A compact, scrollable process table.</li>
-            <li>MCP cleanup tools share the app's gate, return structured summaries, and surface data-freshness on a stable contract.</li>
-            <li>~230 strings localized in 简体中文 / 繁體中文.</li>
+            <li>每个工具都重新设计——引导、清理、软件、状态、菜单栏浮窗、分析与设置，无一例外地重做了一遍。</li>
+            <li>历史中的 CPU、GPU 与健康以柱状呈现，Apple 芯片上的 GPU 占用则由原生接口读取。</li>
+            <li>一张紧凑、可滚动的进程表。</li>
+            <li>MCP 的清理工具与应用共用同一道许可关卡，返回结构化的摘要，并以稳定的约定呈现数据的新鲜程度。</li>
+            <li>约 230 条字符串已译为简体中文 / 繁體中文。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li>One-click relaunch the moment Full Disk Access is granted.</li>
-            <li>First-run onboarding checks the engine and version.</li>
-            <li>Truthful Touch ID copy.</li>
-            <li>The dashboard survives a bad metrics sample (skipped and counted) instead of stalling.</li>
+            <li>完全磁盘访问权限一到手，即可一键重新启动。</li>
+            <li>首次运行的引导会检查引擎及其版本。</li>
+            <li>触控 ID 的文案改得如实了。</li>
+            <li>遇到坏掉的指标采样，面板会挺过去（跳过并计数），而不是卡在那里。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">性能</div>
           <ul class="slist">
-            <li>History auto-refresh is demand-driven, no idle timer.</li>
-            <li>A deepened, test-covered engine runner / metrics / actions core.</li>
+            <li>历史的自动刷新按需触发，不再挂着空转的定时器。</li>
+            <li>更扎实、有测试覆盖的引擎调度 / 指标 / 操作内核。</li>
           </ul>
         </div>
       </div>
@@ -854,36 +854,36 @@
     <article class="entry" id="v0.6.7">
       <div class="ver-col">
         <h2 class="ver">0.6.7</h2>
-        <span class="date mono">Jun 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.7" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 11 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.7" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The biggest release yet, one Home dashboard, 繁體中文, native sensors, live 1-second charts.</p>
+        <p class="lead">迄今最大的一次发布：统一的主页面板、繁體中文、原生传感器读数、每秒更新的实时图表。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>One Home dashboard</b>: Status, History, and Activity fold into a single live view: vitals, charts, and recent jobs in one place.</li>
-            <li><b>繁體中文</b>: Traditional Chinese joins English and 简体, with an in-app switch, so you're not tied to the system language.</li>
-            <li><b>Real fans &amp; temps</b>: fan RPM and CPU/GPU die temperatures, read straight from the SMC, the gaps the engine leaves on Apple Silicon, filled.</li>
-            <li><b>1-second live charts</b>: net and disk sampled every second, so bursts show up instead of being averaged away.</li>
-            <li><b>Trash from the treemap</b>: spot a forgotten folder in Analyze and send it to the Trash right there, no detour to Finder.</li>
-            <li><b>Sharper AI Explain</b>: it briefs the whole picture now: the current snapshot, the recent trend, and your recent cleanups, in your language.</li>
+            <li><b>统一的主页面板</b>：状态、历史与活动并入同一个实时视图——关键指标、图表与近期任务，尽在一处。</li>
+            <li><b>繁體中文</b>：繁體中文加入英文与简体的行列，应用内即可切换，不必受制于系统语言。</li>
+            <li><b>真实的风扇 &amp; 与温度</b>：风扇转速与 CPU/GPU 裸片温度，直接取自 SMC——引擎在 Apple 芯片上留下的空白，就此填上。</li>
+            <li><b>一秒一跳的实时图表</b>：网络与磁盘每秒采样一次，短促的高峰因此显形，而不是被平均掉。</li>
+            <li><b>直接从树图丢进废纸篓</b>：在分析里瞥见一个被遗忘的文件夹，就地把它送进废纸篓，不必绕道访达。</li>
+            <li><b>更敏锐的 AI 解读</b>：它现在会把全景讲给你听——当前快照、近期走势，以及你最近做过的清理，用你的语言。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li>Opt-out anonymous telemetry, one switch, listed in <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>.</li>
-            <li>AI keys moved to the Keychain.</li>
-            <li>Deletes and uninstalls need a second agent opt-in.</li>
+            <li>匿名数据可随时关闭，一个开关即可，明细列在 <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>.</li>
+            <li>AI 密钥挪进了钥匙串。</li>
+            <li>删除与卸载需要智能体这边的第二道许可。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li>The loopback API is hardened, no CORS grant.</li>
-            <li>Treemap hover and breadcrumb fixed.</li>
-            <li>Tests grew 124 → 244.</li>
+            <li>本地回环 API 作了加固，不再授予 CORS。</li>
+            <li>修好了树图的悬停与面包屑导航。</li>
+            <li>测试从 124 增至 244。</li>
           </ul>
         </div>
       </div>
@@ -892,23 +892,23 @@
     <article class="entry" id="v0.6.5">
       <div class="ver-col">
         <h2 class="ver">0.6.5</h2>
-        <span class="date mono">Jun 9, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 9 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.5" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A reliability release, the selection flows stop hanging, and the engine integration is now driven by tests.</p>
+        <p class="lead">一个关乎可靠性的版本：勾选流程不再卡住，引擎的对接也改由测试来驱动。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li>Installers and Purge no longer freeze when the engine finds nothing, or on a second scan, the “Scanning…” hang is gone.</li>
+            <li>引擎一无所获时，或者第二次扫描时，安装包与清除不再卡死——那个停在“扫描中…”的僵局没有了。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li>The “remove exactly what you picked, or nothing” flow is now a pure state machine, verified in CI.</li>
-            <li>One ANSI cleaner, one typed client, one snapshot store.</li>
-            <li>Tests grew 90 → 124.</li>
+            <li>“要么正好删掉你选的，要么一个都不删”这条流程，如今是一台纯粹的状态机，并在 CI 中得到验证。</li>
+            <li>一个 ANSI 清理器、一个带类型的客户端、一个快照存储。</li>
+            <li>测试从 90 增至 124。</li>
           </ul>
         </div>
       </div>
@@ -917,31 +917,31 @@
     <article class="entry" id="v0.6.0">
       <div class="ver-col">
         <h2 class="ver">0.6.0</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Fix-and-polish, cleanup flows actually complete, and the trackers show real data.</p>
+        <p class="lead">修补与打磨：清理流程真的能走完，各项跟踪也显示真实数据了。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>Installer &amp; Uninstall complete</b>: the confirm-screen timeout and the silent <code>[y/N]</code> hang are gone; both flows finish now.</li>
-            <li>Settings flush immediately.</li>
+            <li><b>安装包 &amp; 卸载已完成</b>：确认页的超时，以及无声的 <code>[y/N]</code> 卡顿，都已消失；两条流程现在都能走到底。</li>
+            <li>设置会立即落盘。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>Native disk I/O &amp; GPU</b>: read natively where the engine reports zero on Apple Silicon, so charts show real numbers.</li>
-            <li><b>Purge → Show all</b>: pull in the complete find list and pick from everything, not just the ~50 biggest.</li>
-            <li><b>More history charts</b>: Battery, GPU, and Fans join the lineup; Top Processes ranks by CPU or RAM.</li>
-            <li>The thermal chart plots a real temperature.</li>
+            <li><b>原生的磁盘 I/O &amp; 与 GPU</b>：在 Apple 芯片上引擎报零之处改由原生接口读取，图表因此显示真实数字。</li>
+            <li><b>清除 → 显示全部</b>：取回完整的查找结果，从全部条目中挑选，而不只是最大的约 50 项。</li>
+            <li><b>更多历史图表</b>：电池、GPU 与风扇加入阵容；“最耗资源的进程”可按 CPU 或内存排名。</li>
+            <li>温度图画的是真实温度。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">性能</div>
           <ul class="slist">
-            <li>Faster live sampling catches short spikes.</li>
+            <li>更快的实时采样能捕捉到短促的尖峰。</li>
           </ul>
         </div>
       </div>
@@ -950,25 +950,25 @@
     <article class="entry" id="v0.5.5">
       <div class="ver-col">
         <h2 class="ver">0.5.5</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.5" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Two new cleanup tools, an AI lens on Status, and agents that can act, safely.</p>
+        <p class="lead">两个新的清理工具、一副架在“状态”上的 AI 透镜，以及能安全动手的智能体。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>深度清理</b>: find and clear old build artifacts (<code>node_modules</code>, <code>target/</code>, <code>build/</code>), ticking exactly what goes.</li>
-            <li><b>安装包</b>: sweep leftover <code>.dmg</code> / <code>.pkg</code> / <code>.iso</code> / <code>.zip</code> with the same pick-what-to-remove flow.</li>
-            <li><b>Explain (AI), opt-in</b>: a lens that reads one snapshot and explains it in plain English; local Ollama by default, nothing leaves the Mac.</li>
-            <li><b>Agents can act over MCP</b>: <code>burrow_clean</code>, <code>_optimize</code>, <code>_uninstall</code> and friends, each dry-running unless you flip the real-cleanups switch.</li>
+            <li><b>深度清理</b>：找出并清掉陈年的构建产物（<code>node_modules</code>, <code>target/</code>, <code>build/</code>），勾掉哪些就删哪些。</li>
+            <li><b>安装包</b>：清扫残留的 <code>.dmg</code> / <code>.pkg</code> / <code>.iso</code> / <code>.zip</code> ，走的是同一套“选中哪些删哪些”的流程。</li>
+            <li><b>解读（AI），需自行开启</b>：一副透镜，读一份快照，再用大白话讲给你听；默认走本地 Ollama，没有任何东西离开这台 Mac。</li>
+            <li><b>智能体可经 MCP 动手</b>: <code>burrow_clean</code>, <code>_optimize</code>, <code>_uninstall</code> 等等，除非你拨下“允许真正清理”的开关，否则它们一律只做空跑。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li>Every agent action defaults to <code>--dry-run</code>.</li>
-            <li>LM Studio and OpenAI-compatible backends are supported.</li>
+            <li>智能体的每一个操作都默认为 <code>--dry-run</code>.</li>
+            <li>支持 LM Studio 以及兼容 OpenAI 的后端。</li>
           </ul>
         </div>
       </div>
@@ -977,28 +977,28 @@
     <article class="entry" id="v0.5.1">
       <div class="ver-col">
         <h2 class="ver">0.5.1</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.1" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Maintenance, Full Disk Access actually sticks now.</p>
+        <p class="lead">维护性版本：完全磁盘访问权限现在真的留得住了。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修复</div>
           <ul class="slist">
-            <li><b>Full Disk Access works</b>: ad-hoc signing gives the app a stable code identity, so the TCC grant finally binds.</li>
-            <li>A Quit &amp; Reopen path after granting Full Disk Access.</li>
+            <li><b>完全磁盘访问权限可用了</b>：临时签名让应用有了稳定的代码身份，TCC 的授权终于绑得上了。</li>
+            <li>在授予完全磁盘访问权限之后，新增一条退出 &amp; 并重新打开的路径。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li>New read-only MCP tools: <code>burrow_cleanup_history</code> 与 <code>burrow_deleted_files</code>.</li>
+            <li>新增的只读 MCP 工具： <code>burrow_cleanup_history</code> 与 <code>burrow_deleted_files</code>.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">性能</div>
           <ul class="slist">
-            <li>Less energy in Software, dropped the per-app Spotlight query that kept <code>mds</code> 与 <code>mdworker</code> awake.</li>
+            <li>“软件”更省电了——去掉了逐个应用的 Spotlight 查询，正是它让 <code>mds</code> 与 <code>mdworker</code> 一直醒着。</li>
           </ul>
         </div>
       </div>
@@ -1007,28 +1007,28 @@
     <article class="entry" id="v0.5.0">
       <div class="ver-col">
         <h2 class="ver">0.5.0</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow grows up, Touch ID, a live menu-bar HUD, an MCP server, 简体中文, and a one-command install.</p>
+        <p class="lead">Burrow 长大了：触控 ID、菜单栏上的实时 HUD、一个 MCP 服务、简体中文，以及一条命令搞定的安装。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>Touch ID for sudo</b>: cleanups that need admin rights authenticate with a fingerprint, via the engine's Touch ID support.</li>
-            <li><b>菜单栏悬浮面板</b>: live job status from the menu bar, or run without the icon entirely in Dock mode.</li>
-            <li><b>MCP server</b>: ask Claude Code about your Mac through a read-only stdio server, including <code>burrow_process_usage</code>.</li>
-            <li><b>简体中文</b>: Simplified Chinese localization.</li>
-            <li><b>历史</b>: long-range charts, five minutes out to ninety days, over a local SQLite store.</li>
-            <li><b>Homebrew cask</b>: <code>brew install --cask caezium/tap/burrow</code>: one command, engine included, quarantine cleared.</li>
-            <li>An Activity pane with cleanup history in-app.</li>
+            <li><b>为 sudo 启用触控 ID</b>：需要管理员权限的清理可用指纹验证，借助的是引擎对触控 ID 的支持。</li>
+            <li><b>菜单栏悬浮面板</b>：在菜单栏上查看任务的实时状态，或者切到 Dock 模式，完全不要那个图标。</li>
+            <li><b>MCP 服务</b>：通过一个只读的 stdio 服务，向 Claude Code 打听你这台 Mac 的情况，包括 <code>burrow_process_usage</code>.</li>
+            <li><b>简体中文</b>：简体中文本地化。</li>
+            <li><b>历史</b>：长跨度图表，从五分钟到九十天，底下是一份本地 SQLite 存储。</li>
+            <li><b>Homebrew cask</b>: <code>brew install --cask caezium/tap/burrow</code>：一条命令，引擎在内，隔离属性一并清除。</li>
+            <li>一个“活动”面板，把清理历史搬进了应用。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">变更</div>
           <ul class="slist">
-            <li>A Full Disk Access gate stops the per-folder permission flood.</li>
-            <li>Guided engine setup on first run.</li>
+            <li>一道完全磁盘访问的关卡，止住了逐个文件夹弹权限的洪流。</li>
+            <li>首次运行时有向导带你配置引擎。</li>
           </ul>
         </div>
       </div>
@@ -1037,23 +1037,23 @@
     <article class="entry" id="v0.4.0">
       <div class="ver-col">
         <h2 class="ver">0.4.0</h2>
-        <span class="date mono">Jun 4, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.4.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 4 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.4.0" target="_blank" rel="noopener">完整记录 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">First public release, five tools, one native window, built on a bundled CLI engine.</p>
+        <p class="lead">首个公开版本：五个工具，一扇原生窗口，构筑在内置的命令行引擎之上。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">新增</div>
           <ul class="slist">
-            <li><b>Five tools, one window</b>: Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited engine.</li>
-            <li><b>Status + History</b>: a live dashboard with per-metric sparklines, and long-range charts on a local store.</li>
-            <li><b>MCP server, day one</b>: HTTP + stdio endpoints so Claude Code can ask what's happening on this Mac.</li>
+            <li><b>五个工具，一扇窗</b>：状态、分析、软件、清理与优化——为那台经过审计的引擎配上的原生 macOS 界面。</li>
+            <li><b>状态 + 历史</b>：一块实时面板，各项指标配有迷你折线图，另有基于本地存储的长跨度图表。</li>
+            <li><b>MCP 服务，第一天就有</b>：HTTP 与 stdio 两种端点，让 Claude Code 能问一句这台 Mac 上正发生什么。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">notes</div>
+          <div class="slabel mono">说明</div>
           <ul class="slist">
-            <li>macOS 14+; requires a separate engine install; unsigned, pre-1.0.</li>
+            <li>macOS 14 及以上；需另行安装引擎；未签名，1.0 之前的版本。</li>
           </ul>
         </div>
       </div>
