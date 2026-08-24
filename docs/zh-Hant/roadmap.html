@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Burrow · Roadmap</title>
-<meta name="description" content="What's shipped, building, and being weighed for Burrow, and how to vote.">
+<title>Burrow · 藍圖</title>
+<meta name="description" content="Burrow 已推出、正在做以及正在權衡的項目，以及投票的方式。">
 <meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="../burrow-icon.png">
 <link rel="canonical" href="https://burrow.computer/zh-Hant/roadmap">
@@ -23,14 +23,14 @@
 <link rel="stylesheet" href="../assets/chrome.css">
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://burrow.computer/#org","name":"Burrow","url":"https://burrow.computer","logo":"https://burrow.computer/burrow-icon-512.png","sameAs":["https://github.com/caezium/Burrow"]},{"@type":"WebSite","@id":"https://burrow.computer/#site","url":"https://burrow.computer","name":"Burrow","publisher":{"@id":"https://burrow.computer/#org"}}]}</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="Burrow · Roadmap">
-<meta property="og:description" content="What's shipped, building, and being weighed for Burrow, and how to vote.">
+<meta property="og:title" content="Burrow · 藍圖">
+<meta property="og:description" content="Burrow 已推出、正在做以及正在權衡的項目，以及投票的方式。">
 <meta property="og:image" content="https://burrow.computer/burrow-icon-512.png">
 <meta property="og:url" content="https://burrow.computer/roadmap">
 <meta property="og:site_name" content="Burrow">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Burrow · Roadmap">
-<meta name="twitter:description" content="What's shipped, building, and being weighed for Burrow, and how to vote.">
+<meta name="twitter:title" content="Burrow · 藍圖">
+<meta name="twitter:description" content="Burrow 已推出、正在做以及正在權衡的項目，以及投票的方式。">
 <script src="/analytics.js" defer></script>
 <style>
   @font-face { font-family: "Geist"; src: url("assets/fonts/Geist[wght].woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
@@ -124,96 +124,96 @@
 
 <header class="hero page">
   <h1>藍圖</h1>
-  <p>What's shipped, what's being built, and what we're weighing next.</p>
-  <p class="count">A guide, not a promise, order shifts with what people ask for. Upvote an issue to push it up, or <a href="https://github.com/caezium/Burrow/issues/new/choose" target="_blank" rel="noopener">open a request ↗</a>. Updated Aug 7, 2026.</p>
+  <p>已經推出的、正在建置的，以及接下來正在權衡的。</p>
+  <p class="count">這是參考而非承諾，順序會隨著大家的需求變動。為某個 issue 投票把它往上推，或者 <a href="https://github.com/caezium/Burrow/issues/new/choose" target="_blank" rel="noopener">提出一個需求 ↗</a>。更新於 2026 年 8 月 7 日。</p>
 </header>
 
 <main class="page">
     <section class="rcol">
-      <div class="rcol-head"><h2>Building</h2><span class="ct">1</span><span class="blurb">In progress now.</span></div>
+      <div class="rcol-head"><h2>正在建置</h2><span class="ct">1</span><span class="blurb">此刻正在進行。</span></div>
       <div class="ritems">
         <div class="ritem">
-          <span class="t">A single interface for machine care and agent work</span>
-          <p class="note">Burrow grew tool by tool. The next pass designs it as one product: one navigation model, one task hierarchy, and a clear place for the agent surfaces that arrived late.</p>
+          <span class="t">把電腦保養與代理程式工作收進同一個介面</span>
+          <p class="note">Burrow 是一個工具一個工具長出來的。下一輪會把它當成一個整體產品來設計：一套瀏覽模型、一套工作階層，並為後來才加入的代理程式功能安排一個明確的位置。</p>
           <div class="rtags"><span class="rtype feat">feat</span></div>
         </div>
       </div>
     </section>
     <section class="rcol">
-      <div class="rcol-head"><h2>Planned</h2><span class="ct">2</span><span class="blurb">Decided, not started yet.</span></div>
+      <div class="rcol-head"><h2>已規劃</h2><span class="ct">2</span><span class="blurb">已經決定，但還沒動工。</span></div>
       <div class="ritems">
         <div class="ritem">
-          <span class="t">Windows preview → first stable</span>
-          <p class="note">Data-loss and supply-chain hardening, parity, and test coverage before it loses the “preview” label.</p>
+          <span class="t">Windows 預覽版 → 首個穩定版</span>
+          <p class="note">在拿掉「預覽」這個標籤之前，先做好防資料遺失與供應鏈的強化、功能對齊，以及測試涵蓋率。</p>
           <div class="rtags"><span class="rtype feat">feat</span><a class="rissue" href="https://github.com/caezium/Burrow/issues/93" target="_blank" rel="noopener">#93 ↗</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Uninstall that never quietly does nothing</span>
-          <p class="note">A handful of Homebrew apps use a cask token that differs from the display name, so a name-based lookup resolves most apps and misses the exceptions. Uninstall gets exact resolution and a visible result either way.</p>
+          <span class="t">不會悄悄什麼都沒做的解除安裝</span>
+          <p class="note">有少數 Homebrew 應用程式的 cask 代號與顯示名稱不同，因此以名稱查找雖能命中多數，卻會漏掉這些例外。解除安裝將改用精確判定，而且不論結果如何都讓你看得見。</p>
           <div class="rtags"><span class="rtype fix">fix</span></div>
         </div>
       </div>
     </section>
     <section class="rcol">
-      <div class="rcol-head"><h2>Considering</h2><span class="ct">2</span><span class="blurb">Weighing it, upvote to push it up.</span></div>
+      <div class="rcol-head"><h2>正在考慮</h2><span class="ct">2</span><span class="blurb">正在權衡，投票可以把它往上推。</span></div>
       <div class="ritems">
         <div class="ritem">
-          <span class="t">Persistent one-tap “run all” Tune-Up</span>
-          <p class="note">A saved Smart-Care routine you trigger in one tap from the dashboard.</p>
+          <span class="t">可保存的一鍵「全部執行」調校</span>
+          <p class="note">把一套保養流程存下來，在面板上一鍵觸發。</p>
           <div class="rtags"><span class="rtype feat">feat</span><a class="rissue" href="https://github.com/caezium/Burrow/issues/77" target="_blank" rel="noopener">#77 ↗</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Faster, deeper Analyze</span>
-          <p class="note">Better navigation through very large trees, quicker re-render on drill-down, and caching so a second scan of the same volume is close to instant.</p>
+          <span class="t">更快、更深入的分析</span>
+          <p class="note">在超大樹狀結構中更好瀏覽，往下鑽時重繪更快，並加入快取，讓同一個卷宗的第二次掃描幾乎瞬間完成。</p>
           <div class="rtags"><span class="rtype feat">feat</span></div>
         </div>
       </div>
     </section>
     <section class="rcol">
-      <div class="rcol-head"><h2>Recently shipped</h2><span class="ct">16</span><span class="blurb">Landed in the latest releases.</span></div>
+      <div class="rcol-head"><h2>最近推出</h2><span class="ct">16</span><span class="blurb">已在最近幾個版本中落地。</span></div>
       <div class="ritems">
         <div class="ritem">
-          <span class="t">Developer ID signed &amp; Apple-notarized macOS releases</span>
+          <span class="t">Developer ID 簽署 &amp; 經 Apple 公證的 macOS 版本</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.11.0">0.11.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Signed Sparkle feed + updater foundation</span>
+          <span class="t">已簽署的 Sparkle 更新來源與更新機制基礎</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.11.0">0.11.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Stable Full Disk Access identity across updates</span>
+          <span class="t">跨版本更新仍然穩定的完全取用磁碟身分</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.11.0">0.11.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Bundled MIT engine, no separate <code>mo</code> 安裝</span>
+          <span class="t">內建 MIT 引擎，不需另外的 <code>mo</code> 安裝</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.9.0">0.9.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Process inspector + CPU watchdog</span>
+          <span class="t">處理程序檢視器與 CPU 監看</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.9.0">0.9.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Get Online connectivity companion</span>
+          <span class="t">協助恢復連線的引導工具</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.9.0">0.9.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Security-aware Doctor</span>
+          <span class="t">會顧及安全性的診斷</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.9.0">0.9.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">No-freeze live dashboard</span>
+          <span class="t">不會卡住的即時面板</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.1">0.8.1</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Streaming live status (<code>mo status --watch</code>)</span>
+          <span class="t">串流式的即時狀態（<code>mo status --watch</code>)</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.1">0.8.1</a></div>
         </div>
         <div class="ritem">
-          <span class="t">One-click Update with Homebrew</span>
+          <span class="t">透過 Homebrew 一鍵更新</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.1">0.8.1</a></div>
         </div>
         <div class="ritem">
-          <span class="t">A warm visual redesign</span>
+          <span class="t">更溫暖的視覺改版</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
@@ -221,19 +221,19 @@
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Smart-Care Tune-Up</span>
+          <span class="t">智慧保養式調校</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Homebrew Services &amp; Brewfile</span>
+          <span class="t">Homebrew 服務 &amp; Brewfile</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Deeper MCP agent surface (<code>/events</code>, <code>burrow_diff</code>)</span>
+          <span class="t">更深入的 MCP 代理程式介面（<code>/events</code>, <code>burrow_diff</code>)</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Windows preview</span>
+          <span class="t">Windows 預覽版</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
       </div>

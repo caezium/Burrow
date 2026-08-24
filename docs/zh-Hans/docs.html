@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Burrow Documentation</title>
-<meta name="description" content="What every Burrow tool does, what it touches, the safety rules it follows, and how to connect it to a coding agent over MCP.">
+<title>Burrow 文档</title>
+<meta name="description" content="Burrow 的每个工具做什么、会碰到什么、遵循哪些安全规则，以及如何通过 MCP 连接编程智能体。">
 <meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="../burrow-icon.png">
 <link rel="canonical" href="https://burrow.computer/zh-Hans/docs">
@@ -24,14 +24,14 @@
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://burrow.computer/#org","name":"Burrow","url":"https://burrow.computer","logo":"https://burrow.computer/burrow-icon-512.png","sameAs":["https://github.com/caezium/Burrow"]},{"@type":"WebSite","@id":"https://burrow.computer/#site","url":"https://burrow.computer","name":"Burrow","publisher":{"@id":"https://burrow.computer/#org"}}]}</script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Burrow","applicationCategory":"UtilitiesApplication","operatingSystem":"macOS 14+, Windows 10/11","description":"A free, open-source desktop utility that clears junk, finds duplicate and leftover files, maps disk usage, and watches live system status, with an MCP server so coding agents can read the machine.","url":"https://burrow.computer","downloadUrl":"https://burrow.computer/install","license":"https://github.com/caezium/Burrow/blob/main/LICENSE","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="Burrow Documentation">
-<meta property="og:description" content="What every Burrow tool does, what it touches, the safety rules it follows, and how to connect it to a coding agent over MCP.">
+<meta property="og:title" content="Burrow 文档">
+<meta property="og:description" content="Burrow 的每个工具做什么、会碰到什么、遵循哪些安全规则，以及如何通过 MCP 连接编程智能体。">
 <meta property="og:image" content="https://burrow.computer/burrow-icon-512.png">
 <meta property="og:url" content="https://burrow.computer/docs">
 <meta property="og:site_name" content="Burrow">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Burrow Documentation">
-<meta name="twitter:description" content="What every Burrow tool does, what it touches, the safety rules it follows, and how to connect it to a coding agent over MCP.">
+<meta name="twitter:title" content="Burrow 文档">
+<meta name="twitter:description" content="Burrow 的每个工具做什么、会碰到什么、遵循哪些安全规则，以及如何通过 MCP 连接编程智能体。">
 <script src="/analytics.js" defer></script>
 <style>
   @font-face { font-family: "Geist"; src: url("assets/fonts/Geist[wght].woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
@@ -130,97 +130,97 @@
 </div>
 
 <header class="hero page">
-  <h1>Documentation</h1>
-  <p>Everything Burrow does, what each tool touches, and the rules it follows before it removes anything.</p>
+  <h1>文档</h1>
+  <p>Burrow 能做的一切、每个工具会碰到的范围，以及它在删除任何东西之前所遵循的规则。</p>
 </header>
 
 <main class="page">
   <div class="dwrap">
     <nav class="dtoc">
-      <h2>Contents</h2>
-      <a href="#overview">Overview</a>
-      <a href="#install">Installing</a>
-      <a href="#cleanup">Reclaiming space</a>
-      <a href="#apps">Applications</a>
-      <a href="#maintenance">Maintenance</a>
-      <a href="#disk">Understanding the disk</a>
-      <a href="#machine">Watching the machine</a>
-      <a href="#agents">Agents and MCP</a>
-      <a href="#safety">Safety model</a>
-      <a href="#privacy">Privacy and telemetry</a>
-      <a href="#troubleshooting">Troubleshooting</a>
+      <h2>目录</h2>
+      <a href="#overview">概览</a>
+      <a href="#install">安装</a>
+      <a href="#cleanup">把空间收回来</a>
+      <a href="#apps">应用程序</a>
+      <a href="#maintenance">维护</a>
+      <a href="#disk">看懂磁盘</a>
+      <a href="#machine">盯住这台机器</a>
+      <a href="#agents">智能体与 MCP</a>
+      <a href="#safety">安全模型</a>
+      <a href="#privacy">隐私与数据收集</a>
+      <a href="#troubleshooting">疑难排解</a>
     </nav>
     <div class="dbody">
     <section class="dsec" id="overview">
-      <h2>Overview</h2>
-      <p>Burrow is a native desktop app for macOS, with a WinUI 3 build for Windows in beta. It covers the jobs people usually split across a cleaner, an uninstaller, a duplicate finder, a disk mapper, and a menu-bar monitor, and it exposes all of it to coding agents over MCP.</p>
-      <p>Fourteen tools share one window. Each re-themes the interface in its own colour, because the colour is how a tool tells you what it is about to touch. Two surfaces have no command-line equivalent at all: the long-range history, and the MCP server.</p>
-      <p>Everything runs locally. Scans, metrics, and history stay on the machine, and the MCP server binds to loopback only.</p>
+      <h2>概览</h2>
+      <p>Burrow 是一款面向 macOS 的原生桌面应用，Windows 版本基于 WinUI 3，处于测试阶段。它承担人们通常分给清理工具、卸载工具、重复文件查找、磁盘可视化和菜单栏监控的活儿，并通过 MCP 把这一切开放给编程智能体。</p>
+      <p>十四个工具共用一个窗口。每个工具都会用自己的颜色重新渲染界面，因为颜色正是它告诉你即将动到什么的方式。其中有两项在命令行里根本没有对应物：长期历史与 MCP 服务。</p>
+      <p>一切都在本机运行。扫描结果、指标与历史都留在这台机器上，MCP 服务只绑定回环地址。</p>
     </section>
     <section class="dsec" id="install">
-      <h2>Installing</h2>
-      <p>Homebrew is the shortest path on macOS. It installs the Developer ID signed, Apple-notarized build with its engine bundled, and preserves quarantine so Gatekeeper can validate the ticket.</p>
+      <h2>安装</h2>
+      <p>在 macOS 上，Homebrew 是最短的路径。它安装的是带 Developer ID 签名、经 Apple 公证并内置引擎的版本，同时保留隔离属性，好让 Gatekeeper 校验票据。</p>
       <pre><code>brew install --cask caezium/tap/burrow</code></pre>
-      <p>Direct downloads and the Windows preview are on the <a href="../install" target="_blank" rel="noopener">安装页面</a>. Updates arrive in-app over a signed Sparkle feed; Homebrew installs update with <code>brew upgrade</code>.</p>
-      <h3 id="full-disk-access">Full Disk Access</h3>
-      <p>Burrow runs a safe scan without it. Granting Full Disk Access lets it reach deeper Application Support and container caches that macOS otherwise hides. You can grant or revoke it at any time in System Settings under Privacy &amp; Security.</p>
+      <p>直接下载与 Windows 预览版都在 <a href="../install" target="_blank" rel="noopener">安装页面</a>。更新通过签名的 Sparkle 源送达应用内；用 Homebrew 安装的则以 <code>brew upgrade</code>.</p>
+      <h3 id="full-disk-access">完全磁盘访问权限</h3>
+      <p>没有它，Burrow 也能执行安全扫描。授予完全磁盘访问权限后，它才能触及 macOS 平时隐藏起来的、更深处的 Application Support 与容器缓存。你随时可以在“系统设置”的“隐私 &amp; 安全性”中授予或收回。</p>
     </section>
     <section class="dsec" id="cleanup">
-      <h2>Reclaiming space</h2>
+      <h2>把空间收回来</h2>
       <h3 id="clean">清理</h3>
-      <p>Scans more than ten categories: application caches, system caches, logs, developer tool caches, AI tool caches, browser data, cloud storage clients, design tools, communication apps, and miscellaneous temporary files.</p>
-      <p>The review list is sorted by how safe each item is to remove. Regenerable caches come first, user-visible state last. Sizing is hardlink aware, so files shared between tools are counted once rather than once per path.</p>
+      <p>扫描十余个类别：应用缓存、系统缓存、日志、开发工具缓存、AI 工具缓存、浏览器数据、云存储客户端、设计工具、通讯应用，以及各类临时文件。</p>
+      <p>确认列表按每一项删除起来有多安全排序：可重新生成的缓存排在最前，用户可见的状态排在最后。体积统计能识别硬链接，因此被多个工具共用的文件只计一次，而不是每条路径各计一次。</p>
       <h3 id="purge">深度清理</h3>
-      <p>The diggings development work leaves behind, kept separate from ordinary caches because the trade-offs differ. Build output such as <code>dist</code>, <code>build</code>, <code>target</code>, <code>.next</code>, <code>.build</code>, <code>DerivedData</code>, <code>__pycache__</code>、 <code>coverage</code> rebuilds locally with no network. Dependency directories such as <code>node_modules</code>, <code>Pods</code>、 <code>venv</code> need to be refetched, so they are shown with that cost attached and stay unchecked until you confirm them.</p>
+      <p>开发工作留下的渣土。因为取舍不同，所以与普通缓存分开处理。像 <code>dist</code>, <code>build</code>, <code>target</code>, <code>.next</code>, <code>.build</code>, <code>DerivedData</code>, <code>__pycache__</code>、 <code>coverage</code> 这样的构建产物在本地就能重建，无需联网。而像 <code>node_modules</code>, <code>Pods</code>、 <code>venv</code> 这样的依赖目录则需要重新拉取，因此会连同这份代价一并显示，并在你确认之前保持未勾选。</p>
       <h3 id="installers">安装包</h3>
-      <p>Finds <code>.dmg</code> and <code>.pkg</code> files still sitting in Downloads long after the application was installed. Small individually, frequently tens of gigabytes in aggregate on a machine that has been running for a few years.</p>
+      <p>查找 <code>.dmg</code> 与 <code>.pkg</code> 文件——那些在应用装好很久之后仍留在“下载”里的。单个不大，但在一台用了几年的机器上，加起来常常有几十 GB。</p>
       <h3 id="duplicates">重复文件</h3>
-      <p>A staged content hash: group by size, hash a prefix of the candidates, then hash in full only what still matches. Hardlinked and cloned files are treated as one object, so the reclaimable figure is the figure you actually recover.</p>
+      <p>分阶段的内容哈希：先按大小分组，再对候选文件的开头做哈希，最后只对仍然匹配的做完整哈希。硬链接与克隆文件被视为同一个对象，因此显示的可回收数值就是你真正能拿回来的数值。</p>
       <h3 id="similar-photos">相似照片</h3>
-      <p>Perceptual matching for images that are visually near-identical but differ byte for byte, such as burst frames and re-exports. Content hashing cannot see these; this can.</p>
+      <p>对那些看上去几乎一样、逐字节却不同的图片做感知比对，比如连拍帧和重新导出的版本。内容哈希看不出这些，而它可以。</p>
     </section>
     <section class="dsec" id="apps">
-      <h2>Applications</h2>
+      <h2>应用程序</h2>
       <h3 id="apps">应用</h3>
-      <p>Every installed application, sortable by size, name, recency, or source. Multi-select uninstall removes the bundle along with its preferences, Application Support data, containers, saved state, and launch agents.</p>
-      <p>A Homebrew tab checks which casks and formulae are outdated and can update them in place. Burrow resolves the cask token rather than the display name, because a dozen popular apps use tokens that differ from what the app calls itself.</p>
+      <p>列出所有已安装的应用程序，可按大小、名称、最近使用或来源排序。多选卸载会连同偏好设置、Application Support 数据、容器、保存的状态与启动代理一并删除。</p>
+      <p>Homebrew 标签页会检查哪些 cask 与 formula 已经过期，并可就地更新。Burrow 按 cask 令牌而非显示名称解析，因为有十来个常用应用所使用的令牌与它自称的名字并不相同。</p>
       <h3 id="leftovers">残留文件</h3>
-      <p>The other direction: support files, preferences, and launch agents belonging to applications that are already gone. Burrow matches each orphan back to the application that left it, so you are approving a named app's remains rather than a list of paths.</p>
-      <p>Launch agents for deleted apps are the ones worth clearing first. <code>launchd</code> keeps trying to start a binary that no longer exists, which produces log noise on every boot.</p>
+      <p>反过来的一面：那些属于早已不在的应用程序的支持文件、偏好设置与启动代理。Burrow 会把每个孤立文件对应回留下它的那个应用，因此你确认的是某个有名有姓的应用的残留，而不是一串路径。</p>
+      <p>已删除应用留下的启动代理，最值得先清掉。 <code>launchd</code> 会不断尝试启动一个已经不存在的可执行文件，于是每次开机都在日志里添乱。</p>
     </section>
     <section class="dsec" id="maintenance">
-      <h2>Maintenance</h2>
+      <h2>维护</h2>
       <h3 id="optimize">优化</h3>
-      <p>The routine chores, batched behind one prompt: rebuild Quick Look, repair caches and metadata, flush DNS, and audit login items.</p>
+      <p>把例行杂活收进一次确认里：重建快速查看、修复缓存与元数据、清空 DNS，并检查登录项。</p>
       <h3 id="tune-up">调优</h3>
-      <p>Smart-Care in a single pass. Burrow picks the maintenance that actually applies to this machine right now and runs it end to end, rather than offering a fixed checklist that mostly does not apply.</p>
+      <p>一遍完成整套养护。Burrow 会挑出此刻真正适用于这台机器的维护项并从头执行到尾，而不是摆出一张大多用不上的固定清单。</p>
     </section>
     <section class="dsec" id="disk">
-      <h2>Understanding the disk</h2>
+      <h2>看懂磁盘</h2>
       <h3 id="analyze">分析</h3>
-      <p>A squarified treemap of the whole volume, sized by real allocated bytes. Drill into any branch to see the same breakdown one level down, then reveal in Finder or move to the Trash from the context menu.</p>
-      <p>A treemap answers "what is using my disk" better than a sorted list because the largest consumer is the largest shape rather than the first row you have to scroll to find.</p>
-      <div class="cta">If free space does not increase after you delete something large, local Time Machine snapshots are usually pinning it. See <a href="../blog/mac-says-disk-is-full-but-it-isnt" target="_blank" rel="noopener">why your Mac says the disk is full when it isn't</a>.</div>
+      <p>整卷的方块树状图，面积按真实占用的字节数计算。深入任意分支即可看到下一层的同样细分，再从右键菜单在访达中显示或移到废纸篓。</p>
+      <p>回答“什么在占我的磁盘”，树状图比排序列表更合适：占得最多的那个是最大的那块图形，而不是你得滚动去找的第一行。</p>
+      <div class="cta">如果删掉大文件之后可用空间没有增加，通常是本地的 Time Machine 快照仍然占着。参见 <a href="../blog/mac-says-disk-is-full-but-it-isnt" target="_blank" rel="noopener">为什么磁盘明明没满，Mac 却说它满了</a>.</div>
     </section>
     <section class="dsec" id="machine">
-      <h2>Watching the machine</h2>
+      <h2>盯住这台机器</h2>
       <h3 id="status">状态</h3>
-      <p>CPU, memory, GPU, disk, network, and battery on one page, each with a sparkline. The process table sorts by any column and pins the rows you want to keep in view. On Apple Silicon, fan speed and die temperatures are read natively from the SMC.</p>
+      <p>CPU、内存、GPU、磁盘、网络与电池同页展示，各配迷你走势图。进程表可按任意列排序，也能把你想一直盯着的行置顶。在 Apple 芯片上，风扇转速与芯片温度直接从 SMC 原生读取。</p>
       <h3 id="history">历史</h3>
-      <p>Every sample Status takes lands in a local SQLite file. Scrub from five minutes out to ninety days, with peak-per-process tables for the moments the fans actually spun up. Nothing is uploaded.</p>
+      <p>状态页采集的每一次样本都写入本地的 SQLite 文件。你可以从五分钟一直回溯到九十天；风扇真正转起来的那些时刻，还能查看各进程的峰值表。这些内容不会上传。</p>
       <h3 id="ports">端口</h3>
-      <p>Every listening port with the process behind it, its binary path, and its owning user, refreshed live. Answers "what is holding 3000" without reaching for <code>lsof</code>.</p>
+      <p>每个监听端口，连同它背后的进程、可执行文件路径与所属用户，实时刷新。不必再去敲 <code>lsof</code>.</p>
       <h3 id="network">网络</h3>
-      <p>Live throughput per interface and per process. Unlike Activity Monitor's cumulative totals, this is a rate, so the process saturating your connection right now is the one at the top.</p>
+      <p>按网卡与按进程显示实时吞吐。和活动监视器的累计总量不同，这里是速率，因此此刻把你带宽占满的那个进程就排在最上面。</p>
       <h3 id="get-online">恢复联网</h3>
-      <p>A guided path back to the surface when the connection drops: interface state, DNS resolution, gateway reachability, and captive portal detection, checked in order.</p>
-      <h3 id="menu-bar-hud">Menu-bar HUD</h3>
-      <p>The whole picture drops down from the menu bar without opening the app: live metrics, top processes, and a jump into whichever tool you need.</p>
+      <p>断网时带你一步步回到地面：依次检查网卡状态、DNS 解析、网关可达性与强制门户。</p>
+      <h3 id="menu-bar-hud">菜单栏悬浮面板</h3>
+      <p>不必打开应用，整幅画面就从菜单栏落下：实时指标、占用最高的进程，以及直接跳进所需工具的入口。</p>
     </section>
     <section class="dsec" id="agents">
-      <h2>Agents and MCP</h2>
-      <p>Burrow doubles as an MCP server, so a coding agent can ask the machine questions rather than guessing from your source code. Twenty-six tools are exposed. Fourteen are read-only and available immediately; the ones that change your machine require their own explicit opt-in in Settings before an agent can call them at all.</p>
-      <p>Point Claude Code at the app:</p>
+      <h2>智能体与 MCP</h2>
+      <p>Burrow 同时也是一个 MCP 服务，因此编程智能体可以直接向机器提问，而不必从你的源码里猜。对外开放的工具共有二十六个：其中十四个只读，开箱即用；会改动你机器的那些，必须先在设置里各自明确开启，智能体才谈得上调用。</p>
+      <p>把 Claude Code 指向这个应用：</p>
       <pre><code>{
   "mcpServers": {
     "burrow": {
@@ -229,41 +229,41 @@
     }
   }
 }</code></pre>
-      <h3 id="read-only-tools">Read-only tools</h3>
+      <h3 id="read-only-tools">只读工具</h3>
       <p><code>burrow_snapshot</code>, <code>burrow_history</code>, <code>burrow_top_processes</code>, <code>burrow_process_usage</code>, <code>burrow_info</code>, <code>burrow_analyze</code>, <code>burrow_dupes</code>, <code>burrow_orphans</code>, <code>burrow_photos</code>, <code>burrow_ports</code>, <code>burrow_net</code>, <code>burrow_doctor</code>, <code>burrow_disk_forecast</code>、 <code>burrow_list_apps</code>.</p>
-      <h3 id="gated-tools">Gated tools</h3>
-      <p><code>burrow_clean</code>, <code>burrow_purge</code>, <code>burrow_uninstall</code>, <code>burrow_optimize</code>、 <code>burrow_installer</code> change the machine and stay unavailable until you turn them on.</p>
+      <h3 id="gated-tools">需要开启的工具</h3>
+      <p><code>burrow_clean</code>, <code>burrow_purge</code>, <code>burrow_uninstall</code>, <code>burrow_optimize</code>、 <code>burrow_installer</code> 会改动你的机器，在你开启之前一直不可用。</p>
       <h3 id="http-api">HTTP API</h3>
-      <p>A loopback HTTP API on <code>127.0.0.1:9277</code> serves the same read-only data for tools that speak HTTP rather than MCP. It is on by default and can be turned off in Settings. It binds to loopback only and is never reachable from another machine.</p>
+      <p>在 <code>127.0.0.1:9277</code> 上提供一个回环 HTTP 接口，为那些讲 HTTP 而不讲 MCP 的工具提供同样的只读数据。它默认开启，可在设置中关闭；只绑定回环地址，另一台机器永远访问不到。</p>
     </section>
     <section class="dsec" id="safety">
-      <h2>Safety model</h2>
-      <p>Burrow is built so that a mistake costs you a rebuild rather than your data. Four rules hold everywhere in the app.</p>
+      <h2>安全模型</h2>
+      <p>Burrow 的设计是：一旦出错，代价是重来一次构建，而不是你的数据。以下四条规则在整个应用中都成立。</p>
       <ul>
-        <li><b>先给你看，再动手删。</b> Every action lists the files and the byte count before anything moves. You confirm; Burrow acts.</li>
-        <li><b>Sorted by consequence.</b> Categories are ordered by how safe they are to remove, and anything with real rebuild cost stays unchecked until you tick it yourself.</li>
-        <li><b>No background root helper.</b> When a task needs administrator rights, macOS's own authorization dialog asks you, Burrow runs that one command, and the process exits. There is no privileged daemon left running.</li>
-        <li><b>A protection list you can read.</b> Paths that are never eligible for removal are enforced in code rather than by convention, and the source is public.</li>
+        <li><b>先给你看，再动手删。</b> 每个操作都会在任何东西被移动之前先列出文件与字节数。你确认，Burrow 才动手。</li>
+        <li><b>按后果排序。</b> 类别按删除起来有多安全排列，凡是重建确有代价的，在你亲手勾选之前都保持未选中。</li>
+        <li><b>不设常驻后台的 root 助手。</b> 当某项任务需要管理员权限时，由 macOS 自己的授权对话框来询问你，Burrow 只执行那一条命令，随后进程退出。不会留下任何带特权的守护进程。</li>
+        <li><b>一份你可以读到的保护清单。</b> 那些永远不在删除之列的路径，是靠代码强制而不是靠约定俗成，而这份代码是公开的。</li>
       </ul>
-      <h3 id="signing-and-notarization">Signing and notarization</h3>
-      <p>Version 0.11.0 and every later macOS release is Developer ID signed and Apple-notarized, and a tag cannot publish unless signing, notarization, ticket stapling, and Gatekeeper assessment all succeed. Archived 0.10.5-and-earlier builds predate that guarantee: right-click and choose Open if Gatekeeper blocks one.</p>
+      <h3 id="signing-and-notarization">签名与公证</h3>
+      <p>0.11.0 及其之后的每个 macOS 版本都带 Developer ID 签名并经 Apple 公证；只有签名、公证、票据装订与 Gatekeeper 评估全部通过，标签才可能发布。归档的 0.10.5 及更早版本在这项保证之前：若被 Gatekeeper 拦下，请右键选择“打开”。</p>
     </section>
     <section class="dsec" id="privacy">
-      <h2>Privacy and telemetry</h2>
-      <p>No files, paths, URLs, or metrics leave the machine. Scans, history, and the MCP server are entirely local.</p>
-      <p>Burrow does send anonymous, opt-out usage and diagnostics: crash and hang reports, launch and update outcomes, and sampled fixed-name performance spans. It never records the screen and never sends user files or their contents. One switch in Settings stops both services, and builds made from source ship with telemetry inert.</p>
-      <p>Every field is listed in <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>. This website separately uses cookieless analytics that create no person profile, store no browser identifier, strip URL queries and fragments, and honour Do Not Track.</p>
+      <h2>隐私与数据收集</h2>
+      <p>没有文件、路径、网址或指标会离开这台机器。扫描、历史与 MCP 服务全部在本地。</p>
+      <p>Burrow 确实会发送匿名、可关闭的使用与诊断数据：崩溃与卡顿报告、启动与更新的结果，以及采样得到的、名称固定的性能区间。它从不录屏，也从不发送用户的文件或其内容。设置里一个开关即可同时停掉这两项服务，而从源码构建的版本本就不发送任何内容。</p>
+      <p>所有字段都列在 <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>。此外，本网站另行使用不依赖 Cookie 的分析：不建立个人画像，不存储浏览器标识，剥离网址中的查询与片段，并尊重 Do Not Track。</p>
     </section>
     <section class="dsec" id="troubleshooting">
-      <h2>Troubleshooting</h2>
-      <h3 id="gatekeeper-blocks-the-app">Gatekeeper blocks the app</h3>
-      <p>For 0.11.0 and later this should not happen; if it does, the download was likely modified in transit, so fetch it again from GitHub. For archived builds, right-click the app and choose Open.</p>
-      <h3 id="full-disk-access-looks-granted-but-scans-stay-shallow">Full Disk Access looks granted but scans stay shallow</h3>
-      <p>macOS ties the grant to the app's code signature. Replacing the app with a differently signed build invalidates it. Remove Burrow from the Full Disk Access list, then add it again.</p>
-      <h3 id="free-space-did-not-increase">Free space did not increase</h3>
-      <p>Deleting a file does not release blocks that a local Time Machine snapshot still references. macOS thins snapshots automatically under pressure. <code>tmutil listlocalsnapshots /</code> shows what exists.</p>
-      <h3 id="an-agent-cannot-see-the-gated-tools">An agent cannot see the gated tools</h3>
-      <p>Cleaning, uninstalling, and the other actuating tools stay hidden until you enable agent actions in Settings. This is deliberate: an agent should not be able to delete anything you have not separately authorised.</p>
+      <h2>疑难排解</h2>
+      <h3 id="gatekeeper-blocks-the-app">Gatekeeper 拦下了这个应用</h3>
+      <p>在 0.11.0 及之后不应出现这种情况；如果出现了，多半是下载途中被改动过，请从 GitHub 重新获取。对归档版本，请右键点击应用并选择“打开”。</p>
+      <h3 id="full-disk-access-looks-granted-but-scans-stay-shallow">完全磁盘访问看着已授予，扫描却依然很浅</h3>
+      <p>macOS 把这项授权绑定在应用的代码签名上。用签名不同的版本替换应用会让它失效。请先把 Burrow 从完全磁盘访问列表中移除，再重新添加。</p>
+      <h3 id="free-space-did-not-increase">可用空间没有增加</h3>
+      <p>删除文件并不会释放本地 Time Machine 快照仍在引用的数据块。当空间吃紧时，macOS 会自动稀释这些快照。 <code>tmutil listlocalsnapshots /</code> 可以看到现在都有哪些。</p>
+      <h3 id="an-agent-cannot-see-the-gated-tools">智能体看不到需要开启的工具</h3>
+      <p>清理、卸载以及其他会真正动手的工具，在你于设置中启用智能体操作之前一直是隐藏的。这是有意为之：你没有另行授权的东西，智能体不该有能力删除。</p>
     </section>
     </div>
   </div>
