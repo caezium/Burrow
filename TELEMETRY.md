@@ -25,6 +25,17 @@ Performance, and Other Diagnostic Data for app functionality. Every category
 is unlinked and non-tracking. The manifest changes no collection behavior; it
 describes the opt-out behavior enforced below.
 
+The manifest was last re-reviewed against the shipping request and event
+fields when feature flags landed (issue #322), and needs no new entry for
+them. The `feature_flag_exposed` event is Product Interaction collected for
+analytics, already declared above; the decide request adds no data type the
+event pipeline was not already sending, since `api_key` is the release
+project key and `distinct_id` is the same random anonymous install id every
+event carries. The local flag cache reads only a file's size and regular-file
+status and takes its age from an ISO-8601 timestamp stored inside the JSON,
+never from file creation or modification dates, so it adds no required-reason
+API category beyond the ones declared above.
+
 Sparkle update checks are operational network traffic. Sparkle requests the
 signed `appcast.xml` asset from GitHub and, after user approval, the signed
 release ZIP; Burrow adds no identifier or device profile to those requests.
