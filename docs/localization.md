@@ -120,11 +120,12 @@ catalog is filled — which is a working site, not a broken one.
 
 | | index | docs | compare | roadmap | releases |
 | --- | --- | --- | --- | --- | --- |
-| all nine languages | done | — | — | — | — |
+| all nine languages | done | done | done | done | done |
 
-155 strings per language, covering the hero, the sixteen tool cards, the
-screenshot captions, the trust section, install and the FAQ. Proper nouns,
-version strings and shell commands are deliberately left untranslated.
+801 of 824 strings per language (803 for the two Chinese tables, which also
+carry the language endonyms). The 23 left empty are proper nouns, version
+strings, shell commands and filenames that are deliberately not translated —
+they render as the English source, which is the correct output for them.
 
 ### releases.html is translated too, and that has a cost to manage
 
