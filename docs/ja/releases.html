@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Burrow · Changelog</title>
-<meta name="description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<title>Burrow · 変更履歴</title>
+<meta name="description" content="Burrow のすべてのリリースをひと目で。各バージョンが何を追加し、何を直し、何を締め直したか。">
 <meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="../burrow-icon.png">
 <link rel="canonical" href="https://burrow.computer/ja/releases">
@@ -23,14 +23,14 @@
 <link rel="stylesheet" href="../assets/chrome.css">
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://burrow.computer/#org","name":"Burrow","url":"https://burrow.computer","logo":"https://burrow.computer/burrow-icon-512.png","sameAs":["https://github.com/caezium/Burrow"]},{"@type":"WebSite","@id":"https://burrow.computer/#site","url":"https://burrow.computer","name":"Burrow","publisher":{"@id":"https://burrow.computer/#org"}}]}</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="Burrow · Changelog">
-<meta property="og:description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<meta property="og:title" content="Burrow · 変更履歴">
+<meta property="og:description" content="Burrow のすべてのリリースをひと目で。各バージョンが何を追加し、何を直し、何を締め直したか。">
 <meta property="og:image" content="https://burrow.computer/burrow-icon-512.png">
 <meta property="og:url" content="https://burrow.computer/releases">
 <meta property="og:site_name" content="Burrow">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Burrow · Changelog">
-<meta name="twitter:description" content="Every Burrow release at a glance, what each version added, fixed, and tightened.">
+<meta name="twitter:title" content="Burrow · 変更履歴">
+<meta name="twitter:description" content="Burrow のすべてのリリースをひと目で。各バージョンが何を追加し、何を直し、何を締め直したか。">
 <script src="/analytics.js" defer></script>
 <style>
   @font-face { font-family: "Geist"; src: url("assets/fonts/Geist[wght].woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
@@ -143,29 +143,29 @@
 
 <header class="hero page">
   <h1>変更履歴</h1>
-  <p>Every version at a glance, what it added, changed, and fixed. Full notes for each live on GitHub.</p>
-  <p class="count">26 releases · latest 0.14.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub releases ↗</a></p>
+  <p>すべてのバージョンをひと目で。何を追加し、何を変え、何を直したか。詳細な記録はそれぞれ GitHub にあります。</p>
+  <p class="count">26 リリース · 最新 0.14.0 · <a href="https://github.com/caezium/Burrow/releases" target="_blank" rel="noopener">GitHub のリリース ↗</a></p>
 </header>
 
 <main class="page">
     <article class="entry" id="v0.14.0">
       <div class="ver-col">
-        <h2 class="ver">0.14.0<span class="latest">latest</span></h2>
-        <span class="date mono">Aug 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.14.0" target="_blank" rel="noopener">full notes ↗</a>
+        <h2 class="ver">0.14.0<span class="latest">最新</span></h2>
+        <span class="date mono">2026 年 8 月 11 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.14.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The Touch ID helper now offers itself instead of hiding in Settings, and the reviewed clean says what it removed instead of finishing silently.</p>
+        <p class="lead">Touch ID ヘルパーが設定の奥に隠れず自分から案内するようになり、確認して行うクリーンも黙って終わらず削除した内容を伝えるようになりました。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>Burrow offers the privileged helper.</b> The Touch ID helper shipped in 0.13.0 behind a single button in <b>Settings ▸ Advanced</b>, and nothing pointed anyone at it — upgraders learned about it from the release notes, fresh installs not at all. It is now offered from an ambient banner, at most one notice at a time, and the dismissal persists. (<a href="https://github.com/caezium/Burrow/pull/379" target="_blank" rel="noopener">#379</a>)</li>
+            <li><b>Burrow が特権ヘルパーを自分から案内します。</b> Touch ID ヘルパーは 0.13.0 で、 <b>設定 ▸ 詳細</b>の中のボタンひとつの奥に入っていましたが、そこへ導くものが何もありませんでした。アップグレードした人はリリースノートで知り、新規インストールの人はまったく知らないままでした。今は控えめなバナーで案内し、同時に出る通知はひとつまで、閉じたら二度と出ません。（<a href="https://github.com/caezium/Burrow/pull/379" target="_blank" rel="noopener">#379</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>The reviewed clean reports what it removed.</b> It deleted exactly what was ticked and then looked like it had done nothing — that path deletes each reviewed path with <code>find</code>, which succeeds silently, leaving the result screen with no output to show. It now reports what it was authorized to remove, which the run only claims after confirming every planned path is gone. (<a href="https://github.com/caezium/Burrow/pull/380" target="_blank" rel="noopener">#380</a>)</li>
+            <li><b>確認して行うクリーンが、削除した内容を報告します。</b> チェックしたものを正確に削除していたのに、何もしていないように見えていました。この経路は確認済みの各パスを <code>find</code>で削除しており、成功しても何も出力しないため、結果画面に表示するものがありませんでした。今は削除を許可された内容を報告します。しかもそれは、予定したすべてのパスが消えたことを確認したあとでのみ主張されます。（<a href="https://github.com/caezium/Burrow/pull/380" target="_blank" rel="noopener">#380</a>)</li>
           </ul>
         </div>
       </div>
@@ -174,35 +174,35 @@
     <article class="entry" id="v0.13.0">
       <div class="ver-col">
         <h2 class="ver">0.13.0</h2>
-        <span class="date mono">Aug 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.13.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 11 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.13.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Headings that rendered as empty boxes render as text again, the MCP server speaks the 2026-07-28 spec without dropping older clients, and the cache scan tells you when it has finished.</p>
+        <p class="lead">空の四角に化けていた見出しがまた文字として表示され、MCP サーバは古いクライアントを切り捨てずに 2026-07-28 版の仕様を話すようになり、キャッシュのスキャンは終わったことを知らせるようになりました。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>The scan tells you when it's done.</b> A cache scan can run for minutes and used to end by just sitting there with a number. It now posts a completion notification saying what it found, honouring <b>Settings ▸ Notify when long operations finish</b>. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
-            <li><b>Two more agent tools.</b> <code>burrow_anomalies</code> と <code>burrow_agent_audit</code> join the MCP surface. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+            <li><b>スキャンが終わったことを知らせます。</b> キャッシュのスキャンは数分かかることがあり、これまでは数字を表示したまま黙って終わっていました。今は見つけた内容を伝える完了通知を送ります。 <b>設定 ▸ 長い処理が終わったら通知</b>. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
+            <li><b>エージェント向けのツールがさらに 2 つ。</b> <code>burrow_anomalies</code> と <code>burrow_agent_audit</code> が MCP の一員になりました。（<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li><b>MCP now speaks the 2026-07-28 revision</b>, including its task and cancellation semantics. Older clients are unaffected: 2025-11-25 through 2024-11-05 are still served, and a client that skips <code>initialize</code> entirely still works. (<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
+            <li><b>MCP が 2026-07-28 版に対応</b>しました。タスクとキャンセルの扱いも含みます。古いクライアントには影響がありません。2025-11-25 から 2024-11-05 までは引き続き対応し、 <code>initialize</code> をまったく使わないクライアントもそのまま動きます。（<a href="https://github.com/caezium/Burrow/pull/369" target="_blank" rel="noopener">#369</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>Headings rendered as empty boxes.</b> Burrow now ships real static faces for every weight it uses instead of deriving them from a variable font at render time. (<a href="https://github.com/caezium/Burrow/pull/372" target="_blank" rel="noopener">#372</a>)</li>
-            <li><b>One bad exit no longer disables the menu bar</b> until macOS updates. (<a href="https://github.com/caezium/Burrow/pull/365" target="_blank" rel="noopener">#365</a>)</li>
-            <li><b>The window can be made smaller again</b> — its minimum height is derived from the sidebar rather than hardcoded. (<a href="https://github.com/caezium/Burrow/pull/364" target="_blank" rel="noopener">#364</a>)</li>
-            <li><b>“Stop after current” now responds.</b> The stop was always queued, but nothing on screen said so until the in-flight update finished. (<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
-            <li><b>The clean review no longer promises what closing an app can't deliver.</b> An entry the scan refused was counted in “Close X to clean another N” even though no app was holding it. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>A cancelled app update no longer blocks later update checks</b> for the rest of the session. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>Root operations can't interleave their output.</b> stdout and stderr shared one line buffer, which could splice half a line from one stream onto the other. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
-            <li><b>Update archives are size-capped</b> before they're kept or expanded, and diagnostics reject more credential shapes before anything is uploaded. (<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>見出しが空の四角になっていました。</b> 描画のたびに可変フォントから太さを導き出すのをやめ、使用するすべてのウェイトについて実体のあるフォントを同梱するようにしました。（<a href="https://github.com/caezium/Burrow/pull/372" target="_blank" rel="noopener">#372</a>)</li>
+            <li><b>一度の異常終了でメニューバーが使えなくなることはなくなりました</b> 。macOS を更新するまで待つ必要はありません。（<a href="https://github.com/caezium/Burrow/pull/365" target="_blank" rel="noopener">#365</a>)</li>
+            <li><b>ウインドウをまた小さくできます</b> 。最小の高さはハードコードではなく、サイドバーから導き出すようにしました。（<a href="https://github.com/caezium/Burrow/pull/364" target="_blank" rel="noopener">#364</a>)</li>
+            <li><b>「現在の処理後に停止」が反応するようになりました。</b> 停止自体はいつも受け付けられていましたが、進行中の更新が終わるまで画面上に何も表示されていませんでした。（<a href="https://github.com/caezium/Burrow/pull/377" target="_blank" rel="noopener">#377</a>)</li>
+            <li><b>クリーンの確認画面が、App を閉じても実現しないことを約束しなくなりました。</b> スキャンが除外した項目が、どの App も掴んでいないのに「X を終了すると N を追加で解放」に数えられていました。（<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>App の更新をキャンセルしても、その後の更新確認が止まらなくなりました</b> 。セッション中ずっと止まることはありません。（<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>root 権限の処理で出力が混ざらなくなりました。</b> 標準出力と標準エラー出力が同じ行バッファを共有していたため、片方の途中の行がもう片方に混ざることがありました。（<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
+            <li><b>更新アーカイブにサイズ上限を設けました</b> 。保存や展開の前に確認し、診断情報も送信前により多くの資格情報の形を弾くようにしました。（<a href="https://github.com/caezium/Burrow/pull/367" target="_blank" rel="noopener">#367</a>)</li>
           </ul>
         </div>
       </div>
@@ -211,38 +211,38 @@
     <article class="entry" id="v0.12.0">
       <div class="ver-col">
         <h2 class="ver">0.12.0</h2>
-        <span class="date mono">Aug 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.12.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.12.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Admin operations can authenticate with Touch ID, through an opt-in signed helper that runs a fixed set of operations and nothing else.</p>
+        <p class="lead">管理者操作を Touch ID で承認できるようになりました。任意で導入する署名済みヘルパーが、決められた処理だけを実行します。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>Touch ID for admin operations.</b> Install the helper in <b>Settings ▸ Advanced ▸ Privileged helper</b> and Burrow's elevated work authenticates through the system's normal prompt instead of the password-only dialog. That older path is password-only by construction — the <code>system.privilege.admin</code> right authenticates through SecurityAgent's classic mechanism, which never offers Touch ID. (<a href="https://github.com/caezium/Burrow/pull/346" target="_blank" rel="noopener">#346</a>)</li>
-            <li><b>The Login Items list is now complete.</b> Reading the Background Task Management database needs root, so an unelevated read raised macOS's own “sfltool wants to make changes” prompt — attributed to sfltool rather than Burrow — and still returned only a partial list. Through the helper it is one authentication you recognise, and the whole list.</li>
+            <li><b>管理者操作に Touch ID を。</b> ヘルパーを <b>設定 ▸ 詳細 ▸ 特権ヘルパー</b> からインストールすると、Burrow の権限昇格が必要な処理は、パスワード専用のダイアログではなくシステム標準の確認画面で承認されるようになります。古い経路は仕組み上パスワードしか使えません。 <code>system.privilege.admin</code> 権限は SecurityAgent の従来の仕組みで認証され、そこに Touch ID は現れないからです。（<a href="https://github.com/caezium/Burrow/pull/346" target="_blank" rel="noopener">#346</a>)</li>
+            <li><b>ログイン項目の一覧が完全になりました。</b> バックグラウンドタスク管理のデータベースを読むには root 権限が必要です。権限なしで読むと macOS 自身の「sfltool が変更を加えようとしています」という確認が出て、しかも Burrow ではなく sfltool の名前で表示され、それでも一部の一覧しか返ってきませんでした。ヘルパー経由なら、見覚えのある認証が一度だけで、一覧はすべて揃います。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li><b>Flush DNS no longer runs a root shell.</b> It previously elevated <code>/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"</code>, handing a command string to a shell running as root. It is now two separate processes with fixed arguments and no shell involved.</li>
-            <li><b>Removed the “Touch ID for sudo” setting.</b> It configured <code>pam_tid</code> for terminal <code>sudo</code> and never affected Burrow's own admin prompts, which is what people expected it to do — and those prompts are exactly what the privileged helper now covers. Nothing already configured on your Mac changes by removing it; run <code>mo touchid disable</code> to undo it yourself.</li>
+            <li><b>DNS の消去で root のシェルを起動しなくなりました。</b> 以前は <code>/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"</code>を権限昇格して実行し、root で動くシェルにコマンド文字列を渡していました。今は引数を固定した 2 つの別プロセスで実行し、シェルは介在しません。</li>
+            <li><b>「sudo で Touch ID を使う」設定を削除しました。</b> この設定は <code>pam_tid</code> をターミナル向けに設定するもので <code>sudo</code> 、Burrow 自身の管理者確認には一切影響しませんでした。しかし多くの人はそちらを期待していましたし、その確認こそ今は特権ヘルパーが担っています。この設定を削除しても、すでに Mac に入っている設定は変わりません。自分で元に戻すには <code>mo touchid disable</code> を実行してください。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>A failed elevated run could report success.</b> When an elevated operation could not start, the empty transcript was reduced to “Done — caches cleared”. Failures now say so.</li>
+            <li><b>権限昇格した処理が失敗しても成功と報告されることがありました。</b> 権限昇格した処理が開始できなかったとき、空の記録が「完了しました。キャッシュを削除しました」にまとめられてしまっていました。今は失敗を失敗として伝えます。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">セキュリティ</div>
           <ul class="slist">
-            <li>The helper is opt-in and takes its own one-time macOS approval. Installing it authorizes nothing: you authenticate for each operation you start.</li>
-            <li>Only Burrow can talk to it — callers are pinned to the app's bundle identifier, an Apple-issued chain, and the same signing team, evaluated by the system against the real peer rather than by a PID lookup.</li>
-            <li>It runs the engine sealed inside the signed app plus four Apple tools by absolute path, each as a separate process. The app bundle's signature is verified before anything runs as root, which covers the engine and every library it loads.</li>
-            <li>One honest caveat: the credential from your authentication stays valid for ten seconds, because it has to survive the hop from the app to the helper. A second operation begun inside that window will not prompt again. Detail in <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</li>
+            <li>ヘルパーは任意で、導入時に macOS の承認が一度だけ必要です。インストールしただけでは何も許可されません。開始する処理ごとに認証します。</li>
+            <li>通信できるのは Burrow だけです。呼び出し元は App のバンドル識別子、Apple 発行の証明書チェーン、同じ署名チームに固定され、PID を引くのではなく実際の相手をシステムが評価します。</li>
+            <li>実行するのは、署名済み App の中に封じられたエンジンと、絶対パスで指定した Apple 製ツール 4 つだけで、それぞれ別のプロセスとして動きます。root で何かが動く前に App バンドルの署名を検証するので、エンジンとそれが読み込むすべてのライブラリが対象になります。</li>
+            <li>正直に書いておくべき点がひとつ。認証で得られた資格情報は 10 秒間有効です。App からヘルパーへ渡る間、有効である必要があるためです。この間に始めた 2 つ目の処理では、再度の確認は出ません。詳しくは <a href="https://github.com/caezium/Burrow/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</li>
           </ul>
         </div>
       </div>
@@ -251,36 +251,36 @@
     <article class="entry" id="v0.11.2">
       <div class="ver-col">
         <h2 class="ver">0.11.2</h2>
-        <span class="date mono">Aug 5, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 5 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.2" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A system-metrics, updater, and launch-reliability patch with accurate CPU sampling, accurate Sparkle outcomes, a settled AppKit start, and reliable hang reports.</p>
+        <p class="lead">システム指標・アップデータ・起動の安定性に関する修正版です。CPU の計測が正確になり、Sparkle の結果が実態に沿うようになり、AppKit の起動が落ち着き、ハングの報告が確実になりました。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>CPU usage now reflects a representative sampling interval.</b> The bundled engine keeps a tick baseline across refreshes, samples before the other collectors fan out, and derives total usage from summed tick deltas. This removes the roughly doubled readings and coarse per-core fractions reported in <a href="https://github.com/caezium/Burrow/issues/335" target="_blank" rel="noopener">#335</a>. A cold one-shot status command can take about 600 ms longer; ongoing GUI sampling reuses its existing refresh interval and adds no wait. (<a href="https://github.com/caezium/Burrow/pull/340" target="_blank" rel="noopener">#340</a>)</li>
-            <li><b>Updater failures now mean what they say.</b> Running from a disk image or translocated location, ordinary network failures, and user cancellation remain measurable in PostHog without opening Sentry issues. Sparkle keeps ownership of its native move-to-Applications and scheduled-retry UI. Configuration, signature, installation, and unknown failures still create exactly one scrubbed Sentry diagnostic per cycle. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
-            <li><b>The normal menu-bar path no longer races the first AppKit launch turn.</b> Burrow waits one second before creating its status item, then retains the existing 30-second stability window. The safeguard for macOS 27 Beta 4 build <code>26A5388g</code> remains exact-build-only; a later macOS build returns to the normal guarded path automatically. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>CPU 使用率が、意味のある計測間隔を反映するようになりました。</b> 同梱エンジンが更新をまたいでティックの基準値を保持し、ほかの収集処理が動き出す前に計測し、ティックの差分の合計から全体の使用率を導きます。これにより、 <a href="https://github.com/caezium/Burrow/issues/335" target="_blank" rel="noopener">#335</a>で報告されていた、およそ 2 倍に膨らむ数値とコアごとの粗い比率がなくなりました。単発の status コマンドは初回に 600 ミリ秒ほど余分にかかりますが、GUI の継続的な計測は既存の更新間隔をそのまま使うので待ち時間は増えません。（<a href="https://github.com/caezium/Burrow/pull/340" target="_blank" rel="noopener">#340</a>)</li>
+            <li><b>アップデータの失敗が、言葉どおりの意味になりました。</b> ディスクイメージや隔離された場所からの実行、通常のネットワーク障害、ユーザーによるキャンセルは、Sentry のイシューを立てずに PostHog で計測できるままです。「アプリケーションフォルダへ移動」と再試行のスケジュール表示は引き続き Sparkle が担います。設定・署名・インストール・原因不明の失敗については、1 サイクルにつき情報を除去した Sentry の診断がちょうど 1 件だけ作られます。（<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>通常のメニューバー処理が、AppKit の最初の起動処理と競合しなくなりました。</b> Burrow はステータス項目を作る前に 1 秒待ち、その後は従来どおり 30 秒の安定確認期間を保ちます。macOS 27 Beta 4 のビルド <code>26A5388g</code> に対する保護は、そのビルドだけに限定されたままです。より新しい macOS ビルドでは自動的に通常の経路に戻ります。（<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">改善</div>
           <ul class="slist">
-            <li><b>App-hang evidence can no longer disappear at the Sentry bridge.</b> Sampled hangs are collected into bounded weekly GitHub digests instead of being silently skipped. Cursor pagination reaches older unseen groups, full digests roll into numbered parts, and deferred groups remain eligible for the next run. (<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
-            <li><b>Launch and updater health now have explicit lifecycle outcomes.</b> Fixed-name scheduled, stabilizing, and stable milestones include bounded app release, macOS build, launch phase, and status-item state, so future failures can be separated without collecting free text or user data.</li>
+            <li><b>App のハングの証拠が Sentry への橋渡しで消えることはなくなりました。</b> 抽出されたハングは黙って捨てられるのではなく、上限を設けた週次の GitHub ダイジェストにまとめられます。カーソルによるページ送りで未確認の古いグループにも届き、量が多いダイジェストは番号付きの分割に繰り越され、先送りされたグループは次回の対象として残ります。（<a href="https://github.com/caezium/Burrow/pull/339" target="_blank" rel="noopener">#339</a>)</li>
+            <li><b>起動とアップデータの健全性に、明示的な段階ごとの結果が付きました。</b> 名前が固定された「予定」「安定化中」「安定」の各段階には、範囲を限定した App のリリース、macOS のビルド、起動フェーズ、ステータス項目の状態が含まれます。自由記述やユーザーのデータを集めずに、今後の失敗を切り分けられるようにするためです。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">プライバシー</div>
           <ul class="slist">
-            <li><b>Telemetry remains optional, unlinked, and non-tracking.</b> One Settings switch disables both PostHog analytics and Sentry diagnostics. Updater diagnostics contain fixed categories and bounded error domains/codes, never descriptions, URLs, response bodies, network names, paths, screen content, or files. The privacy manifest remains unchanged and accurate.</li>
+            <li><b>送信データは引き続き任意で、個人と結び付かず、追跡もしません。</b> 設定のスイッチひとつで、PostHog の分析と Sentry の診断の両方が無効になります。アップデータの診断に含まれるのは固定の分類と範囲を限定したエラーのドメインやコードだけで、説明文・URL・応答本文・ネットワーク名・パス・画面の内容・ファイルは一切含まれません。プライバシーマニフェストは変更なく、内容も正確なままです。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">セキュリティ</div>
           <ul class="slist">
-            <li><b>Publishing still fails closed, including the external Homebrew tap.</b> Before any release build begins, CI requires every signing, notarization, Sparkle, and tap credential, then proves the tap token with a reversible Git write. The tap credential is isolated from the engine checkout so a successful notarized release cannot fail at the final cask push because the wrong token was left in Git configuration.</li>
+            <li><b>公開は引き続き、外部の Homebrew tap も含めて安全側で止まります。</b> リリースのビルドを始める前に、CI は署名・公証・Sparkle・tap のすべての資格情報を要求し、取り消し可能な Git への書き込みで tap のトークンを実証します。tap の資格情報はエンジンのチェックアウトから分離してあるため、公証まで成功したリリースが、Git の設定に誤ったトークンが残っていたせいで最後の cask への push で失敗することはありません。</li>
           </ul>
         </div>
       </div>
@@ -289,36 +289,36 @@
     <article class="entry" id="v0.11.1">
       <div class="ver-col">
         <h2 class="ver">0.11.1</h2>
-        <span class="date mono">Aug 3, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 3 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.1" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A guarded-startup and diagnostics patch for the system-wide input freeze reported on macOS 27 Beta 4, with a safer exact-build fallback and privacy-hardened hang telemetry.</p>
+        <p class="lead">macOS 27 Beta 4 で報告されたシステム全体の入力フリーズに対する、起動時の保護と診断の修正版です。対象ビルドを限定した安全な代替経路と、プライバシーを強化したハングの計測を含みます。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>The affected macOS 27 beta gets a safer launch path.</b> On Beta 4 build <code>26A5388g</code>, Burrow starts with a Dock icon instead of creating its menu-bar status item. The fallback is limited to that exact build; a new macOS build restores the normal guarded path. Manual update checks remain available even when automatic Sparkle startup is paused.</li>
-            <li><b>Interrupted launches recover one component at a time.</b> A durable launch journal gives the status item and Sparkle separate 30-second stability windows. If launch is interrupted, the next run suppresses only the component whose window was active, shows a recovery alert, and offers a one-click redacted diagnostic report. (<a href="https://github.com/caezium/Burrow/pull/321" target="_blank" rel="noopener">#321</a>)</li>
+            <li><b>影響を受ける macOS 27 beta では、より安全な起動経路を使います。</b> Beta 4 のビルド <code>26A5388g</code>では、Burrow はメニューバーのステータス項目を作らず Dock アイコンで起動します。この代替経路は該当ビルドだけに限られ、新しい macOS ビルドでは通常の経路に戻ります。Sparkle の自動起動が停止しているときでも、手動での更新確認は使えます。</li>
+            <li><b>起動が中断された場合、部品ごとに順に復帰します。</b> 永続的な起動ジャーナルによって、ステータス項目と Sparkle にそれぞれ 30 秒の安定確認期間が与えられます。起動が中断された場合、次の実行では期間中だった部品だけを抑止し、復帰の通知を表示し、ワンクリックで情報を除去した診断レポートを提示します。（<a href="https://github.com/caezium/Burrow/pull/321" target="_blank" rel="noopener">#321</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">改善</div>
           <ul class="slist">
-            <li><b>Sentry can now explain hangs that never become crashes.</b> Release-health sessions, hang tracking, low-memory context, fixed-name sampled performance spans, and coarse launch/updater state cover failure modes that a normal crash report misses. Outbound data is scrubbed fail closed, with no screenshots, view hierarchies, user paths, URLs, request bodies, or automatic UI, file, database, and network tracing.</li>
-            <li><b>PostHog analytics no longer bring an AppKit-facing SDK into startup.</b> Burrow still sends the same opt-out semantic product, screen, and operation events to PostHog, but a small background HTTPS transport replaces <code>posthog-ios</code>. It has a bounded serialized retry queue and no session replay, autocapture, remote feature flags, AppKit timer, or main-thread disk I/O. Existing 0.11.0 anonymous identities are migrated once so release-to-release funnels remain accurate.</li>
-            <li><b>The first signed Sparkle successor passed a real update.</b> An installed Developer ID-signed 0.11.0 copy found, downloaded, installed, and relaunched 0.11.1 through Sparkle's native UI without Terminal or Homebrew. The updated app then passed strict signing, stapler, and Gatekeeper checks, completing <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
+            <li><b>クラッシュに至らないハングも Sentry で説明できるようになりました。</b> リリース健全性のセッション、ハングの追跡、メモリ不足時の状況、名前が固定された性能計測の抽出、そして大まかな起動・アップデータの状態が、通常のクラッシュ報告では取りこぼす失敗を捉えます。送信されるデータは安全側で除去され、スクリーンショット、ビュー階層、ユーザーのパス、URL、リクエスト本文、UI・ファイル・データベース・ネットワークの自動追跡は含まれません。</li>
+            <li><b>PostHog の分析が、AppKit に触れる SDK を起動時に持ち込まなくなりました。</b> Burrow が PostHog に送るのは、これまでと同じく停止可能な製品・画面・操作のイベントですが、 <code>posthog-ios</code>の代わりに小さなバックグラウンドの HTTPS 転送を使います。上限のある直列の再送キューを持ち、セッション再生・自動収集・リモートの機能フラグ・AppKit のタイマー・メインスレッドでのディスク入出力はありません。0.11.0 の既存の匿名識別子は一度だけ移行されるので、リリース間の推移は正確なままです。</li>
+            <li><b>署名済み Sparkle による最初の更新が、実環境で成功しました。</b> インストール済みの Developer ID 署名付き 0.11.0 が、ターミナルも Homebrew も使わずに Sparkle 標準の画面から 0.11.1 を見つけ、ダウンロードし、インストールして再起動しました。更新後の App は厳格な署名・スタンプ・Gatekeeper の検査に合格し、 <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">プライバシー</div>
           <ul class="slist">
-            <li><b>Telemetry remains optional, unlinked, and non-tracking.</b> One Settings switch disables both PostHog analytics and Sentry diagnostics. The privacy manifest continues to declare Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data; this release adds no signing-specific telemetry and records no screen content.</li>
+            <li><b>送信データは引き続き任意で、個人と結び付かず、追跡もしません。</b> 設定のスイッチひとつで、PostHog の分析と Sentry の診断の両方が無効になります。プライバシーマニフェストは引き続き、製品の操作・その他の利用状況・クラッシュ・パフォーマンス・その他の診断データを宣言しています。このリリースで署名に関する計測は追加しておらず、画面の内容も記録しません。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">セキュリティ</div>
           <ul class="slist">
-            <li><b>The release chain remains fail closed.</b> The tag cannot publish unless the app is Developer ID signed, notarized, stapled, accepted by Gatekeeper, and both the update archive and appcast pass Sparkle signature verification.</li>
+            <li><b>リリースの流れは引き続き安全側で止まります。</b> App が Developer ID で署名され、公証を受け、チケットを添付され、Gatekeeper に受理され、さらに更新アーカイブと appcast の両方が Sparkle の署名検証を通らない限り、タグから公開されることはありません。</li>
           </ul>
         </div>
       </div>
@@ -327,32 +327,32 @@
     <article class="entry" id="v0.11.0">
       <div class="ver-col">
         <h2 class="ver">0.11.0</h2>
-        <span class="date mono">Aug 1, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 8 月 1 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.11.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's first Developer ID-signed and Apple-notarized release, Gatekeeper can verify the app, Full Disk Access gets a stable identity, and Sparkle establishes the signed foundation for native updates.</p>
+        <p class="lead">Burrow 初の、Developer ID で署名され Apple の公証を受けたリリースです。Gatekeeper が App を検証できるようになり、フルディスクアクセスに安定した識別が与えられ、Sparkle が署名付きアップデートの基盤を築きました。</p>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">改善</div>
           <ul class="slist">
-            <li><b>Official downloads are trusted by Gatekeeper.</b> The app and every bundled executable carry a Developer ID signature, hardened runtime, secure timestamp, and a stapled Apple notarization ticket. Direct-download users no longer need to strip quarantine or use the right-click Open workaround. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
-            <li><b>Full Disk Access has a stable identity.</b> Developer ID gives macOS one consistent code identity across releases, so privacy grants can survive normal updates after the one-time transition from an older ad-hoc build. (<a href="https://github.com/caezium/Burrow/issues/177" target="_blank" rel="noopener">#177</a>, <a href="https://github.com/caezium/Burrow/issues/181" target="_blank" rel="noopener">#181</a>)</li>
-            <li><b>The signed update foundation is in place.</b> Burrow now uses Sparkle's native UI. Automatic checks remain on by default, but downloads and installs wait for approval. The update ZIP and appcast carry Ed25519 signatures that CI and the app verify; the first live 0.11.0-to-0.11.1 upgrade later completed successfully in <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
-            <li><b>The bundled engine no longer rewrites the app.</b> It updates only with a signed Burrow release, preserving the Developer ID resource seal. Source builds using an external engine still expose its manual updater.</li>
+            <li><b>公式のダウンロードが Gatekeeper に信頼されます。</b> App と同梱のすべての実行ファイルに、Developer ID の署名、強化されたランタイム、安全なタイムスタンプ、そして添付された Apple の公証チケットが付きます。直接ダウンロードした場合も、隔離属性を外したり右クリックで「開く」を選んだりする必要はもうありません。（<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
+            <li><b>フルディスクアクセスに安定した識別が付きました。</b> Developer ID によって、リリースをまたいで一貫したコードの識別が macOS に示されます。そのため、古いアドホック署名のビルドから一度移行してしまえば、通常のアップデートでプライバシーの許可が失われなくなります。（<a href="https://github.com/caezium/Burrow/issues/177" target="_blank" rel="noopener">#177</a>, <a href="https://github.com/caezium/Burrow/issues/181" target="_blank" rel="noopener">#181</a>)</li>
+            <li><b>署名付きアップデートの基盤が整いました。</b> Burrow は Sparkle 標準の画面を使うようになりました。自動確認は初期状態で有効のままですが、ダウンロードとインストールは承認を待ちます。更新の ZIP と appcast には Ed25519 の署名が付き、CI と App の両方が検証します。実環境での 0.11.0 から 0.11.1 への最初のアップグレードは、のちに <a href="https://github.com/caezium/Burrow/issues/281" target="_blank" rel="noopener">#281</a>.</li>
+            <li><b>同梱エンジンが App を書き換えなくなりました。</b> 更新されるのは署名済みの Burrow のリリースに伴うときだけで、Developer ID のリソース封印が保たれます。外部エンジンを使うソースビルドでは、引き続きエンジン自身の手動更新機能が使えます。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">privacy</div>
+          <div class="slabel mono">プライバシー</div>
           <ul class="slist">
-            <li><b>The privacy manifest matches the shipped app.</b> Product Interaction, Other Usage, Crash, Performance, and Other Diagnostic data are declared unlinked and non-tracking. Analytics and crash reporting remain opt-out, and signing adds no telemetry.</li>
+            <li><b>プライバシーマニフェストが出荷される App と一致しています。</b> 製品の操作、その他の利用状況、クラッシュ、パフォーマンス、その他の診断データは、個人と結び付かず追跡もしないものとして宣言されています。分析とクラッシュ報告は引き続き停止可能で、署名によって計測が増えることはありません。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">security</div>
+          <div class="slabel mono">セキュリティ</div>
           <ul class="slist">
-            <li><b>A tag cannot publish a partially trusted build.</b> CI stops before publication unless signing, notarization, ticket stapling, strict code-sign verification, Gatekeeper assessment, the Sparkle keypair match, and both update signatures all succeed. (<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
-            <li><b>Delayed Apple responses stay fail closed.</b> The release retains Apple's submission ID, waits up to 60 minutes, and checks that same submission once more at the timeout boundary; it never treats an unknown or in-progress result as accepted. (<a href="https://github.com/caezium/Burrow/pull/317" target="_blank" rel="noopener">#317</a>)</li>
-            <li><b>Homebrew keeps Apple's security checks intact.</b> The live cask preserves quarantine, removes the old unsigned warning, and is marked <code>auto_updates true</code> because Sparkle owns future in-app updates.</li>
+            <li><b>一部しか信頼できないビルドがタグから公開されることはありません。</b> 署名、公証、チケットの添付、厳格なコード署名の検証、Gatekeeper の評価、Sparkle の鍵ペアの一致、そして 2 つの更新署名がすべて成功しない限り、CI は公開の前に止まります。（<a href="https://github.com/caezium/Burrow/pull/312" target="_blank" rel="noopener">#312</a>)</li>
+            <li><b>Apple の応答が遅れても安全側で止まります。</b> リリース処理は Apple の提出 ID を保持し、最大 60 分待ち、時間切れの境目で同じ提出をもう一度確認します。不明や処理中の結果を受理と見なすことは決してありません。（<a href="https://github.com/caezium/Burrow/pull/317" target="_blank" rel="noopener">#317</a>)</li>
+            <li><b>Homebrew でも Apple の安全確認がそのまま働きます。</b> 公開中の cask は隔離属性を保ち、未署名だった頃の警告を取り除き、 <code>auto_updates true</code> と記されています。今後のアプリ内アップデートは Sparkle が担うためです。</li>
           </ul>
         </div>
       </div>
@@ -361,23 +361,23 @@
     <article class="entry" id="v0.10.5">
       <div class="ver-col">
         <h2 class="ver">0.10.5</h2>
-        <span class="date mono">Jul 25, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 25 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.5" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's MCP tools, tuned against real agent transcripts, one analyze call maps disk hotspots, killed runs say so instead of failing silently, and slow scans warn you up front.</p>
+        <p class="lead">実際のエージェントのやり取りをもとに MCP ツールを調整しました。analyze の 1 回の呼び出しでディスクの偏りを把握でき、強制終了された実行は黙って失敗せずそう伝え、時間のかかるスキャンは先に警告します。</p>
         <div class="sblock">
-          <div class="slabel mono">improved</div>
+          <div class="slabel mono">改善</div>
           <ul class="slist">
-            <li><b>One <code>burrow_analyze</code> call now maps disk hotspots.</b> The engine reports one directory level per run, which forced agents into a call per directory (a real session made 15 in a row). <code>analyze</code> gains <code>depth</code> (descend into the largest subdirectories), <code>limit</code>、 <code>min_size</code>, emits compact JSON instead of 35–60 KB pretty-printed blobs, and always reports what it pruned (<code>entries_omitted</code> / <code>omitted_bytes</code>, <code>partial: true</code> when the descent hits its time budget). (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
-            <li><b>The slow tools now say they're slow.</b> <code>analyze</code>, <code>clean</code>, <code>purge</code>、 <code>installer</code> descriptions warn that big scans take minutes, so agents scope to a specific folder instead of hanging past their client's patience and falling back to shell commands. The agent docs and the <code>burrow-system-tools</code> skill now lead with the low-disk emergency playbook, the pattern that actually fires in practice. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>1 回の <code>burrow_analyze</code> の呼び出しだけでディスクの偏りを把握できます。</b> エンジンは 1 回の実行で 1 階層しか報告しないため、エージェントはディレクトリごとに呼び出す羽目になっていました（実際のセッションでは 15 回連続で呼ばれていました）。 <code>analyze</code> に <code>depth</code> （最も大きいサブディレクトリへ降りる）が加わり、 <code>limit</code>、 <code>min_size</code>35〜60 KB の整形済みの塊ではなく簡潔な JSON を返し、切り捨てた内容を必ず報告します（<code>entries_omitted</code> / <code>omitted_bytes</code>, <code>partial: true</code> は、降下が時間の上限に達した場合です）。（<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>時間のかかるツールが、時間がかかることを明示するようになりました。</b> <code>analyze</code>, <code>clean</code>, <code>purge</code>、 <code>installer</code> の説明に、大きなスキャンには数分かかると明記しました。これによりエージェントは、クライアントの待ち時間を超えて固まりシェルコマンドに逃げるのではなく、特定のフォルダに範囲を絞るようになります。エージェント向けドキュメントと <code>burrow-system-tools</code> スキルは、実際によく起きる「ディスク容量逼迫」の対処手順を最初に置くようにしました。（<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>Killed runs no longer fail silently.</b> A <code>burrow_clean</code> that hit its time limit rendered as <code>{"exit_code": 9, "output": ""}</code>: nothing an agent could act on. Timed-out actions (and analyze) now return <code>timed_out: true</code> plus a hint. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
-            <li><b><code>burrow_cleanup_history</code> explains itself.</b> When engine history is unavailable, the error now points at <code>burrow_info</code> to check whether Burrow is recording at all. (<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b>強制終了された実行が黙って失敗しなくなりました。</b> ある <code>burrow_clean</code> が時間の上限に達すると <code>{"exit_code": 9, "output": ""}</code>と表示され、エージェントには手がかりがありませんでした。時間切れになった操作（および analyze）は今、 <code>timed_out: true</code> とヒントを返します。（<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
+            <li><b><code>burrow_cleanup_history</code> が自分で説明します。</b> エンジンの履歴が取得できないとき、エラーは <code>burrow_info</code> を案内し、そもそも Burrow が記録しているかどうかを確認できるようにしました。（<a href="https://github.com/caezium/Burrow/pull/303" target="_blank" rel="noopener">#303</a>)</li>
           </ul>
         </div>
       </div>
@@ -386,17 +386,17 @@
     <article class="entry" id="v0.10.2">
       <div class="ver-col">
         <h2 class="ver">0.10.2</h2>
-        <span class="date mono">Jul 24, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 24 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.2" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A fix release, three crashes squashed (the menu-bar popover, the streaming task report, and a nil-font HUD metric), and the in-app updater no longer silently reopens the same build.</p>
+        <p class="lead">修正リリースです。3 件のクラッシュ（メニューバーのポップオーバー、ストリーミング中のタスクレポート、フォントが nil になる HUD の指標）を潰し、アプリ内アップデータが黙って同じビルドを開き直すこともなくなりました。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>No more menu-bar popover or streaming-report crashes.</b> Two <code>EXC_BAD_ACCESS</code> faults inside SwiftUI's view graph, one in the popover header button, one in the live task report/ticker as a job streamed, are fixed by keeping those view subtrees structurally stable across snapshot and scroll updates instead of restructuring them mid-update. (<a href="https://github.com/caezium/Burrow/pull/299" target="_blank" rel="noopener">#299</a>)</li>
-            <li><b>The menu-bar metric no longer crashes on a nil font.</b> <code>NSFont.monospacedSystemFont</code> is declared non-null but can transiently return nil under memory pressure; that null reached CoreText and crashed at draw time (Sentry BURROW-8Y). The metric widgets now fall back to the plain system font, cosmetic at worst, never a crash. (<a href="https://github.com/caezium/Burrow/pull/290" target="_blank" rel="noopener">#290</a>)</li>
-            <li><b>In-app update actually updates.</b> When the cask “cannot be upgraded as-is,” Homebrew prints a warning but exits 0, so the one-click updater reported success and reopened the same build. It now detects the refusal by message and runs the <code>brew reinstall --force</code> Homebrew recommends. (<a href="https://github.com/caezium/Burrow/pull/287" target="_blank" rel="noopener">#287</a>)</li>
+            <li><b>メニューバーのポップオーバーとストリーミングレポートのクラッシュがなくなりました。</b> 2 件の <code>EXC_BAD_ACCESS</code> の不具合が SwiftUI のビューグラフ内で起きていました。ひとつはポップオーバーのヘッダーボタン、もうひとつはジョブのストリーミング中のタスクレポートとティッカーです。更新の途中で構造を組み替えるのをやめ、スナップショットとスクロールの更新をまたいでビューの部分木の構造を保つようにして修正しました。（<a href="https://github.com/caezium/Burrow/pull/299" target="_blank" rel="noopener">#299</a>)</li>
+            <li><b>メニューバーの指標が、フォントが nil のときにクラッシュしなくなりました。</b> <code>NSFont.monospacedSystemFont</code> は非 null と宣言されていますが、メモリ逼迫時に一時的に nil を返すことがあります。その null が CoreText まで届き、描画時にクラッシュしていました（Sentry BURROW-8Y）。指標のウィジェットは今、素のシステムフォントに切り替わります。最悪でも見た目の問題で、クラッシュにはなりません。（<a href="https://github.com/caezium/Burrow/pull/290" target="_blank" rel="noopener">#290</a>)</li>
+            <li><b>アプリ内アップデートが本当に更新するようになりました。</b> cask が「そのままではアップグレードできない」場合、Homebrew は警告を出しつつ終了コード 0 で終わるため、ワンクリックのアップデータは成功と報告して同じビルドを開き直していました。今はそのメッセージから拒否を検出し、Homebrew が推奨する <code>brew reinstall --force</code> を実行します。（<a href="https://github.com/caezium/Burrow/pull/287" target="_blank" rel="noopener">#287</a>)</li>
           </ul>
         </div>
       </div>
@@ -405,27 +405,27 @@
     <article class="entry" id="v0.10.1">
       <div class="ver-col">
         <h2 class="ver">0.10.1</h2>
-        <span class="date mono">Jul 13, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 13 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.1" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Three new panes, Leftovers, Similar Photos, and Network, and Duplicates now works out of the box, plus menu-bar HUD and HEIC fixes.</p>
+        <p class="lead">新しい画面が 3 つ、残存ファイル・似ている写真・ネットワークが加わりました。重複ファイルは追加インストールなしで使えるようになり、メニューバー HUD と HEIC の修正も入っています。</p>
         <div class="sblock">
-          <div class="slabel mono">New</div>
+          <div class="slabel mono">新機能</div>
           <ul class="slist">
-            <li>Leftovers pane: find and clear the caches, preferences, and support files an app leaves behind</li>
-            <li>Similar Photos pane: cluster near-duplicate images by perceptual hash, reveal in Finder</li>
-            <li>Network pane: per-app bandwidth</li>
+            <li>残存ファイルの画面: App が残したキャッシュ・環境設定・関連ファイルを見つけて片づけます</li>
+            <li>似ている写真の画面: 知覚ハッシュでほぼ同じ画像をまとめ、Finder で表示できます</li>
+            <li>ネットワークの画面: App ごとの通信量</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li>Duplicates works with zero install, the fclones sidecar is now bundled universal</li>
-            <li>Similar Photos reports HEIC it can't decode (“N HEIC couldn't be read”) instead of a bare empty result</li>
-            <li>Menu-bar HUD popover no longer shifts sideways and clips; the tool strip wraps instead of overflowing</li>
-            <li>Tool panes mount lazily, no more ~2-second layout hang on open or pane switch</li>
-            <li>Finder-launched app augments its PATH with the Homebrew bins so installed helpers resolve</li>
+            <li>重複ファイルが追加インストールなしで動きます。fclones のサイドカーをユニバーサルバイナリとして同梱しました</li>
+            <li>似ている写真が、読み取れない HEIC をそのまま空の結果にせず「N 件の HEIC を読み取れませんでした」と報告します</li>
+            <li>メニューバー HUD のポップオーバーが横にずれて欠けることはなくなりました。ツールの帯は溢れずに折り返します</li>
+            <li>ツールの画面を遅延して読み込むようにし、開いたときや切り替えたときの約 2 秒のレイアウト停止をなくしました</li>
+            <li>Finder から起動した場合も PATH に Homebrew のディレクトリを補うようにし、インストール済みの補助ツールを見つけられるようにしました</li>
           </ul>
         </div>
       </div>
@@ -434,43 +434,43 @@
     <article class="entry" id="v0.10.0">
       <div class="ver-col">
         <h2 class="ver">0.10.0</h2>
-        <span class="date mono">Jul 12, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 12 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.10.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The conductor release, Burrow ships its own command layer, a brand-new Duplicates pane, and the sudo, uninstall, and Tune-Up fixes you reported.</p>
+        <p class="lead">指揮役のリリースです。Burrow が自前のコマンド層を備え、重複ファイルの画面が新たに加わり、報告いただいた sudo・削除・チューンアップの不具合を直しました。</p>
         <div class="sblock">
-          <div class="slabel mono">New</div>
+          <div class="slabel mono">新機能</div>
           <ul class="slist">
-            <li>Duplicates pane: scan, review checklist-style with a keep-one guard, move extras to the Trash or reclaim via APFS clones</li>
-            <li>Bundled <code>burrow</code> conductor (universal): analysis, status, history, clean, and optimize route through one stable JSON contract with direct-engine fallback</li>
-            <li>7 read-only MCP tools through the conductor, 21 total for agents</li>
+            <li>重複ファイルの画面: スキャンし、チェックリスト形式で確認し（1 つは必ず残す保護付き）、余分をゴミ箱に移すか APFS のクローンで容量を取り戻します</li>
+            <li>同梱の <code>burrow</code> 指揮役（ユニバーサル）: 分析・状態・履歴・クリーン・最適化が、ひとつの安定した JSON の取り決めを通ります。エンジンへの直接呼び出しへの切り替えも備えます</li>
+            <li>指揮役を通じた読み取り専用の MCP ツールが 7 つ、エージェント向けは合計 21 になりました</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li>Admin password dialog appears again for root-owned app uninstalls (the engine now opens /dev/tty instead of permission-testing it)</li>
-            <li>Failed uninstalls keep the list and selection and surface the engine's error</li>
-            <li>Tune-Up reclaim sizes no longer show raw ANSI color codes</li>
-            <li>Analyze bounds per-child scans so a huge cache folder can't freeze the scan</li>
-            <li>Menu-bar popover no longer rubber-bands into empty space</li>
-            <li>Self-update refreshes Homebrew before upgrading</li>
+            <li>root 所有の App を削除する際に管理者パスワードのダイアログがまた表示されます（エンジンが権限を試すのではなく /dev/tty を開くようにしました）</li>
+            <li>削除に失敗しても一覧と選択が保たれ、エンジンのエラーが表示されます</li>
+            <li>チューンアップの回収サイズに ANSI の色コードがそのまま出ることはなくなりました</li>
+            <li>分析が子要素ごとのスキャンに上限を設け、巨大なキャッシュフォルダでスキャンが固まらないようにしました</li>
+            <li>メニューバーのポップオーバーが何もない空間に伸び縮みしなくなりました</li>
+            <li>自己更新の前に Homebrew を更新するようにしました</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Also</div>
+          <div class="slabel mono">その他</div>
           <ul class="slist">
-            <li>Per-metric menu-bar text sizing, stable widths, flipped net in/out ordering</li>
-            <li>HUD popover re-pins when the menu bar auto-hides</li>
+            <li>メニューバーの指標ごとに文字サイズを調整し、幅を安定させ、ネットワークの送受信の並びを入れ替えました</li>
+            <li>メニューバーが自動的に隠れるとき、HUD のポップオーバーが位置を取り直します</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li>Downloadable at last: BurrowWin-0.10.0-win-x64.zip ships on this release, the unpackaged app with burrow.exe and the engine bundled (unzip, run BurrowWin.exe; Windows 10/11)</li>
-            <li>Agent-triggered clean/optimize route through burrow.exe with the same envelope contract as macOS</li>
-            <li>burrow.exe grew real Windows powers: Recycle-Bin safe delete, guarded BCU uninstalls, czkawka duplicates + similar photos, provider-aware OneDrive eviction, IP Helper network attribution</li>
+            <li>ついにダウンロードできます。このリリースに BurrowWin-0.10.0-win-x64.zip が付属します。burrow.exe とエンジンを同梱した未パッケージのアプリです（展開して BurrowWin.exe を実行、Windows 10/11 対応）</li>
+            <li>エージェントが起動するクリーンと最適化は、macOS と同じ包み方の取り決めで burrow.exe を通ります</li>
+            <li>burrow.exe に Windows らしい機能が加わりました。ごみ箱を経由する安全な削除、保護付きの BCU による削除、czkawka による重複と似ている写真の検出、プロバイダを意識した OneDrive の解放、IP Helper によるネットワークの帰属判定です</li>
           </ul>
         </div>
       </div>
@@ -479,36 +479,36 @@
     <article class="entry" id="v0.9.2">
       <div class="ver-col">
         <h2 class="ver">0.9.2</h2>
-        <span class="date mono">Jul 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 7 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.2" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability and battery release, fixes to Cleanup, Analyze, and the menu bar, plus performance work that makes Burrow noticeably lighter while it sits idle.</p>
+        <p class="lead">安定性とバッテリーのためのリリースです。クリーンアップ・分析・メニューバーの不具合を直し、待機中の Burrow が目に見えて軽くなる性能改善も入れました。</p>
         <div class="sblock">
-          <div class="slabel mono">Fixes</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li>Purge (Cleanup → Project build artifacts) applies your selection instead of aborting with “Couldn't confirm the selection safely”</li>
-            <li>Analyze cancels superseded scans and caps engine concurrency, no more runaway pile of processes</li>
-            <li>Camera/mic in-use indicator ignores virtual audio/video devices and clears when capture ends</li>
-            <li>Menu-bar popover no longer flies to a screen edge or mis-sizes on multi-display setups</li>
-            <li>Fewer spurious “App Hang” reports</li>
+            <li>ディープクリーン（クリーンアップ → プロジェクトのビルド成果物）が「選択内容を安全に確認できませんでした」で中断せず、選んだとおりに実行します</li>
+            <li>分析が古くなったスキャンを取り消し、エンジンの同時実行数に上限を設けました。プロセスが際限なく積み上がることはありません</li>
+            <li>カメラ・マイクの使用中表示が仮想デバイスを無視し、収録が終わると消えるようになりました</li>
+            <li>複数ディスプレイの環境で、メニューバーのポップオーバーが画面の端に飛んだりサイズを誤ったりしなくなりました</li>
+            <li>誤検知の「App が応答しません」報告が減りました</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Performance &amp; battery</div>
+          <div class="slabel mono">パフォーマンス &amp; バッテリー</div>
           <ul class="slist">
-            <li>Metrics engine caches slow SMC/GPU sensor reads and skips idle stream frames when no window is open</li>
-            <li>Analyze walk and icon caches are now bounded (evict under memory pressure)</li>
-            <li>Live sparklines window their data instead of scanning the full history each frame</li>
-            <li>Doctor security/SMART/backup probes are timeout-guarded and cached across reopens</li>
-            <li>Network-usage views share one sample instead of each running a 1-second scan</li>
+            <li>指標のエンジンが遅い SMC・GPU センサーの読み取りをキャッシュし、ウインドウが開いていないときは待機中のフレームを飛ばします</li>
+            <li>分析の走査とアイコンのキャッシュに上限を設けました（メモリ逼迫時には破棄されます）</li>
+            <li>リアルタイムのスパークラインが、毎フレーム履歴全体を走査するのではなく、一定の範囲だけを見るようになりました</li>
+            <li>診断のセキュリティ・SMART・バックアップの検査に時間制限を設け、開き直しても結果をキャッシュするようにしました</li>
+            <li>ネットワーク使用状況の各表示が、それぞれ 1 秒のスキャンを走らせるのではなく、ひとつの計測値を共有します</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">Under the hood</div>
+          <div class="slabel mono">内部の変更</div>
           <ul class="slist">
-            <li>Dead-code prune</li>
-            <li>Homebrew cask no longer depends on a system engine (engine bundled since 0.9.0)</li>
+            <li>使われていないコードの整理</li>
+            <li>Homebrew の cask がシステム側のエンジンに依存しなくなりました（0.9.0 以降エンジンは同梱です）</li>
           </ul>
         </div>
       </div>
@@ -517,66 +517,66 @@
     <article class="entry" id="v0.9.0">
       <div class="ver-col">
         <h2 class="ver">0.9.0</h2>
-        <span class="date mono">Jun 30, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 30 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.9.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow's biggest release, it now bundles its own engine (no separate install), and adds an Activity-Monitor-class process inspector, a Get Online connectivity companion, and a security-aware Doctor.</p>
+        <p class="lead">Burrow 最大のリリースです。自前のエンジンを同梱するようになり（別途インストール不要）、アクティビティモニタ級のプロセス検査、接続復旧の案内、そしてセキュリティを見る診断が加わりました。</p>
         <div class="sblock">
-          <div class="slabel mono">engine</div>
+          <div class="slabel mono">エンジン</div>
           <ul class="slist">
-            <li><b>Burrow bundles its own engine now.</b> The app ships an MIT-licensed <code>burrow-engine</code> (forked at its last MIT release) inside <code>Burrow.app</code> and runs it directly, so a fresh install needs <b>no separate engine install</b>. Burrow prefers the bundled engine, then an installed <code>burrow-engine</code>, then a legacy system engine for existing setups.</li>
+            <li><b>Burrow が自前のエンジンを同梱するようになりました。</b> App には MIT ライセンスの <code>burrow-engine</code> （最後の MIT リリース時点から分岐）が <code>Burrow.app</code> の中に入っており、直接実行されます。そのため新規インストールでは <b>エンジンの別途インストールが不要</b>です。Burrow は同梱エンジンを最優先し、次にインストール済みの <code>burrow-engine</code>、そして既存環境向けに従来のシステムエンジンの順で使います。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">process inspector</div>
+          <div class="slabel mono">プロセス検査</div>
           <ul class="slist">
-            <li><b>Per-process inspector</b>: click any process for a structured panel: identity (path, code signature, Mach-O architecture), live CPU/memory, runtime, and the process's open network connections.</li>
-            <li><b>Process tree</b>: the parent/child hierarchy around any process.</li>
-            <li><b>CPU watchdog</b>: set per-process CPU thresholds and get notified when something runs hot, with an editor in Settings.</li>
-            <li><b>Filter, suspend/resume, export</b>: a typed predicate filter over the process table, suspend or resume a process, and export the table.</li>
+            <li><b>プロセスごとの検査</b>: どのプロセスをクリックしても整理された画面が開きます。素性（パス、コード署名、Mach-O のアーキテクチャ）、リアルタイムの CPU とメモリ、稼働時間、そしてそのプロセスが開いているネットワーク接続です。</li>
+            <li><b>プロセスの系統</b>: 任意のプロセスを中心とした親子関係の階層です。</li>
+            <li><b>CPU の見張り</b>: プロセスごとに CPU のしきい値を決め、何かが熱くなったら通知を受け取れます。設定に編集画面があります。</li>
+            <li><b>絞り込み・一時停止／再開・書き出し</b>: プロセス一覧に対する型付きの条件で絞り込み、プロセスを一時停止または再開し、一覧を書き出せます。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">get online</div>
+          <div class="slabel mono">接続復旧</div>
           <ul class="slist">
-            <li><b>On-demand speed test</b>: measure real down/up throughput.</li>
-            <li><b>Nearby Wi-Fi scan</b>: surrounding networks and channel congestion (Home mode), so you can pick a clearer channel.</li>
-            <li><b>Venue captive-portal tips</b>: venue-specific help for hotel/airport/café portals that won't load.</li>
-            <li><b>Connection history</b>: a log of connectivity events (SSID changes, drops).</li>
+            <li><b>必要なときの速度測定</b>: 実際の下り・上りの速度を測ります。</li>
+            <li><b>周辺の Wi-Fi のスキャン</b>: 周囲のネットワークとチャンネルの混雑状況を表示し（ホームモード）、空いているチャンネルを選べるようにします。</li>
+            <li><b>施設の認証ページのヒント</b>: ホテル・空港・カフェの認証ページが開かないときの、場所に応じた対処です。</li>
+            <li><b>接続の履歴</b>: 接続に関する出来事（SSID の変更、切断）の記録です。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">doctor</div>
+          <div class="slabel mono">診断</div>
           <ul class="slist">
-            <li><b>Security posture</b>: SIP, Gatekeeper, FileVault, and firewall at a glance, plus a high-CPU check and one-click <b>Copy diagnostics</b>.</li>
-            <li><b>Battery health</b>: capacity % and condition (omitted on desktops).</li>
-            <li><b>More context</b>: display, external-volume, and network context.</li>
+            <li><b>セキュリティの状態</b>: SIP、Gatekeeper、FileVault、ファイアウォールをひと目で確認できます。CPU 高負荷の点検と、ワンクリックの <b>診断情報のコピー</b>.</li>
+            <li><b>バッテリーの状態</b>: 容量の割合と状態です（デスクトップでは表示されません）。</li>
+            <li><b>追加の情報</b>: ディスプレイ、外部ボリューム、ネットワークの状況です。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">clean, software &amp; analyze</div>
+          <div class="slabel mono">クリーンとソフトウェア &amp; 分析</div>
           <ul class="slist">
-            <li><b>クリーン</b> now sorts the review <b>by reclaimable impact</b> と <b>flags sensitive paths</b> (keychain/credential locations) before you delete; the done screen shows your <b>all-time cleaned total</b>.</li>
-            <li><b>Software</b>: App Store updates that need a newer macOS are hidden; ⌘R refreshes with a cache bypass; app search is alias-aware.</li>
-            <li><b>Uninstall</b>: a Clear-Data-only subset, plus an input-method leftover warning.</li>
-            <li><b>分析</b>: one-tap whole-disk scan, and a treemap “Other” fold for tiny entries.</li>
-            <li><b>最適化</b>: a pre-run safety banner when a VPN or external display is active.</li>
-            <li><b>Login items</b>: modern Login (BTM) items appear in the startup inventory; a LaunchAgent on an unplugged drive is no longer flagged broken.</li>
-            <li><b>Keep Screen On</b> keeps working with the lid closed.</li>
+            <li><b>クリーン</b> が確認画面を <b>回収できる量の順に並べ</b> と <b>注意すべきパスに印を付けます</b> （キーチェーンや資格情報の場所）。削除の前に警告し、完了画面には <b>これまでの累計クリーン量</b>.</li>
+            <li><b>ソフトウェア</b>: より新しい macOS を要する App Store の更新は隠されます。⌘R でキャッシュを迂回して再取得でき、App の検索は別名も認識します。</li>
+            <li><b>削除</b>: データだけを消す選択肢と、入力方式の残存に関する警告が加わりました。</li>
+            <li><b>分析</b>: ワンタップでディスク全体をスキャンでき、ツリーマップでは小さな項目を「その他」にまとめます。</li>
+            <li><b>最適化</b>: VPN や外部ディスプレイが有効なときは、実行前に注意のバナーを表示します。</li>
+            <li><b>ログイン項目</b>: 新しい形式のログイン項目（BTM）が起動項目の一覧に表示されます。取り外したドライブ上の LaunchAgent が壊れていると判定されることはなくなりました。</li>
+            <li><b>画面をつけたままにする</b> が、ふたを閉じても動き続けます。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>Three main-thread hangs</b> on the new process/parity surfaces (suspend/resume, inspector, tree).</li>
-            <li>A missing <code>paths:</code> label on a data-only uninstall plan.</li>
+            <li><b>メインスレッドの停止 3 件</b> を、新しいプロセス関連の画面（一時停止／再開、検査、系統）で修正しました。</li>
+            <li>欠けていた <code>paths:</code> のラベルを、データのみを削除する計画に追加しました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li><b>Windows のプレビュー版</b>: version-aligned to 0.9.0; no Windows-specific changes this release.</li>
+            <li><b>Windows のプレビュー版</b>: バージョンを 0.9.0 に揃えました。このリリースに Windows 固有の変更はありません。</li>
           </ul>
         </div>
       </div>
@@ -585,46 +585,46 @@
     <article class="entry" id="v0.8.3">
       <div class="ver-col">
         <h2 class="ver">0.8.3</h2>
-        <span class="date mono">Jun 25, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.3" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 25 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.3" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A metrics &amp; menu-bar release, real memory-pressure reporting, a power-draw widget, a live menu-bar preview, and a snappier popover.</p>
+        <p class="lead">指標と &amp; メニューバーのリリースです。本物のメモリ負荷の表示、消費電力のウィジェット、メニューバーのライブプレビュー、そしてより軽快なポップオーバー。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>Power-draw widget</b>: live system wattage (W) as a menu-bar metric.</li>
-            <li><b>Real memory pressure.</b> “By pressure” now reads actual macOS memory pressure, <code>(wired + compressed) / total</code> via <code>host_statistics64</code>, the same figure Activity Monitor reports, instead of reusing the CPU-style utilization ramp. Shown as a percentage on the memory tiles, colored green ≤59% / orange 60–79% / red ≥80%.</li>
-            <li><b>Memory detail card</b>: the Status dashboard breaks memory down into used / free / cached / swap.</li>
-            <li><b>Live menu-bar preview + layout presets</b>: Settings previews your real metrics as you configure them, with one-tap layout presets.</li>
-            <li><b>Two new runner animations</b>: Wave and Bars.</li>
+            <li><b>消費電力のウィジェット</b>: システム全体の消費電力（W）をメニューバーの指標としてリアルタイムに表示します。</li>
+            <li><b>本物のメモリ負荷。</b> 「負荷で判定」が、実際の macOS のメモリ負荷を読むようになりました。 <code>(wired + compressed) / total</code> は <code>host_statistics64</code>経由で取得する、アクティビティモニタと同じ数値です。CPU 用の使用率の色分けを流用するのをやめました。メモリのタイルには割合で表示され、59% 以下は緑、60〜79% は橙、80% 以上は赤になります。</li>
+            <li><b>メモリの詳細カード</b>: ステータスの画面が、メモリを使用中・空き・キャッシュ・スワップに分けて表示します。</li>
+            <li><b>メニューバーのライブプレビューとレイアウトのプリセット</b>: 設定しながら実際の指標をその場で確認でき、レイアウトのプリセットもワンタップで選べます。</li>
+            <li><b>走るアニメーションを 2 種類追加</b>: Wave と Bars です。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li><b>Consistent pressure coloring</b> across the dashboard tile, popover, memory-detail card, and menu bar.</li>
-            <li><b>Live popover sparklines</b>: CPU / memory / GPU tick every second (about a minute of history).</li>
-            <li><b>Honest color picker</b>: “By pressure” is offered only where it applies (memory); the temperature color ramp was corrected.</li>
+            <li><b>負荷の色分けを統一</b> しました。ダッシュボードのタイル、ポップオーバー、メモリの詳細カード、メニューバーで揃います。</li>
+            <li><b>ポップオーバーのリアルタイムなスパークライン</b>: CPU・メモリ・GPU が 1 秒ごとに更新されます（約 1 分ぶんの履歴）。</li>
+            <li><b>正直な色の選択</b>: 「負荷で判定」は当てはまるところ（メモリ）にだけ表示されます。温度の色の段階も修正しました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>Brewfile import/export pickers no longer trip the hang detector</b> (ANR false-positives).</li>
-            <li><b>App-Hang reports from memory-starved machines are dropped</b> before sending, they were environmental, not Burrow bugs.</li>
+            <li><b>Brewfile の読み込み・書き出しのファイル選択が、ハング検出に引っかからなくなりました</b> （応答なしの誤検知）。</li>
+            <li><b>メモリが枯渇した機械からの「App が応答しません」報告を送信前に破棄します</b> 。これは環境によるもので、Burrow の不具合ではありませんでした。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">パフォーマンス</div>
           <ul class="slist">
-            <li><b>Snappier popover</b>: the metric grid no longer re-renders on unrelated state changes.</li>
+            <li><b>より軽快なポップオーバー</b>: 指標の並びが、無関係な状態変化で再描画されなくなりました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows</div>
+          <div class="slabel mono">Windows</div>
           <ul class="slist">
-            <li><b>Windows のプレビュー版</b>: a version-aligned 0.8.3 build is attached (<code>BurrowWin-0.8.3-win-x64.zip</code>). No Windows-specific changes this release.</li>
+            <li><b>Windows のプレビュー版</b>: バージョンを揃えた 0.8.3 のビルドを添付しています（<code>BurrowWin-0.8.3-win-x64.zip</code>）。このリリースに Windows 固有の変更はありません。</li>
           </ul>
         </div>
       </div>
@@ -633,21 +633,21 @@
     <article class="entry" id="v0.8.2">
       <div class="ver-col">
         <h2 class="ver">0.8.2</h2>
-        <span class="date mono">Jun 23, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 23 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.2" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A fix release, a Full Disk Access grant now actually takes effect, and Burrow asks for notification permission up front.</p>
+        <p class="lead">修正リリースです。フルディスクアクセスの許可が実際に効くようになり、通知の許可も前もって尋ねるようになりました。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>Full Disk Access is honored again.</b> The shipped app's embedded framework signatures were malformed (<code>codesign --verify --strict</code> failed on <code>Sentry.framework</code>), so macOS couldn't validate Burrow's identity and silently ignored a Full Disk Access grant, turning it on in System Settings appeared to do nothing. The release now re-signs the app and every nested framework inside-out so the signature is valid and the grant takes effect. After updating, toggle Full Disk Access off and back on once. _(Burrow is still ad-hoc-signed, so a re-grant is needed after each update until it ships with a Developer ID signature.)_</li>
+            <li><b>フルディスクアクセスがまた尊重されるようになりました。</b> 出荷された App に含まれるフレームワークの署名が壊れており（<code>codesign --verify --strict</code> が <code>Sentry.framework</code>で失敗していました）、macOS が Burrow の素性を検証できず、フルディスクアクセスの許可を黙って無視していました。そのためシステム設定でオンにしても何も起きていないように見えました。このリリースでは App と入れ子になったすべてのフレームワークを内側から順に署名し直したので、署名が有効になり許可が効きます。更新後、フルディスクアクセスを一度オフにしてからオンに戻してください。_（Burrow はまだアドホック署名のため、Developer ID による署名で出荷されるまでは更新のたびに許可し直す必要があります。）_</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li><b>Notification permission is requested up front</b>: Burrow now asks once, when you finish onboarding or first enable a notifying feature, instead of springing the system prompt the moment a notification tries to fire.</li>
+            <li><b>通知の許可を前もって求めます</b>: 通知が発生しようとした瞬間にシステムの確認を突きつけるのではなく、初期設定を終えたときや通知する機能を初めて有効にしたときに、一度だけ尋ねます。</li>
           </ul>
         </div>
       </div>
@@ -656,35 +656,35 @@
     <article class="entry" id="v0.8.1">
       <div class="ver-col">
         <h2 class="ver">0.8.1</h2>
-        <span class="date mono">Jun 23, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 23 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.1" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability release, no more dashboard freezes, live status now streams, a one-click Homebrew update, and the Windows preview's review closeout.</p>
+        <p class="lead">安定性のリリースです。ダッシュボードが固まらなくなり、状態がストリーミングで届くようになり、Homebrew の更新がワンクリックになり、Windows プレビューのレビューも締めくくりました。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>No more App-Hang freezes.</b> The Overview dashboard re-rendered its whole grid, every chart tile and the full process table, once a second; now only the small Disk / Network tiles update that often, the rest on the snapshot.</li>
-            <li>Opening <b>Settings</b> and the <b>About</b> panel no longer blocks the main thread (login-item status, metrics-folder sizing, and the engine-version lookup moved off it).</li>
-            <li><b>PostHog telemetry</b> now flushes off the main thread instead of on a main-run-loop timer.</li>
+            <li><b>「App が応答しません」による停止がなくなりました。</b> 概要のダッシュボードは、すべてのグラフのタイルとプロセス一覧を含む全体を 1 秒ごとに描き直していました。今その頻度で更新されるのは小さなディスクとネットワークのタイルだけで、残りはスナップショットのタイミングで更新されます。</li>
+            <li>「 <b>設定</b> 」と「 <b>情報</b> 」を開いてもメインスレッドが止まらなくなりました（ログイン項目の状態、指標フォルダのサイズ計算、エンジンのバージョン取得を別スレッドに移しました）。</li>
+            <li><b>PostHog への送信</b> が、メインのランループのタイマーではなく別スレッドで行われるようになりました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li><b>Live status streams by default</b>: with engine 1.44+, Burrow streams the engine's streaming status command (NDJSON) instead of polling the engine's one-shot status command: lower latency and less subprocess churn. Falls back to polling on an older engine or a dropped stream.</li>
+            <li><b>状態のストリーミングが既定になりました</b>: エンジン 1.44 以降では、単発の status コマンドを繰り返し呼ぶのではなく、ストリーミング版（NDJSON）を使います。遅延が減り、サブプロセスの起動も減ります。古いエンジンやストリームが切れた場合は、従来の方式に戻ります。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>Update with Homebrew</b>: for cask installs, the update prompt has a one-click button that runs <code>brew upgrade --cask burrow</code> and relaunches.</li>
+            <li><b>Homebrew で更新</b>: cask で入れている場合、更新の案内にワンクリックのボタンが付き、 <code>brew upgrade --cask burrow</code> を実行して再起動します。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows preview</div>
+          <div class="slabel mono">Windows プレビュー</div>
           <ul class="slist">
-            <li>Closed out the port review: MCP tool parity with macOS (<code>burrow_list_apps</code>, <code>burrow_purge</code>, <code>burrow_installer</code>: preview-only over MCP), stdio MCP that survives the HTTP toggle, brand assets / palette / fonts / icon aligned to the Mac, honest docs, and MCP + deletion-guard tests. Earlier rounds added Recycle-Bin routing, a drive-root guard, and SHA-256 verification of the bundled engine. Still an unsigned, build-from-source preview.</li>
+            <li>移植のレビューを締めくくりました。macOS との MCP ツールの同等性（<code>burrow_list_apps</code>, <code>burrow_purge</code>, <code>burrow_installer</code>は MCP 経由ではプレビューのみ）、HTTP の切り替えに耐える stdio の MCP、Mac に揃えたブランド素材・配色・フォント・アイコン、正直なドキュメント、そして MCP と削除保護のテストです。それ以前の作業では、ごみ箱への経路、ドライブ直下の保護、同梱エンジンの SHA-256 検証を加えました。依然として未署名の、ソースからビルドするプレビューです。</li>
           </ul>
         </div>
       </div>
@@ -693,49 +693,49 @@
     <article class="entry" id="v0.8.0">
       <div class="ver-col">
         <h2 class="ver">0.8.0</h2>
-        <span class="date mono">Jun 20, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 20 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.8.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A top-to-bottom visual redesign, a wave of new tools, a deeper agent surface, and an early Windows preview.</p>
+        <p class="lead">見た目を全面的に刷新し、新しいツールを一気に加え、エージェント向けの機能を深め、Windows の early preview を出しました。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>ポート</b>: live connections, bandwidth, reverse-DNS peers, service labels, conflicts, sortable columns, and a per-connection detail view.</li>
-            <li><b>接続を直す</b>: MDM and gateway checks, the active-interface IP, captive-portal and device-side rescue, and one-click fixes.</li>
-            <li><b>チューンアップ</b>: a Smart-Care flow (scan → results → run) that auto-scans the moment you open it.</li>
-            <li><b>Homebrew</b>: Services (start / stop / restart), Brewfile snapshots (export / restore), and live <code>brew upgrade</code> progress in Updates.</li>
-            <li><b>Menu bar</b>: a customizable popup, Stats-depth widgets, a RunCat-style runner, and live metric widgets in the status item.</li>
-            <li><b>Disk</b> now forecasts when you'll run out of space (“Full in ~N”); <b>Doctor</b> gains SMART-health and backup-awareness checks with overdue reminders, multi-select bulk reclaim, and a git purge-safety badge.</li>
-            <li><b>For your agent</b>: a deeper MCP surface: a token-gated <code>/events</code> SSE stream and <code>burrow_diff</code>, so an agent can watch and compare your machine over time.</li>
+            <li><b>ポート</b>: リアルタイムの接続、通信量、逆引き DNS の相手、サービスのラベル、競合、並べ替え可能な列、そして接続ごとの詳細表示。</li>
+            <li><b>接続を直す</b>: MDM とゲートウェイの点検、有効なインターフェイスの IP、認証ページと端末側の復旧、そしてワンクリックの修正。</li>
+            <li><b>チューンアップ</b>: 開いた瞬間に自動でスキャンが始まる、手入れの流れ（スキャン → 結果 → 実行）。</li>
+            <li><b>Homebrew</b>: サービスの起動・停止・再起動、Brewfile のスナップショット（書き出し・復元）、そして更新画面での <code>brew upgrade</code> の進捗表示。</li>
+            <li><b>メニューバー</b>: 自由に組み替えられるポップアップ、詳細な指標ウィジェット、RunCat 風の走るアニメーション、そしてステータス項目内のリアルタイム指標ウィジェット。</li>
+            <li><b>ディスク</b> が、いつ容量が尽きるかを予測します（「約 N で満杯」）。 <b>診断</b> に、SMART の健全性とバックアップの状況の点検、期限超過の通知、複数選択による一括回収、そして git の安全性バッジが加わりました。</li>
+            <li><b>エージェント向け</b>: より深い MCP 機能です。トークンで保護された <code>/events</code> の SSE ストリームと <code>burrow_diff</code>が加わり、エージェントが時間をまたいで機械を観察し比較できます。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li>A warm, tactile redesign, a warm-coffee adaptive palette, film grain over a soft gradient, a floating icon rail in place of the top tabs, borderless cards, and the Geist / Cal Sans type system.</li>
-            <li><b>概要</b>: Health pulled up into an open hero band over a cleaner three-up vitals grid.</li>
-            <li><b>履歴</b>: a focal hero chart with a selectable metric strip; drag-select a span to surface the top processes for that spike.</li>
-            <li><b>メニューバー HUD</b>: borderless tiles on the same warm ground, with Doctor and Restore reskinned to match and edge-fade scrollers throughout.</li>
+            <li>温かく手触りのある刷新です。コーヒーのような温かみのある適応配色、柔らかなグラデーションに重ねたフィルムグレイン、上部タブに代わる浮遊するアイコンの帯、枠のないカード、そして Geist と Cal Sans の書体体系。</li>
+            <li><b>概要</b>: 状態を大きな見出し帯に引き上げ、その下に整理した 3 列の要点を並べました。</li>
+            <li><b>履歴</b>: 主役となるグラフと、指標を選べる帯。範囲をドラッグして選ぶと、その山の上位プロセスが浮かび上がります。</li>
+            <li><b>メニューバー HUD</b>: 同じ温かい下地の上に枠のないタイルを置き、診断と復元も同じ装いに揃え、スクロール領域の端はぼかしました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">パフォーマンス</div>
           <ul class="slist">
-            <li>Killed several main-thread app-hangs, the process table, sort, ICU on the render path, app icons, clean reports, and the software list.</li>
-            <li>Onboarding now auto-detects the engine.</li>
+            <li>メインスレッドの停止をいくつも潰しました。プロセス一覧、並べ替え、描画経路上の ICU、App のアイコン、クリーンの結果、ソフトウェアの一覧です。</li>
+            <li>初期設定がエンジンを自動で検出します。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">windows preview</div>
+          <div class="slabel mono">Windows プレビュー</div>
           <ul class="slist">
-            <li>An early native <b>WinUI 3 / .NET 8</b> app now lives under <code>windows/</code>: Status, History, Analyze, Apps, a tray HUD, local telemetry/history, and an MCP stdio bridge. Build from source; unsigned preview.</li>
+            <li>初期段階のネイティブな <b>WinUI 3 / .NET 8</b> アプリが <code>windows/</code>に入りました。状態、履歴、分析、App、トレイの HUD、ローカルの計測と履歴、そして MCP の stdio ブリッジを備えます。ソースからビルドしてください。未署名のプレビューです。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">under the hood</div>
+          <div class="slabel mono">内部の変更</div>
           <ul class="slist">
-            <li>The repo is now a monorepo (<code>macos/</code> + <code>windows/</code>), with inside-out framework signing for notarization and an automated upstream engine release watcher.</li>
+            <li>リポジトリを単一構成にまとめ（<code>macos/</code> + <code>windows/</code>）、公証のためにフレームワークを内側から順に署名し、上流エンジンのリリースを自動で見張るようにしました。</li>
           </ul>
         </div>
       </div>
@@ -744,34 +744,34 @@
     <article class="entry" id="v0.7.2">
       <div class="ver-col">
         <h2 class="ver">0.7.2</h2>
-        <span class="date mono">Jun 15, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.2" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 15 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.2" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A feature pass on the redesign, cleanup, software and the live dashboard get more capable, with opt-in update and privacy surfaces.</p>
+        <p class="lead">刷新後の機能強化です。クリーンアップ、ソフトウェア、リアルタイムのダッシュボードができることを増やし、更新とプライバシーの機能は任意で有効にできるようにしました。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>Cleanup, unified</b>: Purge and Installers fold into Clean as category cards, each with a real result screen and the raw log tucked behind a View Log toggle.</li>
-            <li><b>Self-update</b>: Burrow checks itself for new versions (opt-in, default on) and shows a banner plus a menu-bar dot. It never installs on its own.</li>
-            <li><b>Homebrew updates</b> appear the moment you open the Apps tab, and your own login items get on/off toggles.</li>
-            <li>An optional <b>camera &amp; mic in-use indicator</b> in the menu-bar popover (off by default), reading the same signal as Control Center.</li>
-            <li><b>About</b> と <b>Check for Updates</b> now live in Settings too.</li>
+            <li><b>クリーンアップの統合</b>: ディープクリーンとインストーラがクリーンの分類カードとして統合されました。それぞれにきちんとした結果画面があり、生のログは「ログを表示」の切り替えの奥にしまわれています。</li>
+            <li><b>自己更新</b>: Burrow が自分の新しいバージョンを確認し（任意、既定は有効）、バナーとメニューバーの点で知らせます。自動でインストールすることは決してありません。</li>
+            <li><b>Homebrew の更新</b> が App タブを開いた瞬間に表示され、自分のログイン項目にはオンオフの切り替えが付きました。</li>
+            <li>任意の <b>カメラ &amp; マイクの使用中表示</b> をメニューバーのポップオーバーに追加しました（既定は無効）。コントロールセンターと同じ信号を読みます。</li>
+            <li><b>情報</b> と <b>アップデートを確認</b> が設定にも置かれました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li>Network charts in Status and History draw download and upload as two separate lines.</li>
-            <li>Analyze shows live per-folder progress on the first scan.</li>
-            <li>A View Log toggle on every result screen, Clean, Optimize, Purge, and Installers.</li>
+            <li>状態と履歴のネットワークのグラフが、下りと上りを 2 本の線として描くようになりました。</li>
+            <li>分析が、初回のスキャン中にフォルダごとの進捗をリアルタイムで表示します。</li>
+            <li>「ログを表示」の切り替えを、クリーン・最適化・ディープクリーン・インストーラのすべての結果画面に付けました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li>Confirm dialogs and Touch ID are no longer reported as app-hangs.</li>
-            <li>Live App Store / Sparkle update checks stay click-gated, no silent network.</li>
+            <li>確認のダイアログと Touch ID が、App の応答なしとして報告されることはなくなりました。</li>
+            <li>App Store と Sparkle の更新確認は、クリックしたときにだけ行われます。黙って通信することはありません。</li>
           </ul>
         </div>
       </div>
@@ -780,26 +780,26 @@
     <article class="entry" id="v0.7.1">
       <div class="ver-col">
         <h2 class="ver">0.7.1</h2>
-        <span class="date mono">Jun 14, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 14 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.1" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A stability pass, every freeze and the crash reported since the 0.7.0 redesign, fixed.</p>
+        <p class="lead">安定性の改善です。0.7.0 の刷新以降に報告された停止とクラッシュを、すべて修正しました。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li>The History view no longer freezes on wide time ranges.</li>
-            <li>Typing in Uninstall and Purge is smooth again.</li>
-            <li>Fixed a crash opening the menu-bar popover charts, it and the Status mini-charts could segfault on a transition, and now draw as one stable shape.</li>
-            <li>GPU history bars draw again on Apple Silicon.</li>
+            <li>履歴の表示が、広い期間を選んでも固まらなくなりました。</li>
+            <li>削除とディープクリーンでの入力がまた滑らかになりました。</li>
+            <li>メニューバーのポップオーバーのグラフを開いたときのクラッシュを修正しました。これと状態の小さなグラフは、切り替えの際に落ちることがありましたが、今はひとつの安定した形として描かれます。</li>
+            <li>Apple シリコンで GPU の履歴のバーがまた描かれるようになりました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">パフォーマンス</div>
           <ul class="slist">
-            <li>Faster launch, engine discovery moved off the main thread.</li>
-            <li>The HUD, Status, and Activity panels share one refresh pump now.</li>
-            <li>The process-row Quit / Force-Kill menu is no longer rebuilt on every refresh.</li>
+            <li>起動が速くなりました。エンジンの探索をメインスレッドから外しました。</li>
+            <li>HUD・状態・アクティビティの各画面が、ひとつの更新の仕組みを共有するようになりました。</li>
+            <li>プロセスの行にある「終了／強制終了」のメニューが、更新のたびに作り直されることはなくなりました。</li>
           </ul>
         </div>
       </div>
@@ -808,44 +808,44 @@
     <article class="entry" id="v0.7.0">
       <div class="ver-col">
         <h2 class="ver">0.7.0</h2>
-        <span class="date mono">Jun 13, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 13 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.7.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The big one, every tool redesigned, a real Clean review pipeline, a new Software tab, and notifications when work finishes.</p>
+        <p class="lead">大きな節目です。すべてのツールを設計し直し、クリーンに本格的な確認の流れを設け、ソフトウェアのタブを新設し、処理の完了を通知するようにしました。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>New Software tab</b>: per-app uninstall review, a unified Updates list with source badges, and a startup inventory.</li>
-            <li><b>Review before you clean</b>: Scan streams a live count-up into a per-item review screen, and deselected paths are protected for exactly one run.</li>
-            <li><b>Finish-line alerts</b>: get notified when a clean, optimize, or uninstall finishes, plus opt-in low-disk and Trash reminders.</li>
-            <li>Keep Screen On, Clean Screen, and global shortcuts.</li>
+            <li><b>新しいソフトウェアのタブ</b>: App ごとの削除の確認、入手元のバッジ付きで統合された更新一覧、そして起動項目の一覧。</li>
+            <li><b>クリーンの前に確認</b>: スキャンが数値を増やしながら項目ごとの確認画面へ流し込み、選択を外したパスはその 1 回の実行に限り保護されます。</li>
+            <li><b>完了の通知</b>: クリーン・最適化・削除が終わったときに通知されます。任意で、容量不足とゴミ箱のリマインダーも受け取れます。</li>
+            <li>画面をつけたままにする、画面の掃除、そしてシステム全体のショートカット。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li>Every tool redesigned, Onboarding, Clean, Software, Status, the menu-bar popover, Analyze, and Settings, all rebuilt.</li>
-            <li>History CPU, GPU, and health render as bars, and GPU usage is read natively on Apple Silicon.</li>
-            <li>A compact, scrollable process table.</li>
-            <li>MCP cleanup tools share the app's gate, return structured summaries, and surface data-freshness on a stable contract.</li>
-            <li>~230 strings localized in 简体中文 / 繁體中文.</li>
+            <li>すべてのツールを設計し直しました。初期設定、クリーン、ソフトウェア、状態、メニューバーのポップオーバー、分析、設定を、いずれも作り直しています。</li>
+            <li>履歴の CPU・GPU・状態がバーで描かれ、GPU の使用率は Apple シリコンでネイティブに読み取られます。</li>
+            <li>省スペースでスクロールできるプロセス一覧。</li>
+            <li>MCP のクリーン系ツールは App と同じ関門を共有し、構造化された要約を返し、データの新しさを安定した取り決めのもとで示します。</li>
+            <li>約 230 の文字列を簡体字中国語と繁体字中国語に翻訳しました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li>One-click relaunch the moment Full Disk Access is granted.</li>
-            <li>First-run onboarding checks the engine and version.</li>
-            <li>Truthful Touch ID copy.</li>
-            <li>The dashboard survives a bad metrics sample (skipped and counted) instead of stalling.</li>
+            <li>フルディスクアクセスが許可された瞬間に、ワンクリックで再起動できます。</li>
+            <li>初回の初期設定でエンジンとそのバージョンを確認します。</li>
+            <li>Touch ID の説明文を実態に合わせました。</li>
+            <li>ダッシュボードが、おかしな計測値で止まらなくなりました（読み飛ばして件数を数えます）。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">パフォーマンス</div>
           <ul class="slist">
-            <li>History auto-refresh is demand-driven, no idle timer.</li>
-            <li>A deepened, test-covered engine runner / metrics / actions core.</li>
+            <li>履歴の自動更新は必要なときだけ動きます。待機中のタイマーはありません。</li>
+            <li>エンジンの実行・指標・操作の中核を深め、テストで覆いました。</li>
           </ul>
         </div>
       </div>
@@ -854,36 +854,36 @@
     <article class="entry" id="v0.6.7">
       <div class="ver-col">
         <h2 class="ver">0.6.7</h2>
-        <span class="date mono">Jun 11, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.7" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 11 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.7" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">The biggest release yet, one Home dashboard, 繁體中文, native sensors, live 1-second charts.</p>
+        <p class="lead">これまでで最大のリリースです。ひとつのホームダッシュボード、繁体字中国語、ネイティブなセンサー、1 秒刻みのリアルタイムグラフ。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>One Home dashboard</b>: Status, History, and Activity fold into a single live view: vitals, charts, and recent jobs in one place.</li>
-            <li><b>繁體中文</b>: Traditional Chinese joins English and 简体, with an in-app switch, so you're not tied to the system language.</li>
-            <li><b>Real fans &amp; temps</b>: fan RPM and CPU/GPU die temperatures, read straight from the SMC, the gaps the engine leaves on Apple Silicon, filled.</li>
-            <li><b>1-second live charts</b>: net and disk sampled every second, so bursts show up instead of being averaged away.</li>
-            <li><b>Trash from the treemap</b>: spot a forgotten folder in Analyze and send it to the Trash right there, no detour to Finder.</li>
-            <li><b>Sharper AI Explain</b>: it briefs the whole picture now: the current snapshot, the recent trend, and your recent cleanups, in your language.</li>
+            <li><b>ひとつのホームダッシュボード</b>: 状態・履歴・アクティビティがひとつのリアルタイム表示にまとまりました。要点、グラフ、最近の処理が一箇所に並びます。</li>
+            <li><b>繁體中文</b>: 繁体字中国語が英語と簡体字に加わりました。アプリ内で切り替えられるので、システムの言語に縛られません。</li>
+            <li><b>本物のファンと &amp; 温度</b>: ファンの回転数と CPU・GPU のダイ温度を SMC から直接読み取ります。Apple シリコンでエンジンが埋められない部分を補いました。</li>
+            <li><b>1 秒刻みのリアルタイムグラフ</b>: ネットワークとディスクを 1 秒ごとに計測するので、瞬間的な山が平均に埋もれず見えます。</li>
+            <li><b>ツリーマップからゴミ箱へ</b>: 分析で忘れられたフォルダを見つけたら、その場でゴミ箱に送れます。Finder を経由する必要はありません。</li>
+            <li><b>より鋭くなった AI の解説</b>: 全体像をまとめて説明します。現在のスナップショット、最近の傾向、そして最近のクリーンの内容を、あなたの言語で。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li>Opt-out anonymous telemetry, one switch, listed in <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>.</li>
-            <li>AI keys moved to the Keychain.</li>
-            <li>Deletes and uninstalls need a second agent opt-in.</li>
+            <li>匿名の送信データは停止可能で、スイッチひとつ。内容は <a href="https://github.com/caezium/Burrow/blob/main/TELEMETRY.md" target="_blank" rel="noopener">TELEMETRY.md</a>.</li>
+            <li>AI のキーをキーチェーンに移しました。</li>
+            <li>削除とアンインストールには、エージェント向けの 2 つ目の許可が必要です。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li>The loopback API is hardened, no CORS grant.</li>
-            <li>Treemap hover and breadcrumb fixed.</li>
-            <li>Tests grew 124 → 244.</li>
+            <li>ループバックの API を強化しました。CORS の許可は与えません。</li>
+            <li>ツリーマップのカーソル反応とパンくずを修正しました。</li>
+            <li>テストが 124 件から 244 件に増えました。</li>
           </ul>
         </div>
       </div>
@@ -892,23 +892,23 @@
     <article class="entry" id="v0.6.5">
       <div class="ver-col">
         <h2 class="ver">0.6.5</h2>
-        <span class="date mono">Jun 9, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 9 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.5" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">A reliability release, the selection flows stop hanging, and the engine integration is now driven by tests.</p>
+        <p class="lead">信頼性のリリースです。選択の流れが固まらなくなり、エンジンとの連携はテストで駆動されるようになりました。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li>Installers and Purge no longer freeze when the engine finds nothing, or on a second scan, the “Scanning…” hang is gone.</li>
+            <li>インストーラとディープクリーンが、エンジンが何も見つけなかったときや 2 回目のスキャンで固まらなくなりました。「スキャン中…」のまま止まることはありません。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li>The “remove exactly what you picked, or nothing” flow is now a pure state machine, verified in CI.</li>
-            <li>One ANSI cleaner, one typed client, one snapshot store.</li>
-            <li>Tests grew 90 → 124.</li>
+            <li>「選んだものだけを削除する、さもなくば何もしない」という流れを純粋な状態機械にし、CI で検証しています。</li>
+            <li>ANSI の除去はひとつ、型付きのクライアントはひとつ、スナップショットの保管もひとつにまとめました。</li>
+            <li>テストが 90 件から 124 件に増えました。</li>
           </ul>
         </div>
       </div>
@@ -917,31 +917,31 @@
     <article class="entry" id="v0.6.0">
       <div class="ver-col">
         <h2 class="ver">0.6.0</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.6.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Fix-and-polish, cleanup flows actually complete, and the trackers show real data.</p>
+        <p class="lead">修正と仕上げです。クリーンアップの流れが最後まで完了し、各種の表示が本物の数値を示すようになりました。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>Installer &amp; Uninstall complete</b>: the confirm-screen timeout and the silent <code>[y/N]</code> hang are gone; both flows finish now.</li>
-            <li>Settings flush immediately.</li>
+            <li><b>インストーラ &amp; 削除の完了</b>: 確認画面の時間切れと、黙って止まる <code>[y/N]</code> の停止がなくなりました。どちらの流れも最後まで終わります。</li>
+            <li>設定が即座に書き込まれます。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>Native disk I/O &amp; GPU</b>: read natively where the engine reports zero on Apple Silicon, so charts show real numbers.</li>
-            <li><b>Purge → Show all</b>: pull in the complete find list and pick from everything, not just the ~50 biggest.</li>
-            <li><b>More history charts</b>: Battery, GPU, and Fans join the lineup; Top Processes ranks by CPU or RAM.</li>
-            <li>The thermal chart plots a real temperature.</li>
+            <li><b>ネイティブなディスク入出力 &amp; GPU</b>: Apple シリコンでエンジンがゼロを返すところをネイティブに読み取り、グラフが本物の数値を示すようにしました。</li>
+            <li><b>ディープクリーン → すべて表示</b>: 見つかった一覧をすべて取り込み、上位およそ 50 件だけでなく全体から選べるようにしました。</li>
+            <li><b>履歴のグラフを追加</b>: バッテリー・GPU・ファンが加わりました。上位プロセスは CPU かメモリで並べ替えられます。</li>
+            <li>温度のグラフが本物の温度を描くようになりました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">パフォーマンス</div>
           <ul class="slist">
-            <li>Faster live sampling catches short spikes.</li>
+            <li>計測が速くなり、短い山も捉えられます。</li>
           </ul>
         </div>
       </div>
@@ -950,25 +950,25 @@
     <article class="entry" id="v0.5.5">
       <div class="ver-col">
         <h2 class="ver">0.5.5</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.5" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.5" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Two new cleanup tools, an AI lens on Status, and agents that can act, safely.</p>
+        <p class="lead">新しいクリーンアップのツールが 2 つ、状態画面の AI による解説、そして安全に動けるエージェント。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>ディープクリーン</b>: find and clear old build artifacts (<code>node_modules</code>, <code>target/</code>, <code>build/</code>), ticking exactly what goes.</li>
-            <li><b>インストーラ</b>: sweep leftover <code>.dmg</code> / <code>.pkg</code> / <code>.iso</code> / <code>.zip</code> with the same pick-what-to-remove flow.</li>
-            <li><b>Explain (AI), opt-in</b>: a lens that reads one snapshot and explains it in plain English; local Ollama by default, nothing leaves the Mac.</li>
-            <li><b>Agents can act over MCP</b>: <code>burrow_clean</code>, <code>_optimize</code>, <code>_uninstall</code> and friends, each dry-running unless you flip the real-cleanups switch.</li>
+            <li><b>ディープクリーン</b>: 古いビルド成果物を見つけて片づけます（<code>node_modules</code>, <code>target/</code>, <code>build/</code>）。消すものを正確にチェックできます。</li>
+            <li><b>インストーラ</b>: 残った <code>.dmg</code> / <code>.pkg</code> / <code>.iso</code> / <code>.zip</code> を、同じ「消すものを選ぶ」流れで片づけます。</li>
+            <li><b>解説（AI）、任意で有効化</b>: スナップショットをひとつ読んで、わかりやすく説明する機能です。既定ではローカルの Ollama を使い、何も Mac の外には出ません。</li>
+            <li><b>エージェントが MCP を通じて操作できます</b>: <code>burrow_clean</code>, <code>_optimize</code>, <code>_uninstall</code> などが対象で、実際のクリーンを許可するスイッチを入れない限り、いずれも試験実行にとどまります。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li>Every agent action defaults to <code>--dry-run</code>.</li>
-            <li>LM Studio and OpenAI-compatible backends are supported.</li>
+            <li>エージェントの操作はすべて既定で <code>--dry-run</code>.</li>
+            <li>LM Studio と OpenAI 互換のバックエンドに対応しました。</li>
           </ul>
         </div>
       </div>
@@ -977,28 +977,28 @@
     <article class="entry" id="v0.5.1">
       <div class="ver-col">
         <h2 class="ver">0.5.1</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.1" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.1" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Maintenance, Full Disk Access actually sticks now.</p>
+        <p class="lead">メンテナンス。フルディスクアクセスがきちんと保たれるようになりました。</p>
         <div class="sblock">
-          <div class="slabel mono">fixed</div>
+          <div class="slabel mono">修正</div>
           <ul class="slist">
-            <li><b>Full Disk Access works</b>: ad-hoc signing gives the app a stable code identity, so the TCC grant finally binds.</li>
-            <li>A Quit &amp; Reopen path after granting Full Disk Access.</li>
+            <li><b>フルディスクアクセスが機能します</b>: アドホック署名によって App に安定したコードの識別が与えられ、TCC の許可がようやく結び付くようになりました。</li>
+            <li>終了して &amp; 開き直す手順を、フルディスクアクセスの許可後に案内します。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li>New read-only MCP tools: <code>burrow_cleanup_history</code> と <code>burrow_deleted_files</code>.</li>
+            <li>新しい読み取り専用の MCP ツール: <code>burrow_cleanup_history</code> と <code>burrow_deleted_files</code>.</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">performance</div>
+          <div class="slabel mono">パフォーマンス</div>
           <ul class="slist">
-            <li>Less energy in Software, dropped the per-app Spotlight query that kept <code>mds</code> と <code>mdworker</code> awake.</li>
+            <li>ソフトウェアの消費電力を減らしました。App ごとの Spotlight への問い合わせをやめ、 <code>mds</code> と <code>mdworker</code> が起きたままになるのを解消しました。</li>
           </ul>
         </div>
       </div>
@@ -1007,28 +1007,28 @@
     <article class="entry" id="v0.5.0">
       <div class="ver-col">
         <h2 class="ver">0.5.0</h2>
-        <span class="date mono">Jun 8, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 8 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.5.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">Burrow grows up, Touch ID, a live menu-bar HUD, an MCP server, 简体中文, and a one-command install.</p>
+        <p class="lead">Burrow が一段成長しました。Touch ID、リアルタイムのメニューバー HUD、MCP サーバ、簡体字中国語、そしてコマンドひとつでのインストール。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>Touch ID for sudo</b>: cleanups that need admin rights authenticate with a fingerprint, via the engine's Touch ID support.</li>
-            <li><b>メニューバー HUD</b>: live job status from the menu bar, or run without the icon entirely in Dock mode.</li>
-            <li><b>MCP server</b>: ask Claude Code about your Mac through a read-only stdio server, including <code>burrow_process_usage</code>.</li>
-            <li><b>简体中文</b>: Simplified Chinese localization.</li>
-            <li><b>履歴</b>: long-range charts, five minutes out to ninety days, over a local SQLite store.</li>
-            <li><b>Homebrew cask</b>: <code>brew install --cask caezium/tap/burrow</code>: one command, engine included, quarantine cleared.</li>
-            <li>An Activity pane with cleanup history in-app.</li>
+            <li><b>sudo で Touch ID</b>: 管理者権限が必要なクリーンを、エンジンの Touch ID 対応を通じて指紋で承認できます。</li>
+            <li><b>メニューバー HUD</b>: メニューバーから処理の状況をリアルタイムに確認できます。Dock モードならアイコンなしでも動かせます。</li>
+            <li><b>MCP サーバ</b>: 読み取り専用の stdio サーバを通じて、Claude Code に Mac のことを尋ねられます。 <code>burrow_process_usage</code>.</li>
+            <li><b>简体中文</b>: 簡体字中国語への翻訳です。</li>
+            <li><b>履歴</b>: 5 分前から 90 日前までの長期のグラフを、ローカルの SQLite に保存して描きます。</li>
+            <li><b>Homebrew の cask</b>: <code>brew install --cask caezium/tap/burrow</code>: コマンドひとつ、エンジン同梱、隔離属性も解除済み。</li>
+            <li>アプリ内にクリーンの履歴を表示するアクティビティ画面。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">changed</div>
+          <div class="slabel mono">変更</div>
           <ul class="slist">
-            <li>A Full Disk Access gate stops the per-folder permission flood.</li>
-            <li>Guided engine setup on first run.</li>
+            <li>フルディスクアクセスの案内によって、フォルダごとの許可要求の洪水を止めます。</li>
+            <li>初回起動時にエンジンの設定を案内します。</li>
           </ul>
         </div>
       </div>
@@ -1037,23 +1037,23 @@
     <article class="entry" id="v0.4.0">
       <div class="ver-col">
         <h2 class="ver">0.4.0</h2>
-        <span class="date mono">Jun 4, 2026</span>
-        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.4.0" target="_blank" rel="noopener">full notes ↗</a>
+        <span class="date mono">2026 年 6 月 4 日</span>
+        <a class="gh mono" href="https://github.com/caezium/Burrow/releases/tag/v0.4.0" target="_blank" rel="noopener">詳細な記録 ↗</a>
       </div>
       <div class="sbody">
-        <p class="lead">First public release, five tools, one native window, built on a bundled CLI engine.</p>
+        <p class="lead">最初の公開リリースです。5 つのツールをひとつのネイティブなウインドウに収め、同梱の CLI エンジンの上に構築しました。</p>
         <div class="sblock">
-          <div class="slabel mono">added</div>
+          <div class="slabel mono">追加</div>
           <ul class="slist">
-            <li><b>Five tools, one window</b>: Status, Analyze, Software, Clean, and Optimize: a native macOS GUI for the audited engine.</li>
-            <li><b>Status + History</b>: a live dashboard with per-metric sparklines, and long-range charts on a local store.</li>
-            <li><b>MCP server, day one</b>: HTTP + stdio endpoints so Claude Code can ask what's happening on this Mac.</li>
+            <li><b>5 つのツール、ひとつのウインドウ</b>: 状態・分析・ソフトウェア・クリーン・最適化。監査済みエンジンのための、macOS ネイティブな画面です。</li>
+            <li><b>状態と履歴</b>: 指標ごとのスパークラインを備えたリアルタイムのダッシュボードと、ローカルに保存する長期のグラフ。</li>
+            <li><b>初日から MCP サーバ</b>: HTTP と stdio の窓口を用意し、Claude Code がこの Mac の状況を尋ねられるようにしました。</li>
           </ul>
         </div>
         <div class="sblock">
-          <div class="slabel mono">notes</div>
+          <div class="slabel mono">備考</div>
           <ul class="slist">
-            <li>macOS 14+; requires a separate engine install; unsigned, pre-1.0.</li>
+            <li>macOS 14 以降。エンジンの別途インストールが必要。未署名の 1.0 前のバージョンです。</li>
           </ul>
         </div>
       </div>
