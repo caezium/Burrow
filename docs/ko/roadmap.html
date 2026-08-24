@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Burrow · Roadmap</title>
-<meta name="description" content="What's shipped, building, and being weighed for Burrow, and how to vote.">
+<title>Burrow · 로드맵</title>
+<meta name="description" content="Burrow에서 이미 나온 것, 만들고 있는 것, 검토 중인 것, 그리고 투표하는 방법.">
 <meta name="theme-color" content="#121217">
 <link rel="icon" type="image/png" href="../burrow-icon.png">
 <link rel="canonical" href="https://burrow.computer/ko/roadmap">
@@ -23,14 +23,14 @@
 <link rel="stylesheet" href="../assets/chrome.css">
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://burrow.computer/#org","name":"Burrow","url":"https://burrow.computer","logo":"https://burrow.computer/burrow-icon-512.png","sameAs":["https://github.com/caezium/Burrow"]},{"@type":"WebSite","@id":"https://burrow.computer/#site","url":"https://burrow.computer","name":"Burrow","publisher":{"@id":"https://burrow.computer/#org"}}]}</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="Burrow · Roadmap">
-<meta property="og:description" content="What's shipped, building, and being weighed for Burrow, and how to vote.">
+<meta property="og:title" content="Burrow · 로드맵">
+<meta property="og:description" content="Burrow에서 이미 나온 것, 만들고 있는 것, 검토 중인 것, 그리고 투표하는 방법.">
 <meta property="og:image" content="https://burrow.computer/burrow-icon-512.png">
 <meta property="og:url" content="https://burrow.computer/roadmap">
 <meta property="og:site_name" content="Burrow">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Burrow · Roadmap">
-<meta name="twitter:description" content="What's shipped, building, and being weighed for Burrow, and how to vote.">
+<meta name="twitter:title" content="Burrow · 로드맵">
+<meta name="twitter:description" content="Burrow에서 이미 나온 것, 만들고 있는 것, 검토 중인 것, 그리고 투표하는 방법.">
 <script src="/analytics.js" defer></script>
 <style>
   @font-face { font-family: "Geist"; src: url("assets/fonts/Geist[wght].woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
@@ -124,96 +124,96 @@
 
 <header class="hero page">
   <h1>로드맵</h1>
-  <p>What's shipped, what's being built, and what we're weighing next.</p>
-  <p class="count">A guide, not a promise, order shifts with what people ask for. Upvote an issue to push it up, or <a href="https://github.com/caezium/Burrow/issues/new/choose" target="_blank" rel="noopener">open a request ↗</a>. Updated Aug 7, 2026.</p>
+  <p>이미 나온 것, 만들고 있는 것, 그리고 다음으로 검토 중인 것.</p>
+  <p class="count">약속이 아니라 안내입니다. 순서는 요청에 따라 바뀝니다. 이슈에 찬성표를 던져 위로 올리거나, <a href="https://github.com/caezium/Burrow/issues/new/choose" target="_blank" rel="noopener">요청을 남겨 주세요 ↗</a>. 2026년 8월 7일 갱신.</p>
 </header>
 
 <main class="page">
     <section class="rcol">
-      <div class="rcol-head"><h2>Building</h2><span class="ct">1</span><span class="blurb">In progress now.</span></div>
+      <div class="rcol-head"><h2>만드는 중</h2><span class="ct">1</span><span class="blurb">지금 진행 중입니다.</span></div>
       <div class="ritems">
         <div class="ritem">
-          <span class="t">A single interface for machine care and agent work</span>
-          <p class="note">Burrow grew tool by tool. The next pass designs it as one product: one navigation model, one task hierarchy, and a clear place for the agent surfaces that arrived late.</p>
+          <span class="t">기기 관리와 에이전트 작업을 하나의 화면으로</span>
+          <p class="note">Burrow는 도구를 하나씩 더해 가며 자랐습니다. 다음 단계에서는 이를 하나의 제품으로 설계합니다. 하나의 탐색 구조, 하나의 작업 위계, 그리고 뒤늦게 합류한 에이전트 기능이 있을 자리를 분명히 마련합니다.</p>
           <div class="rtags"><span class="rtype feat">feat</span></div>
         </div>
       </div>
     </section>
     <section class="rcol">
-      <div class="rcol-head"><h2>Planned</h2><span class="ct">2</span><span class="blurb">Decided, not started yet.</span></div>
+      <div class="rcol-head"><h2>예정</h2><span class="ct">2</span><span class="blurb">하기로 정했지만 아직 시작하지 않았습니다.</span></div>
       <div class="ritems">
         <div class="ritem">
-          <span class="t">Windows preview → first stable</span>
-          <p class="note">Data-loss and supply-chain hardening, parity, and test coverage before it loses the “preview” label.</p>
+          <span class="t">Windows 미리보기 → 첫 안정 버전</span>
+          <p class="note">「미리보기」라는 딱지를 떼기 전에 데이터 손실과 공급망에 대한 대비, 기능 동등성, 테스트 범위를 다집니다.</p>
           <div class="rtags"><span class="rtype feat">feat</span><a class="rissue" href="https://github.com/caezium/Burrow/issues/93" target="_blank" rel="noopener">#93 ↗</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Uninstall that never quietly does nothing</span>
-          <p class="note">A handful of Homebrew apps use a cask token that differs from the display name, so a name-based lookup resolves most apps and misses the exceptions. Uninstall gets exact resolution and a visible result either way.</p>
+          <span class="t">아무 일도 없이 끝나지 않는 삭제</span>
+          <p class="note">일부 Homebrew 앱은 표시 이름과 다른 cask 토큰을 씁니다. 그래서 이름으로 찾는 방식은 대부분은 맞히지만 예외를 놓칩니다. 삭제 기능이 정확하게 판별하고, 어느 쪽이든 결과가 눈에 보이도록 합니다.</p>
           <div class="rtags"><span class="rtype fix">fix</span></div>
         </div>
       </div>
     </section>
     <section class="rcol">
-      <div class="rcol-head"><h2>Considering</h2><span class="ct">2</span><span class="blurb">Weighing it, upvote to push it up.</span></div>
+      <div class="rcol-head"><h2>검토 중</h2><span class="ct">2</span><span class="blurb">검토하고 있습니다. 찬성표로 올려 주세요.</span></div>
       <div class="ritems">
         <div class="ritem">
-          <span class="t">Persistent one-tap “run all” Tune-Up</span>
-          <p class="note">A saved Smart-Care routine you trigger in one tap from the dashboard.</p>
+          <span class="t">한 번 눌러 「전체 실행」하는 정비 저장</span>
+          <p class="note">관리 절차를 저장해 두고, 대시보드에서 한 번 눌러 실행합니다.</p>
           <div class="rtags"><span class="rtype feat">feat</span><a class="rissue" href="https://github.com/caezium/Burrow/issues/77" target="_blank" rel="noopener">#77 ↗</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Faster, deeper Analyze</span>
-          <p class="note">Better navigation through very large trees, quicker re-render on drill-down, and caching so a second scan of the same volume is close to instant.</p>
+          <span class="t">더 빠르고 깊은 분석</span>
+          <p class="note">아주 큰 트리를 더 잘 돌아다니게 하고, 파고들 때 다시 그리는 속도를 높이며, 캐시를 두어 같은 볼륨을 두 번째로 검사할 때는 거의 즉시 끝나게 합니다.</p>
           <div class="rtags"><span class="rtype feat">feat</span></div>
         </div>
       </div>
     </section>
     <section class="rcol">
-      <div class="rcol-head"><h2>Recently shipped</h2><span class="ct">16</span><span class="blurb">Landed in the latest releases.</span></div>
+      <div class="rcol-head"><h2>최근에 나온 것</h2><span class="ct">16</span><span class="blurb">최근 릴리스에 들어갔습니다.</span></div>
       <div class="ritems">
         <div class="ritem">
-          <span class="t">Developer ID signed &amp; Apple-notarized macOS releases</span>
+          <span class="t">Developer ID 서명 &amp; Apple 공증을 받은 macOS 릴리스</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.11.0">0.11.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Signed Sparkle feed + updater foundation</span>
+          <span class="t">서명된 Sparkle 피드와 업데이터 기반</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.11.0">0.11.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Stable Full Disk Access identity across updates</span>
+          <span class="t">업데이트를 거쳐도 유지되는 전체 디스크 접근 권한 신원</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.11.0">0.11.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Bundled MIT engine, no separate <code>mo</code> 설치</span>
+          <span class="t">MIT 엔진 내장, 별도의 <code>mo</code> 설치</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.9.0">0.9.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Process inspector + CPU watchdog</span>
+          <span class="t">프로세스 검사기와 CPU 감시</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.9.0">0.9.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Get Online connectivity companion</span>
+          <span class="t">연결 복구 도우미</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.9.0">0.9.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Security-aware Doctor</span>
+          <span class="t">보안까지 살피는 진단</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.9.0">0.9.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">No-freeze live dashboard</span>
+          <span class="t">멈추지 않는 실시간 대시보드</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.1">0.8.1</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Streaming live status (<code>mo status --watch</code>)</span>
+          <span class="t">실시간 상태 스트리밍 (<code>mo status --watch</code>)</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.1">0.8.1</a></div>
         </div>
         <div class="ritem">
-          <span class="t">One-click Update with Homebrew</span>
+          <span class="t">Homebrew로 한 번에 업데이트</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.1">0.8.1</a></div>
         </div>
         <div class="ritem">
-          <span class="t">A warm visual redesign</span>
+          <span class="t">따뜻한 느낌으로 새단장</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
@@ -221,19 +221,19 @@
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Smart-Care Tune-Up</span>
+          <span class="t">스마트 케어 정비</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Homebrew Services &amp; Brewfile</span>
+          <span class="t">Homebrew 서비스 &amp; Brewfile</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Deeper MCP agent surface (<code>/events</code>, <code>burrow_diff</code>)</span>
+          <span class="t">더 깊어진 MCP 에이전트 기능 (<code>/events</code>, <code>burrow_diff</code>)</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
         <div class="ritem">
-          <span class="t">Windows preview</span>
+          <span class="t">Windows 미리보기</span>
           <div class="rtags"><a class="rver" href="../releases.html#v0.8.0">0.8.0</a></div>
         </div>
       </div>
