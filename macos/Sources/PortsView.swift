@@ -76,20 +76,20 @@ struct PortsView: View {
             if loading { ProgressView().controlSize(.small) }
             Spacer()
             HStack(spacing: 5) {
-                Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(Brand.textTertiary)
+                Image(systemName: "magnifyingglass").font(.system(size: Brand.scaled(10))).foregroundStyle(Brand.textTertiary)
                 TextField(NSLocalizedString("port, process, service, host…", comment: ""), text: $query)
                     .textFieldStyle(.plain).font(Brand.sans(12)).frame(width: 170)
             }
             Button { resolveDNS.toggle(); if resolveDNS { resolveHosts(conns) } } label: {
                 Image(systemName: resolveDNS ? "globe" : "number")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(resolveDNS ? Tool.ports.accent : Brand.textTertiary)
             }
             .buttonStyle(.plain)
             .help(resolveDNS ? NSLocalizedString("Showing hostnames — click for raw IPs", comment: "")
                              : NSLocalizedString("Showing raw IPs — click to resolve hostnames", comment: ""))
             Button { reload() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain).help(NSLocalizedString("Refresh", comment: ""))
@@ -136,7 +136,7 @@ struct PortsView: View {
             HStack(spacing: 3) {
                 Text(label).foregroundStyle(sortKey == key ? Brand.textSecondary : Brand.textTertiary)
                 if sortKey == key {
-                    Image(systemName: sortAsc ? "chevron.up" : "chevron.down").font(.system(size: 7, weight: .bold))
+                    Image(systemName: sortAsc ? "chevron.up" : "chevron.down").font(.system(size: Brand.scaled(7), weight: .bold))
                 }
             }
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: align)
@@ -151,7 +151,7 @@ struct PortsView: View {
             HStack(spacing: 2) {
                 Text(label).foregroundStyle(sortKey == key ? Brand.textSecondary : Brand.textTertiary)
                 if sortKey == key {
-                    Image(systemName: sortAsc ? "chevron.up" : "chevron.down").font(.system(size: 7, weight: .bold))
+                    Image(systemName: sortAsc ? "chevron.up" : "chevron.down").font(.system(size: Brand.scaled(7), weight: .bold))
                 }
             }.contentShape(Rectangle())
         }.buttonStyle(.plain)
@@ -204,7 +204,7 @@ struct PortsView: View {
                 netView(p).frame(width: 104, alignment: .trailing)
 
                 Image(systemName: on ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(10), weight: .semibold)).foregroundStyle(Brand.textTertiary)
                     .frame(width: 22, alignment: .center)
             }
             .padding(.horizontal, 18).padding(.vertical, 9)

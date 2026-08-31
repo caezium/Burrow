@@ -40,6 +40,10 @@ final class LocalizationTests: XCTestCase {
         "Update Burrow to get the current bundled engine.",
         "Use Settings › Engine › Update external engine, then try again.",
         "Reinstall Burrow to restore the bundled engine.",
+        // Interface text scale (issue #407): the picker labels must not fall
+        // back to English in a translated build.
+        "Text size",
+        "Extra Large",
         "Run maintenance now",
         "Maintenance complete.",
         "Periodic Maintenance",

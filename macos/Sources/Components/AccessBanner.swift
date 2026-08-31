@@ -23,7 +23,7 @@ struct AccessBanner: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: glyph)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: Brand.scaled(15), weight: .semibold))
                 .foregroundStyle(Brand.amber)
                 .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Brand.amber.opacity(0.14)))
@@ -45,7 +45,7 @@ struct AccessBanner: View {
             .buttonStyle(.plain)
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: Brand.scaled(10), weight: .bold))
                     .foregroundStyle(Brand.textTertiary)
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())

@@ -509,10 +509,10 @@ private struct LimitedScanChip: View {
     var body: some View {
         Button { showExplainer = true } label: {
             HStack(spacing: 6) {
-                Image(systemName: "shield.lefthalf.filled").font(.system(size: 10))
+                Image(systemName: "shield.lefthalf.filled").font(.system(size: Brand.scaled(10)))
                 Text("Limited scan active · App Support and container caches are skipped")
                     .font(Brand.mono(10))
-                Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
+                Image(systemName: "chevron.right").font(.system(size: Brand.scaled(8), weight: .semibold))
             }
             .foregroundStyle(Brand.amber)
             .padding(.horizontal, 11).padding(.vertical, 6)

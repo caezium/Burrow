@@ -97,7 +97,7 @@ struct TuneUpView: View {
             VStack(alignment: .leading, spacing: 7) {
                 ForEach(Self.scanModules, id: \.0) { (label, glyph) in
                     HStack(spacing: 9) {
-                        Image(systemName: glyph).font(.system(size: 11)).foregroundStyle(accent).frame(width: 16)
+                        Image(systemName: glyph).font(.system(size: Brand.scaled(11))).foregroundStyle(accent).frame(width: 16)
                         Text(NSLocalizedString(label, comment: "")).font(Brand.sans(12)).foregroundStyle(Brand.textSecondary)
                         Spacer()
                     }
@@ -171,7 +171,7 @@ struct TuneUpView: View {
     private var tidyNote: some View {
         GlassCard {
             HStack(spacing: 12) {
-                Image(systemName: "checkmark.seal.fill").font(.system(size: 20)).foregroundStyle(Brand.green)
+                Image(systemName: "checkmark.seal.fill").font(.system(size: Brand.scaled(20))).foregroundStyle(Brand.green)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(NSLocalizedString("Nothing pressing", comment: ""))
                         .font(Brand.sans(14, .semibold)).foregroundStyle(Brand.textPrimary)
@@ -290,7 +290,7 @@ struct TuneUpView: View {
         let f = Self.agoFmt   // cached (#240)
         return GlassCard {
             HStack(spacing: 12) {
-                Image(systemName: "clock.arrow.circlepath").font(.system(size: 16)).foregroundStyle(accent)
+                Image(systemName: "clock.arrow.circlepath").font(.system(size: Brand.scaled(16))).foregroundStyle(accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(format: NSLocalizedString("Last tune-up %@", comment: ""),
                                 f.localizedString(for: at, relativeTo: Date())))
@@ -323,7 +323,7 @@ struct TuneUpView: View {
                 Button { navigate(pane) } label: {
                     HStack(spacing: 4) {
                         Text(actionTitle).font(Brand.sans(12, .semibold))
-                        Image(systemName: "arrow.right").font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "arrow.right").font(.system(size: Brand.scaled(10), weight: .semibold))
                     }
                     .foregroundStyle(accent)
                 }
@@ -601,7 +601,7 @@ struct TuneUpView: View {
 
     private func planRow(glyph: String, title: String, value: String) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: glyph).font(.system(size: 13)).foregroundStyle(accent).frame(width: 18)
+            Image(systemName: glyph).font(.system(size: Brand.scaled(13))).foregroundStyle(accent).frame(width: 18)
             Text(title).font(Brand.sans(13, .medium)).foregroundStyle(Brand.textPrimary)
             Spacer()
             Text(value).font(Brand.mono(12)).foregroundStyle(Brand.textSecondary)

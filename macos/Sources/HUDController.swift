@@ -111,7 +111,9 @@ final class HUDController: NSViewController {
         }
         var contentH = hosting.intrinsicContentSize.height
         if contentH <= 0 { contentH = hosting.fittingSize.height }
-        let target = NSSize(width: 334, height: min(max(contentH, 1), maxHeight))
+        // Width matches PopupView's scaled frame; read live so a text-scale
+        // change in Settings takes effect the next time the popover lays out.
+        let target = NSSize(width: Brand.scaled(334), height: min(max(contentH, 1), maxHeight))
         if abs(preferredContentSize.height - target.height) > 0.5 || preferredContentSize.width != target.width {
             preferredContentSize = target
         }

@@ -111,7 +111,7 @@ private struct CleanCategoryCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: category.tool.glyph)
-                    .font(.system(size: 24)).foregroundStyle(category.tool.accent)
+                    .font(.system(size: Brand.scaled(24))).foregroundStyle(category.tool.accent)
                 Spacer(minLength: 6)
                 Text(category.cardTitle)
                     .font(Brand.sans(15, .semibold)).foregroundStyle(Brand.textPrimary)

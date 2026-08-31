@@ -69,7 +69,7 @@ struct RestoreView: View {
     private func row(_ entry: RestorePlan.Entry) -> some View {
         HStack(spacing: 12) {
             Image(systemName: entry.restorable ? "arrow.uturn.backward.circle.fill" : "lock.circle.fill")
-                .font(.system(size: 15))
+                .font(.system(size: Brand.scaled(15)))
                 .foregroundStyle(entry.restorable ? Brand.green : Brand.textTertiary)
             VStack(alignment: .leading, spacing: 2) {
                 Text((entry.path as NSString).lastPathComponent)

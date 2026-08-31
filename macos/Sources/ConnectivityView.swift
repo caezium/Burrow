@@ -147,7 +147,7 @@ struct ConnectivityView: View {
                 ForEach(Array(v.tips.enumerated()), id: \.offset) { _, tip in
                     HStack(alignment: .top, spacing: 7) {
                         Image(systemName: "lightbulb")
-                            .font(.system(size: 11)).foregroundStyle(accent)
+                            .font(.system(size: Brand.scaled(11))).foregroundStyle(accent)
                         Text(tip).font(Brand.sans(12)).foregroundStyle(Brand.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -185,7 +185,7 @@ struct ConnectivityView: View {
                     ForEach(Array(strongest.enumerated()), id: \.offset) { _, n in
                         HStack(spacing: 8) {
                             Image(systemName: n.security == "Open" ? "lock.open" : "lock")
-                                .font(.system(size: 9)).foregroundStyle(Brand.textTertiary)
+                                .font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.textTertiary)
                             Text(n.ssid).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary).lineLimit(1)
                             Spacer(minLength: 8)
                             if congested.contains(n.channel) {
@@ -362,7 +362,7 @@ struct ConnectivityView: View {
         GlassCard {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: Self.glyph(c.status))
-                    .font(.system(size: 15)).foregroundStyle(Self.color(c.status))
+                    .font(.system(size: Brand.scaled(15))).foregroundStyle(Self.color(c.status))
                     .frame(width: 20)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(c.title).font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)

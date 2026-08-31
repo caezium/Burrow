@@ -32,7 +32,7 @@ struct OptimizeView: View {
                         ForEach(guardWarnings, id: \.self) { w in
                             HStack(alignment: .top, spacing: 7) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 11)).foregroundStyle(Brand.gold)
+                                    .font(.system(size: Brand.scaled(11))).foregroundStyle(Brand.gold)
                                 Text(w).font(Brand.sans(12)).foregroundStyle(Brand.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }

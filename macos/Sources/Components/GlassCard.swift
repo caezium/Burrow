@@ -39,7 +39,7 @@ struct Eyebrow: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: glyph)
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: Brand.scaled(9), weight: .bold))
             Text(NSLocalizedString(text, comment: "").uppercased())
                 .font(Brand.mono(10, .bold))
                 .tracking(1.0)

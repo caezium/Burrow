@@ -98,7 +98,7 @@ struct StatusView: View {
         let free = m.available ?? (m.total > m.used ? m.total - m.used : 0)
         return HStack(alignment: .center, spacing: 22) {
             HStack(spacing: 6) {
-                Image(systemName: "memorychip").font(.system(size: 12)).foregroundStyle(MemoryPressure.tint(percent: lvl))
+                Image(systemName: "memorychip").font(.system(size: Brand.scaled(12))).foregroundStyle(MemoryPressure.tint(percent: lvl))
                 Text(NSLocalizedString("Memory", comment: "")).font(Brand.mono(10, .semibold)).foregroundStyle(Brand.textSecondary)
             }
             memStat(NSLocalizedString("Used", comment: ""), String(format: "%.1f GB", Fmt.gib(m.used)), MemoryPressure.tint(percent: lvl))
@@ -543,7 +543,7 @@ struct BluetoothStrip: View {
 
     private func chip(_ d: BluetoothDevice) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: Self.glyph(d.name)).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+            Image(systemName: Self.glyph(d.name)).font(.system(size: Brand.scaled(12))).foregroundStyle(Brand.textSecondary)
             Text(d.name).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary).lineLimit(1)
             if let p = d.batteryPercent {
                 Text("\(p)%").font(Brand.mono(11, .semibold))
@@ -647,7 +647,7 @@ struct ProcessCard: View {
     private var filterBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.system(size: 11)).foregroundStyle(Brand.textTertiary)
+                .font(.system(size: Brand.scaled(11))).foregroundStyle(Brand.textTertiary)
             TextField(NSLocalizedString("Filter — e.g. cpu > 20, name ~ chrome", comment: ""),
                       text: Binding(get: { model.filterText }, set: { model.setFilter($0) }))
                 .textFieldStyle(.plain)
@@ -655,7 +655,7 @@ struct ProcessCard: View {
             if !model.filterText.isEmpty {
                 Button { model.setFilter("") } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11)).foregroundStyle(Brand.textTertiary)
+                        .font(.system(size: Brand.scaled(11))).foregroundStyle(Brand.textTertiary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(NSLocalizedString("Clear filter", comment: ""))
@@ -689,7 +689,7 @@ struct ProcessCard: View {
             Button(NSLocalizedString("Copy as JSON", comment: "")) { copyExport(asCSV: false) }
         } label: {
             Image(systemName: "ellipsis.circle")
-                .font(.system(size: 11)).foregroundStyle(Brand.textTertiary)
+                .font(.system(size: Brand.scaled(11))).foregroundStyle(Brand.textTertiary)
                 .frame(width: 20, height: 20).contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 20)
@@ -713,7 +713,7 @@ struct ProcessCard: View {
                 Text(NSLocalizedString(title, comment: "")).font(Brand.mono(10, .bold)).tracking(0.6)
                 if model.sortKey == key {
                     Image(systemName: model.sortAsc ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.system(size: Brand.scaled(7), weight: .bold))
                 }
             }
             .foregroundStyle(model.sortKey == key ? Brand.textSecondary : Brand.textTertiary)
@@ -826,7 +826,7 @@ struct ProcRow: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 11)).foregroundStyle(Brand.textTertiary)
+                .font(.system(size: Brand.scaled(11))).foregroundStyle(Brand.textTertiary)
                 .frame(width: 20, height: 20).contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -867,7 +867,7 @@ struct AppIconView: View {
         } else {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .fill(Color.white.opacity(0.08))
-                .overlay(Image(systemName: "terminal").font(.system(size: 9)).foregroundStyle(Brand.textTertiary))
+                .overlay(Image(systemName: "terminal").font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.textTertiary))
         }
     }
 }
