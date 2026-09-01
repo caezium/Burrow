@@ -26,7 +26,7 @@ struct PermissionRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(granted ? Brand.green : Color.white.opacity(0.22))
+                .fill(granted ? Brand.green : Brand.ink.opacity(0.22))
                 .frame(width: 9, height: 9)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
@@ -65,7 +65,7 @@ struct PermissionRow: View {
             Text(label)
                 .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.textPrimary)
                 .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(Capsule().fill(Color.white.opacity(0.08)))
+                .background(Capsule().fill(Brand.chipFill))
                 .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)

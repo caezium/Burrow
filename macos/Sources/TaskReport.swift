@@ -315,9 +315,9 @@ struct PillButton: View {
         Button(action: action) {
             Text(NSLocalizedString(title, comment: ""))
                 .font(Brand.sans(13, .semibold))
-                .foregroundStyle(filled ? Color.black : Brand.textPrimary)
+                .foregroundStyle(filled ? Brand.onInverse : Brand.textPrimary)
                 .padding(.horizontal, 22).padding(.vertical, 10)
-                .background(Capsule().fill(filled ? Color.white : Color.white.opacity(0.08)))
+                .background(Capsule().fill(filled ? Brand.inverse : Brand.chipFill))
                 .overlay(filled ? nil : Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)

@@ -109,7 +109,7 @@ struct TaskTickerView: View {
                 .scrollIndicators(.hidden)
                 .frame(height: CGFloat(Self.visibleRows) * 19 + 20)
                 .frame(maxWidth: 460)
-                .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Color.black.opacity(0.25)))
+                .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Brand.insetFill))
                 .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
                 // Deferred past the current update transaction: a synchronous
                 // scrollTo here mutates the scroll responder graph mid-way

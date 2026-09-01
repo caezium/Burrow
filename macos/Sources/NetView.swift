@@ -99,9 +99,9 @@ struct NetView: View {
                 .multilineTextAlignment(.center).frame(maxWidth: 440)
             Button { model.scan() } label: {
                 Text(NSLocalizedString("Sample now", comment: ""))
-                    .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
+                    .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.onInverse)
                     .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(Capsule().fill(.white))
+                    .background(Capsule().fill(Brand.inverse))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)

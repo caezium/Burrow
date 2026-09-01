@@ -168,7 +168,7 @@ struct CleanReviewView: View {
         Button(action: action) {
             ZStack {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(state == .none ? Color.white.opacity(0.07) : accent.opacity(0.9))
+                    .fill(state == .none ? Brand.chipFill : accent.opacity(0.9))
                     .frame(width: 17, height: 17)
                 switch state {
                 case .all:
@@ -194,7 +194,7 @@ struct CleanReviewView: View {
             Button { selection.toggle(item.path) } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(ticked ? accent.opacity(0.9) : Color.white.opacity(0.07))
+                        .fill(ticked ? accent.opacity(0.9) : Brand.chipFill)
                         .frame(width: 15, height: 15)
                     if ticked {
                         Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(.black)
@@ -281,9 +281,9 @@ struct CleanReviewView: View {
             Spacer()
             Button { onConfirm(selection) } label: {
                 Text(pillLabel)
-                    .font(Brand.sans(13, .semibold)).foregroundStyle(.black)
+                    .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.onInverse)
                     .padding(.horizontal, 20).padding(.vertical, 10)
-                    .background(Capsule().fill(Color.white))
+                    .background(Capsule().fill(Brand.inverse))
             }
             .buttonStyle(.plain)
             .disabled(selection.selectedCount == 0)

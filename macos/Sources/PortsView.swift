@@ -71,7 +71,7 @@ struct PortsView: View {
                 ForEach(PortInspector.Filter.allCases, id: \.self) { seg($0) }
             }
             .padding(3)
-            .background(Capsule().fill(Color.black.opacity(0.22)))
+            .background(Capsule().fill(Brand.insetFill))
             .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
             if loading { ProgressView().controlSize(.small) }
             Spacer()
@@ -106,9 +106,9 @@ struct PortsView: View {
         }
         return Button { filter = f } label: {
             Text(label).font(Brand.mono(11, on ? .semibold : .regular))
-                .foregroundStyle(on ? .black : Brand.textSecondary)
+                .foregroundStyle(on ? Brand.onInverse : Brand.textSecondary)
                 .padding(.horizontal, 12).padding(.vertical, 5)
-                .background { if on { Capsule().fill(.white) } }
+                .background { if on { Capsule().fill(Brand.inverse) } }
                 .contentShape(Capsule())
         }.buttonStyle(.plain)
     }

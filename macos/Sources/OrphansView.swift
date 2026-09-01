@@ -144,9 +144,9 @@ struct OrphansView: View {
                           path: NSHomeDirectory() + "/Library/Logs")
                 Button { pickFolder() } label: {
                     Text(NSLocalizedString("Choose a folder…", comment: ""))
-                        .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
+                        .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.onInverse)
                         .padding(.horizontal, 14).padding(.vertical, 6)
-                        .background(Capsule().fill(.white))
+                        .background(Capsule().fill(Brand.inverse))
                 }
                 .buttonStyle(.plain)
             }
@@ -160,7 +160,7 @@ struct OrphansView: View {
             Text(label)
                 .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.textPrimary)
                 .padding(.horizontal, 14).padding(.vertical, 6)
-                .background(Capsule().fill(Color.white.opacity(0.08)))
+                .background(Capsule().fill(Brand.chipFill))
                 .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)

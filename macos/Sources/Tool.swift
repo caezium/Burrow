@@ -85,33 +85,6 @@ enum Tool: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Dark, desaturated top colour for the window scrim — the wallpaper
-    /// bleeds through the translucency, this just tints it.
-    private var tintTop: Color {
-        switch self {
-        case .clean:     return Color(hex: 0x0E2A27)
-        case .purge:     return Color(hex: 0x12241A)
-        case .installer: return Color(hex: 0x2A1F12)
-        case .apps:      return Color(hex: 0x2B1611)
-        case .optimize:  return Color(hex: 0x1A1730)
-        case .analyze:   return Color(hex: 0x0E1F2E)
-        case .dupes:     return Color(hex: 0x2A141C)
-        case .orphans:   return Color(hex: 0x232612)
-        case .photos:    return Color(hex: 0x281425)
-        case .status:    return Color(hex: 0x241D11)
-        case .ports:     return Color(hex: 0x1B1426)
-        case .net:       return Color(hex: 0x131A2C)
-        case .connectivity: return Color(hex: 0x0E2630)
-        case .tuneup:    return Color(hex: 0x12231D)
-        }
-    }
-
-    /// Window background scrim laid over the behind-window vibrancy.
-    var scrim: LinearGradient {
-        LinearGradient(colors: [tintTop.opacity(0.88), Brand.nearBlack.opacity(0.96)],
-                       startPoint: .top, endPoint: .bottom)
-    }
-
     /// Our own one-liner per tool — earthy, in keeping with the name.
     var tagline: String {
         switch self {
@@ -140,18 +113,4 @@ enum Pane: Equatable, Hashable {
     case home          // the live dashboard: Overview · History · Activity
     case tool(Tool)
     case settings
-
-    /// Window tint scrim. Home wears the dashboard's gold; tools carry their
-    /// own colour; Settings uses a neutral dark so it reads as "chrome".
-    var scrim: LinearGradient {
-        switch self {
-        case .home:
-            return Tool.status.scrim
-        case .tool(let t):
-            return t.scrim
-        case .settings:
-            return LinearGradient(colors: [Color(hex: 0x16150F).opacity(0.90), Brand.nearBlack.opacity(0.97)],
-                                  startPoint: .top, endPoint: .bottom)
-        }
-    }
 }
