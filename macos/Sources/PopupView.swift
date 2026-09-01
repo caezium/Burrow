@@ -30,6 +30,10 @@ private struct MetricGridKey: Equatable {
     let snap: MoleStatus
     let cpu, gpu, mem, net, fan: [Double]
     let tiles: Set<MenuBarMetric>
+    /// The grid's fonts and tile sizes resolve through `Brand.scaled`, so a
+    /// text-scale change must open the gate even when the metrics haven't
+    /// moved — otherwise the grid keeps the old scale until the next sample.
+    let scale: InterfaceScale
 }
 
 struct PopupView: View {
@@ -37,6 +41,11 @@ struct PopupView: View {
     @ObservedObject private var ops = OperationCenter.shared
     @ObservedObject private var awake = Awake.shared
     @ObservedObject private var cleanScreen = CleanScreen.shared
+    /// The hosting view is created once by StatusBarController and retained,
+    /// so the popup must observe the text scale itself — a Settings change
+    /// re-evaluates this body (even while the popover is closed) and the
+    /// popover opens at the new scale instead of flashing the old one.
+    @ObservedObject private var typeScale = TypeScale.shared
     private weak var delegate: AppDelegate?
 
     init(db: DB, live: LiveFeed, feeds: FeedHub, delegate: AppDelegate) {
@@ -63,7 +72,8 @@ struct PopupView: View {
                 if sections.contains(.metrics) {
                     EquatableGate(key: MetricGridKey(snap: s, cpu: model.cpuHist, gpu: model.gpuHist,
                                                      mem: model.memHist, net: model.netHist,
-                                                     fan: model.fanHist, tiles: Store.popupTiles)) {
+                                                     fan: model.fanHist, tiles: Store.popupTiles,
+                                                     scale: typeScale.value)) {
                         metricGrid(s)
                     }
                     .equatable()

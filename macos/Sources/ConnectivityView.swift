@@ -363,7 +363,7 @@ struct ConnectivityView: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: Self.glyph(c.status))
                     .font(.system(size: Brand.scaled(15))).foregroundStyle(Self.color(c.status))
-                    .frame(width: 20)
+                    .frame(width: Brand.scaled(20))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(c.title).font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
                     Text(c.detail).font(Brand.sans(12)).foregroundStyle(Brand.textSecondary)
