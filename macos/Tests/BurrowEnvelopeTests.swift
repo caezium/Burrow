@@ -329,21 +329,21 @@ final class BurrowEnvelopeTests: XCTestCase {
         }
     }
 
-    /// Put the switch in a chosen state and put it back exactly as it was.
-    ///
-    /// These tests run against `UserDefaults.standard` for the real app domain,
-    /// so removing the key outright would erase a kill-switch the developer had
-    /// genuinely set — restoring the prior value, absent or not, keeps the suite
-    /// from editing anyone's configuration.
+    /// The switch lives in the scratch suite for the duration — see the shared fixture.
     private func withStreamSwitch(_ value: Bool?, _ body: () -> Void) {
-        let key = "BurrowStreamViaConductor"
-        let saved = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let saved { UserDefaults.standard.set(saved, forKey: key) }
-            else { UserDefaults.standard.removeObject(forKey: key) }
+        ConductorBundleFixture.withStreamSwitch(value, body)
+    }
+
+    /// The property the fixture exists for: flipping the switch inside a test must leave the
+    /// developer's real preference domain exactly as it was.
+    func testStreamSwitchFixture_neverWritesTheLiveDefaultsDomain() {
+        let key = BurrowConductor.streamingKey
+        let before = UserDefaults.standard.object(forKey: key) as? Bool
+        withStreamSwitch(false) {
+            XCTAssertFalse(BurrowConductor.streamingEnabled)
+            XCTAssertEqual(UserDefaults.standard.object(forKey: key) as? Bool, before,
+                           "the switch must be flipped in the scratch suite, not in .standard")
         }
-        if let value { UserDefaults.standard.set(value, forKey: key) }
-        else { UserDefaults.standard.removeObject(forKey: key) }
-        body()
+        XCTAssertEqual(UserDefaults.standard.object(forKey: key) as? Bool, before)
     }
 }

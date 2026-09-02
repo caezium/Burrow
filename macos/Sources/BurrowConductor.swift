@@ -151,12 +151,19 @@ enum BurrowConductor {
 
     // MARK: - Streaming clean/optimize (opt-in)
 
+    /// The kill-switch key, read through `Store.d` like every other preference rather than
+    /// `UserDefaults.standard` directly. In production the two are the same object; the
+    /// difference is that a test can point `Store.d` at a scratch suite and flip this switch
+    /// without writing to the developer's live `dev.caezium.Burrow` domain — which is what the
+    /// suite used to do, and what made it non-hermetic on a bare runner.
+    static let streamingKey = "BurrowStreamViaConductor"
+
     /// Default ON (hand-validated on a real build): streaming clean/optimize route through the
     /// bundled conductor (`burrow <cmd> --stream`), falling back to the direct engine on any
     /// miss. Kill-switch:
     ///   `defaults write dev.caezium.Burrow BurrowStreamViaConductor -bool NO`
     static var streamingEnabled: Bool {
-        (UserDefaults.standard.object(forKey: "BurrowStreamViaConductor") as? Bool) ?? true
+        (Store.d.object(forKey: streamingKey) as? Bool) ?? true
     }
 
     /// Default OFF: the per-child walk stays the default because its "scanning <child> · k/N"
@@ -165,7 +172,7 @@ enum BurrowConductor {
     /// empty), which reads as opaque. Opt into the fast-but-opaque path with:
     ///   `defaults write dev.caezium.Burrow BurrowStreamAnalyze -bool YES`
     static var streamingAnalyzeEnabled: Bool {
-        (UserDefaults.standard.object(forKey: "BurrowStreamAnalyze") as? Bool) ?? false
+        (Store.d.object(forKey: "BurrowStreamAnalyze") as? Bool) ?? false
     }
 
     /// The streamable engine commands the conductor forwards with `--stream`. purge/installer are

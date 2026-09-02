@@ -401,15 +401,16 @@ final class OperationFlowTests: XCTestCase {
     func testFallbackPath_stillTranslatesArgv_whenResolveMoFindsTheBundledEngine() async throws {
         MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
         defer { MoleCLI.bundledExecutableOverride = nil }
-        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
         let port = FakeProcessPort(script: Self.cannedCleanStream)
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
                                                 resolveMo: { _ in "/fake/bundled/burrow" },
                                                 center: OperationCenter())
         // A live real clean — mo-style, no --dry-run — is exactly the destructive case: reaching
-        // the engine without --apply would silently no-op it (the §2 bug).
-        flow.start(.moleStream(["clean"], elevated: true, label: "Cleaning caches"))
+        // the engine without --apply would silently no-op it (the §2 bug). The switch is read
+        // at `start`, so it only needs to be off for that call.
+        ConductorBundleFixture.withStreamSwitch(false) {
+            flow.start(.moleStream(["clean"], elevated: true, label: "Cleaning caches"))
+        }
         await settle(flow)
         let spec = try XCTUnwrap(port.specs.first)
         XCTAssertEqual(spec.executable, "/fake/bundled/burrow")
@@ -429,13 +430,13 @@ final class OperationFlowTests: XCTestCase {
         // this elevated PREVIEW into a live delete instead — the dangerous direction.
         MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
         defer { MoleCLI.bundledExecutableOverride = nil }
-        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
         let port = FakeProcessPort(script: Self.cannedClean)
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
                                                 resolveMo: { _ in "/opt/homebrew/bin/mo" },
                                                 center: OperationCenter())
-        flow.start(.moleStream(["clean", "--dry-run"], elevated: true, label: "Scanning caches"))
+        ConductorBundleFixture.withStreamSwitch(false) {
+            flow.start(.moleStream(["clean", "--dry-run"], elevated: true, label: "Scanning caches"))
+        }
         await settle(flow)
         let spec = try XCTUnwrap(port.specs.first)
         XCTAssertEqual(spec.executable, "/opt/homebrew/bin/mo")

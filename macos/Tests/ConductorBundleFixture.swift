@@ -31,6 +31,28 @@ enum ConductorBundleFixture {
         "touch '\(marker.path)'\n" + defaultStub
     }
 
+    /// Runs `body` with the `BurrowStreamViaConductor` kill-switch in a chosen state — `nil` is
+    /// "unset", the shipped default — and puts everything back afterwards.
+    ///
+    /// The switch is read through `Store.d`, so this points `Store.d` at the shared scratch suite
+    /// (the same one `StoreTests` uses) for the duration and restores the previous defaults
+    /// object on exit. Nothing here touches `UserDefaults.standard`: the test bundle is hosted
+    /// inside the real app, so `.standard` IS the developer's live domain, and a suite that wrote
+    /// there could erase a kill-switch they had genuinely set — or, on a bare CI runner, leave a
+    /// preference behind. Either way it is the opposite of hermetic.
+    static func withStreamSwitch<T>(_ value: Bool?, _ body: () throws -> T) rethrows -> T {
+        let saved = Store.d
+        let scratch = UserDefaults(suiteName: StoreTests.scratchSuite)!
+        scratch.removePersistentDomain(forName: StoreTests.scratchSuite)
+        Store.d = scratch
+        defer {
+            scratch.removePersistentDomain(forName: StoreTests.scratchSuite)
+            Store.d = saved
+        }
+        if let value { scratch.set(value, forKey: BurrowConductor.streamingKey) }
+        return try body()
+    }
+
     /// Runs `body` with the conductor lookup pointed at a temporary directory, then restores the
     /// real one. `present: false` leaves the directory empty; `present: true` stages an executable
     /// stub named `burrow`.
