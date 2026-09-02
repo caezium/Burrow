@@ -452,7 +452,7 @@ struct SettingsView: View {
                     .labelsHidden().pickerStyle(.segmented).frame(width: 200)
                     .onChange(of: removalMode) { _, v in Store.cacheRemovalMode = v }
                 }
-                footnote("Permanent (default): the engine removes caches outright — freed space is real, immediately. Trash: reviewed, ticked paths go to the Trash instead — recoverable, but space frees only when Trash empties, and the run won't appear in `mo history`.")
+                footnote("Governs the reviewed clean (Scan → Review → Confirm). Permanent (default): the engine removes the ticked paths outright — freed space is real, immediately. Trash: Burrow moves the ticked paths to the Trash itself — recoverable, but space frees only when Trash empties, and the run won't appear in the cleanup history. \"Clean now\" (the engine's own selection, no review) always moves to the Trash and reports it as moved, not freed.")
             }
 
             section("Storage", "internaldrive") {
