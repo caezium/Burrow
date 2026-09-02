@@ -30,6 +30,10 @@ private struct MetricGridKey: Equatable {
     let snap: MoleStatus
     let cpu, gpu, mem, net, fan: [Double]
     let tiles: Set<MenuBarMetric>
+    /// The grid's fonts and tile sizes resolve through `Brand.scaled`, so a
+    /// text-scale change must open the gate even when the metrics haven't
+    /// moved — otherwise the grid keeps the old scale until the next sample.
+    let scale: InterfaceScale
 }
 
 struct PopupView: View {
@@ -37,6 +41,11 @@ struct PopupView: View {
     @ObservedObject private var ops = OperationCenter.shared
     @ObservedObject private var awake = Awake.shared
     @ObservedObject private var cleanScreen = CleanScreen.shared
+    /// The hosting view is created once by StatusBarController and retained,
+    /// so the popup must observe the text scale itself — a Settings change
+    /// re-evaluates this body (even while the popover is closed) and the
+    /// popover opens at the new scale instead of flashing the old one.
+    @ObservedObject private var typeScale = TypeScale.shared
     private weak var delegate: AppDelegate?
 
     init(db: DB, live: LiveFeed, feeds: FeedHub, delegate: AppDelegate) {
@@ -63,7 +72,8 @@ struct PopupView: View {
                 if sections.contains(.metrics) {
                     EquatableGate(key: MetricGridKey(snap: s, cpu: model.cpuHist, gpu: model.gpuHist,
                                                      mem: model.memHist, net: model.netHist,
-                                                     fan: model.fanHist, tiles: Store.popupTiles)) {
+                                                     fan: model.fanHist, tiles: Store.popupTiles,
+                                                     scale: typeScale.value)) {
                         metricGrid(s)
                     }
                     .equatable()
@@ -80,7 +90,10 @@ struct PopupView: View {
             }
         }
         .padding(13)
-        .frame(width: 334)
+        // Width tracks the interface text scale (issue #407) so larger type
+        // keeps roughly the same line lengths instead of wrapping everywhere.
+        // HUDController sizes the popover from the same number.
+        .frame(width: Brand.scaled(334))
         // Warm tactile ground + grain, matching the main window — the HUD used
         // to ride bare popover material and read as unfinished beside it.
         .background {
@@ -105,7 +118,7 @@ struct PopupView: View {
         Button { open(.home) } label: {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 13)).foregroundStyle(HealthRating.color(s.healthScore))
+                    .font(.system(size: Brand.scaled(13))).foregroundStyle(HealthRating.color(s.healthScore))
                 Text("\(s.healthScore)").font(Brand.mono(16, .semibold)).foregroundStyle(Brand.textPrimary)
                 Text(headline(s)).font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
                     .lineLimit(1).truncationMode(.tail)
@@ -120,7 +133,7 @@ struct PopupView: View {
                 // popover fault).
                 Text(freeSpace(s))
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                Image(systemName: "chevron.right").font(.system(size: Brand.scaled(9), weight: .semibold))
                     .foregroundStyle(Brand.textTertiary)
             }
             .contentShape(Rectangle())
@@ -227,9 +240,9 @@ struct PopupView: View {
             Circle().fill(accent).frame(width: 8, height: 8)
                 .shadow(color: accent.opacity(0.6), radius: 3).padding(3.5)
         case .done:
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Brand.green)
+            Image(systemName: "checkmark.circle.fill").font(.system(size: Brand.scaled(13))).foregroundStyle(Brand.green)
         case .failed:
-            Image(systemName: "xmark.circle.fill").font(.system(size: 13)).foregroundStyle(Brand.red)
+            Image(systemName: "xmark.circle.fill").font(.system(size: Brand.scaled(13))).foregroundStyle(Brand.red)
         }
     }
 
@@ -438,7 +451,7 @@ struct PopupView: View {
                 }
                 if let drain = model.topDrain {
                     HStack(spacing: 5) {
-                        Image(systemName: "bolt.fill").font(.system(size: 9)).foregroundStyle(Brand.gold)
+                        Image(systemName: "bolt.fill").font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.gold)
                         Text(String(format: NSLocalizedString("Top drain — %@ · avg %.0f%% CPU over the last hour", comment: ""),
                                     drain.name, drain.avgCPU))
                             .font(Brand.mono(9)).foregroundStyle(Brand.textSecondary).lineLimit(1)
@@ -512,7 +525,7 @@ struct PopupView: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis").font(.system(size: 10)).foregroundStyle(Brand.textTertiary)
+            Image(systemName: "ellipsis").font(.system(size: Brand.scaled(10))).foregroundStyle(Brand.textTertiary)
                 .frame(width: 16, height: 16).contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -557,8 +570,8 @@ struct PopupView: View {
     /// label — matches the OS amber-dot semantics, no per-app attribution.
     private var privacyIndicator: some View {
         HStack(spacing: 5) {
-            if model.cameraActive { Image(systemName: "video.fill").font(.system(size: 10)) }
-            if model.micActive { Image(systemName: "mic.fill").font(.system(size: 10)) }
+            if model.cameraActive { Image(systemName: "video.fill").font(.system(size: Brand.scaled(10))) }
+            if model.micActive { Image(systemName: "mic.fill").font(.system(size: Brand.scaled(10))) }
             Text("in use").font(Brand.mono(10, .medium))
         }
         .foregroundStyle(Brand.red)
@@ -571,7 +584,7 @@ struct PopupView: View {
     private func utilityButton(glyph: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: glyph).font(.system(size: 10, weight: .medium))
+                Image(systemName: glyph).font(.system(size: Brand.scaled(10), weight: .medium))
                 Text(label).font(Brand.mono(10, .medium))
             }
             .foregroundStyle(active ? Brand.gold : Brand.textSecondary)
@@ -612,7 +625,7 @@ struct PopupView: View {
                 ForEach(Tool.navOrder) { tool in
                     Button { open(.tool(tool)) } label: {
                         Image(systemName: tool.glyph)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: Brand.scaled(12), weight: .medium))
                             .foregroundStyle(tool.accent)
                             .frame(maxWidth: .infinity, minHeight: 26)
                             .background(Capsule().fill(Brand.chipFill))
@@ -642,7 +655,7 @@ struct PopupView: View {
 
     private func iconButton(_ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+            Image(systemName: symbol).font(.system(size: Brand.scaled(12))).foregroundStyle(Brand.textSecondary)
         }.buttonStyle(.plain)
     }
 

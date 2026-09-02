@@ -18,6 +18,33 @@
 import AppKit
 import SwiftUI
 
+/// The live interface text scale (issue #407). One process-wide object so
+/// the `Brand` font factories — plain static funcs with no environment —
+/// can read the factor cheaply on every body evaluation, and so the window
+/// roots (`RootView`) can observe it and re-render when Settings changes
+/// it. Not the menu-bar status item: that renders through `MenuBarRenderer`
+/// with its own per-widget `MenuBarTextSize`.
+final class TypeScale: ObservableObject {
+    static let shared = TypeScale()
+
+    @Published private(set) var value: InterfaceScale
+    /// Cached so `Brand.scaled` is a field read, not an enum switch plus a
+    /// defaults lookup, on each of the hundreds of font calls per render.
+    private(set) var factor: CGFloat
+
+    private init() {
+        let v = Store.interfaceScale
+        value = v
+        factor = v.factor
+    }
+
+    func set(_ newValue: InterfaceScale) {
+        Store.interfaceScale = newValue
+        factor = newValue.factor
+        value = newValue
+    }
+}
+
 extension Color {
     /// 0xRRGGBB literal → sRGB Color.
     init(hex: UInt, alpha: Double = 1) {
@@ -121,17 +148,29 @@ enum Brand {
     // one family. Asking a variable font for a weight it has no registered face
     // for made CoreText synthesize the instance, and that occasionally produced
     // no glyphs at all — see the note in Fonts.swift.
+    //
+    // Sizes here and at `.system(size:)` call sites are written at the
+    // historical 1.0-scale values; the user's interface text scale
+    // (issue #407) multiplies through `scaled(_:)` at resolve time.
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .custom(Fonts.geistMono(weight), size: size)
+        .custom(Fonts.geistMono(weight), size: scaled(size))
     }
     static func sans(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .custom(Fonts.geist(weight), size: size)
+        .custom(Fonts.geist(weight), size: scaled(size))
     }
     /// The display / hero voice — Cal Sans.
     static func display(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .custom(Fonts.display, size: size).weight(weight)
+        .custom(Fonts.display, size: scaled(size)).weight(weight)
     }
     static func serif(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .custom(Fonts.display, size: size).weight(weight)
+        .custom(Fonts.display, size: scaled(size)).weight(weight)
+    }
+
+    /// A point size at the user's interface text scale. The brand factories
+    /// above apply it themselves; glyph sizes (`.system(size:)` on SF
+    /// Symbols) and the popover width opt in at the call site so icons keep
+    /// pace with the text they sit beside.
+    static func scaled(_ size: CGFloat) -> CGFloat {
+        size * TypeScale.shared.factor
     }
 }

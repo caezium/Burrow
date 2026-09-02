@@ -99,6 +99,15 @@ struct RootView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The interface text scale (issue #407). Brand's font factories read the
+    /// factor themselves at body evaluation; observing here makes a Settings
+    /// change re-evaluate the tree from the root so fonts resolve at the new
+    /// size. Deliberately NOT `.id(_:)` — an identity change would destroy
+    /// every descendant's @State/@StateObject (Analyze results, Clean review
+    /// selections) just to change a font size. Equatable-gated leaves that
+    /// skip the re-evaluation catch up on their next data tick.
+    @ObservedObject private var typeScale = TypeScale.shared
+
     init(db: DB, producer: SnapshotProducer, feeds: FeedHub, delegate: AppDelegate?, initialPane: Pane = .home) {
         self.db = db
         self.producer = producer

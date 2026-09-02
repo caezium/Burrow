@@ -33,7 +33,7 @@ struct ProcessTreeView: View {
                 Text(NSLocalizedString("Subtree totals", comment: ""))
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(Brand.textTertiary)
+                    Image(systemName: "xmark.circle.fill").font(.system(size: Brand.scaled(15))).foregroundStyle(Brand.textTertiary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(NSLocalizedString("Close", comment: ""))

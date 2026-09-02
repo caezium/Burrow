@@ -45,7 +45,7 @@ struct ShortcutRecorder: View {
                     set(nil)
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11)).foregroundStyle(Brand.textTertiary)
+                        .font(.system(size: Brand.scaled(11))).foregroundStyle(Brand.textTertiary)
                 }
                 .buttonStyle(.plain)
                 .help(NSLocalizedString("Clear shortcut", comment: ""))

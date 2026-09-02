@@ -61,7 +61,7 @@ struct NetView: View {
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             }
             Button { model.scan() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
@@ -80,7 +80,7 @@ struct NetView: View {
 
     private var conductorMissing: some View {
         VStack(spacing: 10) {
-            Image(systemName: "shippingbox").font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+            Image(systemName: "shippingbox").font(.system(size: Brand.scaled(26))).foregroundStyle(Brand.textTertiary)
             Text(NSLocalizedString("The bundled burrow conductor is missing", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("Network sampling runs through the bundled `burrow` CLI. This build shipped without it — a dev build without the vendor/burrow-cli submodule. Release builds include it.", comment: ""))
@@ -91,7 +91,7 @@ struct NetView: View {
 
     private var idleState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "arrow.up.arrow.down").font(.system(size: 26)).foregroundStyle(Tool.net.accent)
+            Image(systemName: "arrow.up.arrow.down").font(.system(size: Brand.scaled(26))).foregroundStyle(Tool.net.accent)
             Text(NSLocalizedString("Watch what travels the tunnels", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("One nettop sample of every process's bytes in and out, biggest talkers first. Read-only — it names the talkers, it doesn't quiet them.", comment: ""))
@@ -124,7 +124,7 @@ struct NetView: View {
 
     private func errorState(_ message: String) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 22)).foregroundStyle(Brand.orange)
+            Image(systemName: "exclamationmark.triangle").font(.system(size: Brand.scaled(22))).foregroundStyle(Brand.orange)
             Text(message).font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 340)
         }
@@ -132,7 +132,7 @@ struct NetView: View {
 
     private var quietState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle").font(.system(size: 24)).foregroundStyle(Tool.net.accent)
+            Image(systemName: "checkmark.circle").font(.system(size: Brand.scaled(24))).foregroundStyle(Tool.net.accent)
             Text(NSLocalizedString("All quiet", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("No process moved bytes during the sample window.", comment: ""))

@@ -28,7 +28,7 @@ struct ExplainView: View {
                     .font(Brand.serif(18, .medium)).foregroundStyle(Brand.textPrimary)
                 Spacer()
                 Button { onClose() } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 16))
+                    Image(systemName: "xmark.circle.fill").font(.system(size: Brand.scaled(16)))
                         .foregroundStyle(Brand.textTertiary)
                 }.buttonStyle(.plain)
             }

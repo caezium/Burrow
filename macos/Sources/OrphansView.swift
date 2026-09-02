@@ -50,7 +50,7 @@ struct OrphansView: View {
     private var toolbar: some View {
         HStack(spacing: 8) {
             Button { model.goUp() } label: {
-                Image(systemName: "arrow.up").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.up").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(model.canGoUp ? Brand.textSecondary : Brand.textTertiary.opacity(0.35))
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
@@ -64,7 +64,7 @@ struct OrphansView: View {
             }
             ForEach(Array(model.crumbs.enumerated()), id: \.offset) { idx, crumb in
                 if idx > 0 {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                    Image(systemName: "chevron.right").font(.system(size: Brand.scaled(9), weight: .semibold))
                         .foregroundStyle(Brand.textTertiary)
                 }
                 Button { model.goToCrumb(idx) } label: {
@@ -80,14 +80,14 @@ struct OrphansView: View {
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             }
             Button { pickFolder() } label: {
-                Image(systemName: "folder").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "folder").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
             .disabled(!BurrowConductor.isAvailable)
             .help(NSLocalizedString("Choose a folder…", comment: ""))
             Button { model.rescan() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(model.folder == nil ? Brand.textTertiary.opacity(0.35) : Brand.textSecondary)
             }
             .buttonStyle(.plain)
@@ -120,7 +120,7 @@ struct OrphansView: View {
 
     private var conductorMissing: some View {
         VStack(spacing: 10) {
-            Image(systemName: "shippingbox").font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+            Image(systemName: "shippingbox").font(.system(size: Brand.scaled(26))).foregroundStyle(Brand.textTertiary)
             Text(NSLocalizedString("The bundled burrow conductor is missing", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("Leftover scanning runs through the bundled `burrow` CLI. This build shipped without it — a dev build without the vendor/burrow-cli submodule. Release builds include it.", comment: ""))
@@ -131,7 +131,7 @@ struct OrphansView: View {
 
     private var idleState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "externaldrive.badge.questionmark").font(.system(size: 26)).foregroundStyle(Tool.orphans.accent)
+            Image(systemName: "externaldrive.badge.questionmark").font(.system(size: Brand.scaled(26))).foregroundStyle(Tool.orphans.accent)
             Text(NSLocalizedString("Find what uninstalled apps left behind", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("Choose a folder and Burrow flags app-shaped caches and logs that match nothing installed. Read-only — nothing is deleted; review the evidence and reveal anything in Finder.", comment: ""))
@@ -187,7 +187,7 @@ struct OrphansView: View {
 
     private func errorState(_ message: String) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 22)).foregroundStyle(Brand.orange)
+            Image(systemName: "exclamationmark.triangle").font(.system(size: Brand.scaled(22))).foregroundStyle(Brand.orange)
             Text(message).font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 340)
         }
@@ -195,7 +195,7 @@ struct OrphansView: View {
 
     private var cleanState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle").font(.system(size: 24)).foregroundStyle(Tool.orphans.accent)
+            Image(systemName: "checkmark.circle").font(.system(size: Brand.scaled(24))).foregroundStyle(Tool.orphans.accent)
             Text(NSLocalizedString("No leftovers here", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("Everything in this folder matches an installed app.", comment: ""))
@@ -283,7 +283,7 @@ struct OrphansView: View {
     private func hitRow(_ hit: OrphanHit) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "questionmark.folder")
-                .font(.system(size: 13)).foregroundStyle(Tool.orphans.accent)
+                .font(.system(size: Brand.scaled(13))).foregroundStyle(Tool.orphans.accent)
                 .frame(width: 20)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
@@ -297,13 +297,13 @@ struct OrphansView: View {
             Spacer()
             if !hit.evidence.isEmpty {
                 Image(systemName: "info.circle")
-                    .font(.system(size: 11)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(11))).foregroundStyle(Brand.textTertiary)
                     .help(String(format: NSLocalizedString("Why it's flagged: %@", comment: ""),
                                  hit.evidence.joined(separator: " · ")))
             }
             Button { AnalyzeIcons.reveal(hit.path) } label: {
                 Image(systemName: "magnifyingglass.circle")
-                    .font(.system(size: 12)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(12))).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain)
             .help(NSLocalizedString("Reveal in Finder", comment: ""))

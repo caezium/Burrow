@@ -197,7 +197,7 @@ struct OnboardingView: View {
                             featureLine(NSLocalizedString("Open source — read every line", comment: ""))
                             Link(destination: URL(string: "https://github.com/caezium/Burrow")!) {
                                 Image(systemName: "arrow.up.right.square")
-                                    .font(.system(size: 10)).foregroundStyle(Brand.textTertiary)
+                                    .font(.system(size: Brand.scaled(10))).foregroundStyle(Brand.textTertiary)
                             }
                             .accessibilityLabel(NSLocalizedString("Open the Burrow repository on GitHub", comment: ""))
                         }
@@ -253,7 +253,7 @@ struct OnboardingView: View {
     private func featureLine(_ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .bold)).foregroundStyle(Brand.green)
+                .font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(Brand.green)
                 .padding(3)
                 .background(Circle().fill(Brand.green.opacity(0.15)))
                 .accessibilityHidden(true)

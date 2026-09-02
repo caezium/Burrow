@@ -65,6 +65,7 @@ struct SettingsView: View {
     /// means a relaunch is needed before scans can reach protected caches.
     private let fdaAtOpen = Privacy.hasFullDiskAccess()
     @State private var appLanguage: String = Store.appLanguage
+    @State private var interfaceScale: InterfaceScale = Store.interfaceScale
     // Loaded off-main in onAppear — `SMAppService.status` is a synchronous
     // XPC call that hung the main thread when read in this @State initializer.
     @State private var launchAtLogin: Bool = false
@@ -285,6 +286,21 @@ struct SettingsView: View {
                 footnote("A language change takes effect after a relaunch.")
             }
 
+            section("Appearance", "textformat.size") {
+                HStack {
+                    Text(NSLocalizedString("Text size", comment: "")).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary)
+                    Spacer()
+                    Picker("", selection: $interfaceScale) {
+                        ForEach(InterfaceScale.allCases) { Text($0.title).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.menu).tint(Brand.textSecondary).fixedSize()
+                    .onChange(of: interfaceScale) { _, v in
+                        TypeScale.shared.set(v)
+                    }
+                }
+                footnote("Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar.")
+            }
+
             section("Startup & window", "macwindow") {
                 toggleRow("Launch at Login", isOn: $launchAtLogin) { on in
                     do {
@@ -418,7 +434,7 @@ struct SettingsView: View {
                                 try? MoleWhitelist.live.remove(pattern)
                                 whitelistPatterns = MoleWhitelist.live.patterns()
                             } label: {
-                                Image(systemName: "minus.circle").font(.system(size: 11))
+                                Image(systemName: "minus.circle").font(.system(size: Brand.scaled(11)))
                                     .foregroundStyle(Brand.textTertiary)
                             }
                             .buttonStyle(.plain)
@@ -535,7 +551,7 @@ struct SettingsView: View {
     private var menuBarCompatibilityNotice: some View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: Brand.scaled(11), weight: .semibold))
                 .foregroundStyle(Brand.amber)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
@@ -999,7 +1015,7 @@ struct SettingsView: View {
 
         var body: some View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "arrow.right").font(.system(size: 8, weight: .bold))
+                Image(systemName: "arrow.right").font(.system(size: Brand.scaled(8), weight: .bold))
                     .foregroundStyle(Brand.green).accessibilityHidden(true)
                 Text("\u{201C}\(text)\u{201D}").font(Brand.sans(12)).foregroundStyle(Brand.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1011,7 +1027,7 @@ struct SettingsView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { copied = false }
                 } label: {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 10))
+                        .font(.system(size: Brand.scaled(10)))
                         .foregroundStyle(copied ? Brand.green : (hovering ? Brand.textSecondary : Brand.textTertiary))
                 }
                 .buttonStyle(.plain)
@@ -1230,29 +1246,29 @@ struct SettingsView: View {
 
     private func menuBarMetricRow(index idx: Int, item: MenuBarItem) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: item.metric.glyph).font(.system(size: 11))
+            Image(systemName: item.metric.glyph).font(.system(size: Brand.scaled(11)))
                 .foregroundStyle(Brand.textSecondary).frame(width: 16)
             Text(item.metric.title).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary)
             Text(item.resolvedStyle.title).font(Brand.mono(9)).foregroundStyle(Brand.textTertiary)
             Spacer(minLength: 6)
             Button { moveMenuBarItem(idx, by: -1) } label: {
-                Image(systemName: "chevron.up").font(.system(size: 9, weight: .bold)).foregroundStyle(Brand.textTertiary)
+                Image(systemName: "chevron.up").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain).disabled(idx == 0).accessibilityLabel(NSLocalizedString("Move up", comment: ""))
             Button { moveMenuBarItem(idx, by: 1) } label: {
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Brand.textTertiary)
+                Image(systemName: "chevron.down").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain).disabled(idx == menuBarItems.count - 1).accessibilityLabel(NSLocalizedString("Move down", comment: ""))
             Button {
                 expandedMenuBarItem = (expandedMenuBarItem == item.id) ? nil : item.id
             } label: {
                 Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 11))
+                    .font(.system(size: Brand.scaled(11)))
                     .foregroundStyle(expandedMenuBarItem == item.id ? Brand.green : Brand.textTertiary)
             }
             .buttonStyle(.plain).accessibilityLabel(NSLocalizedString("Options", comment: ""))
             Button { removeMenuBarItem(idx) } label: {
-                Image(systemName: "minus.circle.fill").font(.system(size: 12)).foregroundStyle(Brand.textTertiary)
+                Image(systemName: "minus.circle.fill").font(.system(size: Brand.scaled(12))).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain).accessibilityLabel(NSLocalizedString("Remove", comment: ""))
         }
