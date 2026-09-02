@@ -148,9 +148,9 @@ struct DupesView: View {
                 .multilineTextAlignment(.center).frame(maxWidth: 440)
             Button { pickFolder() } label: {
                 Text(NSLocalizedString("Choose a folder…", comment: ""))
-                    .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
+                    .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.onInverse)
                     .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(Capsule().fill(.white))
+                    .background(Capsule().fill(Brand.inverse))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -286,7 +286,7 @@ struct DupesView: View {
         Button(action: action) {
             ZStack {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(state == .none ? Color.white.opacity(0.07) : Tool.dupes.accent.opacity(0.9))
+                    .fill(state == .none ? Brand.chipFill : Tool.dupes.accent.opacity(0.9))
                     .frame(width: 17, height: 17)
                 switch state {
                 case .all:
@@ -310,7 +310,7 @@ struct DupesView: View {
             Button { model.toggle(path) } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(ticked ? Tool.dupes.accent.opacity(0.9) : Color.white.opacity(0.07))
+                        .fill(ticked ? Tool.dupes.accent.opacity(0.9) : Brand.chipFill)
                         .frame(width: 15, height: 15)
                     if ticked {
                         Image(systemName: "checkmark").font(.system(size: Brand.scaled(8), weight: .bold)).foregroundStyle(.black)
@@ -358,7 +358,7 @@ struct DupesView: View {
                 Text(NSLocalizedString("Reclaim via clones…", comment: ""))
                     .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.textPrimary)
                     .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .background(Capsule().fill(Brand.chipFill))
                     .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -369,9 +369,9 @@ struct DupesView: View {
                 Text(String(format: NSLocalizedString("Move to Trash · %@", comment: "confirm pill"),
                             Fmt.bytes(model.selection.selectedBytes(in: report))))
                     .font(Brand.sans(12, .semibold))
-                    .foregroundStyle(model.selection.isEmpty ? Brand.textTertiary : .black)
+                    .foregroundStyle(model.selection.isEmpty ? Brand.textTertiary : Brand.onInverse)
                     .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(Capsule().fill(model.selection.isEmpty ? Color.white.opacity(0.06) : Color.white))
+                    .background(Capsule().fill(model.selection.isEmpty ? Brand.chipFill : Brand.inverse))
             }
             .buttonStyle(.plain)
             .disabled(model.selection.isEmpty || model.deduping || model.scanning)

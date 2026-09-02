@@ -143,7 +143,7 @@ struct SoftwareView: View {
             if BrewClient.isInstalled { seg("Services", .services) }
         }
         .padding(3)
-        .background(Capsule().fill(Color.black.opacity(0.22)))
+        .background(Capsule().fill(Brand.insetFill))
         .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
@@ -151,9 +151,9 @@ struct SoftwareView: View {
         let on = model.segment == value
         return Button { model.segment = value } label: {
             Text(NSLocalizedString(title, comment: "")).font(Brand.mono(11, on ? .semibold : .regular))
-                .foregroundStyle(on ? .black : Brand.textSecondary)
+                .foregroundStyle(on ? Brand.onInverse : Brand.textSecondary)
                 .padding(.horizontal, 12).padding(.vertical, 5)
-                .background { if on { Capsule().fill(.white) } }
+                .background { if on { Capsule().fill(Brand.inverse) } }
                 .contentShape(Capsule())
         }.buttonStyle(.plain)
     }
@@ -165,7 +165,7 @@ struct SoftwareView: View {
                 .textFieldStyle(.plain).font(Brand.sans(12)).frame(width: 130)
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(Capsule().fill(Color.black.opacity(0.22)))
+        .background(Capsule().fill(Brand.insetFill))
         .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
@@ -186,7 +186,7 @@ struct SoftwareView: View {
                 .textFieldStyle(.plain).font(Brand.sans(12)).frame(width: 130)
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(Capsule().fill(Color.black.opacity(0.22)))
+        .background(Capsule().fill(Brand.insetFill))
         .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
@@ -291,9 +291,9 @@ struct SoftwareView: View {
             } label: {
                 Text(model.uninstallButtonTitle)
                     .font(Brand.sans(12, .semibold))
-                    .foregroundStyle(model.selected.isEmpty ? Brand.textTertiary : .black)
+                    .foregroundStyle(model.selected.isEmpty ? Brand.textTertiary : Brand.onInverse)
                     .padding(.horizontal, 16).padding(.vertical, 7)
-                    .background(Capsule().fill(model.selected.isEmpty ? Color.white.opacity(0.06) : Color.white))
+                    .background(Capsule().fill(model.selected.isEmpty ? Brand.chipFill : Brand.inverse))
             }
             .buttonStyle(.plain)
             .disabled(model.selected.isEmpty)
@@ -418,7 +418,7 @@ struct AppRow: View {
                 }
             }
             .padding(12)
-            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.black.opacity(0.22)))
+            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Brand.insetFill))
             .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
         } else if preview != nil {
             // Still says nothing about what Remove will then do, for the one reason that survived
@@ -477,7 +477,7 @@ struct AppRow: View {
             } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(ticked ? Tool.apps.accent.opacity(0.9) : Color.white.opacity(0.07))
+                        .fill(ticked ? Tool.apps.accent.opacity(0.9) : Brand.chipFill)
                         .frame(width: 14, height: 14)
                     if refusal != nil {
                         Image(systemName: "lock.fill").font(.system(size: Brand.scaled(7), weight: .bold))

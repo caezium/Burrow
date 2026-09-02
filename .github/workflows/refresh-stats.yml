@@ -41,6 +41,13 @@ jobs:
         # signal worth reading, not a failure.
         run: python3 scripts/site-release.py --stats
 
+      # The download line is printed on every translated copy too. Without
+      # this, each refresh leaves docs/<lang>/index.html one count behind the
+      # English page and `site-i18n.py --check` fails on every PR until
+      # someone regenerates by hand.
+      - name: Regenerate translated pages from the refreshed English source
+        run: python3 scripts/site-i18n.py
+
       - name: Commit when the numbers moved
         id: commit
         run: |

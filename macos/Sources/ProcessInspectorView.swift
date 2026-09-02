@@ -203,7 +203,7 @@ struct ProcessInspectorView: View {
             VStack(alignment: .leading, spacing: 7) { rows() }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.black.opacity(0.18)))
+                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Brand.insetFill))
                 .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
         }
     }

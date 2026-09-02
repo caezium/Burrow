@@ -89,6 +89,12 @@ enum Brand {
     static let cardFillHover = Color.adaptive(0xF2ECE0, 0xFFFFFF, darkA: 0.11, lightA: 0.90)
     static let chipFill      = Color.adaptive(0xF2ECE0, 0x2A2114, darkA: 0.08, lightA: 0.07)
     static let trackFill     = Color.adaptive(0xF2ECE0, 0x2A2114, darkA: 0.10, lightA: 0.10)
+    /// Recessed panel/track — darker than the ground in both modes.
+    static let insetFill     = Color.adaptive(0x000000, 0x2A2114, darkA: 0.22, lightA: 0.07)
+
+    // MARK: Inverse — the high-contrast CTA pill (bright on dark, ink on paper)
+    static let inverse   = Color.adaptive(0xFFFFFF, 0x221B11)
+    static let onInverse = Color.adaptive(0x0F0B05, 0xF4EFE6)
 
     // MARK: Accent — one electric blue for primary emphasis (both modes)
     static let accent   = Color(hex: 0x5B8DEF)

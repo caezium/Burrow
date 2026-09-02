@@ -201,7 +201,10 @@ struct RootView: View {
         }
         // At most one banner at a time. FDA outranks the helper: without it
         // scans can't read the caches the helper would elevate over anyway.
-        .overlay(alignment: .bottom) {
+        // A safe-area inset, NOT an overlay: panes anchor their own confirm
+        // footers to the bottom edge, and an overlay drawn over them swallowed
+        // their clicks (#410 — the banner sat exactly on Clean's confirm pill).
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if !fdaGranted, !fdaBannerDismissed {
                 AccessBanner(
                     title: NSLocalizedString("Full Disk Access is off", comment: ""),

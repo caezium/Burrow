@@ -20,6 +20,11 @@ struct AccessBanner: View {
     var onAction: () -> Void = { Privacy.openFullDiskAccessSettings() }
     var onDismiss: () -> Void
 
+    /// The bar keeps its fixed dark ground in both modes, so every foreground
+    /// must be fixed too — the adaptive Brand text colours turn espresso in
+    /// light mode and vanished against this background (#410).
+    private static let onDark = Color(hex: 0xEDE6DA)
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: glyph)
@@ -30,23 +35,23 @@ struct AccessBanner: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.textPrimary)
+                    .font(Brand.sans(12, .semibold)).foregroundStyle(Self.onDark)
                 Text(detail)
-                    .font(Brand.sans(11)).foregroundStyle(Brand.textSecondary)
+                    .font(Brand.sans(11)).foregroundStyle(Self.onDark.opacity(0.62))
             }
             Spacer(minLength: 14)
             Button(action: onAction) {
                 Text(actionTitle)
-                    .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.textPrimary)
+                    .font(Brand.sans(11, .semibold)).foregroundStyle(Self.onDark)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Capsule().fill(Color.white.opacity(0.10)))
-                    .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
             }
             .buttonStyle(.plain)
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: Brand.scaled(10), weight: .bold))
-                    .foregroundStyle(Brand.textTertiary)
+                    .foregroundStyle(Self.onDark.opacity(0.55))
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
             }

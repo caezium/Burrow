@@ -27,7 +27,7 @@ describes the opt-out behavior enforced below.
 
 The manifest was last re-reviewed against the shipping request and event
 fields when feature flags landed (issue #322), and needs no new entry for
-them. The `feature_flag_exposed` event is Product Interaction collected for
+them. The `$feature_flag_called` event is Product Interaction collected for
 analytics, already declared above; the decide request adds no data type the
 event pipeline was not already sending, since `api_key` is the release
 project key and `distinct_id` is the same random anonymous install id every
@@ -137,9 +137,11 @@ wrong-version files are discarded whole, and the conservative defaults stay
 in force until a later successful fetch rewrites it. An opted-out launch
 neither reads nor writes it, exactly like the event outbox.
 
-**Exposure event.** The first lookup of each flag per launch emits
-`feature_flag_exposed` with exactly two feature-flag-specific properties —
-`flag` (the allowlisted key) and `value` (boolean). The usual telemetry super
+**Exposure event.** The first lookup of each flag per launch emits PostHog's
+native `$feature_flag_called` with exactly two feature-flag-specific
+properties — `$feature_flag` (the allowlisted key) and
+`$feature_flag_response` (boolean). PostHog's flag usage and rollout views
+only count exposures sent under these names. The usual telemetry super
 properties (app version, OS build, platform, locale, etc.) are also attached,
 just like any other event. Like every event it is dropped while opted out.
 
@@ -166,7 +168,7 @@ so no IP is attached to events either.
 | `app_updated` | previous/current app version and build |
 | `engine_missing`, `install_window_ready`, `onboarding_completed` | none |
 | `telemetry_opt_in_changed` | enabled boolean |
-| `feature_flag_exposed` | `flag` (allowlisted key), boolean `value` — once per flag per launch |
+| PostHog `$feature_flag_called` | `$feature_flag` (allowlisted key), boolean `$feature_flag_response` — once per flag per launch |
 | PostHog `$screen` | fixed name: `home`, `settings`, or `tool.<known tool>` |
 | `feature_operation_started` | `feature` (`clean` or `optimize`), `dry_run` boolean, `elevated` boolean |
 | `feature_operation_completed` | `feature` (`clean` or `optimize`), fixed `result` (`succeeded`, `failed`, `authorization_cancelled`, or `cancelled`), `duration_bucket`; failed completions may add `failure_category` (`boundary_changed`, `privileged_launch_refused`, or `engine_nonzero`) |

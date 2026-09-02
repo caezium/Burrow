@@ -314,7 +314,7 @@ struct HealthRing: View {
     let color: Color
     var body: some View {
         ZStack {
-            Circle().stroke(Color.white.opacity(0.10), lineWidth: 6)
+            Circle().stroke(Brand.trackFill, lineWidth: 6)
             Circle()
                 .trim(from: 0, to: CGFloat(max(0, min(score, 100))) / 100)
                 .stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
@@ -481,7 +481,7 @@ struct RingGauge: View {
     var body: some View {
         VStack(spacing: 3) {
             ZStack {
-                Circle().stroke(Color.white.opacity(0.10), lineWidth: 4)
+                Circle().stroke(Brand.trackFill, lineWidth: 4)
                 Circle()
                     .trim(from: 0, to: CGFloat(max(0, min(percent, 100))) / 100)
                     .stroke(color, style: StrokeStyle(lineWidth: 4, lineCap: .round))
@@ -551,7 +551,7 @@ struct BluetoothStrip: View {
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Capsule().fill(Color.white.opacity(0.05)))
+        .background(Capsule().fill(Brand.chipFill))
         .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
@@ -866,7 +866,7 @@ struct AppIconView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         } else {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+                .fill(Brand.chipFill)
                 .overlay(Image(systemName: "terminal").font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.textTertiary))
         }
     }

@@ -325,7 +325,7 @@ struct MoInteractiveView: View {
                     Text(selected.isEmpty ? LocalizedStringKey("Remove") : "Remove (\(selected.count))")
                         .font(Brand.sans(12, .semibold)).foregroundStyle(selected.isEmpty ? Brand.textTertiary : .white)
                         .padding(.horizontal, 14).padding(.vertical, 6)
-                        .background(Capsule().fill(selected.isEmpty ? Color.white.opacity(0.06) : cfg.tool.accent))
+                        .background(Capsule().fill(selected.isEmpty ? Brand.chipFill : cfg.tool.accent))
                 }.buttonStyle(.plain).disabled(selected.isEmpty)
             }
             .padding(.horizontal, 18).padding(.vertical, 10)
