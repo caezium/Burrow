@@ -67,10 +67,12 @@ final class PrivilegedIdentityTests: XCTestCase {
                                         canonicalHome: "/Users/name with space")
         let command = ValidatedElevatedCommand(executable: executable, components: [],
                                                invokingUser: user, signedBundlePath: nil)
-        let script = MoleCLI.elevatedScript(command: command, args: [])
+        let script = EngineCLI.elevatedScript(command: command, args: [])
         XCTAssertTrue(script.contains("'HOME=/Users/name with space'"))
         XCTAssertTrue(script.contains("'SUDO_UID=501'"))
         XCTAssertFalse(script.contains("HOME=/var/root"))
+        XCTAssertTrue(script.contains("'BURROW_HOME=/Users/name with space'"))
+        XCTAssertTrue(script.contains("'BURROW_PRIVILEGED=1'"))
     }
 
     /// The layout every shipped copy of Burrow actually has.
@@ -110,7 +112,7 @@ final class PrivilegedIdentityTests: XCTestCase {
         XCTAssertEqual(command.signedBundlePath, layout.bundle)
         // Ownership stopped being the guarantee, so the resource seal has to
         // be checked at the boundary — without it nothing is verifying this.
-        let script = MoleCLI.elevatedScript(command: command, args: ["optimize"])
+        let script = EngineCLI.elevatedScript(command: command, args: ["optimize"])
         XCTAssertTrue(script.contains("/usr/bin/codesign --verify --strict"),
                       "the signed-bundle policy is only safe with the seal check")
         XCTAssertTrue(script.contains("/usr/bin/stat -f '%d:%i:%u:%p'"),
@@ -275,14 +277,12 @@ final class CleanupAuthorizationTests: XCTestCase {
 
         XCTAssertEqual(plan.orderedReviewedPaths(), [deeper.path, nested.path, caches.path],
                        "a parent must never be deleted before its own listed children")
-        // The shell the osascript route runs is built from the same order.
-        // Only the delete loop matters — the boundary checks ahead of it stat
-        // every root and item, so searching the whole script finds those first.
-        let shell = plan.irreversibleCleanupShell()
-        let loop = String(shell[try XCTUnwrap(shell.range(of: "for p in")).lowerBound...])
-        let deepIndex = try XCTUnwrap(loop.range(of: deeper.path)).lowerBound
-        let parentIndex = try XCTUnwrap(loop.range(of: caches.path + "'")).lowerBound
-        XCTAssertLessThan(deepIndex, parentIndex)
+        // The plan file both elevation routes hand the engine is written in that order.
+        let dir = root.appendingPathComponent("plans", isDirectory: true)
+        let file = try plan.writePlanFile(in: dir)
+        let listed = try String(contentsOf: file, encoding: .utf8)
+            .split(separator: "\n").map(String.init).filter { !$0.hasPrefix("#") }
+        XCTAssertEqual(listed, [deeper.path, nested.path, caches.path])
     }
 
     func testApprovedRootRejectsUnexpectedVolumeIdentity() throws {
@@ -339,26 +339,54 @@ final class CleanupAuthorizationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fakeTrash.path))
     }
 
-    func testIrreversibleCleanupDeletesTheReviewedTreeAndReportsSuccess() throws {
+    /// The plan file names exactly the reviewed entries — paths that came out of the dry run's
+    /// enumeration and were pinned at review — and nothing else. Its contents are the engine's
+    /// delete list, so this is the assertion that Confirm cannot widen the review.
+    func testPlanFileListsExactlyTheReviewedPathsAndNothingElse() throws {
+        let a = root.appendingPathComponent("cache-a")
+        let b = root.appendingPathComponent("cache-b")
+        let unticked = root.appendingPathComponent("cache-unticked")
+        for dir in [a, b, unticked] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: false)
+        }
+        let snapshot = try CleanupSnapshot.capture(list: list([a.path, b.path, unticked.path]),
+                                                   approvedRootURLs: [root])
+        let plan = try snapshot.plan(selectedPaths: [a.path, b.path])
+
+        let dir = root.appendingPathComponent("plans", isDirectory: true)
+        let file = try plan.writePlanFile(in: dir)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let listed = try String(contentsOf: file, encoding: .utf8)
+            .split(separator: "\n").map(String.init).filter { !$0.hasPrefix("#") }
+        XCTAssertEqual(Set(listed), [a.path, b.path])
+        XCTAssertFalse(listed.contains(unticked.path), "an unticked entry never reaches the plan")
+        XCTAssertTrue(listed.allSatisfy { $0.hasPrefix("/") && !$0.contains("/../") })
+    }
+
+    /// The osascript route's shell: the boundary checks run, and only then the engine. With the
+    /// review intact the command runs; nothing in the shell deletes anything itself.
+    func testGuardedShellRunsTheEngineCommandWhenTheReviewIsIntact() throws {
         let item = root.appendingPathComponent("permanent cache")
-        let nested = item.appendingPathComponent("nested")
-        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
-        try Data("cache".utf8).write(to: nested.appendingPathComponent("blob"))
+        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
         let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
                                                    approvedRootURLs: [root])
         let plan = try snapshot.plan(selectedPaths: [item.path])
+        let marker = root.appendingPathComponent("engine-ran")
 
-        let shell = plan.irreversibleCleanupShell()
-        XCTAssertTrue(shell.contains("/usr/bin/find -x"))
-        XCTAssertTrue(shell.contains("-depth -delete"))
+        let shell = plan.guardedShell(running: "/usr/bin/touch \(EngineCLI.shellQuote(marker.path))")
         XCTAssertTrue(shell.contains("/usr/bin/stat -f '%d:%i:%u:%p'"),
                       "the reviewed identity must still be re-checked at the boundary")
+        XCTAssertFalse(shell.contains("-delete"), "the shell no longer deletes; the engine does")
+        XCTAssertTrue(shell.hasSuffix("/usr/bin/touch \(EngineCLI.shellQuote(marker.path))"),
+                      "the engine command is the LAST statement, after every check")
 
         XCTAssertEqual(try runCleanupShell(shell), 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: item.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path), "the command ran")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: item.path),
+                      "the shell itself touched nothing that was reviewed")
     }
 
-    func testIrreversibleCleanupRefusesWhenTheReviewedInodeWasSwapped() throws {
+    func testGuardedShellRefusesBeforeTheEngineWhenTheReviewedInodeWasSwapped() throws {
         let item = root.appendingPathComponent("swapped")
         let moved = root.appendingPathComponent("moved-away")
         try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
@@ -366,97 +394,51 @@ final class CleanupAuthorizationTests: XCTestCase {
         let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
                                                    approvedRootURLs: [root])
         let plan = try snapshot.plan(selectedPaths: [item.path])
+        let marker = root.appendingPathComponent("engine-ran")
 
         // Substitute a different directory at the reviewed NAME after review.
         try FileManager.default.moveItem(at: item, to: moved)
         try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
         try Data("unreviewed".utf8).write(to: item.appendingPathComponent("marker"))
 
-        XCTAssertEqual(try runCleanupShell(plan.irreversibleCleanupShell()),
-                       ElevatedExitCode.boundaryCheckFailed)
+        let shell = plan.guardedShell(running: "/usr/bin/touch \(EngineCLI.shellQuote(marker.path))")
+        XCTAssertEqual(try runCleanupShell(shell), ElevatedExitCode.boundaryCheckFailed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path),
+                       "the engine must not be spawned once a boundary check refuses")
         XCTAssertEqual(try String(contentsOf: item.appendingPathComponent("marker")),
-                       "unreviewed", "the substituted inode must not be deleted")
-        XCTAssertEqual(try String(contentsOf: moved.appendingPathComponent("marker")),
-                       "reviewed", "the reviewed inode survives at its new name")
+                       "unreviewed", "the substituted inode is untouched")
     }
 
-    /// The deliberate trade behind deleting the tree rooted at the reviewed
-    /// inode rather than an enumerated set of descendants pinned at review
-    /// time.  The preview presents a cache ENTRY with a size, not a file list,
-    /// so "everything under this exact directory" is what the user approved —
-    /// and pinning the full set instead made a clean abort whenever the owning
-    /// app wrote to its own cache between the preview and the confirmation.
-    func testIrreversibleCleanupRemovesContentAddedUnderTheReviewedEntryAfterReview() throws {
-        let item = root.appendingPathComponent("live cache")
+    func testGuardedShellRefusesOnceTheReviewHasExpired() throws {
+        let item = root.appendingPathComponent("stale")
         try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
+        let old = Date(timeIntervalSince1970: 1_000)
         let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
-                                                   approvedRootURLs: [root])
-        let plan = try snapshot.plan(selectedPaths: [item.path])
+                                                   approvedRootURLs: [root], now: old)
+        let plan = try snapshot.plan(selectedPaths: [item.path], now: old)
+        let marker = root.appendingPathComponent("engine-ran")
 
-        try Data("written after review".utf8)
-            .write(to: item.appendingPathComponent("added-later"))
-
-        XCTAssertEqual(try runCleanupShell(plan.irreversibleCleanupShell()), 0,
-                       "a cache written to between preview and confirmation still cleans")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: item.path))
+        // The plan expired long ago on the wall clock the shell's `date +%s` reads.
+        let shell = plan.guardedShell(running: "/usr/bin/touch \(EngineCLI.shellQuote(marker.path))")
+        XCTAssertEqual(try runCleanupShell(shell), ElevatedExitCode.boundaryCheckFailed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
     }
 
-    func testIrreversibleCleanupDeletesTheLinkNotItsTargetOutsideTheTree() throws {
-        let item = root.appendingPathComponent("with-symlink")
-        let outside = root.appendingPathComponent("outside-the-reviewed-tree")
-        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
-        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: false)
-        try Data("precious".utf8).write(to: outside.appendingPathComponent("keep"))
-        try FileManager.default.createSymbolicLink(
-            at: item.appendingPathComponent("escape"), withDestinationURL: outside)
+    func testStalePlanFilesAreSweptAndFreshOnesKept() throws {
+        let dir = root.appendingPathComponent("plans", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let stale = dir.appendingPathComponent("old.plan")
+        let fresh = dir.appendingPathComponent("new.plan")
+        let other = dir.appendingPathComponent("notes.txt")
+        for file in [stale, fresh, other] { try Data("x".utf8).write(to: file) }
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -7200)],
+                                              ofItemAtPath: stale.path)
 
-        let snapshot = try CleanupSnapshot.capture(list: list([item.path]),
-                                                   approvedRootURLs: [root])
-        let plan = try snapshot.plan(selectedPaths: [item.path])
-
-        XCTAssertEqual(try runCleanupShell(plan.irreversibleCleanupShell()), 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: item.path))
-        XCTAssertEqual(try String(contentsOf: outside.appendingPathComponent("keep")),
-                       "precious", "-delete must never follow a symlink out of the tree")
+        CleanupExecutionPlan.sweepStalePlanFiles(in: dir, olderThan: 3600)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stale.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fresh.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: other.path), "only .plan files are swept")
     }
-
-    func testIrreversibleCleanupContinuesPastOneFailingEntryAndReportsFailure() throws {
-        // The failure this test needs is a permission denial, and root has no
-        // permissions to deny — as uid 0 the "undeletable" entry deletes fine
-        // and the test would fail for a reason that isn't a defect.
-        try XCTSkipIf(getuid() == 0, "the blocked entry is only blocked for a non-root user")
-
-        let good = root.appendingPathComponent("removable")
-        let blocked = root.appendingPathComponent("blocked")
-        let locked = blocked.appendingPathComponent("locked")
-        let child = locked.appendingPathComponent("undeletable")
-        try FileManager.default.createDirectory(at: good, withIntermediateDirectories: false)
-        try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)
-        try Data("stuck".utf8).write(to: child)
-        // Clear the write bit on the NESTED directory so its entry cannot be
-        // unlinked. This happens before capture: mutating a reviewed entry's
-        // own mode afterwards would change its pinned identity and the
-        // boundary check would refuse the whole run — a different outcome.
-        try FileManager.default.setAttributes([.posixPermissions: 0o500],
-                                              ofItemAtPath: locked.path)
-        defer {
-            try? FileManager.default.setAttributes([.posixPermissions: 0o700],
-                                                   ofItemAtPath: locked.path)
-        }
-
-        let snapshot = try CleanupSnapshot.capture(list: list([good.path, blocked.path]),
-                                                   approvedRootURLs: [root])
-        let plan = try snapshot.plan(selectedPaths: [good.path, blocked.path])
-
-        let status = try runCleanupShell(plan.irreversibleCleanupShell())
-        XCTAssertNotEqual(status, 0, "an entry that could not be removed must report failure")
-        XCTAssertNotEqual(status, ElevatedExitCode.boundaryCheckFailed,
-                          "a partial removal is not the same refusal as a changed review")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: good.path),
-                       "one failing entry must not abandon the others")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: child.path))
-    }
-
 
     private func runCleanupShell(_ shell: String) throws -> Int32 {
         let process = Process()

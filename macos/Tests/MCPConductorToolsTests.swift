@@ -88,6 +88,136 @@ final class MCPConductorToolsTests: XCTestCase {
         }
     }
 
+    // MARK: - burrow_dupes argv: `group` is pinned, paths are validated, nothing else reaches argv
+
+    /// An agent cannot pick the engine's subcommand or add `--apply`: the strings it hands over are
+    /// validated as directories before anything is spawned, so `dedupe`/`--apply` are refused as
+    /// bad arguments and the (footprint-recording) stub engine is never run.
+    func testDupes_agentSuppliedSubcommandAndApplyFlag_areRefusedWithoutSpawning() throws {
+        let marker = tempDir.appendingPathComponent("engine-ran")
+        try ConductorBundleFixture.withConductor(
+            present: true, stub: ConductorBundleFixture.footprintStub(marker: marker)) {
+            XCTAssertThrowsError(try catalog.call(name: "burrow_dupes",
+                                                  arguments: ["paths": ["dedupe", "--apply"]])) { err in
+                guard case MCPToolError.badArguments(let message) = err else {
+                    return XCTFail("expected .badArguments, got \(err)")
+                }
+                XCTAssertTrue(message.contains("dedupe"), "the refusal names the offending value: \(message)")
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path),
+                           "a refused call must never spawn the engine")
+        }
+    }
+
+    /// A real absolute directory mixed with one bad entry is still refused whole — the engine
+    /// would otherwise read the bad entry as a flag or a subcommand for the good one.
+    func testDupes_oneRelativePathInTheList_refusesTheWholeCall() throws {
+        let marker = tempDir.appendingPathComponent("engine-ran")
+        try ConductorBundleFixture.withConductor(
+            present: true, stub: ConductorBundleFixture.footprintStub(marker: marker)) {
+            XCTAssertThrowsError(try catalog.call(name: "burrow_dupes",
+                                                  arguments: ["paths": [tempDir.path, "Downloads"]]))
+            XCTAssertThrowsError(try catalog.call(name: "burrow_dupes",
+                                                  arguments: ["paths": [tempDir.appendingPathComponent("missing").path]]))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+        }
+    }
+
+    /// The happy path: the engine receives `dupes group <dir> --json` — `group` spelled by the
+    /// tool, the directory verbatim, and the conductor's `--json` — nothing else.
+    func testDupes_existingAbsoluteDirectory_spawnsTheReadOnlyGroupSubcommand() throws {
+        try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
+            let json = try catalog.call(name: "burrow_dupes", arguments: ["paths": [tempDir.path]])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertEqual(obj["argv"] as? String, "dupes group \(tempDir.path) --json")
+        }
+    }
+
+    // MARK: - burrow_evict: the one actuating tool on this seam, gated like the action tools
+
+    func testEvict_isAuditedAndDeclaresPathsRequired() throws {
+        XCTAssertTrue(ToolCatalog.auditedTools.contains("burrow_evict"), "evict mutates; it must leave an audit row")
+        let d = try XCTUnwrap(catalog.descriptors().first { $0["name"] as? String == "burrow_evict" })
+        let schema = try XCTUnwrap(d["inputSchema"] as? [String: Any])
+        XCTAssertEqual(schema["required"] as? [String], ["paths"])
+        XCTAssertNotNil(MCPToolMetadata.table["burrow_evict"])
+        XCTAssertEqual(MCPToolMetadata.table["burrow_evict"]?.readOnly, false)
+    }
+
+    func testEvict_withoutConfirm_isTheEnginesDryRun_noApply() throws {
+        try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
+            let json = try catalog.call(name: "burrow_evict", arguments: ["paths": [tempDir.path]])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertEqual(obj["argv"] as? String, "evict \(tempDir.path) --json")
+        }
+    }
+
+    func testEvict_confirmWithoutOptIn_isBlockedAndNothingSpawns() throws {
+        let saved = Store.d
+        Store.d = UserDefaults(suiteName: StoreTests.scratchSuite)!
+        Store.d.removePersistentDomain(forName: StoreTests.scratchSuite)
+        defer { Store.d.removePersistentDomain(forName: StoreTests.scratchSuite); Store.d = saved }
+        let marker = tempDir.appendingPathComponent("engine-ran")
+        try ConductorBundleFixture.withConductor(
+            present: true, stub: ConductorBundleFixture.footprintStub(marker: marker)) {
+            let json = try catalog.call(name: "burrow_evict",
+                                        arguments: ["paths": [tempDir.path], "confirm": true])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertEqual(obj["blocked"] as? Bool, true)
+            XCTAssertEqual(obj["ran"] as? Bool, false)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+        }
+    }
+
+    func testEvict_confirmWithOptIn_appendsApply() throws {
+        let saved = Store.d
+        Store.d = UserDefaults(suiteName: StoreTests.scratchSuite)!
+        Store.d.removePersistentDomain(forName: StoreTests.scratchSuite)
+        defer { Store.d.removePersistentDomain(forName: StoreTests.scratchSuite); Store.d = saved }
+        Store.mcpActionsEnabled = true
+        try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
+            let json = try catalog.call(name: "burrow_evict",
+                                        arguments: ["paths": [tempDir.path], "confirm": true])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertEqual(obj["argv"] as? String, "evict \(tempDir.path) --apply --json")
+        }
+    }
+
+    func testEvict_relativeOrMissingPath_isRefusedWithoutSpawning() throws {
+        let marker = tempDir.appendingPathComponent("engine-ran")
+        try ConductorBundleFixture.withConductor(
+            present: true, stub: ConductorBundleFixture.footprintStub(marker: marker)) {
+            XCTAssertThrowsError(try catalog.call(name: "burrow_evict", arguments: ["paths": ["--apply"]]))
+            XCTAssertThrowsError(try catalog.call(name: "burrow_evict",
+                                                  arguments: ["paths": [tempDir.appendingPathComponent("nope").path]]))
+            XCTAssertThrowsError(try catalog.call(name: "burrow_evict", arguments: [:]))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+        }
+    }
+
+    // MARK: - The legacy `.mo` tools run the bundled engine when there is one
+
+    /// analyze / cleanup_history / list_apps used to spawn through `.mo` discovery even on a
+    /// build that bundles the engine — a different lookup (and environment) from the conductor
+    /// tools beside them. With a bundled engine present they must reach THAT binary.
+    func testAnalyze_withBundledEngine_spawnsItRatherThanDiscovery() throws {
+        try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
+            let json = try catalog.call(name: "burrow_analyze", arguments: ["path": tempDir.path])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertEqual(obj["argv"] as? String, "analyze --json \(tempDir.path)")
+        }
+    }
+
+    func testCleanupHistoryAndListApps_withBundledEngine_spawnIt() throws {
+        try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
+            let history = try catalog.call(name: "burrow_cleanup_history", arguments: ["limit": 5])
+            let h = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(history.utf8)) as? [String: Any])
+            XCTAssertEqual(h["argv"] as? String, "history --json --limit 5")
+            let apps = try catalog.call(name: "burrow_list_apps", arguments: [:])
+            XCTAssertTrue(apps.contains("uninstall --list"), apps)
+        }
+    }
+
     // MARK: - Required-argument validation (before any conductor spawn)
 
     func testDupes_withoutPaths_throwsBadArguments() {
@@ -224,14 +354,14 @@ final class MCPConductorToolsTests: XCTestCase {
                                            contents: Data("not a binary".utf8),
                                            attributes: [.posixPermissions: 0o644]),
             "the fixture must actually stage the file, or the assertions below prove nothing")
-        let saved = BurrowConductor.resourceDirectory
-        BurrowConductor.resourceDirectory = { dir }
+        let saved = BurrowEngine.resourceDirectory
+        BurrowEngine.resourceDirectory = { dir }
         defer {
-            BurrowConductor.resourceDirectory = saved
+            BurrowEngine.resourceDirectory = saved
             try? FileManager.default.removeItem(at: dir)
         }
 
-        XCTAssertNil(BurrowConductor.executableURL())
-        XCTAssertFalse(BurrowConductor.isAvailable)
+        XCTAssertNil(BurrowEngine.executableURL())
+        XCTAssertFalse(BurrowEngine.isAvailable)
     }
 }

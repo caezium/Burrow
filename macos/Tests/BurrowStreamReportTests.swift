@@ -41,6 +41,88 @@ final class BurrowStreamReportTests: XCTestCase {
         XCTAssertEqual(report.summary?.freeChange, "", "freeChange is reserved for a real free-space-change reading")
     }
 
+    /// The engine's default removal is a Trash move: `freed_bytes` is 0 and the bytes are in
+    /// `moved_to_trash_bytes`. The summary must say "moved to Trash", never "Cleaned 0B" and
+    /// never claim the Trash bytes were freed.
+    func testCleanLive_trashPath_reportsMovedToTrashNotFreed() {
+        let lines = [
+            #"{"event":"removed","path":"/a/x","bytes":1024}"#,
+            #"{"event":"done","freed_bytes":0,"freed_human":"0B","moved_to_trash_bytes":1024,"moved_to_trash_human":"1.0KB","removed":1,"failed":0,"protected":0}"#,
+        ]
+        let report = BurrowStreamReport.reduce(lines)
+        XCTAssertEqual(report.summary?.space, "", "nothing was freed, so nothing reads as Cleaned")
+        XCTAssertEqual(report.summary?.trashed, "1.0KB")
+        XCTAssertEqual(report.summary?.completionLine, "1.0KB moved to Trash · 1 items")
+    }
+
+    /// `--permanent` (or a tool-delegated delete) frees for real; a mixed run shows both.
+    func testCleanLive_mixedFreedAndTrashed_showsBoth() {
+        let lines = [
+            #"{"event":"done","freed_bytes":2048,"freed_human":"2.0KB","moved_to_trash_bytes":1024,"moved_to_trash_human":"1.0KB","removed":2,"failed":0,"protected":0}"#,
+        ]
+        let report = BurrowStreamReport.reduce(lines)
+        XCTAssertEqual(report.summary?.completionLine, "Cleaned 2.0KB · 1.0KB moved to Trash · 2 items")
+    }
+
+    /// A refusal carries the engine's reason into the report — a plan path outside the clean
+    /// roots is shown as refused, never silently dropped from what the user reviewed.
+    func testProtected_carriesTheReasonIntoTheReport() {
+        let lines = [
+            #"{"event":"protected","path":"/Users/x/Documents/keep","reason":"not_a_clean_target"}"#,
+            #"{"event":"protected","path":"/Users/x/Library/Caches/sys"}"#,
+            #"{"event":"done","freed_bytes":0,"freed_human":"0B","moved_to_trash_bytes":0,"moved_to_trash_human":"0B","removed":0,"failed":0,"protected":2}"#,
+        ]
+        let report = BurrowStreamReport.reduce(lines)
+        let items = report.groups.first?.items ?? []
+        XCTAssertEqual(items.map(\.marker), [.review, .review])
+        XCTAssertEqual(items.first?.text, "/Users/x/Documents/keep — refused: not a clean target")
+        XCTAssertEqual(items.last?.text, "/Users/x/Library/Caches/sys — protected")
+        XCTAssertEqual(BurrowStreamReport.hudLine(lines[0]), "keep")
+    }
+
+    /// An optimize task the engine skipped (`requires_admin` on an un-elevated run) is
+    /// rendered as skipped, not as a failure: nothing was attempted.
+    func testOptimize_skippedTaskIsNotAFailure() {
+        let lines = [
+            #"{"event":"task","name":"flush_dns","ok":true,"error":null,"skipped":true,"reason":"requires_admin"}"#,
+            #"{"event":"task","name":"restart_dock","ok":true,"error":null}"#,
+            #"{"event":"done","ok":true,"tasks":2,"failed":0,"skipped":1}"#,
+        ]
+        let report = BurrowStreamReport.reduce(lines)
+        let items = report.groups.first?.items ?? []
+        XCTAssertEqual(items.map(\.marker), [.info, .ok])
+        XCTAssertEqual(items.first?.text, "flush_dns — skipped (needs administrator)")
+        XCTAssertEqual(BurrowStreamReport.skippedText("x", reason: nil), "x — skipped")
+        XCTAssertEqual(BurrowStreamReport.skippedText("x", reason: "other"), "x — skipped (other)")
+    }
+
+    /// A buffered run (the streaming switch off, or `installer`, which has no `--stream`) is one
+    /// envelope line; it reduces to the same report, every touched or refused path included.
+    func testBufferedEnvelope_reducesLikeTheStream() {
+        let live = [#"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"clean","data":{"dry_run":false,"freed_bytes":2048,"freed_human":"2.0KB","moved_to_trash_bytes":0,"moved_to_trash_human":"0B","removed":[{"path":"/a/x","size":2048,"accounted":true}],"errors":[{"path":"/a/y","error":"denied"}],"protected":["/a/keep"],"text":"…"}}"#]
+        let report = BurrowStreamReport.reduce(live)
+        XCTAssertEqual(report.groups.first?.items.map(\.marker), [.ok, .error, .review])
+        XCTAssertEqual(report.groups.first?.items.last?.text, "/a/keep — protected")
+        XCTAssertEqual(report.summary?.completionLine, "Cleaned 2.0KB · 1 items")
+
+        let preview = [#"{"ok":true,"burrow_cli":"0.1.0","data":{"dry_run":true,"total_bytes":4096,"total_human":"4.0KB","items":[{"path":"/a/x","label":"t","size":4096,"size_human":"4.0KB"}],"text":"…"}}"#]
+        let previewReport = BurrowStreamReport.reduce(preview)
+        XCTAssertEqual(previewReport.groups.first?.items.map(\.marker), [.action])
+        XCTAssertEqual(previewReport.summary?.completionLine, "Cleaned 4.0KB · 1 items")
+
+        let optimize = [#"{"ok":true,"burrow_cli":"0.1.0","data":{"dry_run":false,"results":[{"name":"flush_dns","ok":true,"error":null,"skipped":true,"reason":"requires_admin"},{"name":"restart_dock","ok":false,"error":"x"}],"text":"…"}}"#]
+        let optimizeReport = BurrowStreamReport.reduce(optimize, title: "Maintenance")
+        XCTAssertEqual(optimizeReport.groups.first?.title, "Maintenance")
+        XCTAssertEqual(optimizeReport.groups.first?.items.map(\.marker), [.info, .error])
+        XCTAssertEqual(optimizeReport.summary?.items, "2")
+
+        let failed = [#"{"ok":false,"burrow_cli":"0.1.0","error":{"kind":"permission_denied","message":"cannot read ~/Library"}}"#]
+        let failedReport = BurrowStreamReport.reduce(failed)
+        XCTAssertEqual(failedReport.groups.first?.items.map(\.marker), [.error])
+        XCTAssertEqual(failedReport.groups.first?.items.first?.text, "cannot read ~/Library")
+        XCTAssertNil(failedReport.summary)
+    }
+
     func testOptimize_taskEvents() {
         let lines = [
             #"{"event":"task","name":"flush_dns","ok":true,"error":null}"#,

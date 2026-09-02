@@ -5,7 +5,7 @@
 //  The elevated-execution seam (issue #48). One elevated `mo` run = one
 //  osascript `do shell script … with administrator privileges` = one
 //  macOS auth prompt. That spawn was previously hand-rolled inline in
-//  `MoleCLI.runElevated` against a raw `Process`, so the riskiest code in
+//  `EngineCLI.runElevated` against a raw `Process`, so the riskiest code in
 //  the app — the path that runs as ROOT — was the path no test could reach.
 //
 //  This is the sibling of `MoleProcessPort` (the #29 capture-spawn runner):
@@ -19,7 +19,7 @@
 //  signal is the exit status.
 //
 //  Live caller: `Connectivity.run` (flush DNS / renew DHCP), which constructs
-//  `SystemPrivilegeBroker` directly. The `MoleCLI.runElevated` wrapper that
+//  `SystemPrivilegeBroker` directly. The `EngineCLI.runElevated` wrapper that
 //  used to sit in front of this was deleted along with the `mo touchid`
 //  setting, its only user.
 //
@@ -59,7 +59,7 @@ extension ElevatedOutcome {
 // MARK: - Port
 
 /// The one elevated-spawn boundary. `openElevated` builds the osascript
-/// invocation (via `MoleCLI.elevatedScript`, the one shared two-pass quoter),
+/// invocation (via `EngineCLI.elevatedScript`, the one shared two-pass quoter),
 /// runs it once, and classifies the result. Production spawns real osascript;
 /// tests script the outcome without touching the GUI.
 protocol PrivilegeBroker: Sendable {
@@ -90,7 +90,7 @@ struct SystemPrivilegeBroker: PrivilegeBroker {
         } catch {
             return .launchFailed
         }
-        let script = MoleCLI.elevatedScript(command: command, args: args)
+        let script = EngineCLI.elevatedScript(command: command, args: args)
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         task.arguments = ["-e", script]
@@ -122,6 +122,86 @@ struct SystemPrivilegeBroker: PrivilegeBroker {
         } catch {
             return .launchFailed
         }
+    }
+}
+
+// MARK: - One-shot elevated ENGINE run with its transcript
+
+/// An elevated engine command whose OUTPUT matters — the uninstall apply, which answers with a
+/// per-app outcome envelope on stdout. `openElevated` above discards stdout; the streaming
+/// runner (`OperationFlow`'s port) does not, but it reduces lines into a report as it goes.
+/// This drives that same port — helper daemon when it is usable, osascript otherwise, exactly
+/// the elevation Clean/Optimize use — and simply collects the transcript into a `Captured`,
+/// so the caller decodes it with the parsers it already has for the un-elevated run.
+///
+/// The environment is the port's: `PrivilegedEngineEnvironment` (BURROW_HOME +
+/// BURROW_PRIVILEGED) on both routes, so the elevated engine looks under the invoking user's
+/// home for leftovers and refuses user-writable sidecar overrides.
+enum ElevatedEngineRun {
+    enum Outcome: Equatable {
+        /// The engine ran; `stdout` is its transcript (the elevated routes merge stderr into
+        /// it — the engine writes nothing there) and `exitCode` its status.
+        case captured(Captured)
+        /// The administrator prompt was dismissed. Nothing ran.
+        case authCancelled
+        /// Elevation could not be set up (no invoking identity, the executable failed the
+        /// bundle-seal check, the helper could not spawn); nothing ran. `reason` is the
+        /// runner's own explanation when it gave one.
+        case launchFailed(reason: String)
+    }
+
+    /// Blocking — call off the main thread; it waits at the prompt and for the whole run.
+    ///
+    /// `requiresCurrentBundle` is true: only the engine sealed inside Burrow.app may run as
+    /// root — the same rule the streaming path applies to every elevated `.mo` operation — so
+    /// a dev build that resolved an external engine is refused here (exit 126 with the
+    /// reason in the transcript) rather than elevated.
+    static func capture(executable: String, args: [String], timeout: TimeInterval,
+                        port: ProcessPort = EngineRunner.shared.streamPort,
+                        invokingUser: InvokingUserIdentity? = nil) -> Outcome {
+        let user: InvokingUserIdentity
+        do { user = try invokingUser ?? InvokingUserIdentity.current() }
+        catch { return .launchFailed(reason: error.localizedDescription) }
+        let spec = ProcessSpec(executable: executable, arguments: args, stdin: nil,
+                               elevated: true, timeout: timeout, invokingUser: user,
+                               requiresCurrentBundle: true)
+        return collect(port.events(spec))
+    }
+
+    /// Reduce one event stream to an outcome. Split out so the reduction is testable with a
+    /// scripted port and no elevation at all.
+    static func collect(_ events: AsyncStream<ProcessEvent>) -> Outcome {
+        let done = DispatchSemaphore(value: 0)
+        let box = OutcomeBox()
+        Task.detached {
+            var lines: [String] = []
+            var outcome: Outcome?
+            for await event in events {
+                switch event {
+                case .line(let line): lines.append(line)
+                case .authCancelled: outcome = .authCancelled
+                case .exited(let code):
+                    let transcript = lines.joined(separator: "\n")
+                    // The elevated routes carry a refusal reason as transcript lines before a
+                    // launch-refused exit; surface it as the failure rather than as engine output.
+                    if code == ElevatedExitCode.executableRefused
+                        || code == ElevatedExitCode.logSinkUnavailable
+                        || code == ElevatedExitCode.launchFailed {
+                        outcome = .launchFailed(reason: transcript)
+                    } else {
+                        outcome = .captured(Captured(stdout: transcript, stderr: "", exitCode: code))
+                    }
+                }
+            }
+            box.value = outcome ?? .launchFailed(reason: "the elevated run ended without an exit status")
+            done.signal()
+        }
+        done.wait()
+        return box.value ?? .launchFailed(reason: "the elevated run produced no outcome")
+    }
+
+    private final class OutcomeBox: @unchecked Sendable {
+        var value: Outcome?
     }
 }
 

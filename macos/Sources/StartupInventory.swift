@@ -87,7 +87,7 @@ enum StartupControl {
 
     /// Labels currently disabled in the per-user database.
     static func disabledLabels() -> Set<String> {
-        guard let out = try? MoEngine.shared.capture(
+        guard let out = try? EngineRunner.shared.capture(
             MoCommand(target: .executable(launchctl), args: ["print-disabled", domain], timeout: 8)).stdout
         else { return [] }
         var disabled: Set<String> = []
@@ -124,7 +124,7 @@ enum StartupControl {
 
     @discardableResult
     private static func run(_ args: [String]) -> Int32 {
-        (try? MoEngine.shared.capture(
+        (try? EngineRunner.shared.capture(
             MoCommand(target: .executable(launchctl), args: args, timeout: 12)).exitCode) ?? -1
     }
 }
@@ -235,7 +235,7 @@ enum StartupInventory {
             if case .exited(0) = result.outcome { return result.output }
             return ""   // declined or failed: fall back to the plist-only inventory
         }
-        return (try? MoEngine.shared.capture(
+        return (try? EngineRunner.shared.capture(
             MoCommand(target: .executable("/usr/bin/sfltool"), args: ["dumpbtm"], timeout: 10)).stdout) ?? ""
     }
 }

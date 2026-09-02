@@ -58,6 +58,9 @@ final class HelperContractTests: XCTestCase {
         XCTAssertEqual(resolved.childEnvironment["SUDO_USER"], "jane doe")
         XCTAssertEqual(resolved.childEnvironment["SUDO_UID"], "502")
         XCTAssertFalse(resolved.childEnvironment.values.contains("/var/root"))
+        // The engine's privileged-run contract, on the helper route too.
+        XCTAssertEqual(resolved.childEnvironment["BURROW_HOME"], "/Users/Jane Doe")
+        XCTAssertEqual(resolved.childEnvironment["BURROW_PRIVILEGED"], "1")
     }
 
     func testRequestCarriesAnExplicitInvokingUserClaimAndRejectsItsAbsence() throws {
@@ -192,9 +195,11 @@ final class HelperContractTests: XCTestCase {
     }
 
     func testSystemTools_setIsExactlyWhatTheOperationsNeed() {
+        // `find` left with the reviewed clean's `find -delete` loop: the engine's own rails
+        // delete now, from a plan file, so root has one fewer general-purpose tool to run.
         XCTAssertEqual(HelperSystemTool.all,
                        ["/usr/bin/dscacheutil", "/usr/bin/killall",
-                        "/usr/sbin/ipconfig", "/usr/bin/sfltool", "/usr/bin/find"])
+                        "/usr/sbin/ipconfig", "/usr/bin/sfltool"])
     }
 
     /// No step may ever name a shell. The path this replaces elevated
@@ -202,13 +207,12 @@ final class HelperContractTests: XCTestCase {
     /// which put a command string in front of a root shell parser.
     func testSteps_neverInvokeAShell() {
         let shells = ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/env"]
-        // Give the reviewed clean its path list, as the sibling argv test does.
-        // Without one it resolves to no steps, so the `find` step — the only
-        // one built from caller-supplied data, and thus the one most worth
-        // checking for a shell — was never actually examined here.
-        let reviewedPaths = ["/Users/henry/Library/Caches/example"]
+        // Give the reviewed clean its plan file, as the sibling argv test does.
+        // Without one it resolves to no steps, so the step built around the
+        // one caller-derived value would never actually be examined here.
+        let planFile = "/private/tmp/burrow-helper-plan.abc123/plan.plan"
         for operation in HelperOperation.allCases {
-            for step in operation.steps(interface: "en0", reviewedPaths: reviewedPaths) {
+            for step in operation.steps(interface: "en0", reviewedPlanFile: planFile) {
                 if case .system(let path) = step.executable {
                     XCTAssertFalse(shells.contains(path), "\(operation) must not run a shell")
                     XCTAssertTrue(HelperSystemTool.all.contains(path),
@@ -300,30 +304,43 @@ final class HelperContractTests: XCTestCase {
 
     // MARK: - Fixed argv (the client contributes nothing)
     //
-    // These are the exact argv the GUI passes today through the osascript
-    // path (CleanView `["clean"]`, OptimizeView `["optimize"]`, previews with
-    // `--dry-run`). The helper reproduces them from the enum ALONE, so an
-    // attacker who fully controls the XPC payload still cannot add a flag.
+    // The daemon reproduces the engine argv from the enum ALONE, so an attacker
+    // who fully controls the XPC payload still cannot add a flag. It is spelled
+    // in the ENGINE's convention (preview by default, `--apply` to act) and is
+    // always streamed, because the daemon relays stdout live over XPC.
 
     func testEngineArguments_areFixedPerOperation() {
-        XCTAssertEqual(HelperOperation.scan.engineArguments, ["clean", "--dry-run"])
-        XCTAssertEqual(HelperOperation.clean.engineArguments, ["clean"])
-        XCTAssertEqual(HelperOperation.optimize.engineArguments, ["optimize"])
-        XCTAssertEqual(HelperOperation.optimizeScan.engineArguments, ["optimize", "--dry-run"])
+        XCTAssertEqual(HelperOperation.scan.engineArguments, ["clean", "--dry-run", "--stream"])
+        XCTAssertEqual(HelperOperation.clean.engineArguments, ["clean", "--apply", "--stream"])
+        XCTAssertEqual(HelperOperation.optimize.engineArguments, ["optimize", "--apply", "--stream"])
+        XCTAssertEqual(HelperOperation.optimizeScan.engineArguments, ["optimize", "--dry-run", "--stream"])
         // The network fixes don't drive the engine at all.
         XCTAssertNil(HelperOperation.flushDNS.engineArguments)
         XCTAssertNil(HelperOperation.renewDHCP.engineArguments)
+    }
+
+    /// The live operations act and the previews say so on the wire: `--apply` on
+    /// exactly the mutating engine operations, `--dry-run` on exactly the
+    /// previews, never both, never neither.
+    func testEngineArguments_applyExactlyWhenTheOperationMutates() {
+        for operation in HelperOperation.allCases {
+            guard let argv = operation.engineArguments else { continue }
+            XCTAssertEqual(argv.contains("--apply"), operation.mutatesDisk,
+                           "\(operation) must carry --apply iff it mutates")
+            XCTAssertEqual(argv.contains("--dry-run"), !operation.mutatesDisk,
+                           "\(operation) must state --dry-run iff it is a preview")
+            XCTAssertTrue(argv.contains("--stream"), "\(operation) relays a live stream")
+        }
     }
 
     /// argv goes to posix_spawn, never a shell — but a stray metacharacter
     /// anywhere in here would signal that someone started templating strings
     /// into a command that runs as root.
     func testArguments_neverEmptyAndNeverShellMetacharacters() {
-        // The reviewed clean is driven by its path list, so it is given one —
-        // and a path the daemon would have had to validate before it got here.
-        let reviewedPaths = ["/Users/henry/Library/Caches/example"]
+        // The reviewed clean is driven by the daemon's plan file, so it is given one.
+        let planFile = "/private/tmp/burrow-helper-plan.abc123/plan.plan"
         for op in HelperOperation.allCases {
-            let steps = op.steps(interface: "en0", reviewedPaths: reviewedPaths)
+            let steps = op.steps(interface: "en0", reviewedPlanFile: planFile)
             XCTAssertFalse(steps.isEmpty, "\(op) must resolve to at least one command")
             for token in steps.flatMap(\.arguments) {
                 XCTAssertFalse(token.contains(where: { ";|&`$<>\n\0".contains($0) }),
@@ -690,20 +707,21 @@ final class HelperReviewedRequestTests: XCTestCase {
         XCTAssertNil(HelperOperation.cleanReviewed.engineArguments)
     }
 
-    func testStepsAreFixedFindInvocationsOverTheValidatedPaths() {
-        let paths = ["/Users/henry/Library/Caches/a", "/Library/Caches/b"]
-        let steps = HelperOperation.cleanReviewed.steps(interface: nil, reviewedPaths: paths)
-        XCTAssertEqual(steps.count, 2)
-        for (step, path) in zip(steps, paths) {
-            XCTAssertEqual(step.executable, .system(HelperSystemTool.find))
-            XCTAssertEqual(step.arguments, ["-x", path, "-depth", "-delete"])
-        }
-        XCTAssertTrue(HelperSystemTool.all.contains(HelperSystemTool.find))
+    /// The reviewed clean is ONE engine run over the daemon's plan file, with fixed flags:
+    /// `--apply --permanent` (this is the permanent path), `--plan <file>` (no re-scan; the
+    /// engine removes only the listed paths, each through its rails), `--stream` (live relay).
+    func testStepsAreOneEngineRunOverTheDaemonsPlanFile() {
+        let planFile = "/private/tmp/burrow-helper-plan.abc123/plan.plan"
+        let steps = HelperOperation.cleanReviewed.steps(interface: nil, reviewedPlanFile: planFile)
+        XCTAssertEqual(steps, [HelperStep(
+            executable: .bundledEngine,
+            arguments: ["clean", "--apply", "--permanent", "--plan", planFile, "--stream"])])
+        XCTAssertTrue(HelperOperation.cleanReviewed.usesBundledEngine)
     }
 
-    func testNoReviewedPathsMeansNoStepsRatherThanADeleteOfSomethingElse() {
+    func testNoPlanFileMeansNoStepsRatherThanACleanOfSomethingElse() {
         XCTAssertTrue(HelperOperation.cleanReviewed.steps(interface: nil,
-                                                          reviewedPaths: []).isEmpty)
+                                                          reviewedPlanFile: nil).isEmpty)
     }
 }
 

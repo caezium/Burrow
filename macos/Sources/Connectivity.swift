@@ -200,7 +200,7 @@ enum Connectivity {
 
     /// Capture a short command's stdout via the shared engine seam.
     private static func shell(_ path: String, _ args: [String]) -> String {
-        (try? MoEngine.shared.capture(MoCommand(target: .executable(path), args: args, timeout: 8)))?.stdout ?? ""
+        (try? EngineRunner.shared.capture(MoCommand(target: .executable(path), args: args, timeout: 8)))?.stdout ?? ""
     }
 
     // MARK: - One-click fixes

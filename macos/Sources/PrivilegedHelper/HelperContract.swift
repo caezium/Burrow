@@ -12,7 +12,7 @@
 //
 //  ── Why the contract looks like this ────────────────────────────────────
 //  The old elevation path handed osascript a SHELL STRING built from an
-//  executable path plus argv (`MoleCLI.elevatedScript`). It was carefully
+//  executable path plus argv (`EngineCLI.elevatedScript`). It was carefully
 //  quoted and well tested, but its shape meant the privileged side had to
 //  trust whatever command the caller composed.
 //
@@ -42,14 +42,18 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
     /// This is the only operation that accepts data from the caller beyond a
     /// verb, which deserves saying plainly. It does NOT weaken the rule that a
     /// compromised client cannot express "run this": the argv is still built
-    /// here, the executable is still a fixed absolute path, and the paths are
-    /// values passed to a delete, never anything executed.
+    /// here, the executable is still the bundled engine, and the paths are
+    /// values the daemon writes into a plan file of its own for the engine's
+    /// `clean --apply --plan` — never anything executed, and never a file the
+    /// client could hand root.
     ///
     /// What stops a compromised client asking root to delete something it
     /// shouldn't is that the daemon does not trust the list. It rebuilds the
     /// approved roots from its OWN getpwuid record, and re-derives every fact
     /// it checks — existence, symlink-ness, canonical form, volume, owner —
-    /// with its own lstat. The client proposes; the privileged side decides.
+    /// with its own lstat; then the engine re-checks every path through its
+    /// deletion rails and refuses anything outside its clean roots. The client
+    /// proposes; the privileged side decides, twice.
     case cleanReviewed
     /// The engine's maintenance pass.
     case optimize
@@ -69,23 +73,38 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
     /// the user already understands, and the complete list.
     case readLoginItems
 
-    /// The engine argv for the operations that drive the bundled engine, or
-    /// nil for the ones that don't.
+    /// The engine argv for the operations that drive the bundled engine with a
+    /// FIXED command line, or nil for the ones that don't (the network fixes,
+    /// the login-items dump, and the reviewed clean — whose argv carries the
+    /// daemon's own plan file and is built in `steps`).
     ///
-    /// These reproduce what the GUI runs today through osascript — CleanView's
-    /// `["clean"]`, OptimizeView's `["optimize"]`, and the dry-run previews —
-    /// so the helper changes HOW the command is elevated, never WHAT runs.
+    /// Spelled in the ENGINE's convention, because that is what the daemon
+    /// runs: the bundled engine previews by default and needs `--apply` to
+    /// act, the inverse of mo. `--stream` is always on — the daemon relays the
+    /// engine's stdout line by line over XPC, so the GUI gets the same live
+    /// NDJSON feed an un-elevated run does — and `--dry-run` is stated on the
+    /// previews rather than inherited from the default, so a read-only run is
+    /// a fact on the wire.
     var engineArguments: [String]? {
         switch self {
-        case .scan: return ["clean", "--dry-run"]
-        case .clean: return ["clean"]
-        case .optimize: return ["optimize"]
-        case .optimizeScan: return ["optimize", "--dry-run"]
+        case .scan: return ["clean", "--dry-run", "--stream"]
+        case .clean: return ["clean", "--apply", "--stream"]
+        case .optimize: return ["optimize", "--apply", "--stream"]
+        case .optimizeScan: return ["optimize", "--dry-run", "--stream"]
         case .flushDNS, .renewDHCP, .readLoginItems, .cleanReviewed: return nil
         }
     }
 
-    /// Whether this operation needs a network interface name.
+    /// Whether the operation runs the bundled engine (so the daemon must
+    /// prepare its verified execution snapshot first) rather than a system
+    /// tool from the closed set.
+    var usesBundledEngine: Bool {
+        switch self {
+        case .scan, .clean, .optimize, .optimizeScan, .cleanReviewed: return true
+        case .flushDNS, .renewDHCP, .readLoginItems: return false
+        }
+    }
+
     var needsInterface: Bool { self == .renewDHCP }
 
     /// Whether this operation is driven by a reviewed path list. Exactly one
@@ -93,33 +112,39 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
     /// required to be absent for every other.
     var needsReviewedPaths: Bool { self == .cleanReviewed }
 
+    /// The engine argv for a reviewed clean over `planFile` — the plan file the
+    /// DAEMON wrote from the paths it validated, never a client-supplied path.
+    /// Fixed flags around that one value: `--apply --permanent` because this is
+    /// the permanent path (the Trash mode never reaches the helper), `--plan`
+    /// so the engine removes only the listed paths with no re-scan, each
+    /// re-checked through its rails, `--stream` for the live relay.
+    static func reviewedCleanArguments(planFile: String) -> [String] {
+        ["clean", "--apply", "--permanent", "--plan", planFile, "--stream"]
+    }
+
     /// The exact process steps the daemon runs, in order.
     ///
     /// Every executable is an absolute path from a closed set, and every
-    /// argument is either a literal spelled here or an interface name that
+    /// argument is either a literal spelled here, an interface name that
     /// `HelperRequest.validate` has already proved is a real interface on this
-    /// machine. Nothing is passed to a shell.
+    /// machine, or the daemon's own plan file (`reviewedPlanFile`, consumed
+    /// only by `.cleanReviewed`; without one the reviewed clean resolves to NO
+    /// steps rather than an engine run over something else). Nothing is
+    /// passed to a shell.
     ///
     /// That last point is a security improvement over the path this replaces:
     /// `Connectivity.run` currently elevates
     /// `/bin/sh -c "dscacheutil -flushcache; killall -HUP mDNSResponder"`,
     /// so a root shell parses a command string. Here the two commands are two
     /// separate `posix_spawn` calls with fixed argv and no shell in between.
-    func steps(interface: String?, reviewedPaths: [String] = []) -> [HelperStep] {
+    func steps(interface: String?, reviewedPlanFile: String? = nil) -> [HelperStep] {
         switch self {
         case .scan, .clean, .optimize, .optimizeScan:
             return [HelperStep(executable: .bundledEngine, arguments: engineArguments ?? [])]
         case .cleanReviewed:
-            // One `find` per reviewed entry, each with fixed flags around a
-            // path the daemon has already validated. `-x` holds it to the
-            // entry's own volume, `-delete` implies depth-first and refuses to
-            // follow symlinks, and BSD find chdir's as it descends so each
-            // unlink is relative to the directory it is standing in rather
-            // than a re-resolved path.
-            return reviewedPaths.map {
-                HelperStep(executable: .system(HelperSystemTool.find),
-                           arguments: ["-x", $0, "-depth", "-delete"])
-            }
+            guard let reviewedPlanFile else { return [] }
+            return [HelperStep(executable: .bundledEngine,
+                               arguments: Self.reviewedCleanArguments(planFile: reviewedPlanFile))]
         case .flushDNS:
             return [
                 HelperStep(executable: .system(HelperSystemTool.dscacheutil), arguments: ["-flushcache"]),
@@ -149,20 +174,42 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// Recognise an existing elevated call site's argv as a typed operation,
-    /// or `nil` if it isn't one of them.
+    /// Recognise an elevated call site's argv as a typed operation, or `nil`
+    /// if it isn't one of them.
     ///
-    /// This is the migration seam. The GUI still describes elevated work as
-    /// `["clean"]` / `["optimize"]` through `OperationFlow`, and this maps
-    /// those onto the helper WITHOUT letting anything else through: argv the
-    /// helper doesn't recognise returns nil and keeps the existing osascript
-    /// route, rather than being forwarded as some approximate operation.
+    /// This is the migration seam. `OperationFlow` still describes elevated
+    /// work as argv — the engine-convention argv `BurrowEngine.streamArgv` /
+    /// `engineArgv` produce: `["clean", "--apply", "--stream"]` for a live
+    /// clean, `["clean", "--stream"]` (or `["clean", "--dry-run", "--stream"]`)
+    /// for its preview, and the same shapes for optimize, with `--stream`
+    /// absent when the streaming switch is off. This maps exactly those onto
+    /// the helper WITHOUT letting anything else through: the verb must come
+    /// first, every flag must be one of the three the engine takes on these
+    /// commands, and `--apply` with `--dry-run` is a contradiction the engine
+    /// itself refuses. Anything else returns nil and keeps the existing
+    /// osascript route, rather than being forwarded as some approximate
+    /// operation.
+    ///
+    /// The engine's convention decides the mapping, never mo's: a bare
+    /// `["clean"]` is a PREVIEW here, because that is what the engine does
+    /// with it. Reading it as the live clean (as the first version of this
+    /// seam did, from mo's convention) would have had the daemon run the
+    /// engine's dry run and report a cleanup that removed nothing.
     init?(engineArguments: [String]) {
-        guard let match = HelperOperation.allCases.first(where: {
-            guard let candidate = $0.engineArguments else { return false }
-            return candidate == engineArguments
-        }) else { return nil }
-        self = match
+        guard let verb = engineArguments.first, ["clean", "optimize"].contains(verb) else { return nil }
+        let flags = engineArguments.dropFirst()
+        let allowed: Set<String> = ["--apply", "--dry-run", "--stream"]
+        guard flags.allSatisfy({ allowed.contains($0) }),
+              Set(flags).count == flags.count else { return nil }
+        let apply = flags.contains("--apply")
+        guard !(apply && flags.contains("--dry-run")) else { return nil }
+        switch (verb, apply) {
+        case ("clean", true): self = .clean
+        case ("clean", false): self = .scan
+        case ("optimize", true): self = .optimize
+        case ("optimize", false): self = .optimizeScan
+        default: return nil
+        }
     }
 }
 
@@ -178,12 +225,11 @@ enum HelperSystemTool {
     static let killall = "/usr/bin/killall"
     static let ipconfig = "/usr/sbin/ipconfig"
     static let sfltool = "/usr/bin/sfltool"
-    static let find = "/usr/bin/find"
 
     /// Every permitted absolute path. Used by the daemon to re-check an
     /// executable immediately before spawning it, so a step constructed by
     /// some future code path still cannot introduce a new binary.
-    static let all: Set<String> = [dscacheutil, killall, ipconfig, sfltool, find]
+    static let all: Set<String> = [dscacheutil, killall, ipconfig, sfltool]
 }
 
 /// What a step runs.
@@ -242,15 +288,50 @@ struct HelperResolvedInvokingUser: Equatable, Sendable {
 
     /// A complete, deterministic environment for every root child. Nothing is
     /// inherited from launchd and no client-provided string is copied here.
+    /// Built by `PrivilegedEngineEnvironment` so the daemon and the osascript
+    /// path hand the engine the same variables.
     var childEnvironment: [String: String] {
+        Dictionary(uniqueKeysWithValues: PrivilegedEngineEnvironment.variables(
+            home: canonicalHome, username: username, uid: uid).map { ($0.key, $0.value) })
+    }
+}
+
+/// The environment every ELEVATED engine invocation runs with — the one
+/// builder behind both elevation routes (the privileged helper's
+/// `childEnvironment` and the osascript `elevatedScript` preamble), so the
+/// two cannot hand the engine different facts about who asked.
+///
+/// Two variables are the engine's own privileged-run contract (burrow-engine
+/// BUR-130/BUR-141) and exist because a root process has a root `$HOME`:
+///
+///   * `BURROW_HOME` — the invoking user's real home, as the engine's
+///     highest-precedence home override. Without it an elevated uninstall
+///     enumerates leftovers under `/var/root`, finds none, and reports "no
+///     support files" about an app with hundreds of megabytes of them; the
+///     engine refuses to run with a `/var/root` home unless this is set.
+///   * `BURROW_PRIVILEGED=1` — tells the engine it is running with rights
+///     the invoking user does not have, so it ignores `BURROW_FCLONES` /
+///     `BURROW_BRCTL` overrides pointing outside its own bundle directory.
+///     A user-writable override is exactly what must never be handed root.
+///
+/// Ordered, because the osascript preamble is a shell string and tests pin
+/// its exact text.
+enum PrivilegedEngineEnvironment {
+    static let homeKey = "BURROW_HOME"
+    static let privilegedKey = "BURROW_PRIVILEGED"
+    static let privilegedValue = "1"
+
+    static func variables(home: String, username: String, uid: UInt32) -> [(key: String, value: String)] {
         [
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME": canonicalHome,
-            "USER": username,
-            "LOGNAME": username,
-            "SUDO_USER": username,
-            "SUDO_UID": String(uid),
-            "LC_ALL": "C",
+            ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
+            ("HOME", home),
+            ("USER", username),
+            ("LOGNAME", username),
+            ("SUDO_USER", username),
+            ("SUDO_UID", String(uid)),
+            ("LC_ALL", "C"),
+            (homeKey, home),
+            (privilegedKey, privilegedValue),
         ]
     }
 }

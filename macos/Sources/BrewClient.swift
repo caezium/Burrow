@@ -5,7 +5,7 @@
 //  Shared Homebrew invocation seam. The Updates pane already shells `brew`
 //  for outdated/upgrade; the Services + Snapshot features reuse the same
 //  resolution (known Homebrew prefixes, never a PATH lookup a user-writable
-//  dir could shadow) and the same MoEngine capture path. Pure parsers live
+//  dir could shadow) and the same EngineRunner capture path. Pure parsers live
 //  alongside their callers and are unit-tested; this is just the spawn seam.
 //
 
@@ -29,7 +29,7 @@ enum BrewClient {
         let dir = (brew as NSString).deletingLastPathComponent
         env["PATH"] = "\(dir):/usr/bin:/bin:/usr/sbin:/sbin:" + (env["PATH"] ?? "")
         do {
-            let r = try MoEngine.shared.capture(
+            let r = try EngineRunner.shared.capture(
                 MoCommand(target: .executable(brew), args: args, environment: env, timeout: timeout))
             return Result(out: r.stdout, err: r.stderr, code: r.exitCode)
         } catch {

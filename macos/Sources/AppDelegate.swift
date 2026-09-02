@@ -100,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // (BURROW_ENGINE_DIR used to be exported here, pointing the bundled conductor at a
         // separate bundled engine. The repoint collapsed those two binaries into one, so
-        // there is no second directory to point at and `BurrowConductor.engineDir()` is gone.)
+        // there is no second directory to point at and `BurrowEngine.engineDir()` is gone.)
 
         // Product analytics + crash reporting (PostHog + Sentry). Opt-out, on
         // by default, and inert without release-injected keys. Started before
@@ -115,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // No engine yet → guided install instead of a dead-end quit. The
         // window's Recheck calls startServices() once `mo` is found.
         //
-        // Discovery can shell out to `which mo` (MoleCLI.discover) when mo
+        // Discovery can shell out to `which mo` (EngineCLI.discover) when mo
         // isn't in a trusted Homebrew path — a blocking Process wait that must
         // never run on the main thread at launch (issue #72 / Sentry BURROW-1:
         // a ~2 s+ app-hang on cold launch). Probe off-main, then gate startup
@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         markLaunch(.engineProbeStarted)
         let engineProbeSpan = CrashReporter.startLaunchSpan("engine_probe")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let found = MoleCLI.findExecutable() != nil
+            let found = EngineCLI.findExecutable() != nil
             engineProbeSpan?.finish()
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -352,7 +352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // can vanish between gate and slides. The slides assume a working
         // engine, so route into the guided install instead — its Recheck
         // re-enters startServices() and lands back here.
-        guard MoleCLI.findExecutable() != nil else {
+        guard EngineCLI.findExecutable() != nil else {
             showInstallWindow()
             return
         }
@@ -893,7 +893,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // directly under the app's own version in the About panel and a bare "v0.1.0" next
         // to Burrow 0.11.x reads as a bug rather than as a separate component.
         DispatchQueue.global(qos: .userInitiated).async {
-            let version = MoleCLI.versionReport()?.display ?? NSLocalizedString("not found", comment: "")
+            let version = EngineCLI.versionReport()?.display ?? NSLocalizedString("not found", comment: "")
             DispatchQueue.main.async { self.presentAboutPanel(moleVersion: version) }
         }
     }

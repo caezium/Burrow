@@ -224,6 +224,20 @@ enum HelperReviewedCleanup {
             return lstat(path, &status) == 0
         }
     }
+
+    /// The daemon's OWN plan file for `clean --apply --plan`: the validated
+    /// paths, written into a fresh root-only directory (mkdtemp, 0700; the file
+    /// 0600). Root never reads a delete list out of a user-writable location.
+    /// The caller removes the directory once the engine has exited.
+    static func writePlanFile(paths: [String]) throws -> URL {
+        var template = Array((NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("burrow-helper-plan.XXXXXX").utf8CString)
+        guard let made = template.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress) }) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        let directory = URL(fileURLWithPath: String(cString: made), isDirectory: true)
+        return try CleanPlanFile.write(paths: paths, in: directory)
+    }
 }
 
 // MARK: - Engine resolution
@@ -348,12 +362,12 @@ final class HelperOperationRunner: @unchecked Sendable {
     func run(operation: HelperOperation,
              operationID: String,
              interface: String?,
-             reviewedPaths: [String] = [],
+             reviewedPlanFile: String? = nil,
              enginePath: String?,
              invokingUser: HelperResolvedInvokingUser,
              emit: @escaping (String) -> Void) -> Int32 {
         var last: Int32 = 0
-        for step in operation.steps(interface: interface, reviewedPaths: reviewedPaths) {
+        for step in operation.steps(interface: interface, reviewedPlanFile: reviewedPlanFile) {
             let path: String
             switch step.executable {
             case .bundledEngine:
@@ -377,16 +391,8 @@ final class HelperOperationRunner: @unchecked Sendable {
                                 operationID: operationID, ownerUID: invokingUser.uid,
                                 environment: invokingUser.childEnvironment,
                                 emit: emit)
-            // For a reviewed clean, `find`'s status is NOT the verdict — the
-            // postcondition below is. `-delete` returns true even when it
-            // removed nothing, and it returns FALSE for an entry that a
-            // deeper delete already took away, so believing it reports a
-            // fully successful clean as "exit 1".
-            if status != 0 && !operation.needsReviewedPaths { last = status }
-            // A reviewed clean is a list of independent entries: one that
-            // can't be removed must not abandon the ones after it. Every other
-            // operation is a sequence where a failed step invalidates the rest.
-            guard operation.needsReviewedPaths || status == 0 else { break }
+            // A failed step invalidates the rest of the sequence.
+            if status != 0 { last = status; break }
         }
         return last
     }
@@ -661,7 +667,7 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         // closed set; fixed argv either way.
         var engineSnapshot: HelperExecutableSnapshot?
         var enginePath: String?
-        if request.operation.engineArguments != nil {
+        if request.operation.usesBundledEngine {
             guard let snapshot = HelperEngine.executableSnapshot(teamID: teamID) else {
                 helperTrace("engine unavailable: signed execution snapshot could not be prepared")
                 return respond(.engineUnavailable)
@@ -675,12 +681,31 @@ final class HelperService: NSObject, BurrowHelperProtocol {
 
         helperTrace("running \(request.operation.rawValue) (mutating: \(request.operation.mutatesDisk))")
 
+        // A reviewed clean runs the engine over a plan file the DAEMON writes
+        // from the paths it just validated — plan-then-execute with no re-scan.
+        // The file lives in a fresh root-only directory for exactly the length
+        // of the run.
+        var reviewedPlanFile: URL?
+        if request.operation.needsReviewedPaths {
+            do {
+                reviewedPlanFile = try HelperReviewedCleanup.writePlanFile(paths: reviewedPaths)
+            } catch {
+                helperTrace("reviewed cleanup refused: plan file could not be written")
+                return respond(.engineUnavailable)
+            }
+        }
+        defer {
+            if let file = reviewedPlanFile {
+                try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+            }
+        }
+
         let client = connection.remoteObjectProxy as? BurrowHelperClientProtocol
         let operationID = request.operationID
         var code = runner.run(operation: request.operation,
                               operationID: operationID,
                               interface: request.networkInterface,
-                              reviewedPaths: reviewedPaths,
+                              reviewedPlanFile: reviewedPlanFile?.path,
                               enginePath: enginePath,
                               invokingUser: invokingUser) { line in
             client?.helperDidEmit(line: line, operationID: operationID)
@@ -689,18 +714,16 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         // output pipe has drained; deinit then removes the private snapshot.
         withExtendedLifetime(engineSnapshot) {}
 
-        // Success is the POSTCONDITION, not find's exit status: `-delete` is
-        // documented to always return true, so it exits 0 having printed a
-        // permission error and removed nothing. Reporting that as success is
-        // how a clean that freed nothing renders as "Done — caches cleared".
-        if request.operation.needsReviewedPaths {
+        // The engine's status is the verdict for what it attempted (nonzero
+        // when any removal failed), and the POSTCONDITION covers what it
+        // refused: a reviewed entry the engine's rails declined is still on
+        // disk, so the run reports it rather than reading as a full success.
+        // The refusal itself reached the client as a `protected` line.
+        if request.operation.needsReviewedPaths, code == 0 {
             let survivors = HelperReviewedCleanup.survivors(among: reviewedPaths)
-            // Authoritative, in both directions: still-present entries fail the
-            // run, and an entry that is gone is a success no matter what `find`
-            // said on its way out.
-            code = survivors.isEmpty ? 0 : 1
             if !survivors.isEmpty {
                 helperTrace("reviewed cleanup left \(survivors.count) of \(reviewedPaths.count) entries")
+                code = 1
             }
         }
         helperTrace("operation finished with status \(code)")

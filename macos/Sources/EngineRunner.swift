@@ -1,11 +1,11 @@
 //
-//  MoEngine.swift
+//  EngineRunner.swift
 //  Burrow
 //
 //  The single entry point to the `mo` runners (issue #48). Burrow grew several
 //  process shapes — capture (small one-shot commands), streaming (clean /
 //  optimize), and interactive PTY (purge / installer) — each found and spawned
-//  at its own call site. `MoEngine` is the ONE facade callers reach for so
+//  at its own call site. `EngineRunner` is the ONE facade callers reach for so
 //  "how do I run mo?" has a single answer.
 //
 //  Three shapes hang off the facade as methods — CAPTURE, DISCOVERY, and
@@ -19,11 +19,11 @@
 //  production has always used.
 //
 //  Behavior is preserved exactly: a `capture(_:)` call produces the same argv,
-//  stdin, environment, timeout, and result fields that `MoleCLI.run` did, and
+//  stdin, environment, timeout, and result fields that `EngineCLI.run` did, and
 //  `interactive()` vends a FRESH `PTYTask` whose raw, escape-preserving output
 //  the `SelectionSession` reducer depends on. The ports are injected
 //  (production defaults are the real ones) so every shape is testable with
-//  scripted fakes, matching the seams `MoleCLI`/`MoleProcess`/`ProcessPort`/
+//  scripted fakes, matching the seams `EngineCLI`/`MoleProcess`/`ProcessPort`/
 //  `PTYPort` already expose.
 //
 
@@ -34,12 +34,12 @@ import Foundation
 /// One `mo` invocation, described once. `target` chooses how the executable is
 /// resolved (the discovered `mo`, or an explicit path like Homebrew's `brew`);
 /// the rest mirrors what the capture runner already accepts so migrating a
-/// `MoleCLI.run(...)` call is a 1:1 translation.
+/// `EngineCLI.run(...)` call is a 1:1 translation.
 struct MoCommand: Equatable {
     enum Target: Equatable {
         /// Resolve through discovery (`MoLocator.locate`); falls back to a
         /// non-existent path so a missing `mo` surfaces as a nonzero exit, the
-        /// same degradation `MoleCLI.run` had.
+        /// same degradation `EngineCLI.run` had.
         case mo
         /// Run this exact executable path (the brew straggler, test binaries).
         case executable(String)
@@ -49,7 +49,7 @@ struct MoCommand: Equatable {
     var args: [String]
     var stdin: String?
     var environment: [String: String]?
-    /// Same default as `MoleCLI.run` (10 s) so an unspecified timeout behaves
+    /// Same default as `EngineCLI.run` (10 s) so an unspecified timeout behaves
     /// identically to the pre-facade call.
     var timeout: TimeInterval
 
@@ -69,7 +69,7 @@ struct MoCommand: Equatable {
 // MARK: - Capture result
 
 /// What a captured run produced. A thin rename of `MoleProcessResult` /
-/// `MoleCLI.Result` so the typed parsers keep reading the same fields; the
+/// `EngineCLI.Result` so the typed parsers keep reading the same fields; the
 /// success convention is still `exitCode == 0`, and `timedOut` distinguishes a
 /// timeout kill from a genuine nonzero exit (issue #48's "no exit-15 lie").
 struct Captured: Equatable {
@@ -77,18 +77,24 @@ struct Captured: Equatable {
     let stderr: String
     let exitCode: Int32
     var timedOut: Bool = false
+
+    /// The bytes a command's own decoder should read: the envelope's `data` when the engine
+    /// answered `ok:true`, nil for an `ok:false` envelope, and `stdout` verbatim for a legacy
+    /// binary that emits no envelope. Unwrapped HERE, once, so no consumer has to remember that
+    /// the envelope's own top level is not the payload (see `BurrowEnvelope.payloadBytes`).
+    var payload: Data? { BurrowEnvelope.payloadBytes(stdout: stdout) }
 }
 
 // MARK: - Discovery
 
-/// Where `mo` is, or that it's missing. Mirrors `MoleCLI.findExecutable()`
+/// Where `mo` is, or that it's missing. Mirrors `EngineCLI.findExecutable()`
 /// returning `String?`, but names the miss so call sites read intent.
 enum Availability: Equatable {
     case installed(path: String)
     case missing
 }
 
-/// Discovery seam. Production resolves through `MoleCLI` (PATH + known
+/// Discovery seam. Production resolves through `EngineCLI` (PATH + known
 /// locations, cached + revalidated); tests inject a fake to drive resolution
 /// deterministically.
 protocol MoLocator: Sendable {
@@ -96,10 +102,10 @@ protocol MoLocator: Sendable {
     func locate() -> String?
 }
 
-/// The production locator: delegates to `MoleCLI`'s existing discovery so the
+/// The production locator: delegates to `EngineCLI`'s existing discovery so the
 /// caching/revalidation stays in one place.
 struct SystemMoLocator: MoLocator {
-    func locate() -> String? { MoleCLI.findExecutable() }
+    func locate() -> String? { EngineCLI.findExecutable() }
 }
 
 // MARK: - Facade
@@ -108,7 +114,7 @@ struct SystemMoLocator: MoLocator {
 /// discovery, and interactive PTY — hang off this type as methods, and the
 /// streaming port is exposed for `OperationFlow`; the ports are injected so
 /// every path is testable in memory.
-final class MoEngine {
+final class EngineRunner {
     private let processPort: MoleProcessPort
     private let locator: MoLocator
     /// The streaming-op spawn port (clean / optimize). Exposed so
@@ -122,10 +128,10 @@ final class MoEngine {
     /// would stomp each other's child and keystrokes.
     private let makePTY: @Sendable () -> PTYPort
 
-    /// Production singleton. Wraps the real capture runner, `MoleCLI` discovery,
+    /// Production singleton. Wraps the real capture runner, `EngineCLI` discovery,
     /// the real streaming port, and the real PTY — the exact spawn paths the
     /// migrated call sites used before, just funneled through one type.
-    static let shared = MoEngine()
+    static let shared = EngineRunner()
 
     init(processPort: MoleProcessPort = SystemMoleProcess(),
          locator: MoLocator = SystemMoLocator(),
@@ -154,7 +160,7 @@ final class MoEngine {
     /// Capture stdout + stderr of one command. Blocks until the child exits —
     /// call off the main thread. A `.mo` target that can't be resolved runs
     /// `/usr/bin/false`, so a missing binary degrades to a nonzero exit instead
-    /// of throwing, exactly as `MoleCLI.run` did. Times out per `command`; on
+    /// of throwing, exactly as `EngineCLI.run` did. Times out per `command`; on
     /// timeout the child is killed and `Captured.timedOut` is set (the run
     /// returns a nonzero exit, it does NOT throw for the timeout).
     @discardableResult
@@ -162,7 +168,7 @@ final class MoEngine {
         let executable: String
         switch command.target {
         case .mo:
-            // `/usr/bin/false` mirrors `MoleCLI.run`'s fallback: an unresolved
+            // `/usr/bin/false` mirrors `EngineCLI.run`'s fallback: an unresolved
             // `mo` yields a clean nonzero exit, never a crash.
             executable = locator.locate() ?? "/usr/bin/false"
         case .executable(let path):
@@ -206,7 +212,7 @@ final class MoEngine {
     /// the engine can't be resolved. Reuses the streaming port that drives
     /// clean/optimize, so there's no new spawn plumbing.
     ///
-    /// Does NOT check that the resolved binary supports the flag — `MoleCLI.supportsWatch()`
+    /// Does NOT check that the resolved binary supports the flag — `EngineCLI.supportsWatch()`
     /// is that gate, and it resolves through the same locator so the two agree. Spawning
     /// this against an engine that rejects `--watch` is survivable but wasteful: the child
     /// prints one error envelope, exits, and `SnapshotProducer` falls back to polling.

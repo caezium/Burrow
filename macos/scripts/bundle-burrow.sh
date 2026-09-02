@@ -6,7 +6,7 @@
 # script is called "burrow", it builds the crate named `burrow-engine` (the submodule at
 # macos/vendor/burrow-engine, which tracks caezium/burrow-engine), and it writes the result to a
 # file named neither: Resources/burrow. That last one is deliberate rather than a leftover —
-# `BurrowConductor.executableURL()` resolves Resources/burrow, so keeping the staged filename is
+# `BurrowEngine.executableURL()` resolves Resources/burrow, so keeping the staged filename is
 # exactly what lets every `capture()` call site stay unedited.
 #
 # The GUI shells out to this ONE bundled binary (`burrow <cmd> --json`) for the stable Burrow

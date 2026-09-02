@@ -485,7 +485,7 @@
 "“%1$@” resolves to %2$d applications (%3$@), so the engine refuses to act on it. Remove them one at a time." = "「%1$@」은(는) 응용 프로그램 %2$d개(%3$@)에 해당하므로 엔진이 실행을 거부합니다. 하나씩 삭제하세요.";
 "The engine resolved %1$d applications for %2$d selected, so the sets don't line up." = "선택한 %2$d개에 대해 엔진이 응용 프로그램 %1$d개를 찾아 대상이 서로 맞지 않습니다.";
 "The engine won't remove %1$@: %2$@" = "엔진이 %1$@을(를) 삭제하지 않습니다: %2$@";
-"Needs an administrator: %@. Burrow doesn't elevate this run, so it may fail on the app itself." = "관리자 권한이 필요합니다: %@. Burrow는 이번 실행에서 권한을 올리지 않으므로 앱 자체는 삭제하지 못할 수 있습니다.";
+"Needs an administrator: %@. Burrow will ask for an administrator password and remove it with that authorization." = "관리자 권한 필요: %@. Burrow가 관리자 암호를 요청하고 해당 승인으로 앱을 제거합니다.";
 "one of these apps" = "이 앱들 중 하나";
 "Homebrew removes %1$@: `%2$@`. `--zap` also deletes configuration and data the cask declares, which the preview can't list." = "%1$@은(는) Homebrew가 삭제합니다: `%2$@`. `--zap`은 cask가 선언한 설정과 데이터까지 지우며, 미리보기에는 그 목록이 나오지 않습니다.";
 "aborted — nothing removed" = "중단했습니다 — 아무것도 삭제하지 않음";

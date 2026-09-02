@@ -228,7 +228,7 @@ final class EngineFailureChannelTests: XCTestCase {
     /// The exit code is not the whole test. An `ok:false` body that somehow exits 0 is still a
     /// failure, and must not be passed through where an agent expects the app inventory.
     func testListApps_zeroExitButFailureEnvelope_isStillAnError_andNeverAnEmptyAppsList() throws {
-        let json = ToolCatalog.listAppsToolResult(exitCode: 0, stdout: analyzeMissing, stderr: "")
+        let json = ToolCatalog.listAppsToolResult(Captured(stdout: analyzeMissing, stderr: "", exitCode: 0))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertNotNil(obj["error"])
         XCTAssertEqual(obj["reason"] as? String,
@@ -242,7 +242,7 @@ final class EngineFailureChannelTests: XCTestCase {
     /// must still pass through untouched.
     func testListApps_realBareArrayListing_stillPassesThroughVerbatim() {
         let listing = #"[{"name":"Slack","bundle_id":"com.tinyspeck.slackmacgap","path":"/Applications/Slack.app","size":"250MB"}]"#
-        XCTAssertEqual(ToolCatalog.listAppsToolResult(exitCode: 0, stdout: listing, stderr: ""), listing)
+        XCTAssertEqual(ToolCatalog.listAppsToolResult(Captured(stdout: listing, stderr: "", exitCode: 0)), listing)
     }
 
     // MARK: - The wire format: additive, and no failure dressed as a success

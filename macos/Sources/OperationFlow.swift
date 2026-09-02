@@ -10,11 +10,11 @@
 //  never a subclass.
 //
 //  The process boundary is one method behind ProcessPort. Production takes its
-//  streaming port from the MoEngine facade (MoEngine.shared.streamPort, the real
+//  streaming port from the EngineRunner facade (EngineRunner.shared.streamPort, the real
 //  SystemProcessPort) so "how do I run mo?" has one answer; tests still script a
 //  fake by injecting `process:` directly. SystemProcessPort streams long-running
 //  ops (Clean/Optimize); MoleProcess (the #29 capture-spawn runner) captures
-//  one-shot output — both now hang off MoEngine, coexisting by use-case.
+//  one-shot output — both now hang off EngineRunner, coexisting by use-case.
 //
 
 import Foundation
@@ -133,6 +133,10 @@ struct ToolOperation<Report: Sendable> {
     /// the result line a completion notification carries (freed bytes
     /// etc.). nil keeps the last streamed line.
     var finalDetail: (@Sendable (Report) -> String)? = nil
+    /// Runs exactly once when the operation is over, however it ended —
+    /// exit, auth cancelled, stopped, or refused before it spawned. The
+    /// reviewed clean deletes its plan file here.
+    var finally: (@Sendable () -> Void)? = nil
 
     /// "Scan with admin": the same operation, elevated — root bypasses TCC
     /// so the gate no longer applies.
@@ -186,13 +190,14 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
     private let hasFullDiskAccess: () -> Bool
     /// Resolves the mo executable; elevated runs use trusted locations only
     /// (never a PATH lookup a user-writable directory could shadow).
-    private let resolveMo: (_ elevated: Bool) -> String?
+    private let resolveEngine: (_ elevated: Bool) -> String?
     private let resolveInvokingUser: () throws -> InvokingUserIdentity
     private let center: OperationCenter
 
     private var task: Task<Void, Never>?
     private var currentElevated = false
     private var currentLabel: String?
+    private var currentFinally: (@Sendable () -> Void)?
     private var telemetryFeature: String?
     private var telemetryStartedAt: Date?
     private var cancelRequested = false
@@ -215,16 +220,16 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    init(process: any ProcessPort = MoEngine.shared.streamPort,
+    init(process: any ProcessPort = EngineRunner.shared.streamPort,
          hasFullDiskAccess: @escaping () -> Bool = Privacy.hasFullDiskAccess,
-         resolveMo: @escaping (_ elevated: Bool) -> String? = {
-             $0 ? MoleCLI.trustedExecutable() : MoleCLI.findExecutable()
+         resolveEngine: @escaping (_ elevated: Bool) -> String? = {
+             $0 ? EngineCLI.trustedExecutable() : EngineCLI.findExecutable()
          },
          resolveInvokingUser: @escaping () throws -> InvokingUserIdentity = InvokingUserIdentity.current,
          center: OperationCenter = .shared) {
         self.process = process
         self.hasFullDiskAccess = hasFullDiskAccess
-        self.resolveMo = resolveMo
+        self.resolveEngine = resolveEngine
         self.resolveInvokingUser = resolveInvokingUser
         self.center = center
     }
@@ -248,30 +253,30 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
             // here would mean the app's actual Clean/Optimize buttons never stream at all.
             //
             // The mo→engine argv TRANSLATION is a separate concern from which of these two
-            // branches runs, and it must not depend on that choice: `resolveMo` below resolves
-            // the SAME bundled engine binary this branch would have used (MoleCLI.bundledExecutable(),
-            // the file `streamOverride`/`BurrowConductor.executableURL()` also targets) whenever
+            // branches runs, and it must not depend on that choice: `resolveEngine` below resolves
+            // the SAME bundled engine binary this branch would have used (EngineCLI.bundledExecutable(),
+            // the file `streamOverride`/`BurrowEngine.executableURL()` also targets) whenever
             // one is bundled — which it will be in a shipped build regardless of the streaming
             // switch. So when only the conductor branch translated, turning that switch off
             // (`defaults write … BurrowStreamViaConductor -bool NO`) silently handed the SAME
             // bundled engine mo's own untranslated argv, which it reads with the OPPOSITE meaning
             // (`["clean"]` is mo's LIVE run and the engine's DRY RUN) — a transport kill switch
             // that could turn a real clean into a silent no-op. Not "byte-identical to before":
-            // `MoleCLI.bundledExecutable()` is new in this same diff, so what `resolveMo` finds
+            // `EngineCLI.bundledExecutable()` is new in this same diff, so what `resolveEngine` finds
             // changed underneath this fallback even though the fallback's own code didn't.
-            if let conductorRun = BurrowConductor.streamOverride(moArgs: op.arguments) {
+            if let conductorRun = BurrowEngine.streamOverride(moArgs: op.arguments) {
                 exe = conductorRun.executable
                 arguments = conductorRun.arguments
             } else {
-                let resolved = resolveMo(op.elevated)
+                let resolved = resolveEngine(op.elevated)
                 exe = resolved
                 // Translate only when we can tell this IS the bundled engine — a genuine
                 // external mo/burrow-engine(MIT-fork) Homebrew fallback (reachable only when the
                 // bundle itself is missing) speaks mo's own convention, and translating that one
                 // unconditionally would turn an elevated preview ("Scan with admin") into a live
                 // delete on it instead.
-                if let resolved, resolved == MoleCLI.bundledExecutable() {
-                    arguments = BurrowConductor.engineArgv(fromMo: op.arguments)
+                if let resolved, resolved == EngineCLI.bundledExecutable() {
+                    arguments = BurrowEngine.engineArgv(fromMo: op.arguments)
                 }
             }
         case .path(let p): exe = p
@@ -283,8 +288,9 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
             // could never satisfy this. A missing bundled engine is fixed by
             // reinstalling the app, which is what installCommand documents.
             state = .finished(.failed(op.elevated
-                ? "The bundled engine is missing. Reinstall Burrow to restore it: \(MoleCLI.installCommand)"
+                ? "The bundled engine is missing. Reinstall Burrow to restore it: \(EngineCLI.installCommand)"
                 : "mo not found"))
+            op.finally?()
             return
         }
 
@@ -293,6 +299,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
             do { invokingUser = try resolveInvokingUser() }
             catch {
                 state = .finished(.failed(error.localizedDescription))
+                op.finally?()
                 return
             }
         } else {
@@ -316,6 +323,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         telemetryStartedAt = Date()
         cancelRequested = false
         reactivated = false
+        currentFinally = op.finally
         if let label = op.label { center.begin(opID, label: label, notifiesOnEnd: op.notifyOnEnd) }
         if let telemetryFeature {
             Telemetry.capture("feature_operation_started", [
@@ -354,6 +362,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                 case .exited(let code):
                     guard !self.cancelRequested else { return }
                     self.reactivateIfElevated(op)   // backstop: no-output runs
+                    defer { self.runFinally() }
                     self.rawLog = lines.joined(separator: "\n")
                     if code == 0 {
                         self.report = op.reduce(lines)
@@ -367,10 +376,14 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                         }
                         self.captureTelemetryCompletion(result: "succeeded")
                     } else {
-                        // A cleanup report may contain the preview's optimistic
-                        // summary even though the exact-tree guard stopped the
-                        // deletion. Do not render or notify with that summary.
-                        self.report = op.cleanupPlan == nil ? op.reduce(lines) : nil
+                        // A reviewed clean refused at the boundary never ran
+                        // the engine, so there is nothing to report — the
+                        // failure message says so. Every other nonzero exit is
+                        // reduced from the engine's own lines (what it removed,
+                        // what it refused and why), never from the preview.
+                        let refusedBeforeRunning = op.cleanupPlan != nil
+                            && code == ElevatedExitCode.boundaryCheckFailed
+                        self.report = refusedBeforeRunning ? nil : op.reduce(lines)
                         let message = Self.failureMessage(exitCode: code,
                                                           isCleanup: op.cleanupPlan != nil)
                         self.state = .finished(.failed(message))
@@ -389,6 +402,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                     // not by a view-level "elevated + nonzero + no output" guess.
                     guard !self.cancelRequested else { return }
                     self.reactivateIfElevated(op)
+                    defer { self.runFinally() }
                     self.report = op.reduce(lines)
                     self.rawLog = lines.joined(separator: "\n")
                     self.state = .finished(.failed(NSLocalizedString("authorization cancelled", comment: "")))
@@ -406,6 +420,15 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         state = .finished(.cancelled)
         if currentLabel != nil { center.end(opID, success: false) }
         captureTelemetryCompletion(result: "cancelled")
+        runFinally()
+    }
+
+    /// The operation's `finally`, once. Cleared as it runs so no terminal path
+    /// can fire it twice.
+    private func runFinally() {
+        let body = currentFinally
+        currentFinally = nil
+        body?()
     }
 
     /// Back to the idle hero — the report screen's "Back" button.
@@ -567,7 +590,7 @@ struct SystemProcessPort: ProcessPort {
             if spec.elevated {
                 // The osascript `do shell script` wrapper has no stdin channel,
                 // so elevated + stdin is unsupported. No caller pairs them today
-                // (stdin-fed flows like uninstall run un-elevated via MoleCLI.run);
+                // (stdin-fed flows like uninstall run un-elevated via EngineCLI.run);
                 // assert so the unsupported combo fails loudly rather than
                 // silently dropping the input if someone wires it up later.
                 assert(spec.stdin == nil, "elevated runs don't support stdin")
@@ -603,7 +626,7 @@ struct SystemProcessPort: ProcessPort {
                     }
                     return
                 }
-                let script = MoleCLI.elevatedScript(command: command,
+                let script = EngineCLI.elevatedScript(command: command,
                                                     args: spec.arguments,
                                                     logSink: logSink,
                                                     cleanupPlan: spec.cleanupPlan)

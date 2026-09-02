@@ -4,7 +4,7 @@
 //
 //  The typed `mo` command surface: one place that knows how each subcommand is
 //  invoked and how its output maps to a typed value. Built on the capture
-//  runner (`MoleCLI.run`); the parsing is pure so it's unit-tested against
+//  runner (`EngineCLI.run`); the parsing is pure so it's unit-tested against
 //  captured output. Views and the MCP server call this instead of each
 //  re-implementing "spawn mo X → parse".
 //
@@ -43,7 +43,7 @@ enum MoleClient {
     /// added: `BurrowEnvelope.parse` throws `.notAnObject` on an array, so `payloadBytes` passes
     /// it through untouched.
     static func listAppsResult(timeout: TimeInterval = 180) -> ListAppsResult {
-        guard let res = try? MoEngine.shared.capture(
+        guard let res = try? EngineRunner.shared.capture(
                 MoCommand(target: .mo, args: ["uninstall", "--list"], timeout: timeout)),
               res.exitCode == 0 else { return .unavailable }
         return .ok(parseApps(Data(res.stdout.utf8)))

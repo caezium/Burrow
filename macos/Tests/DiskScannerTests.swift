@@ -35,7 +35,7 @@ final class DiskScannerTests: XCTestCase {
             found: "1.28.1",
             updatePolicy: .external
         ).errorDescription)
-        XCTAssertTrue(msg.contains(MoleCLI.minimumAnalyzeJSONVersion))
+        XCTAssertTrue(msg.contains(EngineCLI.minimumAnalyzeJSONVersion))
         XCTAssertTrue(msg.contains("1.28.1"))
         XCTAssertTrue(msg.contains("Update external engine"))
     }
@@ -45,7 +45,7 @@ final class DiskScannerTests: XCTestCase {
             found: nil,
             updatePolicy: .bundledWithApp
         ).errorDescription)
-        XCTAssertTrue(msg.contains(MoleCLI.minimumAnalyzeJSONVersion))
+        XCTAssertTrue(msg.contains(EngineCLI.minimumAnalyzeJSONVersion))
         XCTAssertFalse(msg.contains("%@"), "format placeholders must be resolved")
     }
 }

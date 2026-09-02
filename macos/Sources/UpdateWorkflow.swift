@@ -1220,7 +1220,7 @@ enum ElectronReplacementInstaller {
                 throw UpdateFailure.verification(.invalidSignature)
             }
             try FileManager.default.createDirectory(at: extracted, withIntermediateDirectories: true)
-            let extraction = try MoEngine.shared.capture(
+            let extraction = try EngineRunner.shared.capture(
                 MoCommand(
                     target: .executable("/usr/bin/ditto"),
                     args: ["-x", "-k", archive.path, extracted.path],

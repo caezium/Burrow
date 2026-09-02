@@ -64,8 +64,8 @@ struct CleanupExecutionPlan: Sendable, Equatable {
         let expiry = Int(expiresAt.timeIntervalSince1970)
         let identities = approvedRoots + items.map(\.identity)
         return ["[ \"$(/bin/date +%s)\" -le \(expiry) ]"] + identities.map { identity in
-            let path = MoleCLI.shellQuote(identity.path)
-            let token = MoleCLI.shellQuote(identity.shellStatToken)
+            let path = EngineCLI.shellQuote(identity.path)
+            let token = EngineCLI.shellQuote(identity.shellStatToken)
             return "[ \"$(/usr/bin/stat -f '%d:%i:%u:%p' -- \(path) 2>/dev/null)\" = \(token) ]"
         }
     }
@@ -92,45 +92,56 @@ struct CleanupExecutionPlan: Sendable, Equatable {
     }
 
     /// The shell-quoted form of `orderedReviewedPaths()`, for the delete loop.
-    func quotedReviewedPaths() -> [String] {
-        orderedReviewedPaths().map { MoleCLI.shellQuote($0) }
-    }
-
-    /// The complete irreversible cleanup: boundary checks, then the deletes.
+    /// The shell the osascript route runs for a reviewed clean: every boundary check first —
+    /// the review's expiry, then the pinned identity of each approved root and each reviewed
+    /// entry — and only then `command`, the engine invocation `EngineCLI.elevatedScript` builds
+    /// (`clean --apply --permanent --plan <file> --stream`). A failed check exits with
+    /// `ElevatedExitCode.boundaryCheckFailed` before the engine is ever spawned, so a review
+    /// whose entries were swapped, or that went stale, runs nothing.
     ///
-    /// This lives beside the plan that authorizes it rather than inside the
-    /// AppleScript builder, so a test can execute exactly the semantics that
-    /// ship instead of reconstructing them from a quoted wrapper.
-    ///
-    /// `find -delete` is doing real safety work here, not just recursion.
-    /// BSD `find` chdir's as it descends, so every unlink is relative to the
-    /// directory it is standing in rather than a re-resolved path, and it
-    /// refuses to delete any name whose path relative to "." contains a "/" —
-    /// which is precisely the mid-walk directory-swap case.  Following
-    /// symlinks is incompatible with `-delete`, so it cannot be redirected out
-    /// of the tree, and `-x` holds it to the volume the boundary check pinned.
-    ///
-    /// A failing entry does not abandon the rest: the loop records it and the
-    /// aggregate status reports it once.  `find` names each failing path on
-    /// stderr, which the caller redirects into the run log, so the transcript
-    /// says which entries survived.
-    ///
-    /// Success is decided by the POSTCONDITION, never by find's exit status.
-    /// BSD `-delete` is documented to "always return true", so `find` exits 0
-    /// having printed `unlink(...): Permission denied` and deleted nothing —
-    /// trusting its status is how a cleanup that removed nothing reports
-    /// "Done — caches cleared". Asking whether the entry is actually gone also
-    /// covers the cases find never reports at all.
-    func irreversibleCleanupShell() -> String {
+    /// The deletion itself is the ENGINE's now, through its own rails, from the plan file; this
+    /// shell no longer deletes anything. That is deliberate: one set of deletion rails (the
+    /// engine's, unit-tested there) instead of a `find -delete` loop here whose safety
+    /// properties had to be re-proven in this repository.
+    func guardedShell(running command: String) -> String {
         let checks = executionBoundaryChecks().map {
             $0 + " || exit \(ElevatedExitCode.boundaryCheckFailed)"
         }
-        let paths = quotedReviewedPaths().joined(separator: " ")
-        let loop = "failed=0; for p in \(paths); do "
-            + "/usr/bin/find -x \"$p\" -depth -delete; "
-            + "if [ -e \"$p\" ] || [ -L \"$p\" ]; then failed=1; fi; "
-            + "done; [ \"$failed\" -eq 0 ]"
-        return (checks + [loop]).joined(separator: "; ")
+        return (checks + [command]).joined(separator: "; ")
+    }
+
+    /// Write this plan's reviewed paths as an engine plan file into `directory` (the app's
+    /// clean-plans directory by default). The paths are exactly `orderedReviewedPaths()` — the
+    /// entries that came out of the dry run's own enumeration, pinned at review time — so the
+    /// file can never name something the user was not shown. Deleted by the operation's
+    /// `finally` once the run ends; `sweepStalePlanFiles` catches the ones a crash left behind.
+    func writePlanFile(in directory: URL? = nil) throws -> URL {
+        try CleanPlanFile.write(paths: orderedReviewedPaths(),
+                                in: directory ?? Self.plansDirectory())
+    }
+
+    /// `~/Library/Application Support/Burrow/clean-plans`.
+    static func plansDirectory() -> URL {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        return support.appendingPathComponent("Burrow", isDirectory: true)
+            .appendingPathComponent("clean-plans", isDirectory: true)
+    }
+
+    /// Delete plan files older than `olderThan` — a plan is consumed within minutes of being
+    /// written (the review itself expires after `CleanupSnapshot.lifetime`), so anything older
+    /// is a leftover from a run that never finished. A leftover is inert (nothing runs a plan
+    /// without a fresh confirmation) but it is a list of the user's paths, so it is not kept.
+    static func sweepStalePlanFiles(in directory: URL? = nil, olderThan age: TimeInterval = 3600,
+                                    now: Date = Date()) {
+        let dir = directory ?? plansDirectory()
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        for entry in entries where entry.pathExtension == "plan" {
+            let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            if now.timeIntervalSince(modified) > age { try? FileManager.default.removeItem(at: entry) }
+        }
     }
 
     private static func makeSeal(snapshotID: UUID, createdAt: Date, expiresAt: Date,
@@ -362,5 +373,38 @@ enum CleanupExecutor {
         // moveItem refuses an occupied destination, so a second race can only
         // make restoration fail closed and leave the object recoverable.
         try? FileManager.default.moveItem(at: captured, to: original)
+    }
+}
+
+// MARK: - The reviewed clean as an operation
+
+extension ToolOperation where Report == TaskRunReport {
+    /// Confirm on the review screen: run the engine over the plan file, elevated, streamed.
+    ///
+    /// The argv is mo-style here (`OperationFlow` translates it to the engine's `--apply` and
+    /// adds `--stream` when streaming is on): `clean --permanent --plan <file>` — permanent
+    /// because this IS the permanent path (the Trash mode never reaches here; it moves the
+    /// reviewed entries itself, un-elevated). The engine does NOT re-scan: it removes the listed
+    /// paths and nothing else, each re-checked through its rails, and reports a path it refuses
+    /// as `protected` with the reason, which the reducer renders rather than drops.
+    ///
+    /// `plan` still rides along: the osascript route runs its boundary checks (expiry + pinned
+    /// identities) ahead of the engine, and the helper route sends its paths for the daemon to
+    /// validate and write into a plan file of its own. `categoryOf` maps a path back to the
+    /// review category it was shown under, so the result reads the way the review did.
+    static func reviewedClean(plan: CleanupExecutionPlan, planFile: URL,
+                              categoryOf: (@Sendable (String) -> String?)? = nil,
+                              label: String) -> ToolOperation {
+        let title = BurrowStreamReport.groupTitle(forMo: ["clean"])
+        return ToolOperation(
+            label: label,
+            arguments: ["clean", "--permanent", "--plan", planFile.path],
+            elevated: true,
+            cleanupPlan: plan,
+            reduce: { BurrowStreamReport.reduce($0, title: title, categoryOf: categoryOf) },
+            hudLine: { BurrowStreamReport.hudLine($0) },
+            notifyOnEnd: true,
+            finalDetail: { $0.summary?.completionLine ?? "" },
+            finally: { try? FileManager.default.removeItem(at: planFile) })
     }
 }

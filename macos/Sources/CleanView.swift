@@ -83,6 +83,7 @@ struct CleanView: View {
         }
         .onAppear {
             fdaGranted = Privacy.hasFullDiskAccess()
+            CleanupExecutionPlan.sweepStalePlanFiles()
             // Skip Intro (Settings ▸ General): the dry-run preview is
             // read-only, so it can start the moment the tab opens.
             if Store.skipIntro, case .idle = dryFlow.state, case .idle = realFlow.state {
@@ -323,35 +324,36 @@ struct CleanView: View {
             alert.runModalQuiet()
             return
         }
+        // Plan-then-execute: the ticked paths go into a plan file and Confirm runs the engine
+        // over exactly that file (`clean --apply --permanent --plan <file>`). No re-scan — the
+        // engine removes only what was reviewed, each path re-checked through its rails — and
+        // the stale-review timer above stays as the safety on top. The file is deleted by the
+        // operation's `finally` whichever way the run ends. The engine reports every path back
+        // (removed / failed / protected-with-reason), so the result screen is the engine's own
+        // account of the run rather than the review's optimistic summary.
+        let planFile: URL
+        do {
+            planFile = try plan.writePlanFile()
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = NSLocalizedString("The cleanup plan couldn't be written", comment: "")
+            alert.informativeText = String(format: NSLocalizedString("Nothing was cleaned. (%@)", comment: ""), error.localizedDescription)
+            alert.alertStyle = .warning
+            alert.runModalQuiet()
+            return
+        }
         screen = .hero
-        // `find -delete` succeeds SILENTLY — it writes nothing at all — so
-        // parsing its output produced an empty report: no items, no bytes, no
-        // done-banner. The reviewed clean deleted exactly what was ticked and
-        // then looked like it had done nothing, which is indistinguishable
-        // from a failure. Build the report from the plan we just authorized;
-        // the run only reaches `.done` when every planned path is gone, which
-        // is precisely what makes this safe to state as fact.
-        let cleaned = selection.list.categories
-            .map { category in
-                (category.name, category.items.filter { paths.contains($0.path) })
-            }
-            .filter { !$0.1.isEmpty }
-        let cleanedBytes = cleaned.flatMap(\.1).reduce(Int64(0)) { $0 + $1.sizeBytes }
-        let cleanedCount = cleaned.reduce(0) { $0 + $1.1.count }
-        realFlow.start(ToolOperation(
-            label: NSLocalizedString("Cleaning reviewed caches", comment: ""),
-            executable: .path("/usr/bin/find"), arguments: [], elevated: true,
-            cleanupPlan: plan,
-            reduce: { _ in
-                (groups: cleaned.map { name, items in
-                    TaskGroup(title: name,
-                              items: items.map { TaskItem(marker: .ok, text: $0.path) })
-                 },
-                 summary: TaskSummary(space: Fmt.bytes(cleanedBytes),
-                                      items: "\(cleanedCount)",
-                                      categories: "\(cleaned.count)"))
-            },
-            notifyOnEnd: true))
+        // The result screen groups what the engine reports back under the review's own
+        // categories, so a refused or failed path is shown where the user ticked it.
+        var categoryOfPath: [String: String] = [:]
+        for category in selection.list.categories {
+            for item in category.items { categoryOfPath[item.path] = category.name }
+        }
+        let lookup = categoryOfPath
+        realFlow.start(.reviewedClean(
+            plan: plan, planFile: planFile,
+            categoryOf: { lookup[$0] },
+            label: NSLocalizedString("Cleaning reviewed caches", comment: "")))
     }
 
     // MARK: - Trash mode

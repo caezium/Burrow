@@ -158,10 +158,12 @@ final class SnapshotProducer {
         /// Background executor for the blocking mo fetch. Production hops to
         /// a serial utility queue; tests pass `{ $0() }` for synchrony.
         var work: (@escaping () -> Void) -> Void
-        /// NDJSON status stream (`status --watch`) — used when the resolved engine can
-        /// actually serve one. Returns nil when it can't (the bundled Rust engine has no
-        /// streamer; an old mo predates the flag) or when nothing resolves, and the
-        /// producer polls instead. Tests omit it, so the poll path is exercised directly.
+        /// NDJSON status stream (`status --watch`) — ONE long-lived engine process whose
+        /// lines are the snapshots, instead of a `status --json` spawn per tick. Used when the
+        /// resolved engine can actually serve one: the bundled engine always can (BUR-132); an
+        /// old mo predates the flag. Returns nil when it can't or when nothing resolves, and
+        /// the producer polls instead. Tests script it with a canned stream (see
+        /// `SnapshotProducerEngineTests.testWatchStream_…`) or omit it for the poll path.
         var statusWatch: (() -> AsyncStream<ProcessEvent>?)? = nil
 
         static func live(db: DB) -> Deps {
@@ -174,16 +176,14 @@ final class SnapshotProducer {
                         work: { queue.async(execute: $0) },
                         statusWatch: {
                             // Stream when the engine we're about to spawn can stream.
-                            // `supportsWatch()` decides on WHAT answered `--version`, not
-                            // on how big its number is: the bundled Rust engine rejects
-                            // `status --watch` outright and always will until it grows a
-                            // streamer, so a version compare here would flip to "yes" the
-                            // day it ships 1.0 and start asking a hard-erroring command for
-                            // a stream. Both `supportsWatch()` and `statusWatch()` resolve
-                            // through the same `MoleCLI.findExecutable()`, so the binary
-                            // asked is the binary spawned. Spawns a subprocess, so this
-                            // runs off-main (the producer calls the factory inside `work`).
-                            MoleCLI.supportsWatch() ? MoEngine.shared.statusWatch() : nil
+                            // `supportsWatch()` decides on WHAT answered `--version`: the
+                            // bundled engine streams (BUR-132); a system mo older than
+                            // 1.44 doesn't and is polled instead. Both `supportsWatch()`
+                            // and `statusWatch()` resolve through the same
+                            // `EngineCLI.findExecutable()`, so the binary asked is the
+                            // binary spawned. Spawns a subprocess, so this runs off-main
+                            // (the producer calls the factory inside `work`).
+                            EngineCLI.supportsWatch() ? EngineRunner.shared.statusWatch() : nil
                         })
         }
     }
@@ -196,7 +196,7 @@ final class SnapshotProducer {
     private let lock = NSLock()
     private var running = false
     private var foreground = false
-    private var streaming = false            // `mo status --watch` active (guarded by lock)
+    private var streaming = false            // `status --watch` active (guarded by lock)
     private var snapTimer: ClockCancellable?
     private var liveTimer: ClockCancellable?
     private var streamTask: Task<Void, Never>?
@@ -266,14 +266,14 @@ final class SnapshotProducer {
         if let d = deps.hardware.diskBytes() { _ = liveDisk.mbps(d.read, d.write, at: now) }
         armLiveTimer()
         // Off-main: seed one snapshot immediately, then either start the
-        // `mo status --watch` stream or arm the poll timer. The gate spawns
-        // `mo --version`, so the decision must run off the main thread.
+        // `status --watch` stream or arm the poll timer. The gate spawns
+        // `--version`, so the decision must run off the main thread.
         deps.work { self.beginSnapshots() }
     }
 
     /// Seed one snapshot, then choose snapshot delivery: stream when
-    /// `deps.statusWatch` vends one (V1.44+, opt-in), else poll. Runs on
-    /// `deps.work` (off-main).
+    /// `deps.statusWatch` vends one (the bundled engine, or mo 1.44+), else
+    /// poll. Runs on `deps.work` (off-main).
     private func beginSnapshots() {
         sampleNow()
         if let factory = deps.statusWatch, let stream = factory() {
@@ -283,9 +283,11 @@ final class SnapshotProducer {
         }
     }
 
-    /// Consume `mo status --watch` NDJSON: publish every line, persist throttled
-    /// to the configured interval. On stream end (mo exited / errored) fall back
-    /// to polling, so a dropped stream never leaves the dashboard frozen.
+    /// Consume `status --watch` NDJSON: publish every line, persist throttled
+    /// to the configured interval. On stream end (the engine exited / errored)
+    /// fall back to polling, so a dropped stream never leaves the dashboard
+    /// frozen — the poll timer is armed only once the stream has finished, so
+    /// there is never a per-tick spawn alongside a live stream.
     private func startStreaming(_ stream: AsyncStream<ProcessEvent>) {
         lock.lock()
         guard running else { lock.unlock(); return }
@@ -489,19 +491,19 @@ struct MoCLIStatusSource: StatusSource {
         // Prefer the bundled conductor (burrow status --json): its envelope `data` is the same
         // status JSON the snapshot pipeline decodes + patches, and it runs the bundled engine
         // (no system mo needed). Fall back to the direct engine on any miss.
-        if BurrowConductor.isAvailable,
-           let envelope = try? BurrowConductor.capture("status", timeout: 8),
+        if BurrowEngine.isAvailable,
+           let envelope = try? BurrowEngine.capture("status", timeout: 8),
            let data = envelope.data,
            let json = String(data: data, encoding: .utf8) {
             return json
         }
-        let result = try MoEngine.shared.capture(
+        let result = try EngineRunner.shared.capture(
             MoCommand(target: .mo, args: ["status", "--json"], timeout: 8))
         // `stderr=` was empty on every engine failure (the reason is in the `ok:false` envelope
         // on stdout), so this NSError carried an exit code and nothing else into the log the one
         // time anyone would want to read it.
         guard result.exitCode == 0,
-              let json = BurrowEnvelope.payloadBytes(stdout: result.stdout)
+              let json = result.payload
                   .map({ String(decoding: $0, as: UTF8.self) }) else {
             let reason = BurrowEnvelope.failureReason(stdout: result.stdout, stderr: result.stderr)
                 .map { String($0.prefix(200)) } ?? "no error output"

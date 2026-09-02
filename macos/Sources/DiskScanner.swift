@@ -48,7 +48,7 @@ struct DiskScanResult {
 
 enum DiskScanError: Error, LocalizedError {
     case moNotFound
-    case moTooOld(found: String?, updatePolicy: MoleCLI.EngineUpdatePolicy)
+    case moTooOld(found: String?, updatePolicy: EngineCLI.EngineUpdatePolicy)
     /// `reason` is what the run actually said, read from whichever channel the resolved binary
     /// says it on (`BurrowEnvelope.failureReason`) — NOT stderr, which the Rust engine leaves
     /// empty on every classified failure. nil means the run said nothing at all.
@@ -63,9 +63,9 @@ enum DiskScanError: Error, LocalizedError {
             return String(format: NSLocalizedString(
                 "Disk analysis needs Mole %@ or newer (you have %@). %@",
                 comment: ""),
-                MoleCLI.minimumAnalyzeJSONVersion,
+                EngineCLI.minimumAnalyzeJSONVersion,
                 found ?? NSLocalizedString("an unknown version", comment: ""),
-                NSLocalizedString(MoleCLI.engineUpdateInstruction(for: updatePolicy), comment: ""))
+                NSLocalizedString(EngineCLI.engineUpdateInstruction(for: updatePolicy), comment: ""))
         case .moFailed(let code, let reason):
             // "mo analyze exited 2:" with nothing after the colon is what this printed for every
             // engine failure, because it was formatting stderr and the engine writes none. Say
@@ -96,20 +96,20 @@ enum DiskScanner {
         // below). The envelope's `data` is the same analyze-go JSON, so `parse` is unchanged; any
         // conductor miss (not bundled, engine error, empty/garbled) falls through to the direct
         // engine, so behavior is never worse than before.
-        if BurrowConductor.isAvailable, let viaConductor = try? conductorScan(path, timeout: timeout) {
+        if BurrowEngine.isAvailable, let viaConductor = try? conductorScan(path, timeout: timeout) {
             return viaConductor
         }
-        guard case .installed(let executable) = MoEngine.shared.availability() else {
+        guard case .installed(let executable) = EngineRunner.shared.availability() else {
             throw DiskScanError.moNotFound
         }
-        let updatePolicy = MoleCLI.engineUpdatePolicy(
+        let updatePolicy = EngineCLI.engineUpdatePolicy(
             executable: executable,
-            bundledExecutable: MoleCLI.bundledExecutable()
+            bundledExecutable: EngineCLI.bundledExecutable()
         )
         // 5-minute timeout — `mo analyze` on the home dir is usually a
         // few seconds, but a cold cache + large external volume + no
         // indexing can stretch it. Beyond 5 min something's wrong.
-        let result = try MoEngine.shared.capture(
+        let result = try EngineRunner.shared.capture(
             MoCommand(target: .mo, args: ["analyze", "--json", path], timeout: timeout))
         guard result.exitCode == 0 else {
             // `moTooOld` is a mo-family diagnosis and stays reachable only from a mo-family
@@ -137,7 +137,7 @@ enum DiskScanner {
             if BurrowEnvelope.inOutput(result.stdout) == nil,
                indicatesMissingJSONSupport(stderr: result.stderr) {
                 throw DiskScanError.moTooOld(
-                    found: MoleCLI.versionReport()?.display,
+                    found: EngineCLI.versionReport()?.display,
                     updatePolicy: updatePolicy
                 )
             }
@@ -150,7 +150,7 @@ enum DiskScanner {
         // path "?" and zero entries, an empty-looking disk rather than an error), and refuse an
         // `ok:false` body even if the process somehow exited 0. A legacy `mo` has no envelope
         // and its stdout passes through byte-for-byte, as before.
-        guard let data = BurrowEnvelope.payloadBytes(stdout: result.stdout) else {
+        guard let data = result.payload else {
             throw DiskScanError.moFailed(
                 exitCode: result.exitCode,
                 reason: BurrowEnvelope.failureReason(stdout: result.stdout, stderr: result.stderr))
@@ -162,7 +162,7 @@ enum DiskScanner {
     /// not bundled, timeout, an `ok:false` envelope, or no `data` — so `scan` can fall back to
     /// the direct engine. The `data` payload is the same analyze-go JSON, decoded by `parse`.
     private static func conductorScan(_ path: String, timeout: TimeInterval) throws -> DiskScanResult {
-        let envelope = try BurrowConductor.capture("analyze", [path], timeout: timeout)
+        let envelope = try BurrowEngine.capture("analyze", [path], timeout: timeout)
         guard let data = envelope.data else {
             throw DiskScanError.parseFailed("conductor returned an envelope with no data")
         }
@@ -184,7 +184,7 @@ enum DiskScanner {
     ///   * **The Rust engine** — never fires, and must not. Its stderr is empty on every
     ///     classified failure, so it cannot match; and it should not be TAUGHT to match, because
     ///     "too old" is meaningless across the two version scales (the engine is a 0.x line —
-    ///     see `MoleCLI.EngineVersion`) and telling a user on the bundled engine to run
+    ///     see `EngineCLI.EngineVersion`) and telling a user on the bundled engine to run
     ///     `brew upgrade mole` would be advice about a program they don't have. Its real reason
     ///     lives in the `ok:false` envelope and is read by `BurrowEnvelope.failureReason`.
     ///

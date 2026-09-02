@@ -40,7 +40,7 @@ final class MoleProcessTests: XCTestCase {
     }
 
     override func tearDown() {
-        MoleCLI.processPort = SystemMoleProcess()
+        EngineCLI.processPort = SystemMoleProcess()
         super.tearDown()
     }
 
@@ -121,25 +121,25 @@ final class MoleProcessTests: XCTestCase {
         XCTAssertFalse(result.timedOut)
     }
 
-    func testMoleCLIRun_surfacesTimedOutToCallers() throws {
-        let result = try MoleCLI.run(args: ["5"], executable: "/bin/sleep", timeout: 0.4)
+    func testEngineCLIRun_surfacesTimedOutToCallers() throws {
+        let result = try EngineCLI.run(args: ["5"], executable: "/bin/sleep", timeout: 0.4)
         XCTAssertTrue(result.timedOut)
         XCTAssertNotEqual(result.exitCode, 0)
     }
 
-    func testMoleCLIRun_stillCapturesKnownEchoInvocationThroughRealPort() throws {
-        let result = try MoleCLI.run(args: ["hello world"], executable: "/bin/echo")
+    func testEngineCLIRun_stillCapturesKnownEchoInvocationThroughRealPort() throws {
+        let result = try EngineCLI.run(args: ["hello world"], executable: "/bin/echo")
 
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "hello world")
     }
 
-    func testMoleCLIRun_mapsInjectedPortResult() throws {
+    func testEngineCLIRun_mapsInjectedPortResult() throws {
         let fake = FakeMoleProcessPort()
         fake.result = MoleProcessResult(stdout: "mapped out", stderr: "mapped err", exitCode: 7)
-        MoleCLI.processPort = fake
+        EngineCLI.processPort = fake
 
-        let result = try MoleCLI.run(args: ["ignored"], executable: "/bin/example", stdin: "yes\n", timeout: 3)
+        let result = try EngineCLI.run(args: ["ignored"], executable: "/bin/example", stdin: "yes\n", timeout: 3)
 
         XCTAssertEqual(result.stdout, "mapped out")
         XCTAssertEqual(result.stderr, "mapped err")
@@ -152,7 +152,7 @@ final class MoleProcessTests: XCTestCase {
 
     /// The point of draining stderr concurrently with stdout: a child can emit
     /// far more than the ~64 KB pipe buffer without deadlocking. Reading stdout
-    /// AFTER waitUntilExit (the old `MoleCLI.run`) would hang until the timeout
+    /// AFTER waitUntilExit (the old `EngineCLI.run`) would hang until the timeout
     /// killed the child and return truncated output. This locks the fix in.
     func testSystemCapture_capturesLargeOutputWithoutDeadlockOrTruncation() throws {
         let start = Date()

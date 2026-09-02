@@ -15,6 +15,18 @@
 
 import Foundation
 
+/// The engine's classified failure kinds — the `error.kind` strings of an `ok:false` envelope
+/// (burrow-engine `envelope.rs`). Spelled once, so a producer on this side (`BurrowEngine.capture`
+/// synthesising a kind for a timeout) and a consumer branching on one use the same token.
+enum ErrorKind: String {
+    case permissionDenied = "permission_denied"
+    case unsupported
+    case notFound = "not_found"
+    case processFailed = "process_failed"
+    case invalidOutput = "invalid_output"
+    case error
+}
+
 struct BurrowEnvelope {
     let ok: Bool
     let command: String?
@@ -26,12 +38,15 @@ struct BurrowEnvelope {
     let error: BurrowError?
 
     struct BurrowError {
-        /// permission_denied | unsupported | not_found | process_failed | error
+        /// The classified kind, verbatim from the wire — see `ErrorKind` for the known values.
         let kind: String?
         let message: String?
         let platform: String?
         /// The unavailable feature, set when kind == "unsupported".
         let feature: String?
+
+        /// `kind` as one of the engine's classified values; nil for an unknown or absent kind.
+        var errorKind: ErrorKind? { kind.flatMap(ErrorKind.init(rawValue:)) }
     }
 
     enum ParseError: Error, LocalizedError {
@@ -96,7 +111,7 @@ struct BurrowEnvelope {
 //
 // So every call site that read `stderr` for the reason showed the user an empty reason — "mo
 // analyze exited 2:" with nothing after the colon — while the message sat in the stdout it had
-// just thrown away. Both binary shapes are still reachable (`MoleCLI.trustedExecutable` falls
+// just thrown away. Both binary shapes are still reachable (`EngineCLI.trustedExecutable` falls
 // through bundled engine → installed burrow-engine → legacy `mo`, and `findExecutable` adds a
 // PATH `mo` after that), so these read the envelope when there IS one and fall back to stderr
 // when there isn't, rather than picking a side.

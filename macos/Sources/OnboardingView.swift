@@ -135,7 +135,7 @@ struct OnboardingView: View {
                      color: Brand.green)
             } else if engine != nil {
                 Button(NSLocalizedString("Install", comment: "")) {
-                    NSWorkspace.shared.open(MoleCLI.repoURL)
+                    NSWorkspace.shared.open(EngineCLI.repoURL)
                 }
                 .buttonStyle(.plain)
                 .font(Brand.sans(11, .semibold)).foregroundStyle(Brand.amber)
@@ -163,8 +163,8 @@ struct OnboardingView: View {
     /// chip with no number rather than claiming a version it could not read.
     private func probeEngine() async {
         let status: EngineStatus = await Task.detached(priority: .userInitiated) {
-            guard MoleCLI.findExecutable() != nil else { return EngineStatus(installed: false, descriptor: nil) }
-            return EngineStatus(installed: true, descriptor: MoleCLI.versionReport()?.display)
+            guard EngineCLI.findExecutable() != nil else { return EngineStatus(installed: false, descriptor: nil) }
+            return EngineStatus(installed: true, descriptor: EngineCLI.versionReport()?.display)
         }.value
         engine = status
     }

@@ -330,6 +330,11 @@ enum MCPToolMetadata {
             idempotent: true, openWorld: true,
             outputSchema: Self.passthrough("the conductor's `slim-check` report")),
 
+        "burrow_evict": Entry(
+            title: "Evict cloud-file local copies", readOnly: false, destructive: false,
+            idempotent: true, openWorld: true,
+            outputSchema: Self.passthrough("the engine's `evict` report — a dry-run existence report, or the apply's per-path result")),
+
         "burrow_agent_audit": Entry(
             title: "What agents have done", readOnly: true, destructive: false,
             idempotent: true, openWorld: false,

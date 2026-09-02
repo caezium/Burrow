@@ -35,10 +35,8 @@ jobs:
       # Pinned to a SHA (supply-chain hygiene), matching the macOS ci.yml.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      # TODO: pin setup-dotnet / upload-artifact to commit SHAs to match the
-      # checkout pin above (left as floating major tags pending a verified SHA).
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 8.0.x
 
@@ -56,7 +54,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: burrowwin-test-results
           path: windows/artifacts/test-results

@@ -71,7 +71,7 @@ final class OperationFlowTests: XCTestCase {
     private func makeFlow(_ port: FakeProcessPort, fda: @escaping () -> Bool = { true },
                           center: OperationCenter? = nil) -> OperationFlow<CleanReport> {
         OperationFlow(process: port, hasFullDiskAccess: fda,
-                      resolveMo: { _ in "/usr/local/bin/mo" }, center: center ?? OperationCenter())
+                      resolveEngine: { _ in "/usr/local/bin/mo" }, center: center ?? OperationCenter())
     }
 
     private func settle<R>(_ flow: OperationFlow<R>) async {
@@ -217,7 +217,7 @@ final class OperationFlowTests: XCTestCase {
     func testStdinTimeoutAndPathExecutableReachSpec() async throws {
         let port = FakeProcessPort(script: [.exited(0)])
         let flow = OperationFlow<String>(process: port, hasFullDiskAccess: { true },
-                                         resolveMo: { _ in nil }, center: OperationCenter())
+                                         resolveEngine: { _ in nil }, center: OperationCenter())
         // Uninstall-style blocking run: canned confirmations + long timeout.
         let answers = String(repeating: "y\n", count: 16)
         flow.start(ToolOperation(label: nil,
@@ -255,7 +255,7 @@ final class OperationFlowTests: XCTestCase {
         let port = FakeProcessPort(script: Self.cannedCleanStream)
         let center = OperationCenter()
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
-                                                resolveMo: { _ in "/usr/local/bin/mo" }, center: center)
+                                                resolveEngine: { _ in "/usr/local/bin/mo" }, center: center)
 
         flow.start(.moleStream(["clean"], label: "Cleaning caches", notifyOnEnd: true))
         await settle(flow)
@@ -350,15 +350,147 @@ final class OperationFlowTests: XCTestCase {
         XCTAssertFalse(message.contains("Nothing was cleaned"), message)
     }
 
+    // MARK: - The reviewed clean: plan-then-execute
+
+    private func makeReviewedPlan() throws -> (plan: CleanupExecutionPlan, parent: URL, item: URL) {
+        var parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("burrow-flow-plan-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        parent = URL(fileURLWithPath: try XCTUnwrap(
+            InvokingUserIdentity.canonicalPath(parent.path)), isDirectory: true)
+        let item = parent.appendingPathComponent("reviewed-cache")
+        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
+        let snapshot = try CleanupSnapshot.capture(
+            list: CleanList(categories: [
+                .init(name: "Test", items: [
+                    .init(path: item.path, sizeBytes: 1, sizeText: "1B", itemCount: nil),
+                ]),
+            ], summaryTotalText: "1B", summaryItemCount: 1),
+            approvedRootURLs: [parent])
+        return (try snapshot.plan(selectedPaths: [item.path]), parent, item)
+    }
+
+    /// Confirm on the review runs `clean --apply --permanent --plan <file> --stream` over the plan
+    /// file — not a fresh `clean` — elevated, with the plan still attached for the routes' own
+    /// checks; the file lists exactly the reviewed paths and is deleted once the run ends.
+    func testReviewedClean_runsTheEngineOverThePlanFile_thenDeletesIt() async throws {
+        let (plan, parent, item) = try makeReviewedPlan()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let planFile = try plan.writePlanFile(in: parent.appendingPathComponent("plans"))
+        XCTAssertEqual(try String(contentsOf: planFile, encoding: .utf8)
+                           .split(separator: "\n").map(String.init).filter { !$0.hasPrefix("#") },
+                       [item.path], "the plan file lists exactly the reviewed paths")
+
+        let port = FakeProcessPort(script: [
+            .line(#"{"event":"removed","path":"\#(item.path)","bytes":1}"#),
+            .line(#"{"event":"done","freed_bytes":1,"freed_human":"1B","moved_to_trash_bytes":0,"moved_to_trash_human":"0B","removed":1,"failed":0,"protected":0}"#),
+            .exited(0),
+        ])
+        let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
+                                                resolveEngine: { _ in "/fake/bundled/burrow" },
+                                                center: OperationCenter())
+        ConductorBundleFixture.withStreamSwitch(true) {
+            ConductorBundleFixture.withConductor(present: true) {
+                flow.start(.reviewedClean(plan: plan, planFile: planFile,
+                                          categoryOf: { _ in "Test" }, label: "Cleaning reviewed caches"))
+            }
+        }
+        await settle(flow)
+
+        let spec = try XCTUnwrap(port.specs.first)
+        XCTAssertEqual(spec.arguments, ["clean", "--permanent", "--plan", planFile.path, "--apply", "--stream"])
+        XCTAssertTrue(spec.elevated)
+        XCTAssertTrue(spec.requiresCurrentBundle, "the engine run is bundle-sealed like every elevated engine run")
+        XCTAssertEqual(spec.cleanupPlan, plan, "the routes still get the plan for their own checks")
+        XCTAssertEqual(URL(fileURLWithPath: spec.executable).lastPathComponent, "burrow")
+        guard case .finished(.done(exit: 0)) = flow.state else { return XCTFail("\(flow.state)") }
+        XCTAssertEqual(flow.report?.groups.map(\.title), ["Test"], "grouped under the review's category")
+        XCTAssertEqual(flow.report?.summary?.completionLine, "Cleaned 1B · 1 items")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planFile.path),
+                       "the plan file is deleted once the run has ended")
+    }
+
+    /// With the streaming switch off the same run is buffered: `--apply`, no `--stream`, still
+    /// the plan file and never a fresh clean.
+    func testReviewedClean_withoutStreaming_stillRunsThePlanNotAFreshClean() async throws {
+        let (plan, parent, _) = try makeReviewedPlan()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let planFile = try plan.writePlanFile(in: parent.appendingPathComponent("plans"))
+        EngineCLI.bundledExecutableOverride = "/fake/bundled/burrow"
+        defer { EngineCLI.bundledExecutableOverride = nil }
+        let port = FakeProcessPort(script: [.exited(0)])
+        let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
+                                                resolveEngine: { _ in "/fake/bundled/burrow" },
+                                                center: OperationCenter())
+        ConductorBundleFixture.withStreamSwitch(false) {
+            flow.start(.reviewedClean(plan: plan, planFile: planFile, label: "Cleaning reviewed caches"))
+        }
+        await settle(flow)
+        let spec = try XCTUnwrap(port.specs.first)
+        XCTAssertEqual(spec.arguments, ["clean", "--permanent", "--plan", planFile.path, "--apply"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planFile.path))
+    }
+
+    /// A refused path is in the report, never dropped: the engine's `protected` line with its
+    /// reason renders as a review item, and the nonzero exit reads as a partial run.
+    func testReviewedClean_showsTheEnginesRefusals() async throws {
+        let (plan, parent, item) = try makeReviewedPlan()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let planFile = try plan.writePlanFile(in: parent.appendingPathComponent("plans"))
+        let port = FakeProcessPort(script: [
+            .line(#"{"event":"protected","path":"\#(item.path)","reason":"not_a_clean_target"}"#),
+            .line(#"{"event":"done","freed_bytes":0,"freed_human":"0B","moved_to_trash_bytes":0,"moved_to_trash_human":"0B","removed":0,"failed":0,"protected":1}"#),
+            .exited(1),
+        ])
+        let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
+                                                resolveEngine: { _ in "/fake/bundled/burrow" },
+                                                center: OperationCenter())
+        ConductorBundleFixture.withStreamSwitch(true) {
+            ConductorBundleFixture.withConductor(present: true) {
+                flow.start(.reviewedClean(plan: plan, planFile: planFile, label: "Cleaning reviewed caches"))
+            }
+        }
+        await settle(flow)
+        guard case .finished(.failed(let message)) = flow.state else { return XCTFail("\(flow.state)") }
+        XCTAssertTrue(message.contains("could not be removed"), message)
+        // The report is reduced from the engine's own lines even on failure: nothing optimistic.
+        let items = flow.report?.groups.flatMap(\.items) ?? []
+        XCTAssertEqual(items.map(\.marker), [.review])
+        XCTAssertEqual(items.first?.text, "\(item.path) — refused: not a clean target")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planFile.path))
+    }
+
+    /// The plan file is removed on every terminal path, including a refusal before the spawn.
+    func testReviewedClean_deletesThePlanFileWhenTheRunIsRefusedBeforeSpawning() async throws {
+        let (plan, parent, _) = try makeReviewedPlan()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let planFile = try plan.writePlanFile(in: parent.appendingPathComponent("plans"))
+        let port = FakeProcessPort(script: [])
+        let flow = OperationFlow<TaskRunReport>(
+            process: port, hasFullDiskAccess: { true },
+            resolveEngine: { _ in "/fake/bundled/burrow" },
+            resolveInvokingUser: { throw ElevatedSetupError.noInvokingUser },
+            center: OperationCenter())
+        ConductorBundleFixture.withStreamSwitch(true) {
+            ConductorBundleFixture.withConductor(present: true) {
+                flow.start(.reviewedClean(plan: plan, planFile: planFile, label: "Cleaning reviewed caches"))
+            }
+        }
+        await settle(flow)
+        guard case .finished(.failed) = flow.state else { return XCTFail("\(flow.state)") }
+        XCTAssertTrue(port.specs.isEmpty, "nothing spawned")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planFile.path))
+    }
+
     /// This is about the DIRECT engine path, so it has to pin the no-conductor world: with a
     /// conductor staged, `streamOverride` supplies an executable for a non-elevated `clean`
-    /// before `resolveMo` is ever consulted, and the unresolvable-engine branch under test is
+    /// before `resolveEngine` is ever consulted, and the unresolvable-engine branch under test is
     /// never reached. It previously relied on the test host happening not to bundle one.
     func testMissingExecutableFailsBeforeSpawn() {
         ConductorBundleFixture.withConductor(present: false) {
             let port = FakeProcessPort(script: [])
             let flow = OperationFlow<CleanReport>(process: port, hasFullDiskAccess: { true },
-                                                  resolveMo: { _ in nil }, center: OperationCenter())
+                                                  resolveEngine: { _ in nil }, center: OperationCenter())
             flow.start(Self.cleanOp())
             guard case .finished(.failed) = flow.state else { return XCTFail("expected failed") }
             XCTAssertTrue(port.specs.isEmpty)
@@ -368,7 +500,7 @@ final class OperationFlowTests: XCTestCase {
     func testElevatedRunFailsBeforeSpawnWhenInvokingAccountCannotBeResolved() {
         let port = FakeProcessPort(script: [.exited(0)])
         let flow = OperationFlow<CleanReport>(
-            process: port, hasFullDiskAccess: { true }, resolveMo: { _ in "/usr/bin/true" },
+            process: port, hasFullDiskAccess: { true }, resolveEngine: { _ in "/usr/bin/true" },
             resolveInvokingUser: {
                 throw InvokingUserIdentity.ResolutionError.missingAccount(501)
             }, center: OperationCenter())
@@ -381,7 +513,7 @@ final class OperationFlowTests: XCTestCase {
     //
     // `streamOverride` returning nil (the streaming switch off, or no conductor bundled) used to
     // mean the fallback spawn sent `op.arguments` straight through, untranslated. Once
-    // `MoleCLI.bundledExecutable()` became part of `resolveMo`'s resolution chain, that fallback
+    // `EngineCLI.bundledExecutable()` became part of `resolveEngine`'s resolution chain, that fallback
     // started resolving the SAME bundled engine the conductor branch would have — so the switch
     // stopped being a transport-only decision and started being able to flip a live clean into a
     // silent no-op. These pin that the fallback branch now translates whenever it resolves the
@@ -389,27 +521,28 @@ final class OperationFlowTests: XCTestCase {
     //
     // Both therefore have to REACH that branch, and two deliberate acts are what get them there.
     // `bundledExecutableOverride` is what lets the fallback recognise a bundled engine at all —
-    // it short-circuits `MoleCLI.bundledExecutable()` before the shared lookup, so it does not
-    // also make a conductor "bundled" (that is `BurrowConductor.resourceDirectory`'s seam). And
+    // it short-circuits `EngineCLI.bundledExecutable()` before the shared lookup, so it does not
+    // also make a conductor "bundled" (that is `BurrowEngine.resourceDirectory`'s seam). And
     // turning the documented `BurrowStreamViaConductor` kill switch off is what stops
     // `streamOverride` answering first: at its shipped default (ON for clean/optimize), a test
     // host that HAD staged a Resources/burrow would spawn the CONDUCTOR's
-    // `["clean", "--apply", "--stream"]` instead, whatever `resolveMo` was told to return. The
+    // `["clean", "--apply", "--stream"]` instead, whatever `resolveEngine` was told to return. The
     // switch off with an engine still bundled is exactly the production configuration these two
     // describe; without it both tests could silently assert about the branch they mean to bypass.
 
     func testFallbackPath_stillTranslatesArgv_whenResolveMoFindsTheBundledEngine() async throws {
-        MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
-        defer { MoleCLI.bundledExecutableOverride = nil }
-        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
+        EngineCLI.bundledExecutableOverride = "/fake/bundled/burrow"
+        defer { EngineCLI.bundledExecutableOverride = nil }
         let port = FakeProcessPort(script: Self.cannedCleanStream)
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
-                                                resolveMo: { _ in "/fake/bundled/burrow" },
+                                                resolveEngine: { _ in "/fake/bundled/burrow" },
                                                 center: OperationCenter())
         // A live real clean — mo-style, no --dry-run — is exactly the destructive case: reaching
-        // the engine without --apply would silently no-op it (the §2 bug).
-        flow.start(.moleStream(["clean"], elevated: true, label: "Cleaning caches"))
+        // the engine without --apply would silently no-op it (the §2 bug). The switch is read
+        // at `start`, so it only needs to be off for that call.
+        ConductorBundleFixture.withStreamSwitch(false) {
+            flow.start(.moleStream(["clean"], elevated: true, label: "Cleaning caches"))
+        }
         await settle(flow)
         let spec = try XCTUnwrap(port.specs.first)
         XCTAssertEqual(spec.executable, "/fake/bundled/burrow")
@@ -423,19 +556,19 @@ final class OperationFlowTests: XCTestCase {
     }
 
     func testFallbackPath_leavesArgvUntranslated_whenResolveMoFindsAnExternalMo() async throws {
-        // The override is set (so `bundledExecutable()` resolves to something) but `resolveMo`
+        // The override is set (so `bundledExecutable()` resolves to something) but `resolveEngine`
         // deliberately returns a DIFFERENT path — the "bundle itself is missing, Homebrew has a
         // real mo" case. That binary speaks mo's own convention, so translating it would turn
         // this elevated PREVIEW into a live delete instead — the dangerous direction.
-        MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
-        defer { MoleCLI.bundledExecutableOverride = nil }
-        UserDefaults.standard.set(false, forKey: "BurrowStreamViaConductor")
-        defer { UserDefaults.standard.removeObject(forKey: "BurrowStreamViaConductor") }
+        EngineCLI.bundledExecutableOverride = "/fake/bundled/burrow"
+        defer { EngineCLI.bundledExecutableOverride = nil }
         let port = FakeProcessPort(script: Self.cannedClean)
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
-                                                resolveMo: { _ in "/opt/homebrew/bin/mo" },
+                                                resolveEngine: { _ in "/opt/homebrew/bin/mo" },
                                                 center: OperationCenter())
-        flow.start(.moleStream(["clean", "--dry-run"], elevated: true, label: "Scanning caches"))
+        ConductorBundleFixture.withStreamSwitch(false) {
+            flow.start(.moleStream(["clean", "--dry-run"], elevated: true, label: "Scanning caches"))
+        }
         await settle(flow)
         let spec = try XCTUnwrap(port.specs.first)
         XCTAssertEqual(spec.executable, "/opt/homebrew/bin/mo")

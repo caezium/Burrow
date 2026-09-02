@@ -51,8 +51,8 @@ struct CleanHub: View {
                 if category != nil { backBar }
                 ZStack {
                     CleanView().hubVisible(category == .caches)
-                    MoInteractiveView(.purge, isActive: category == .purge).hubVisible(category == .purge)
-                    MoInteractiveView(.installer, isActive: category == .installer).hubVisible(category == .installer)
+                    SweepView(.purge).hubVisible(category == .purge)
+                    SweepView(.installer).hubVisible(category == .installer)
                 }
             }
             if category == nil { chooser }

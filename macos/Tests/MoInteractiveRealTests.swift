@@ -23,7 +23,7 @@ final class MoInteractiveRealTests: XCTestCase {
         // timeout on large disks. CI and default local runs skip it.
         try XCTSkipUnless(Foundation.ProcessInfo.processInfo.environment["BURROW_REAL_MO_TESTS"] == "1",
                           "set BURROW_REAL_MO_TESTS=1 to run the real `mo installer` scan")
-        try XCTSkipUnless(MoleCLI.findExecutable() != nil, "needs `mo` on PATH")
+        try XCTSkipUnless(EngineCLI.findExecutable() != nil, "needs `mo` on PATH")
 
         let runner = MoInteractiveRunner(subcommand: "installer", title: "Installers")
         let resolved = expectation(description: "scan reaches choosing or done")

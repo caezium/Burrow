@@ -31,7 +31,7 @@ final class MoActionsTests: XCTestCase {
     // would be pinning the machine rather than the gate.
 
     private static let bundledPath = "/fake/bundled/burrow"
-    /// Where `MoleCLI.trustedExecutable()` lands when no engine is bundled — a real legacy `mo`
+    /// Where `EngineCLI.trustedExecutable()` lands when no engine is bundled — a real legacy `mo`
     /// (mole 1.46.0 on the machine this was written on), which deletes by default.
     private static let legacyMoPath = "/opt/homebrew/bin/mo"
 
@@ -338,7 +338,7 @@ final class MoActionsTests: XCTestCase {
                        "an unidentified binary never receives engine-specific argv")
         XCTAssertNil(ticket.command.executable)
         XCTAssertEqual(ticket.command.spawnPath, "/usr/bin/false",
-                       "same clean nonzero exit MoEngine already gives an unresolvable `.mo`")
+                       "same clean nonzero exit EngineRunner already gives an unresolvable `.mo`")
     }
 
     // MARK: - One resolution, carried — not two that could disagree

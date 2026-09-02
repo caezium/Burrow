@@ -1,5 +1,5 @@
 //
-//  MoleCLI.swift
+//  EngineCLI.swift
 //  Burrow
 //
 //  Wrapper around Burrow's bundled engine, with a system-installed `mo` as
@@ -22,7 +22,7 @@ import Foundation
 import AppKit  // NSAlert
 import os
 
-enum MoleCLI {
+enum EngineCLI {
     enum EngineUpdatePolicy: Equatable {
         /// The engine is inside Burrow.app and must stay immutable so the
         /// Developer ID resource seal remains valid. It updates with Burrow.
@@ -99,11 +99,11 @@ enum MoleCLI {
         // speaks the envelope.
         //
         // Deliberately delegated rather than re-derived here with a second `Bundle` API: this and
-        // `BurrowConductor.executableURL()` name the SAME file, and two lookups for one file can
+        // `BurrowEngine.executableURL()` name the SAME file, and two lookups for one file can
         // silently disagree — see that function's doc for the elevated-run hazard if they ever do.
-        // Delegating also means `BurrowConductor.resourceDirectory` governs both, so a test can
+        // Delegating also means `BurrowEngine.resourceDirectory` governs both, so a test can
         // choose "conductor bundled / not bundled" once instead of per resolver.
-        return BurrowConductor.executableURL()?.path
+        return BurrowEngine.executableURL()?.path
     }
 
     /// The only engine Burrow may run as root. Homebrew prefixes are normally
@@ -160,30 +160,30 @@ enum MoleCLI {
         }
 
         let user = command.invokingUser
-        let environment = [
-            "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME=\(user.canonicalHome)",
-            "USER=\(user.username)",
-            "LOGNAME=\(user.username)",
-            "SUDO_USER=\(user.username)",
-            "SUDO_UID=\(user.uid)",
-            "LC_ALL=C",
-        ]
+        // The same variables the privileged helper gives its root child — including the engine's
+        // BURROW_HOME / BURROW_PRIVILEGED contract — so both elevation routes agree.
+        let environment = PrivilegedEngineEnvironment.variables(
+            home: user.canonicalHome, username: user.username, uid: UInt32(user.uid))
+            .map { "\($0.key)=\($0.value)" }
         let isolatedEnvironment = ["/usr/bin/env", "-i"] + environment
+        // `do shell script … with administrator privileges` inherits the
+        // caller's PATH on current macOS releases. Start from an empty
+        // environment so no user-writable tool can be resolved by the
+        // root engine or one of its child scripts.
+        let engine = (isolatedEnvironment + [command.executable.path] + args)
+            .map(shellQuote).joined(separator: " ")
         let run: String
         if let cleanupPlan {
-            // Boundary checks and deletes both come from the plan, so the
-            // authorization and what it authorizes cannot drift apart. Running
-            // them inside the redirect means a refused check explains itself in
-            // the run log rather than vanishing into osascript's stderr.
-            run = cleanupPlan.irreversibleCleanupShell()
+            // A reviewed clean: the plan's boundary checks (expiry, pinned
+            // identities of every root and entry) run first, and only then the
+            // engine over the plan file named in `args`. The checks and the
+            // paths both come from the plan, so the authorization and what it
+            // authorizes cannot drift apart. Running them inside the redirect
+            // means a refused check explains itself in the run log rather than
+            // vanishing into osascript's stderr.
+            run = cleanupPlan.guardedShell(running: engine)
         } else {
-            // `do shell script … with administrator privileges` inherits the
-            // caller's PATH on current macOS releases. Start from an empty
-            // environment so no user-writable tool can be resolved by the
-            // root engine or one of its child scripts.
-            run = (isolatedEnvironment + [command.executable.path] + args)
-                .map(shellQuote).joined(separator: " ")
+            run = engine
         }
 
         if let sink = logSink {
@@ -238,13 +238,13 @@ enum MoleCLI {
         engineUpdateInstruction(for: currentEngineUpdatePolicy)
     }
 
-    /// The MIT engine normally ships BUNDLED inside the app (zero install). This is only the
-    /// fallback hint shown if the bundled copy is somehow unavailable — reinstalling the app
-    /// restores it.
+    /// The engine ships BUNDLED inside the app (zero install). This is only the fallback hint
+    /// shown if the bundled copy is somehow unavailable — reinstalling the app restores it.
+    /// `caezium/tap/burrow` is the cask `release.yml` bumps in caezium/homebrew-tap.
     static let installCommand = "brew reinstall --cask caezium/tap/burrow"
-    /// The engine fork (the MIT engine is bundled with the app, pinned at mo's last MIT
-    /// release before upstream relicensed to GPL-3.0).
-    static let repoURL = URL(string: "https://github.com/caezium/burrow-digger")!
+    /// The bundled engine's source: `caezium/burrow-engine` (FSL-1.1-ALv2, the crate the
+    /// vendor/burrow-engine submodule tracks). Not the retired burrow-digger fork.
+    static let repoURL = URL(string: "https://github.com/caezium/burrow-engine")!
 
     /// What the resolved engine binary answered when asked for its version.
     ///
@@ -288,7 +288,7 @@ enum MoleCLI {
     /// Spawns a subprocess — call OFF the main thread.
     static func versionReport() -> EngineVersion? {
         guard let res = try? run(args: ["--version"], timeout: 5) else { return nil }
-        return parseVersionReport(stdout: res.stdout, stderr: res.stderr, exitCode: res.exitCode)
+        return parseVersionReport(res)
     }
 
     /// Turn one `--version` run into an `EngineVersion`. Pure → unit-tested against real
@@ -300,8 +300,9 @@ enum MoleCLI {
     /// it anyway — landing on the envelope's own `"burrow_cli":"0.1.0"` field and handing
     /// five call sites a number that described the envelope format, not the engine. A run
     /// that failed has no version to report; say nil.
-    static func parseVersionReport(stdout: String, stderr: String, exitCode: Int32) -> EngineVersion? {
-        guard exitCode == 0 else { return nil }
+    static func parseVersionReport(_ res: Captured) -> EngineVersion? {
+        guard res.exitCode == 0 else { return nil }
+        let stdout = res.stdout, stderr = res.stderr
 
         // The engine declares its version in a named field. Read the field. Do NOT scrape:
         // the envelope also carries `burrow_cli` (the format version) and, on other
@@ -409,21 +410,22 @@ enum MoleCLI {
     ///
     /// Keyed to what answered, not to how big its number is:
     ///
-    ///   * `.envelope` — the Rust `burrow-engine` has no status streamer at all. It rejects
-    ///     the flag outright (`{"ok":false,…,"unknown status option: --watch"}`, exit 2), so
-    ///     there is nothing to stream no matter what it numbers itself. This used to be a
-    ///     `>= 1.44.0` comparison, which returned the right answer for the wrong reason: the
-    ///     engine is a 0.x line, so the compare said no. The day it ships 1.0 that compare
-    ///     silently flips to yes and the app starts asking a hard-erroring command for a
-    ///     stream. When the engine DOES grow a streamer it has to announce it — a capability
-    ///     field in the `version` payload, read here — never re-derived from the number.
+    ///   * `.envelope` — the bundled `burrow-engine` streams (`status --watch [--interval s]`,
+    ///     one NDJSON line per tick, each line the same object `status` puts in its envelope's
+    ///     `data`; exits 0 when the reader closes the pipe — BUR-132). The engine ships INSIDE
+    ///     the app and has no version drift the app could be behind, so the answer for an
+    ///     envelope-speaking engine is simply yes: there is no older envelope engine this build
+    ///     can be paired with. Note it is a capability answer, not a version compare — the
+    ///     engine numbers itself on a 0.x line that has nothing to do with mo's, and a compare
+    ///     against `minimumWatchVersion` here would be meaningless (it used to be, and it
+    ///     said "no" for the wrong reason).
     ///   * `.moBanner` — mo-family, so mo's scale applies and the version compare is
-    ///     meaningful. Note the fork shares the Rust engine's product name; only `kind`
+    ///     meaningful. Note the digger fork shares the Rust engine's product name; only `kind`
     ///     tells them apart, which is why this switches on `kind` first.
     static func supportsWatch(_ engine: EngineVersion) -> Bool {
         switch engine.kind {
         case .envelope:
-            return false
+            return true
         case .moBanner:
             let minimum = engine.name.caseInsensitiveCompare(diggerForkName) == .orderedSame
                 ? minimumDiggerForkWatchVersion
@@ -434,7 +436,7 @@ enum MoleCLI {
 
     /// Whether the resolved engine supports `status --watch`. Spawns `--version` — call OFF
     /// the main thread. Resolves through the same `findExecutable()` that
-    /// `MoEngine.statusWatch()` spawns, so the binary asked is the binary streamed.
+    /// `EngineRunner.statusWatch()` spawns, so the binary asked is the binary streamed.
     static func supportsWatch() -> Bool {
         guard let engine = versionReport() else { return false }
         return supportsWatch(engine)
@@ -452,17 +454,6 @@ enum MoleCLI {
             if a != b { return a > b }
         }
         return true
-    }
-
-    /// Result of a subprocess invocation. `exitCode == 0` is the success
-    /// convention; callers that care about diagnostics should look at
-    /// `stderr` when it's non-zero, and `timedOut` distinguishes "the
-    /// timeout killed it" from a genuine failure (issue #48).
-    struct Result {
-        let stdout: String
-        let stderr: String
-        let exitCode: Int32
-        var timedOut: Bool = false
     }
 
     /// The subprocess runner. Production uses `SystemMoleProcess`; tests inject
@@ -484,7 +475,7 @@ enum MoleCLI {
     static func run(args: [String],
                     executable: String? = nil,
                     stdin: String? = nil,
-                    timeout: TimeInterval = 10) throws -> Result {
+                    timeout: TimeInterval = 10) throws -> Captured {
         let resolvedExecutable = executable ?? (findExecutable() ?? "/usr/bin/false")
         let processResult = try MoleProcess.capture(
             executable: resolvedExecutable,
@@ -493,7 +484,8 @@ enum MoleCLI {
             timeout: timeout,
             port: processPort
         )
-        return Result(
+        // `Captured` — the one capture result type (EngineRunner's) — rather than a private twin.
+        return Captured(
             stdout: processResult.stdout,
             stderr: processResult.stderr,
             exitCode: processResult.exitCode,

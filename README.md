@@ -1,8 +1,10 @@
-> Burrow is an independent open-source project. It bundles its own MIT engine —
-> `burrow-engine`, a fork of the [Mole](https://github.com/tw93/Mole) (`mo`) CLI
-> by tw93 — and is **not affiliated with or endorsed by
-> [mole.fit](https://mole.fit/)** (the official Mole for Mac app by `mo`'s
-> author); its own name, mark, palette, and copy are original.
+> Burrow is an independent open-source (MIT) app. It bundles its own engine —
+> `burrow-engine`, a single source-available binary under the Functional Source
+> License (FSL-1.1-ALv2) whose command surface is modelled on the
+> [Mole](https://github.com/tw93/Mole) (`mo`) CLI by tw93 — and is **not
+> affiliated with or endorsed by [mole.fit](https://mole.fit/)** (the official
+> Mole for Mac app by `mo`'s author); its own name, mark, palette, and copy are
+> original.
 >
 > If you like Mole and want to fund `mo`'s development — **buy mole.fit ($19)**.
 
@@ -26,7 +28,7 @@
     <a href="https://trendshift.io/repositories/47076" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/47076/weekly?language=Swift" alt="caezium%2FBurrow | Trendshift" width="250" height="55"/></a>
 </p>
 
-**Burrow puts everything your Mac needs in one free, native app: junk cleanup, dev-artifact purge, app uninstall with leftover removal, duplicate finding, safe maintenance, disk maps, and live system status — powered by a bundled, audited open-source engine ([burrow-engine](https://github.com/caezium/burrow-digger), a fork of [Mole](https://github.com/tw93/Mole)'s `mo`), so there's nothing else to install. And it does what no other cleaner does: it keeps months of local metric history and runs a built-in MCP server, so AI agents like Claude Code, Codex, and Cursor can watch, query, and care for your Mac — every action consent-gated, audited, and reversible. Native on macOS, with a Windows preview under [`windows/`](windows/).**
+**Burrow puts everything your Mac needs in one free, native app: junk cleanup, dev-artifact purge, app uninstall with leftover removal, duplicate finding, safe maintenance, disk maps, and live system status — powered by one bundled engine binary ([burrow-engine](https://github.com/caezium/burrow-engine), FSL-1.1 — see [Attribution](#attribution--license)) whose commands mirror [Mole](https://github.com/tw93/Mole)'s `mo`, so there's nothing else to install. And it does what no other cleaner does: it keeps months of local metric history and runs a built-in MCP server, so AI agents like Claude Code, Codex, and Cursor can watch, query, and care for your Mac — every action consent-gated, audited, and reversible. Native on macOS, with a Windows preview under [`windows/`](windows/).**
 
 Mac:
 ```sh
@@ -123,7 +125,7 @@ Windows: download from [releases](https://github.com/caezium/Burrow/releases)
 
 ## The tools
 
-Burrow wraps a bundled, open-source Mole engine in a native desktop app: clean
+Burrow wraps its bundled `burrow-engine` binary in a native desktop app: clean
 junk, purge dev artifacts, sweep leftover installers, uninstall apps, run safe
 maintenance, map your disk, and watch live system status — in one window. On top
 of that it adds things the CLI doesn't have: a **long-running history** of your
@@ -139,7 +141,7 @@ stdio bridge, CI, tests, and unsigned release packaging.
 |---|---|---|
 | **Status** | Live dashboard with per-metric sparklines and a sortable/pinnable process table. | `mo status --json` |
 | **Clean** | Preview what's reclaimable, then clean for real — categorized cache/log/leftover removal. | `mo clean` |
-| **Purge** | Reclaim space from dev projects: `node_modules`, build dirs, `target/`, `__pycache__`, and more. | `mo purge` |
+| **Purge** | Reclaim space from dev projects: `node_modules`, build dirs, `target/`, `__pycache__`, and more — preview streams in, one confirmation, everything found goes to the Trash. | `mo purge` |
 | **Installers** | Find and remove leftover `.dmg`/`.pkg` installer files in bulk. | `mo installer` |
 | **Optimize** | One-tap safe maintenance: rebuild caches, repair metadata, flush DNS, restart Dock/Finder. | `mo optimize` |
 | **Software** | Installed-app list with search/sort (size, name, recent, source) and multi-select uninstall; a Homebrew **Updates** tab. | `mo uninstall --list`, `brew outdated` |
@@ -284,7 +286,7 @@ Everything is local and takes effect immediately unless noted:
 | **Menu-bar icon** | Show the menu-bar item, or run as a regular Dock app instead. |
 | **MCP / agent access** | Copyable stdio config + the tool list for Claude Code, Cursor, Codex, Cline, and any MCP client. |
 | **Local HTTP query server** | Optional loopback REST endpoints + port for dashboards/curl. On Windows, disabling this keeps the local `/mcp` bridge available for stdio MCP. |
-| **Mole engine** | Shows the active engine version. The bundled engine updates with signed Burrow releases; source builds using an external engine retain its updater. |
+| **Engine** | Shows the active `burrow-engine` version. The bundled engine updates with signed Burrow releases; source builds using an external engine retain its updater. |
 
 ## Permissions & Full Disk Access
 
@@ -305,10 +307,11 @@ handles this honestly:
 ### macOS
 
 - **macOS 14+**
-- **No separate engine install.** Burrow bundles its own MIT engine
-  (`burrow-engine`) and runs it directly. _(Building from source? The engine is
-  staged from a git submodule; if it isn't present, Burrow falls back to a
-  system `mo` — `brew install mole`.)_
+- **No separate engine install.** Burrow bundles its own engine
+  (`burrow-engine`, one FSL-1.1 binary) and runs it directly. _(Building from
+  source? The engine is staged from the private `macos/vendor/burrow-engine`
+  submodule; without access to it, Burrow falls back to a system `mo` —
+  `brew install mole` — with mo's own argv conventions.)_
 
 ### Windows preview
 
@@ -399,7 +402,10 @@ unsigned Inno Setup installer, creates a portable ZIP fallback, writes
 
 ## Security & trust
 
-Burrow drives a bundled, open-source Mole engine (an MIT fork of `mo`). The honest privacy picture:
+Burrow drives one bundled engine binary, `burrow-engine` (FSL-1.1-ALv2; its
+source is private, so what ships is the signed binary inside the app — see
+[Attribution](#attribution--license)), plus an MIT `fclones` sidecar for
+duplicate finding. The honest privacy picture:
 
 - **No accounts, no ads.** Your metrics, history, and file contents stay on
   your machine. The macOS app sends opt-out anonymous usage plus crash, hang,
@@ -407,13 +413,17 @@ Burrow drives a bundled, open-source Mole engine (an MIT fork of `mo`). The hone
   recordings, user files, user paths, metrics, or stored IP; turn it off in
   Settings. PostHog delivery and its bounded sanitized retry outbox run entirely
   off AppKit's main thread. Full list in **[TELEMETRY.md](TELEMETRY.md)**.
-- **No background root helper by default.** When Clean/Optimize need admin
-  rights, macOS's own dialog asks you and Burrow runs that one `mo` command,
-  then exits — you approve every elevation. You can opt in to a small signed
-  helper so those prompts accept Touch ID; it grants no standing privilege
-  (every root operation still authenticates, every time), performs only scan,
-  clean, and optimize, and can be removed from Settings. Details in
-  **[SECURITY.md](SECURITY.md)**.
+- **No background root helper by default.** When Clean/Optimize — or an
+  uninstall whose app bundle needs an administrator — need admin rights, macOS's
+  own dialog asks you and Burrow runs that one engine command as root, then
+  exits — you approve every elevation. Every elevated run gets a fixed
+  environment: `BURROW_HOME` points the engine back at *your* home (so an
+  elevated uninstall removes your leftovers, not root's) and
+  `BURROW_PRIVILEGED=1` makes it refuse user-writable sidecar overrides. You can
+  opt in to a small signed helper so those prompts accept Touch ID; it grants
+  no standing privilege (every root operation still authenticates, every time),
+  performs only scan, clean, and optimize, and can be removed from Settings.
+  Details in **[SECURITY.md](SECURITY.md)**.
 - **Local-only surfaces:** the MCP/HTTP surfaces bind to loopback only
   (`127.0.0.1`) and history is stored locally. On Windows, the HTTP REST toggle
   disables REST endpoints but keeps the local `/mcp` bridge route available for
@@ -551,16 +561,40 @@ For local GUI smoke checks:
 ### macOS
 
 ```
-mo status --json   ──>  Sampler ──> SQLite (WAL) ──┬─> Status / History (charts)
-                                                   ├─> HTTP QueryServer (:9277)
-                                                   └─> burrow mcp (stdio) ─> Claude Code / Cursor / Codex
-mo analyze --json  ──>  DiskScanner + squarified Treemap ──────> Analyze
-mo clean / purge / installer / optimize ─> CommandRunner (streamed) ─> the tool tabs
-mo uninstall --list ─>  Software (+ brew outdated for Updates)
+Contents/Resources/burrow  (burrow-engine, one binary; one {ok, data|error} envelope per command,
+                            NDJSON when streamed)
+burrow status --watch          ──> SnapshotProducer (one long-lived stream, one line per tick;
+                                   polls `status --json` only if the stream drops)
+                                   ──> SQLite (WAL) ──┬─> Status / History (charts)
+                                                      ├─> HTTP QueryServer (:9277)
+                                                      └─> Burrow --mcp (stdio) ─> Claude Code / Cursor / Codex
+burrow analyze --progress <p>  ──> live file/dir/byte ticks, then the full payload
+                                   ──> DiskScanner + squarified Treemap ─> Analyze
+                                   (one `analyze` per child directory is the fallback)
+burrow clean|optimize|purge --stream ─> OperationFlow (NDJSON, live on both elevation routes:
+                                        the helper relays stdout over XPC, osascript tails the
+                                        root shell's log) ─> Clean / Optimize / Purge
+burrow clean --apply --permanent --plan <file> --stream
+                               ──> the reviewed clean: Confirm writes the ticked paths to a plan
+                                   file and the engine removes only those — no re-scan — and
+                                   reports each one back (removed / failed / protected + reason)
+burrow installer, uninstall [--apply] ─> Installers / Software (buffered envelope; uninstall is
+                                        elevated only when the bundle needs an administrator)
+burrow dupes|orphans|photos|net --json ─> Duplicates / Leftovers / Photos / Network (+ fclones sidecar)
 ```
 
-One binary, two modes: default is the menu-bar GUI; `burrow mcp` (or `Burrow
---mcp`) is the stdio MCP server (it forks before SwiftUI claims the process).
+The Swift side names the seams after what they are: `BurrowEngine` resolves
+and spawns the bundled binary and parses its envelope, `EngineRunner` is the
+one capture/stream/PTY facade, `EngineCLI` is discovery plus the elevated
+`do shell script` builder, and `MoActions` is the single gate that mints every
+destructive run for the GUI and the MCP server alike. A source build without
+the private engine submodule falls back to a system `mo`, whose argv is the
+inverse of the engine's (mo runs live by default; the engine previews by
+default and needs `--apply`) — `BurrowEngine.engineArgv` is the one
+translation, applied only when the resolved binary is the bundled engine.
+
+One app binary, two modes: default is the menu-bar GUI; `Burrow --mcp` is the
+stdio MCP server (it forks before SwiftUI claims the process).
 The whole UI is one translucent window with a top-pill nav (`Brand`/`Tool`
 design system); Settings, History, and Activity are panes in that same window.
 
@@ -575,11 +609,20 @@ gaps in the Windows Mole branch. See
 
 ## Attribution & license
 
-[MIT](LICENSE).
+Burrow (this repository) is [MIT](LICENSE). The app bundle ships two
+separately licensed binaries — the full notices are in [NOTICE](NOTICE):
 
-- **Mole CLI** (`mo`) is © [tw93](https://github.com/tw93/Mole), MIT. Burrow
-  bundles **`burrow-engine`**, an MIT fork of Mole pinned at its last MIT
-  release, and runs that as its engine.
+- **`burrow-engine`** (`Contents/Resources/burrow`) is © 2026 caezium, licensed
+  under the **Functional Source License 1.1, ALv2 future license**
+  (FSL-1.1-ALv2). Its source lives in the private
+  [caezium/burrow-engine](https://github.com/caezium/burrow-engine) repository,
+  vendored as a submodule and built into a single universal binary at release
+  time; only the built binary ships. Its command surface (`clean`, `optimize`,
+  `uninstall`, `analyze`, `status`, …) is modelled on **Mole CLI** (`mo`), which
+  is © [tw93](https://github.com/tw93/Mole), MIT — Burrow no longer bundles a
+  fork of Mole's code.
+- **`fclones`** (`Contents/Resources/fclones`) is © Piotr Kołaczkowski, MIT —
+  the duplicate-file engine behind the Duplicates pane.
 - Inspired by the **mole.fit** Mac app (same author as `mo`). Burrow is an
   independent reimplementation with its own brand — no assets, icons, copy, or
   trade dress are taken from mole.fit.

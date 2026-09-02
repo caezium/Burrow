@@ -874,10 +874,10 @@ final class SoftwareModel: ObservableObject {
     ///    `UninstallPreview.parse` already understands, and it wants the display name, not a
     ///    bundle id.
     ///
-    /// `resolved == MoleCLI.bundledExecutable()` is a path-identity check, and it is the same one
+    /// `resolved == EngineCLI.bundledExecutable()` is a path-identity check, and it is the same one
     /// two other places make before assuming engine semantics — go read them rather than take
     /// this sentence's word for it: `OperationFlow.start` compares `resolved` against
-    /// `MoleCLI.bundledExecutable()` inline before translating its fallback spawn's argv, and
+    /// `EngineCLI.bundledExecutable()` inline before translating its fallback spawn's argv, and
     /// `MoActions.mint` gets the same answer as data, from `EngineTarget.isBundledEngine`, and
     /// carries it on the ticket so the spawn cannot re-resolve to a different file.
     ///
@@ -891,9 +891,9 @@ final class SoftwareModel: ObservableObject {
     /// rows on the machine this was verified on — so the `.engine` branch below is the live one
     /// in a shipped build, not a written-ahead placeholder.
     nonisolated private static func fetchPreview(for app: InstalledApp) -> UninstallPreview {
-        let resolved = MoleCLI.findExecutable()
+        let resolved = EngineCLI.findExecutable()
         let source = uninstallTarget(for: app,
-                                     resolvedIsBundledEngine: resolved != nil && resolved == MoleCLI.bundledExecutable())
+                                     resolvedIsBundledEngine: resolved != nil && resolved == EngineCLI.bundledExecutable())
         // Spawn the file this resolution named, not a second lookup: `source` above already
         // decided what to SAY to the binary, and the two answers have to be about the same one.
         // `/usr/bin/false` for an unresolved lookup is the same degradation `.mo` already gave.
@@ -902,13 +902,13 @@ final class SoftwareModel: ObservableObject {
         case .unavailable:
             return UninstallPreview(appName: nil, totalText: nil, entries: [])
         case .engine(let bundleId):
-            let res = try? MoEngine.shared.capture(
+            let res = try? EngineRunner.shared.capture(
                 MoCommand(target: target, args: ["uninstall", "--dry-run", bundleId], timeout: 120))
             return UninstallPreview.fromEngineEnvelope(res?.stdout ?? "")
                 ?? UninstallPreview(appName: nil, totalText: nil, entries: [])
         case .legacy(let name):
             // EOF after the prompt makes --dry-run print the enumeration and exit.
-            let res = try? MoEngine.shared.capture(
+            let res = try? EngineRunner.shared.capture(
                 MoCommand(target: target, args: ["uninstall", "--dry-run", name], stdin: "y\n", timeout: 120))
             let text = Ansi.strip((res?.stdout ?? "") + "\n" + (res?.stderr ?? ""))
             return UninstallPreview.parse(text.components(separatedBy: "\n"))
@@ -1391,7 +1391,7 @@ final class SoftwareModel: ObservableObject {
             // `--dry-run` changes nothing; anything unreadable aborts (fail closed).
             // `pre` was minted with the ticket, from the same resolution, so this probe and the
             // apply below are the same binary reading argv built for it.
-            let dry = try? MoEngine.shared.capture(
+            let dry = try? EngineRunner.shared.capture(
                 MoCommand(target: .executable(pre.spawnPath), args: pre.args, stdin: pre.stdin,
                           timeout: pre.timeout ?? 120))
             let reading = UninstallGuard.readDryRun(stdout: dry?.stdout ?? "",
@@ -1487,12 +1487,41 @@ final class SoftwareModel: ObservableObject {
                 DispatchQueue.main.sync { MainActor.assumeIsolated { self.trashSubsets(subsets) } }
             }
 
-            // Verified — the ticket's stdin answers mo's prompts (proceed +
-            // final confirm); they only ever apply to the set the dry run
-            // just pinned.
-            let res = try? MoEngine.shared.capture(
-                MoCommand(target: .executable(ticket.command.spawnPath), args: ticket.command.args,
-                          stdin: ticket.command.stdin, timeout: ticket.command.timeout ?? 600))
+            // Verified. HOW the apply runs is the dry run's call (`UninstallGuard.elevation`):
+            // a bundle the invoking user cannot write needs administrator rights, and the only
+            // honest way to give it those is the same elevation Clean/Optimize use — macOS asks
+            // the user to authenticate, then the sealed engine runs as root with BURROW_HOME
+            // pointing back at this user's home so the leftovers it removes alongside the
+            // bundle are this user's, not root's. Everything else stays un-elevated: the
+            // ticket's stdin answers a legacy mo's prompts (proceed + final confirm), and they
+            // only ever apply to the set the dry run just pinned.
+            let elevation: UninstallGuard.Elevation
+            if case .engine(let plan) = reading { elevation = UninstallGuard.elevation(for: plan) }
+            else { elevation = .unelevated }
+            let res: Captured?
+            switch elevation {
+            case .unelevated:
+                res = try? EngineRunner.shared.capture(
+                    MoCommand(target: .executable(ticket.command.spawnPath), args: ticket.command.args,
+                              stdin: ticket.command.stdin, timeout: ticket.command.timeout ?? 600))
+            case .elevated:
+                switch ElevatedEngineRun.capture(executable: ticket.command.spawnPath,
+                                                 args: ticket.command.args,
+                                                 timeout: ticket.command.timeout ?? 600) {
+                case .captured(let captured):
+                    res = captured
+                case .authCancelled:
+                    Task { @MainActor in
+                        self.loading = false
+                        OperationCenter.shared.end(opId, success: false,
+                                                   detail: NSLocalizedString("cancelled — nothing removed", comment: ""))
+                    }
+                    return
+                case .launchFailed(let reason):
+                    // Read by the failure branch below as the engine's reason: nothing ran.
+                    res = Captured(stdout: "", stderr: reason, exitCode: ElevatedExitCode.launchFailed)
+                }
+            }
             // A zero exit alone isn't removal: an `ok:false` envelope is the engine saying it
             // refused or failed, so it counts as a failure here too. Narrowing only — a legacy
             // `mo` emits no envelope, and a success envelope leaves this untouched, so no

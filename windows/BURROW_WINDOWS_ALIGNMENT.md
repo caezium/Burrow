@@ -91,6 +91,17 @@ Current Windows-specific adaptations:
 - A clean extraction of `Burrow-v0.1.0-preview.1-win-x64.zip` launches `BurrowWin.exe`, shows the main window, and returns `/health` with `ok: true` on port 9277.
 - Silent installer smoke could not run on this workstation because local Application Control policy blocks unsigned setup executables. This is consistent with the preview's unsigned release model and is now documented for direct-download users.
 
+## Release gates (windows-release.yml)
+
+The Windows release is a manual `workflow_dispatch` run, kept deliberately separate from the macOS tag-triggered `release.yml`. What it must do before an artifact exists, and where each rule came from:
+
+- **Bundle the `burrow` conductor at its pinned commit (#252).** `windows/vendor/burrow-cli` is a submodule; the workflow reads its gitlink, clones caezium/burrow-cli, checks out that exact SHA, cargo-builds `burrow.exe` and stages it into `Assets\` so the csproj's conditional `Content Include` bundles it. `Assets\Mole\burrow-engine.cmd` is the entrypoint name the conductor resolves on Windows; it and `mo.cmd` forward their arguments to `invoke-mole.ps1` through `powershell -File` (an argv array, never a `-Command` string with interpolated arguments).
+- **Hard-fail instead of warn (#269, #363).** The conductor build used to be a try/catch that downgraded any failure to a `::warning::` and shipped a build with dead features — the same silent-degradation shape that produced a broken macOS 0.10.0. The build step now fails the run, and a post-publish step asserts that `Assets\burrow.exe` and `Assets\Mole\mole.ps1` are present in the publish output.
+- **Authenticated clone only, fail closed (#269, BUR-144).** burrow-cli is private and burrow-cli depends on the private burrow-engine crate over git. `ENGINE_PAT` is required (the step exits 1 without it), the clone is exactly one authenticated `git -c url.…insteadOf` invocation, and cargo's fetch uses a process-scoped `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0` rewrite that is removed again in `finally`. The token is never written to global git config and reaches no other step; `scripts/tests/test_release_workflows.py` pins all of this.
+- **Every action pinned to a commit SHA (BUR-144).** `actions/checkout`, `actions/setup-dotnet` and `actions/upload-artifact` are referenced by 40-hex SHA with a version comment, in both `windows-ci.yml` and `windows-release.yml`, matching the macOS `ci.yml`. The Python tests reject any floating tag.
+- **Telemetry keys baked from secrets, presence surfaced.** `BURROWWIN_SENTRY_DSN` / `BURROWWIN_POSTHOG_*` are read from repository secrets into MSBuild properties; an empty one is logged as a warning so a release that silently shipped inert telemetry is easy to spot.
+- Installer/WinGet packaging still runs locally through `scripts\build-release.ps1` (see `docs/release.md`); the artifact remains unsigned, as documented for direct-download users.
+
 ## Known gaps before calling the Windows port complete
 
 - Broaden screenshot/UI automation coverage for tray-menu actions and navigation, beyond the diagnostic tray HUD visual smoke.

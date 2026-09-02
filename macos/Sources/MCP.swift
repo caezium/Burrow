@@ -247,7 +247,7 @@ struct ToolCatalog {
             ],
             [
                 "name": "burrow_dupes",
-                "description": "Duplicate-file groups under one or more directories via `burrow dupes` (fclones group report). Read-only — reports groups, deletes nothing.",
+                "description": "Duplicate-file groups under one or more directories via `burrow dupes group` (fclones group report). Read-only — reports groups, deletes nothing; the engine's dedupe/remove/link actions are not reachable from this tool. Each path must be an absolute path to an existing directory, else the call is refused before anything runs.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -332,6 +332,19 @@ struct ToolCatalog {
                 ] as [String: Any],
             ],
             [
+                "name": "burrow_evict",
+                "description": "Evict the LOCAL copies of cloud-synced files (iCloud Drive) via `burrow evict <paths…>` — the files stay in the cloud and re-download on next access, so this reclaims disk without deleting anything. SAFE BY DEFAULT: without confirm:true it is a dry run that only reports each path's existence. A real eviction needs confirm:true AND the user's opt-in ('Let agents run cleanups' in Burrow Settings); without the opt-in, confirm:true is refused and reported as blocked. Each path must be absolute and exist, else the call is refused before anything runs. macOS only.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "paths": ["type": "array", "items": ["type": "string"], "description": "Absolute paths (files or directories) whose local copies should be evicted."],
+                        "confirm": ["type": "boolean", "description": "true = actually evict (requires the Settings opt-in). Omit/false = dry-run preview only."],
+                    ],
+                    "required": ["paths"],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ],
+            [
                 "name": "burrow_clean",
                 "description": "Clean caches, logs, temp files and leftovers via `mo clean`. SAFE BY DEFAULT: with no `confirm` (or confirm:false) it runs `--dry-run` and only PREVIEWS what would be freed — nothing is deleted. A real deletion needs confirm:true AND the user's opt-in ('Let agents run cleanups' in Burrow Settings); without the opt-in, confirm:true is refused and reported as blocked. Real runs are not elevated (user-level caches only). SLOW: the scan can take minutes on a full disk — a `timed_out: true` result means it was killed, not that there was nothing to clean.",
                 "inputSchema": [
@@ -355,7 +368,7 @@ struct ToolCatalog {
             ],
             [
                 "name": "burrow_uninstall",
-                "description": "UNINSTALL an application via `mo uninstall <app>…` — the .app bundle itself AND the per-app data under ~/Library (containers, Application Support, caches, preferences, logs, saved state, HTTP storage, WebKit data, cookies). The bundle and its files move to the Trash, where the user can put them back, unless `permanent` is true — then they are deleted outright and are not recoverable. EXCEPTION, and tell the user before you confirm: an app installed by Homebrew (`source: \"Homebrew\"` in burrow_list_apps) is removed by `brew uninstall --cask --zap <token>`, which does NOT use the Trash and, via the cask's zap stanza, also deletes configuration and data the dry-run file list cannot enumerate. Identify apps by `bundle_id` from burrow_list_apps: display names are not unique (a machine can hold several apps called `Steam` or `Updater`) and an ambiguous term is REFUSED rather than guessed. SAFE BY DEFAULT: without confirm:true it runs `--dry-run` (preview only; its `items[]` carry `kind: \"application\"|\"leftover\"`, and `requires_admin` tells you the run needs elevation Burrow does not have). A real run needs confirm:true AND BOTH Settings opt-ins (cleanups + the dedicated uninstall/permanent switch), else it's reported as blocked; it also aborts unless the dry run resolves exactly the requested apps. OUTCOMES ARE PER APP: `apps[].status` is `removed`, `partial` or `refused`, and a bundle that could not be removed leaves its support files in place too — report `partial`/`refused` honestly, with the engine's `suggestion`, instead of summarising the run as done.",
+                "description": "UNINSTALL an application via `mo uninstall <app>…` — the .app bundle itself AND the per-app data under ~/Library (containers, Application Support, caches, preferences, logs, saved state, HTTP storage, WebKit data, cookies). The bundle and its files move to the Trash, where the user can put them back, unless `permanent` is true — then they are deleted outright and are not recoverable. EXCEPTION, and tell the user before you confirm: an app installed by Homebrew (`source: \"Homebrew\"` in burrow_list_apps) is removed by `brew uninstall --cask --zap <token>`, which does NOT use the Trash and, via the cask's zap stanza, also deletes configuration and data the dry-run file list cannot enumerate. Identify apps by `bundle_id` from burrow_list_apps: display names are not unique (a machine can hold several apps called `Steam` or `Updater`) and an ambiguous term is REFUSED rather than guessed. SAFE BY DEFAULT: without confirm:true it runs `--dry-run` (preview only; its `items[]` carry `kind: \"application\"|\"leftover\"`, and `requires_admin` tells you the bundle needs administrator rights — over MCP the run is never elevated, since an agent cannot answer the password prompt, so expect `partial`/`refused` for that app and send the user to the Burrow app, which does prompt). A real run needs confirm:true AND BOTH Settings opt-ins (cleanups + the dedicated uninstall/permanent switch), else it's reported as blocked; it also aborts unless the dry run resolves exactly the requested apps. OUTCOMES ARE PER APP: `apps[].status` is `removed`, `partial` or `refused`, and a bundle that could not be removed leaves its support files in place too — report `partial`/`refused` honestly, with the engine's `suggestion`, instead of summarising the run as done.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -435,6 +448,7 @@ struct ToolCatalog {
     /// — no action taken, and it would bloat the log (and the reader list).
     static let auditedTools: Set<String> = [
         "burrow_clean", "burrow_optimize", "burrow_uninstall", "burrow_purge", "burrow_installer",
+        "burrow_evict",
     ]
 
     private func recordAudit(tool: String, arguments: [String: Any], ok: Bool, summary: String, since: Date) {
@@ -495,6 +509,8 @@ struct ToolCatalog {
             return self.callSentinel(arguments)
         case "burrow_slim_check":
             return try self.callSlimCheck(arguments)
+        case "burrow_evict":
+            return try self.callEvict(arguments)
         case "burrow_clean":
             return self.runAction(.clean, confirm: (arguments["confirm"] as? Bool) ?? false)
         case "burrow_optimize":
@@ -564,7 +580,8 @@ struct ToolCatalog {
     /// `ran` is documented on the wire as a claim about the disk, so the per-app accounting
     /// decides it: an application removed, or a support file removed. A run that was refused
     /// outright still reports `ran: false`, which is the honest answer for it.
-    static func realRunClaim(exitCode: Int32, stdout: String, stderr: String) -> (ran: Bool, error: String?) {
+    static func realRunClaim(_ res: Captured) -> (ran: Bool, error: String?) {
+        let stdout = res.stdout, stderr = res.stderr, exitCode = res.exitCode
         let failed = BurrowEnvelope.reportsFailure(stdout: stdout)
         let outcome = UninstallGuard.readOutcome(stdout: stdout)
         let ran = outcome.map(\.changedTheDisk) ?? (exitCode == 0 && !failed)
@@ -797,7 +814,7 @@ struct ToolCatalog {
     /// pressure + disk headroom, plus the decode-drift count.
     private func callDoctor(_ args: [String: Any]) -> String {
         let moInstalled: Bool
-        if case .installed = MoEngine.shared.availability() { moInstalled = true } else { moInstalled = false }
+        if case .installed = EngineRunner.shared.availability() { moInstalled = true } else { moInstalled = false }
         let latest = self.metrics.latest()?.status
         var free: Int64 = 0, total: Int64 = 0
         if let d = latest?.disks.max(by: { $0.total < $1.total }) {
@@ -873,9 +890,7 @@ struct ToolCatalog {
     /// throws.
     private func callCleanupHistory(_ args: [String: Any]) -> String {
         let limit = max(1, min((args["limit"] as? Int) ?? 20, 200))
-        let res = try? MoEngine.shared.capture(
-            MoCommand(target: .mo, args: ["history", "--json", "--limit", "\(limit)"], timeout: 15))
-        return Self.cleanupHistoryResult(exitCode: res?.exitCode ?? 127, stdout: res?.stdout ?? "")
+        return Self.cleanupHistoryResult(Self.runEngine(["history", "--json", "--limit", "\(limit)"], timeout: 15))
     }
 
     /// Shape `mo history --json` output into the tool's reply. Pure so every branch is
@@ -891,11 +906,11 @@ struct ToolCatalog {
     /// no `ok` key just makes `.ok` default to false — so outcome 2 only fires when `burrow_cli`
     /// (present on every real envelope, success or failure, and never emitted by legacy mo's own
     /// `--json`) is actually there; otherwise this falls through to outcome 3 unchanged.
-    static func cleanupHistoryResult(exitCode: Int32, stdout: String) -> String {
-        guard exitCode == 0 else {
+    static func cleanupHistoryResult(_ res: Captured) -> String {
+        guard res.exitCode == 0 else {
             return "{\"error\":\"mo history unavailable\",\"hint\":\"call burrow_info to check whether Burrow is recording data at all\",\"sessions\":[]}"
         }
-        let out = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        let out = res.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !out.isEmpty else { return "{\"sessions\":[]}" }
         guard let envelope = try? BurrowEnvelope.parse(out), envelope.burrowCli != nil else {
             return out
@@ -960,9 +975,8 @@ struct ToolCatalog {
     private static func deletionsLogPath() -> String {
         let fallback = (NSHomeDirectory() as NSString)
             .appendingPathComponent("Library/Logs/mole/deletions.log")
-        guard let res = try? MoEngine.shared.capture(
-                MoCommand(target: .mo, args: ["history", "--json"], timeout: 10)),
-              res.exitCode == 0 else { return fallback }
+        let res = Self.runEngine(["history", "--json"], timeout: 10)
+        guard res.exitCode == 0 else { return fallback }
         return Self.deletionsLogPath(fromCaptureStdout: res.stdout) ?? fallback
     }
 
@@ -1033,7 +1047,7 @@ struct ToolCatalog {
             // `pre.spawnPath` and `ticket.command.spawnPath` are the same file by construction —
             // the gate resolved once and put the answer on both — so the plan this reads is the
             // plan the apply below executes, and neither is re-discovered here.
-            let dry = Self.runMo(pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120,
+            let dry = Self.runEngine(pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120,
                                  executable: pre.spawnPath)
             // The decision point, and it fails closed on anything it cannot read. Against the
             // bundled engine it reads `apps[].query` — the arguments echoed back verbatim — so an
@@ -1070,7 +1084,7 @@ struct ToolCatalog {
         // Spawn the binary the gate resolved, not a fresh lookup: `ticket.command.args` is only
         // correct for that file (mo-style or engine-style), so re-discovering here could hand one
         // program the other's wire format.
-        let res = Self.runMo(ticket.command.args, stdin: ticket.command.stdin,
+        let res = Self.runEngine(ticket.command.args, stdin: ticket.command.stdin,
                              timeout: timeout, executable: ticket.command.spawnPath)
         var permanent: Bool?
         if case .uninstall(_, let p) = ticket.action, ticket.mode == .real { permanent = p }
@@ -1078,7 +1092,7 @@ struct ToolCatalog {
         // string for a run that didn't fully succeed. A PREVIEW never ran by definition, and the
         // dry run's own transcript must not be mined for a per-app outcome it doesn't contain.
         let claim = ticket.mode == .real
-            ? Self.realRunClaim(exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr)
+            ? Self.realRunClaim(res)
             : (ran: false,
                error: (BurrowEnvelope.reportsFailure(stdout: res.stdout) || res.exitCode != 0)
                    ? BurrowEnvelope.failureReason(stdout: res.stdout, stderr: res.stderr)
@@ -1114,7 +1128,7 @@ struct ToolCatalog {
         let limit = min(max((args["limit"] as? Int) ?? 100, 1), 1000)
         let minSize = Int64(max((args["min_size"] as? Int) ?? 0, 0))
         // 300 s like DiskScanner — analyze on a home dir can take a while.
-        let res = Self.runMo(["analyze", "--json", path], timeout: 300)
+        let res = Self.runEngine(["analyze", "--json", path], timeout: 300)
         if res.timedOut {
             return Self.jsonString([
                 "error": "mo analyze timed out",
@@ -1129,8 +1143,8 @@ struct ToolCatalog {
                DiskScanner.indicatesMissingJSONSupport(stderr: res.stderr) {
                 return Self.jsonString([
                     "error": "the active engine is too old for `analyze --json` " +
-                             "(needs >= \(MoleCLI.minimumAnalyzeJSONVersion)); " +
-                             MoleCLI.currentEngineUpdateInstruction,
+                             "(needs >= \(EngineCLI.minimumAnalyzeJSONVersion)); " +
+                             EngineCLI.currentEngineUpdateInstruction,
                     "path": path])
             }
             return Self.analyzeFailure(path: path, stdout: res.stdout, stderr: res.stderr)
@@ -1141,7 +1155,7 @@ struct ToolCatalog {
         // an empty entry list bolted onto it: a directory that reads as having no children.
         // `payloadBytes` unwraps the engine and passes a legacy `mo`'s bare JSON through
         // untouched, and returns nil for an `ok:false` body that somehow exited 0.
-        guard let payload = BurrowEnvelope.payloadBytes(stdout: res.stdout) else {
+        guard let payload = res.payload else {
             return Self.analyzeFailure(path: path, stdout: res.stdout, stderr: res.stderr)
         }
         let out = String(decoding: payload, as: UTF8.self)
@@ -1231,11 +1245,11 @@ struct ToolCatalog {
             let remaining = deadline.timeIntervalSinceNow
             guard remaining > 5 else { complete = false; break }
             descended += 1
-            let res = Self.runMo(["analyze", "--json", childPath], timeout: min(remaining, 60))
+            let res = Self.runEngine(["analyze", "--json", childPath], timeout: min(remaining, 60))
             // Same unwrap as the top level: decoding the envelope itself gave every descended
             // child `entries: []`, so the hotspot map read as "these directories are empty".
             guard !res.timedOut, res.exitCode == 0,
-                  let payload = BurrowEnvelope.payloadBytes(stdout: res.stdout),
+                  let payload = res.payload,
                   var child = (try? JSONSerialization.jsonObject(
                       with: payload)) as? [String: Any] else {
                 if res.timedOut { complete = false }
@@ -1257,14 +1271,14 @@ struct ToolCatalog {
     /// `mo uninstall --list` — installed apps + the exact names uninstall
     /// accepts. Read-only.
     private func callListApps() -> String {
-        let res = Self.runMo(["uninstall", "--list"], timeout: 60)
-        return Self.listAppsToolResult(exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr)
+        return Self.listAppsToolResult(Self.runEngine(["uninstall", "--list"], timeout: 60))
     }
 
     /// Shape `mo uninstall --list` output into the tool's reply. Pure so the failure branch is
     /// deterministically testable without a real spawn (mirrors `cleanupHistoryResult` above —
     /// same "may be absent on a CI runner" reasoning).
-    static func listAppsToolResult(exitCode: Int32, stdout: String, stderr: String) -> String {
+    static func listAppsToolResult(_ res: Captured) -> String {
+        let stdout = res.stdout, stderr = res.stderr, exitCode = res.exitCode
         // A zero exit is not on its own proof of a listing: an `ok:false` body is a failure
         // whatever the process claimed on the way out, and passing it through would hand an
         // agent an error document where it expects an app array. `uninstall --list` answers
@@ -1308,26 +1322,28 @@ struct ToolCatalog {
 
     // MARK: - Conductor discovery tools (Phase 6.3 parity, read-only)
     //
-    // These expose burrow-cli's discovery commands through the bundled
-    // conductor (`burrow <cmd> --json`, BurrowConductor.capture) and pass
+    // These expose the engine's discovery commands through the bundled
+    // binary (`burrow <cmd> --json`, BurrowEngine.capture) and pass
     // the envelope's `data` payload through VERBATIM — the contract tracks
-    // burrow-cli's, not ours, exactly like burrow_analyze tracks Mole's.
-    // All seven are read-only: no audit rows, no confirm gates, and the
-    // mutating siblings (dupes apply/dedupe, slim, evict) stay out of MCP.
+    // the engine's, not ours, exactly like burrow_analyze tracks Mole's.
+    // The seven discovery tools are read-only: no audit rows, no confirm
+    // gates. `burrow_evict` (below) is the one actuating tool on this seam
+    // and carries the same preview/confirm/opt-in gate as the action tools;
+    // the other mutating siblings (dupes dedupe/remove/link, slim) stay out.
 
-    /// One shape for all seven: availability check, capture, pass `data`
-    /// through. Degrades to a JSON error object — never a throw — so an
-    /// agent on a build without the bundled conductor sees why instead of
-    /// a -32603 (same posture as the exit-127 `mo` degrade above).
+    /// One shape for every conductor-seam tool: availability check, capture,
+    /// pass `data` through. Degrades to a JSON error object — never a throw —
+    /// so an agent on a build without the bundled conductor sees why instead
+    /// of a -32603 (same posture as the exit-127 `mo` degrade above).
     private func callConductor(_ command: String, _ args: [String],
                                timeout: TimeInterval = 300) -> String {
-        guard BurrowConductor.isAvailable else {
+        guard BurrowEngine.isAvailable else {
             return Self.jsonString([
                 "error": "the burrow conductor is not bundled in this build; \(command) is unavailable",
                 "command": command])
         }
         do {
-            let envelope = try BurrowConductor.capture(command, args, timeout: timeout)
+            let envelope = try BurrowEngine.capture(command, args, timeout: timeout)
             guard let data = envelope.data,
                   let out = String(data: data, encoding: .utf8),
                   !out.isEmpty else {
@@ -1335,15 +1351,23 @@ struct ToolCatalog {
                                         "command": command])
             }
             return out
-        } catch let BurrowConductorError.engine(kind, message) {
+        } catch let BurrowEngineError.engine(kind, message) {
             return Self.jsonString(["error": message, "kind": kind, "command": command])
         } catch {
             return Self.jsonString(["error": error.localizedDescription, "command": command])
         }
     }
 
-    /// `burrow dupes <paths…>` — duplicate-file groups (fclones group
-    /// report; the mutating dedupe/remove/link subcommands are not exposed).
+    /// `burrow dupes group <paths…>` — duplicate-file groups (fclones group report).
+    ///
+    /// The subcommand is HARDCODED to the read-only `group`, never taken from the agent: the
+    /// engine's `dupes` reads its first positional as `group|dedupe|remove|link`, so an agent
+    /// string in that slot could select the mutating `dedupe`/`remove`/`link` actions, and an
+    /// `--apply` anywhere in argv would run them. Every path is therefore validated by
+    /// `Self.scanDirectory` BEFORE anything is spawned — absolute, existing, a directory — which
+    /// is also what keeps a `--flag`-shaped or `dedupe`-shaped string out of the engine's argv.
+    /// No `--` separator: the engine at the pinned commit rejects a bare `--` as an unknown
+    /// option (`reject_unknown_flag`), so the validation IS the separator here.
     private func callDupes(_ args: [String: Any]) throws -> String {
         let paths = (args["paths"] as? [String])?
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -1351,7 +1375,25 @@ struct ToolCatalog {
         guard !paths.isEmpty else {
             throw MCPToolError.badArguments("dupes needs `paths`: one or more directories to scan")
         }
-        return self.callConductor("dupes", paths)
+        let directories = try paths.map { try Self.scanDirectory($0, tool: "dupes") }
+        return self.callConductor("dupes", ["group"] + directories)
+    }
+
+    /// One agent-supplied scan target, admitted to argv only as an absolute path to an existing
+    /// directory. Anything else — a relative path, a flag, a subcommand name, a file, a missing
+    /// directory — is refused with the tool's usual `badArguments` and nothing is spawned.
+    static func scanDirectory(_ path: String, tool: String) throws -> String {
+        guard path.hasPrefix("/") else {
+            throw MCPToolError.badArguments(
+                "\(tool) `paths` must be absolute directories; got `\(path)`")
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw MCPToolError.badArguments(
+                "\(tool) `paths` must name existing directories; `\(path)` is not one")
+        }
+        return path
     }
 
     /// `burrow orphans <dir> [--installed id1,id2,…]` — leftover files
@@ -1411,6 +1453,38 @@ struct ToolCatalog {
         return self.callConductor("slim-check", [binary])
     }
 
+    /// `burrow evict <paths…> [--apply]` — dehydrate cloud-synced files. The engine previews by
+    /// default and evicts only on `--apply`, which this appends ONLY for a confirmed call the
+    /// user has opted into — the same two conditions `burrow_clean`'s real run needs, refused
+    /// with the same `blocked` wire shape. Paths are admitted to argv only as absolute paths
+    /// that exist (a file or a directory), so an agent string can neither be read as a flag nor
+    /// name something the engine would then go looking for.
+    private func callEvict(_ args: [String: Any]) throws -> String {
+        let paths = (args["paths"] as? [String])?
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty } ?? []
+        guard !paths.isEmpty else {
+            throw MCPToolError.badArguments("evict needs `paths`: one or more files or directories")
+        }
+        let targets = try paths.map { try Self.existingAbsolutePath($0, tool: "evict") }
+        let confirm = (args["confirm"] as? Bool) ?? false
+        guard !confirm || Store.mcpActionsEnabled else {
+            return ActionWire.blocked(command: "evict", reason: .agentCleanupsOptInOff)
+        }
+        return self.callConductor("evict", targets + (confirm ? ["--apply"] : []))
+    }
+
+    /// One agent-supplied path, admitted to argv only when absolute and present on disk.
+    static func existingAbsolutePath(_ path: String, tool: String) throws -> String {
+        guard path.hasPrefix("/") else {
+            throw MCPToolError.badArguments("\(tool) `paths` must be absolute; got `\(path)`")
+        }
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw MCPToolError.badArguments("\(tool) `paths` must exist; `\(path)` does not")
+        }
+        return path
+    }
+
     // MARK: Action helpers
 
     /// Run `mo` with the given args, never throwing — a missing binary
@@ -1420,15 +1494,33 @@ struct ToolCatalog {
     /// let discovery answer, because their argv means the same thing to either binary; a gated
     /// ACTION must pass the path its ticket was minted against, since that is the file its argv
     /// was translated (or deliberately not translated) for.
-    private static func runMo(_ args: [String], stdin: String? = nil, timeout: TimeInterval,
-                              executable: String? = nil) -> MoleCLI.Result {
-        let target: MoCommand.Target = executable.map { .executable($0) } ?? .mo
-        guard let cap = try? MoEngine.shared.capture(
-            MoCommand(target: target, args: args, stdin: stdin, timeout: timeout)) else {
-            return MoleCLI.Result(stdout: "", stderr: "mo not found", exitCode: 127)
+    ///
+    /// With no `executable`, the BUNDLED engine is spawned when this build ships one — the same
+    /// file and the same environment (`BurrowEngine.environment()`: the bundled fclones and
+    /// the #279 PATH augmentation) every conductor-seam tool uses — and only a build without
+    /// one falls back to `.mo` discovery. A resolved executable that IS the bundled engine gets
+    /// that environment too; anything else runs with the app's own, as before.
+    private static func runEngine(_ args: [String], stdin: String? = nil, timeout: TimeInterval,
+                                  executable: String? = nil) -> Captured {
+        let bundled = BurrowEngine.executableURL()?.path
+        let target: MoCommand.Target
+        switch (executable, bundled) {
+        case (let exe?, _): target = .executable(exe)
+        case (nil, let path?): target = .executable(path)
+        case (nil, nil): target = .mo
         }
-        return MoleCLI.Result(stdout: cap.stdout, stderr: cap.stderr,
-                              exitCode: cap.exitCode, timedOut: cap.timedOut)
+        let environment: [String: String]?
+        if case .executable(let path) = target, path == bundled {
+            environment = BurrowEngine.environment()
+        } else {
+            environment = nil
+        }
+        guard let cap = try? EngineRunner.shared.capture(
+            MoCommand(target: target, args: args, stdin: stdin, environment: environment,
+                      timeout: timeout)) else {
+            return Captured(stdout: "", stderr: "mo not found", exitCode: 127)
+        }
+        return cap
     }
 
     /// Strip ANSI/VT100 escape sequences so mo's TUI coloring doesn't leak

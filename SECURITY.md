@@ -1,12 +1,15 @@
 # Security & trust
 
-Burrow is a GUI that ships its own MIT engine, a fork of the
-[`mo` (Mole)](https://github.com/tw93/Mole) CLI. Starting with 0.11.0, official
-releases must pass Developer ID signing and Apple notarization before they can
-publish. This page is the honest account of what
-the app does, what touches the network, and how it handles admin rights, so you
-can decide before you run it. The actual cleaning/scanning is done by that
-bundled engine (MIT, © tw93 for the original); audit it too.
+Burrow is an MIT-licensed GUI that ships its own engine: `burrow-engine`, one
+source-available binary under the Functional Source License (FSL-1.1-ALv2)
+whose command surface is modelled on the [`mo` (Mole)](https://github.com/tw93/Mole)
+CLI. Starting with 0.11.0, official releases must pass Developer ID signing and
+Apple notarization before they can publish. This page is the honest account of
+what the app does, what touches the network, and how it handles admin rights,
+so you can decide before you run it. The actual cleaning/scanning is done by
+that bundled engine (see [NOTICE](NOTICE) for its license and for the MIT
+`fclones` sidecar); its source is private, so what you can audit is the signed
+binary inside the app and the Swift that gates every call to it.
 
 ## Code signing
 

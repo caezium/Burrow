@@ -26,27 +26,49 @@ final class PrivilegeRouteTests: XCTestCase {
     // operation. Anything it doesn't recognise keeps the old route rather than
     // being forwarded as an approximate match.
 
-    func testRecognition_mapsTheThreeKnownCallSites() {
-        // Exactly what CleanView, OptimizeView, and the preview path pass today.
-        XCTAssertEqual(HelperOperation(engineArguments: ["clean"]), .clean)
-        XCTAssertEqual(HelperOperation(engineArguments: ["optimize"]), .optimize)
+    func testRecognition_mapsTheEngineConventionArgvTheFlowActuallySends() {
+        // Exactly what OperationFlow sends after `BurrowEngine.streamArgv` / `engineArgv`:
+        // the engine's convention (preview by default, `--apply` to act), streamed.
+        XCTAssertEqual(HelperOperation(engineArguments: ["clean", "--apply", "--stream"]), .clean)
+        XCTAssertEqual(HelperOperation(engineArguments: ["optimize", "--apply", "--stream"]), .optimize)
+        XCTAssertEqual(HelperOperation(engineArguments: ["clean", "--stream"]), .scan)
+        XCTAssertEqual(HelperOperation(engineArguments: ["optimize", "--stream"]), .optimizeScan)
+        // The streaming kill-switch off: same operations, buffered.
+        XCTAssertEqual(HelperOperation(engineArguments: ["clean", "--apply"]), .clean)
         XCTAssertEqual(HelperOperation(engineArguments: ["clean", "--dry-run"]), .scan)
+        XCTAssertEqual(HelperOperation(engineArguments: ["optimize", "--dry-run", "--stream"]), .optimizeScan)
     }
 
-    func testRecognition_isExactAndOrderSensitive() {
-        // A near-miss is not a match. Extra flags, reordering, or a different
-        // verb all fall through to osascript rather than being coerced into
-        // the closest typed operation.
+    /// The engine's convention decides, never mo's. A bare `["clean"]` is what the engine
+    /// treats as a PREVIEW, so it must map to the scan — the first version of this seam read
+    /// it as the live clean, and the daemon would have run a dry run and called it a cleanup.
+    func testRecognition_aBareVerbIsThePreviewNotTheLiveRun() {
+        XCTAssertEqual(HelperOperation(engineArguments: ["clean"]), .scan)
+        XCTAssertEqual(HelperOperation(engineArguments: ["optimize"]), .optimizeScan)
+    }
+
+    func testRecognition_isExactAboutVerbAndFlags() {
+        // A near-miss is not a match. An unknown flag, a verb that isn't first, a different
+        // verb, or the apply/dry-run contradiction the engine itself refuses — all fall
+        // through to osascript rather than being coerced into the closest typed operation.
         XCTAssertNil(HelperOperation(engineArguments: ["--dry-run", "clean"]))
         XCTAssertNil(HelperOperation(engineArguments: ["clean", "--yes"]))
         XCTAssertNil(HelperOperation(engineArguments: ["clean", "--dry-run", "--verbose"]))
+        XCTAssertNil(HelperOperation(engineArguments: ["clean", "--apply", "--dry-run"]))
+        XCTAssertNil(HelperOperation(engineArguments: ["clean", "--apply", "--apply"]))
+        XCTAssertNil(HelperOperation(engineArguments: ["clean", "--permanent", "--apply"]),
+                     "the removal mode is not something the client may choose for the daemon")
+        XCTAssertNil(HelperOperation(engineArguments: ["clean", "--apply", "--plan", "/tmp/x"]),
+                     "a plan file is the daemon's own, never a client argument")
         XCTAssertNil(HelperOperation(engineArguments: ["uninstall", "Safari"]))
+        XCTAssertNil(HelperOperation(engineArguments: ["purge", "--apply", "--stream"]))
         XCTAssertNil(HelperOperation(engineArguments: []))
     }
 
     /// The one that matters: an attacker-shaped argv must never resolve to an
-    /// operation. It can't, because recognition is equality against three
-    /// fixed arrays — but this is the assertion that says so out loud.
+    /// operation. It can't, because recognition admits a verb from a closed set
+    /// followed only by flags from a closed set — but this is the assertion
+    /// that says so out loud.
     func testRecognition_neverAcceptsInjectedArgv() {
         for hostile in [["clean", "; rm -rf /"],
                         ["clean", "--dry-run", "&&", "curl", "evil"],
@@ -61,7 +83,7 @@ final class PrivilegeRouteTests: XCTestCase {
     // MARK: - The routing rule
 
     func testRoute_usesTheHelperWhenEverythingLinesUp() {
-        XCTAssertEqual(PrivilegeRoute.decide(arguments: ["clean"],
+        XCTAssertEqual(PrivilegeRoute.decide(arguments: ["clean", "--apply", "--stream"],
                                              registration: .enabled,
                                              skew: .matched),
                        .helper(.clean))

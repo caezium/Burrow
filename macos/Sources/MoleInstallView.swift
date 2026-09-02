@@ -33,12 +33,12 @@ struct MoleInstallView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("REINSTALL SIGNED APP").font(Brand.mono(9, .bold)).tracking(0.6).foregroundStyle(Brand.textTertiary)
                 HStack {
-                    Text(MoleCLI.installCommand).font(Brand.mono(12)).foregroundStyle(Brand.textPrimary)
+                    Text(EngineCLI.installCommand).font(Brand.mono(12)).foregroundStyle(Brand.textPrimary)
                         .textSelection(.enabled)
                     Spacer()
                     Button {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(MoleCLI.installCommand, forType: .string)
+                        NSPasteboard.general.setString(EngineCLI.installCommand, forType: .string)
                         copied = true
                     } label: {
                         Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
@@ -49,7 +49,7 @@ struct MoleInstallView: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(Brand.chipFill))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Brand.hairline, lineWidth: 1))
 
-                Button { NSWorkspace.shared.open(MoleCLI.repoURL) } label: {
+                Button { NSWorkspace.shared.open(EngineCLI.repoURL) } label: {
                     Text("View the bundled engine source →")
                         .font(Brand.mono(10)).foregroundStyle(Brand.textSecondary)
                 }.buttonStyle(.plain)
@@ -82,7 +82,7 @@ struct MoleInstallView: View {
     private func recheck() {
         checking = true; stillMissing = false; copied = false
         DispatchQueue.global(qos: .userInitiated).async {
-            let found = MoleCLI.findExecutable() != nil
+            let found = EngineCLI.findExecutable() != nil
             DispatchQueue.main.async {
                 checking = false
                 if found { onReady() } else { stillMissing = true }
@@ -95,7 +95,7 @@ struct MoleInstallView: View {
     private func startAutoDetect() {
         pollTimer?.invalidate()
         let t = Timer(timeInterval: 2.0, repeats: true) { timer in
-            guard MoleCLI.trustedExecutable() != nil else { return }
+            guard EngineCLI.trustedExecutable() != nil else { return }
             timer.invalidate()
             onReady()
         }

@@ -127,7 +127,7 @@ struct SettingsView: View {
     @State private var aiOpenAIKey: String = Store.aiOpenAIKey
     @State private var moleVersion: String = "—"
     @State private var moleUpdating = false
-    @State private var engineUpdatePolicy: MoleCLI.EngineUpdatePolicy = .unavailable
+    @State private var engineUpdatePolicy: EngineCLI.EngineUpdatePolicy = .unavailable
     @State private var copiedConfig = false
     // The "Touch ID for sudo" row this branch was hardening against the repointed engine
     // ("unknown command: touchid" must not read as a false "Disabled") is gone entirely on
@@ -468,7 +468,7 @@ struct SettingsView: View {
                     .labelsHidden().pickerStyle(.segmented).frame(width: 200)
                     .onChange(of: removalMode) { _, v in Store.cacheRemovalMode = v }
                 }
-                footnote("Permanent (default): the engine removes caches outright — freed space is real, immediately. Trash: reviewed, ticked paths go to the Trash instead — recoverable, but space frees only when Trash empties, and the run won't appear in `mo history`.")
+                footnote("Governs the reviewed clean (Scan → Review → Confirm). Permanent (default): the engine removes the ticked paths outright — freed space is real, immediately. Trash: Burrow moves the ticked paths to the Trash itself — recoverable, but space frees only when Trash empties, and the run won't appear in the cleanup history. \"Clean now\" (the engine's own selection, no review) always moves to the Trash and reports it as moved, not freed.")
             }
 
             section("Storage", "internaldrive") {
@@ -516,7 +516,7 @@ struct SettingsView: View {
                                     (60, "60 sec"), (120, "2 min"), (300, "5 min")]) {
                     Store.sampleIntervalSeconds = $0
                 }
-                footnote("With Mole 1.44+ Burrow streams `mo status --watch` for live status; on older mo it falls back to polling `mo status --json` at this cadence. 60 s is plenty for charts; tighter intervals give finer detail at the cost of more subprocess churn.")
+                footnote("Burrow streams `status --watch` from the bundled engine for live status, and this is how often a snapshot is written to history. If the stream ever drops (or a system mo older than 1.44 is in use) it falls back to polling `status --json` at this cadence. 60 s is plenty for charts; tighter intervals give finer detail at the cost of more history rows.")
             }
         }
     }
@@ -772,8 +772,8 @@ struct SettingsView: View {
     /// installed mo on the 1.4x line, which the number alone gives no way to tell apart.
     private func loadMoleVersion() {
         DispatchQueue.global(qos: .userInitiated).async {
-            let engine = MoleCLI.versionReport()
-            let policy = MoleCLI.currentEngineUpdatePolicy
+            let engine = EngineCLI.versionReport()
+            let policy = EngineCLI.currentEngineUpdatePolicy
             DispatchQueue.main.async {
                 // Same fallback string, and the same localization, as `AppDelegate.showAboutPanel`
                 // — the two rows report the identical fact one panel apart, and only this one was
@@ -809,8 +809,8 @@ struct SettingsView: View {
         guard !moleUpdating else { return }
         moleUpdating = true
         DispatchQueue.global(qos: .userInitiated).async {
-            let res = try? MoleCLI.run(args: ["update"], timeout: 600)
-            let newVersion = MoleCLI.versionReport()
+            let res = try? EngineCLI.run(args: ["update"], timeout: 600)
+            let newVersion = EngineCLI.versionReport()
             DispatchQueue.main.async {
                 moleUpdating = false
                 if let newVersion { moleVersion = newVersion.display }

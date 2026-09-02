@@ -485,7 +485,7 @@
 "“%1$@” resolves to %2$d applications (%3$@), so the engine refuses to act on it. Remove them one at a time." = "「%1$@」は %2$d 個の App（%3$@）に一致するため、エンジンは処理を拒否します。1 つずつ削除してください。";
 "The engine resolved %1$d applications for %2$d selected, so the sets don't line up." = "選択した %2$d 個に対してエンジンは %1$d 個の App を解決したため、対象が一致しません。";
 "The engine won't remove %1$@: %2$@" = "エンジンは %1$@ を削除しません: %2$@";
-"Needs an administrator: %@. Burrow doesn't elevate this run, so it may fail on the app itself." = "管理者権限が必要です: %@。Burrow はこの実行で権限を昇格しないため、App 本体の削除は失敗する可能性があります。";
+"Needs an administrator: %@. Burrow will ask for an administrator password and remove it with that authorization." = "管理者権限が必要: %@。Burrow は管理者パスワードを求め、その承認でアプリを削除します。";
 "one of these apps" = "これらの App のいずれか";
 "Homebrew removes %1$@: `%2$@`. `--zap` also deletes configuration and data the cask declares, which the preview can't list." = "%1$@ は Homebrew が削除します: `%2$@`。`--zap` は cask が宣言した設定やデータも削除しますが、それらはプレビューに表示できません。";
 "aborted — nothing removed" = "中止しました — 何も削除していません";
