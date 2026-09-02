@@ -86,15 +86,24 @@ it. Real cleans run at user level (not elevated).
 
 | Tool | What a real run does | Safety | Key params |
 |---|---|---|---|
-| **burrow_clean** | Removes caches, logs, temp files, leftovers (`mo clean`). The scan can take minutes on a full disk; a `timed_out: true` result means the run was killed, not that nothing needed cleaning. | Dry-run unless `confirm:true` **and** "Let agents run cleanups" is on, else blocked. | `confirm` |
+| **burrow_clean** | Removes caches, logs, temp files, leftovers (`mo clean`) — to the **Trash** by default, so `freed_bytes` is 0 on that path and the bytes are in `moved_to_trash_bytes`; every path the engine refused is listed under `protected`. The scan can take minutes on a full disk; a `timed_out: true` result means the run was killed, not that nothing needed cleaning. | Dry-run unless `confirm:true` **and** "Let agents run cleanups" is on, else blocked. | `confirm` |
 | **burrow_optimize** | Refreshes caches/services, safe maintenance (`mo optimize`). | Same gate as clean. | `confirm` |
 | **burrow_uninstall** | Removes the `.app` bundle **and** its per-app data under `~/Library`. `apps` takes `bundle_id`s from `burrow_list_apps`. Bundle and files move to the Trash unless `permanent:true` (then deleted outright). **Exception:** an app with `source: "Homebrew"` is removed by `brew uninstall --cask --zap <token>` — no Trash, and `--zap` also deletes cask-declared data the preview can't list; say so before confirming. The dry run's `requires_admin` means the bundle needs an administrator: over MCP the run is **never elevated** (an agent can't answer the prompt), so expect `partial`/`refused` for that app and send the user to the Burrow app, which does prompt. **Outcomes are per app** — `apps[].status` is `removed`, `partial` (bundle came off, some files did not, or vice versa) or `refused` (nothing for that app touched, support files left alone too); report them with the engine's `suggestion` rather than summarising the run as done. | Needs `confirm:true` **and both** opt-ins; aborts unless the engine resolves exactly the apps you named (an ambiguous name is refused, never guessed). | `apps` (required), `confirm`, `permanent` |
 | **burrow_evict** | Evicts the *local copies* of cloud-synced files (iCloud Drive) via `burrow evict` — they stay in the cloud and re-download on access, so disk is reclaimed and nothing is deleted. Paths must be absolute and exist. macOS only. | Dry-run (existence report) unless `confirm:true` **and** "Let agents run cleanups" is on, else blocked. | `paths` (required), `confirm` |
-| **burrow_purge** | Finds dev build artifacts (`node_modules`, `target/`, …). | **Preview-only over MCP** — returns the dry-run list; the real purge is an interactive flow in the app. | `confirm` (reserved) |
-| **burrow_installer** | Finds leftover installers (`.dmg`/`.pkg`/…). | **Preview-only over MCP**, like purge. | `confirm` (reserved) |
+| **burrow_purge** | Finds dev build artifacts (`node_modules`, `target/`, …). | **Preview-only over MCP** — returns the dry-run list; the real purge runs from the Burrow app (a streamed preview, one confirmation, everything found to the Trash — the engine has no per-project selection). | `confirm` (reserved) |
+| **burrow_installer** | Finds leftover installers (`.dmg`/`.pkg`/…). | **Preview-only over MCP**, like purge; the app runs it. | `confirm` (reserved) |
 
 Every actuating call is recorded to Burrow's audit log, so the user can see what an agent did —
 and `burrow_agent_audit` reads that log back, so you can see it too.
+
+**How these differ from the app.** Over MCP every tool is one buffered call: the engine's
+`{ok, data|error}` envelope, passed through. The app itself runs the engine's live paths —
+`status --watch` (one long-lived stream feeding the dashboard and the history these tools read),
+`analyze --progress` (the treemap fills as the walk runs), `clean|optimize|purge --stream`
+(one NDJSON line per item, live even when elevated), and a reviewed clean that writes the
+ticked paths to a plan file and runs `clean --apply --plan <file>` so Confirm never re-scans.
+None of that changes what the tools above return; it is why `burrow_cleanup_history` and
+`burrow_deleted_files` see app runs and agent runs alike.
 
 ---
 

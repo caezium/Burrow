@@ -141,7 +141,7 @@ stdio bridge, CI, tests, and unsigned release packaging.
 |---|---|---|
 | **Status** | Live dashboard with per-metric sparklines and a sortable/pinnable process table. | `mo status --json` |
 | **Clean** | Preview what's reclaimable, then clean for real — categorized cache/log/leftover removal. | `mo clean` |
-| **Purge** | Reclaim space from dev projects: `node_modules`, build dirs, `target/`, `__pycache__`, and more. | `mo purge` |
+| **Purge** | Reclaim space from dev projects: `node_modules`, build dirs, `target/`, `__pycache__`, and more — preview streams in, one confirmation, everything found goes to the Trash. | `mo purge` |
 | **Installers** | Find and remove leftover `.dmg`/`.pkg` installer files in bulk. | `mo installer` |
 | **Optimize** | One-tap safe maintenance: rebuild caches, repair metadata, flush DNS, restart Dock/Finder. | `mo optimize` |
 | **Software** | Installed-app list with search/sort (size, name, recent, source) and multi-select uninstall; a Homebrew **Updates** tab. | `mo uninstall --list`, `brew outdated` |
@@ -561,13 +561,25 @@ For local GUI smoke checks:
 ### macOS
 
 ```
-Contents/Resources/burrow  (burrow-engine, one binary; every reply is a {ok, data|error} envelope)
-burrow status --json    ──>  Sampler ──> SQLite (WAL) ──┬─> Status / History (charts)
-                                                        ├─> HTTP QueryServer (:9277)
-                                                        └─> Burrow --mcp (stdio) ─> Claude Code / Cursor / Codex
-burrow analyze --json   ──>  DiskScanner + squarified Treemap ──────> Analyze
-burrow clean|optimize --stream ─> OperationFlow (NDJSON, elevated via helper or osascript) ─> Clean / Optimize
-burrow uninstall --dry-run / --apply ─> Software (un-elevated; elevated when the bundle needs admin)
+Contents/Resources/burrow  (burrow-engine, one binary; one {ok, data|error} envelope per command,
+                            NDJSON when streamed)
+burrow status --watch          ──> SnapshotProducer (one long-lived stream, one line per tick;
+                                   polls `status --json` only if the stream drops)
+                                   ──> SQLite (WAL) ──┬─> Status / History (charts)
+                                                      ├─> HTTP QueryServer (:9277)
+                                                      └─> Burrow --mcp (stdio) ─> Claude Code / Cursor / Codex
+burrow analyze --progress <p>  ──> live file/dir/byte ticks, then the full payload
+                                   ──> DiskScanner + squarified Treemap ─> Analyze
+                                   (one `analyze` per child directory is the fallback)
+burrow clean|optimize|purge --stream ─> OperationFlow (NDJSON, live on both elevation routes:
+                                        the helper relays stdout over XPC, osascript tails the
+                                        root shell's log) ─> Clean / Optimize / Purge
+burrow clean --apply --permanent --plan <file> --stream
+                               ──> the reviewed clean: Confirm writes the ticked paths to a plan
+                                   file and the engine removes only those — no re-scan — and
+                                   reports each one back (removed / failed / protected + reason)
+burrow installer, uninstall [--apply] ─> Installers / Software (buffered envelope; uninstall is
+                                        elevated only when the bundle needs an administrator)
 burrow dupes|orphans|photos|net --json ─> Duplicates / Leftovers / Photos / Network (+ fclones sidecar)
 ```
 
