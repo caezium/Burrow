@@ -32,6 +32,10 @@
 	<string>Burrow scans your Downloads for leftover installer files (.dmg, .pkg).</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT License. © 2026 Henry Zhang.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Burrow needs Location access to read nearby Wi-Fi network names and channels. macOS ties Wi-Fi details to Location Services; Burrow never records or shares your location.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Burrow needs Location access to read nearby Wi-Fi network names and channels. macOS ties Wi-Fi details to Location Services; Burrow never records or shares your location.</string>
 	<key>NSRemovableVolumesUsageDescription</key>
 	<string>Burrow analyzes external drives when you point it at them.</string>
 	<key>PHPostHogApiKey</key>

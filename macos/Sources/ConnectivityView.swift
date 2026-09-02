@@ -32,6 +32,9 @@ struct ConnectivityView: View {
     @State private var nearby: [NearbyNetworks.Net] = []
     @State private var scanning = false
     @State private var scanned = false
+    /// The last scan was refused Location access (#416) — the card explains
+    /// and links to the pane, instead of claiming "no networks".
+    @State private var scanDenied = false
     /// On-demand throughput + latency test (PRD §β). User-initiated — it
     /// transfers data to/from Cloudflare's public speed endpoint.
     @State private var speed: SpeedTest.Result?
@@ -197,8 +200,19 @@ struct ConnectivityView: View {
                                 .foregroundStyle(Brand.textSecondary).frame(width: 64, alignment: .trailing)
                         }
                     }
+                } else if scanDenied, !scanning {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(NSLocalizedString("macOS only shows Wi-Fi network names to apps with Location access. Allow Burrow under System Settings ▸ Privacy & Security ▸ Location Services, then rescan.", comment: ""))
+                            .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button { NSWorkspace.shared.open(LocationAccess.settingsURL) } label: {
+                            Text(NSLocalizedString("Open Settings", comment: ""))
+                                .font(Brand.sans(11, .semibold)).foregroundStyle(accent)
+                        }.buttonStyle(.plain)
+                    }
                 } else if scanned, !scanning {
-                    Text(NSLocalizedString("No networks found — scanning needs Location access (System Settings ▸ Privacy & Security ▸ Location).", comment: ""))
+                    Text(NSLocalizedString("No networks found. Check that Wi-Fi is on, then rescan.", comment: ""))
                         .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if !scanned {
@@ -334,19 +348,33 @@ struct ConnectivityView: View {
 
     private func scanNearby() {
         scanning = true
-        Task.detached(priority: .utility) {
-            let nets = ConnectivityView.scanNearbyNetworks()
-            await MainActor.run {
-                nearby = nets
-                scanning = false
-                scanned = true
+        Task {
+            // Ask for Location first (#416): CoreWLAN returns nameless networks
+            // without the grant and never prompts for it on its own. The first
+            // Scan raises the system dialog; later ones return at once.
+            let status = await LocationAuthorizer.shared.requestAuthorization()
+            switch LocationAccess.verdict(for: status) {
+            case .ready:
+                scanDenied = false
+                nearby = await Task.detached(priority: .utility) { ConnectivityView.scanNearbyNetworks() }.value
+                if venue == nil {
+                    // The SSID was hidden behind the same grant — a fresh grant
+                    // can surface the venue card now.
+                    let ssid = await Task.detached(priority: .utility) { ConnectivityView.currentSSID() }.value
+                    venue = ssid.flatMap { VenueMatcher.match(ssid: $0) }
+                }
+            case .ask, .denied:
+                scanDenied = true
+                nearby = []
             }
+            scanning = false
+            scanned = true
         }
     }
 
-    /// Active scan via CoreWLAN. Throws/empty without Location access or off
-    /// Wi-Fi → the card shows the permission hint. A scan briefly disrupts the
-    /// link, so it's only ever user-initiated.
+    /// Active scan via CoreWLAN. Called only once Location access is granted;
+    /// empty when Wi-Fi is off. A scan briefly disrupts the link, so it's only
+    /// ever user-initiated.
     private static func scanNearbyNetworks() -> [NearbyNetworks.Net] {
         guard let iface = CWWiFiClient.shared().interface() else { return [] }
         let nets = (try? iface.scanForNetworks(withSSID: nil)) ?? []

@@ -89,6 +89,13 @@ targets:
         NSDocumentsFolderUsageDescription: "Burrow scans your Documents for reclaimable project artifacts."
         NSDownloadsFolderUsageDescription: "Burrow scans your Downloads for leftover installer files (.dmg, .pkg)."
         NSRemovableVolumesUsageDescription: "Burrow analyzes external drives when you point it at them."
+        # macOS 14+ hides Wi-Fi network names behind Location Services, and only
+        # prompts for it when the app asks via CoreLocation with a usage string
+        # (#416). Both keys: NSLocationUsageDescription is the macOS key and
+        # WhenInUse the one requestWhenInUseAuthorization documents. Asked
+        # only from the Get Online pane's Scan button, never at launch.
+        NSLocationUsageDescription: "Burrow needs Location access to read nearby Wi-Fi network names and channels. macOS ties Wi-Fi details to Location Services; Burrow never records or shares your location."
+        NSLocationWhenInUseUsageDescription: "Burrow needs Location access to read nearby Wi-Fi network names and channels. macOS ties Wi-Fi details to Location Services; Burrow never records or shares your location."
         # Telemetry keys, expanded from build settings at build time. Empty in
         # dev builds (the defaults below) → analytics/crash reporting stay off.
         # A release injects real values via `xcodebuild VAR=...` (see scripts/).
