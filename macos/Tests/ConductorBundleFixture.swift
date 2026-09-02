@@ -18,14 +18,29 @@ import XCTest
 
 enum ConductorBundleFixture {
 
+    /// A valid, empty success envelope.
+    static let defaultStub = #"printf '{"ok":true,"burrow_cli":"0.1.0","data":{}}'"#
+
+    /// A success envelope whose `data.argv` is the exact argv the app spawned the engine with,
+    /// space-joined — the way a test proves WHAT was sent, not merely that something was.
+    static let argvEchoStub = #"printf '{"ok":true,"burrow_cli":"0.1.0","data":{"argv":"%s"}}' "$*""#
+
+    /// A stub that records that it ran at all by creating `marker`, then answers with the empty
+    /// envelope. A test asserting "nothing was spawned" checks the marker is still absent.
+    static func footprintStub(marker: URL) -> String {
+        "touch '\(marker.path)'\n" + defaultStub
+    }
+
     /// Runs `body` with the conductor lookup pointed at a temporary directory, then restores the
     /// real one. `present: false` leaves the directory empty; `present: true` stages an executable
     /// stub named `burrow`.
     ///
-    /// The stub is never spawned by these tests — resolution only checks the executable bit — but
-    /// it is written as a shell script that emits a valid empty envelope so that a future test
-    /// which does run it gets something parseable rather than a crash.
+    /// The default stub is a shell script that emits a valid empty envelope, so a test that only
+    /// checks resolution gets something parseable if it ever does spawn it. A test that WANTS
+    /// to observe the spawn passes its own `stub` body (`sh` syntax; `$@` is the argv the app
+    /// built) — the two canned ones below cover "echo the argv back" and "leave a footprint".
     static func withConductor<T>(present: Bool,
+                                 stub: String = defaultStub,
                                  file: StaticString = #filePath, line: UInt = #line,
                                  _ body: () throws -> T) rethrows -> T {
         let dir = FileManager.default.temporaryDirectory
@@ -33,10 +48,10 @@ enum ConductorBundleFixture {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         if present {
-            let stub = dir.appendingPathComponent("burrow")
+            let stubURL = dir.appendingPathComponent("burrow")
             FileManager.default.createFile(
-                atPath: stub.path,
-                contents: Data("#!/bin/sh\nprintf '{\"ok\":true,\"data\":{}}'\n".utf8),
+                atPath: stubURL.path,
+                contents: Data(("#!/bin/sh\n" + stub + "\n").utf8),
                 attributes: [.posixPermissions: 0o755])
         }
 

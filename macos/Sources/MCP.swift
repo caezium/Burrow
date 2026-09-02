@@ -247,7 +247,7 @@ struct ToolCatalog {
             ],
             [
                 "name": "burrow_dupes",
-                "description": "Duplicate-file groups under one or more directories via `burrow dupes` (fclones group report). Read-only — reports groups, deletes nothing.",
+                "description": "Duplicate-file groups under one or more directories via `burrow dupes group` (fclones group report). Read-only — reports groups, deletes nothing; the engine's dedupe/remove/link actions are not reachable from this tool. Each path must be an absolute path to an existing directory, else the call is refused before anything runs.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -1342,8 +1342,16 @@ struct ToolCatalog {
         }
     }
 
-    /// `burrow dupes <paths…>` — duplicate-file groups (fclones group
-    /// report; the mutating dedupe/remove/link subcommands are not exposed).
+    /// `burrow dupes group <paths…>` — duplicate-file groups (fclones group report).
+    ///
+    /// The subcommand is HARDCODED to the read-only `group`, never taken from the agent: the
+    /// engine's `dupes` reads its first positional as `group|dedupe|remove|link`, so an agent
+    /// string in that slot could select the mutating `dedupe`/`remove`/`link` actions, and an
+    /// `--apply` anywhere in argv would run them. Every path is therefore validated by
+    /// `Self.scanDirectory` BEFORE anything is spawned — absolute, existing, a directory — which
+    /// is also what keeps a `--flag`-shaped or `dedupe`-shaped string out of the engine's argv.
+    /// No `--` separator: the engine at the pinned commit rejects a bare `--` as an unknown
+    /// option (`reject_unknown_flag`), so the validation IS the separator here.
     private func callDupes(_ args: [String: Any]) throws -> String {
         let paths = (args["paths"] as? [String])?
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -1351,7 +1359,25 @@ struct ToolCatalog {
         guard !paths.isEmpty else {
             throw MCPToolError.badArguments("dupes needs `paths`: one or more directories to scan")
         }
-        return self.callConductor("dupes", paths)
+        let directories = try paths.map { try Self.scanDirectory($0, tool: "dupes") }
+        return self.callConductor("dupes", ["group"] + directories)
+    }
+
+    /// One agent-supplied scan target, admitted to argv only as an absolute path to an existing
+    /// directory. Anything else — a relative path, a flag, a subcommand name, a file, a missing
+    /// directory — is refused with the tool's usual `badArguments` and nothing is spawned.
+    static func scanDirectory(_ path: String, tool: String) throws -> String {
+        guard path.hasPrefix("/") else {
+            throw MCPToolError.badArguments(
+                "\(tool) `paths` must be absolute directories; got `\(path)`")
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw MCPToolError.badArguments(
+                "\(tool) `paths` must name existing directories; `\(path)` is not one")
+        }
+        return path
     }
 
     /// `burrow orphans <dir> [--installed id1,id2,…]` — leftover files

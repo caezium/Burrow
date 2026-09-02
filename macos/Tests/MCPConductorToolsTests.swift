@@ -88,6 +88,51 @@ final class MCPConductorToolsTests: XCTestCase {
         }
     }
 
+    // MARK: - burrow_dupes argv: `group` is pinned, paths are validated, nothing else reaches argv
+
+    /// An agent cannot pick the engine's subcommand or add `--apply`: the strings it hands over are
+    /// validated as directories before anything is spawned, so `dedupe`/`--apply` are refused as
+    /// bad arguments and the (footprint-recording) stub engine is never run.
+    func testDupes_agentSuppliedSubcommandAndApplyFlag_areRefusedWithoutSpawning() throws {
+        let marker = tempDir.appendingPathComponent("engine-ran")
+        try ConductorBundleFixture.withConductor(
+            present: true, stub: ConductorBundleFixture.footprintStub(marker: marker)) {
+            XCTAssertThrowsError(try catalog.call(name: "burrow_dupes",
+                                                  arguments: ["paths": ["dedupe", "--apply"]])) { err in
+                guard case MCPToolError.badArguments(let message) = err else {
+                    return XCTFail("expected .badArguments, got \(err)")
+                }
+                XCTAssertTrue(message.contains("dedupe"), "the refusal names the offending value: \(message)")
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path),
+                           "a refused call must never spawn the engine")
+        }
+    }
+
+    /// A real absolute directory mixed with one bad entry is still refused whole — the engine
+    /// would otherwise read the bad entry as a flag or a subcommand for the good one.
+    func testDupes_oneRelativePathInTheList_refusesTheWholeCall() throws {
+        let marker = tempDir.appendingPathComponent("engine-ran")
+        try ConductorBundleFixture.withConductor(
+            present: true, stub: ConductorBundleFixture.footprintStub(marker: marker)) {
+            XCTAssertThrowsError(try catalog.call(name: "burrow_dupes",
+                                                  arguments: ["paths": [tempDir.path, "Downloads"]]))
+            XCTAssertThrowsError(try catalog.call(name: "burrow_dupes",
+                                                  arguments: ["paths": [tempDir.appendingPathComponent("missing").path]]))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+        }
+    }
+
+    /// The happy path: the engine receives `dupes group <dir> --json` — `group` spelled by the
+    /// tool, the directory verbatim, and the conductor's `--json` — nothing else.
+    func testDupes_existingAbsoluteDirectory_spawnsTheReadOnlyGroupSubcommand() throws {
+        try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
+            let json = try catalog.call(name: "burrow_dupes", arguments: ["paths": [tempDir.path]])
+            let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertEqual(obj["argv"] as? String, "dupes group \(tempDir.path) --json")
+        }
+    }
+
     // MARK: - Required-argument validation (before any conductor spawn)
 
     func testDupes_withoutPaths_throwsBadArguments() {
