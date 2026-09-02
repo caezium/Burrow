@@ -248,6 +248,55 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('(cd "$RUNNER_TEMP" && git clone', tap_step)
         self.assertIn('cd "$TAP_DIR"', tap_step)
 
+    def test_windows_release_scopes_engine_credentials_and_pins_actions(self) -> None:
+        workflow = (WORKFLOWS / "windows-release.yml").read_text(encoding="utf-8")
+        windows_ci = (WORKFLOWS / "windows-ci.yml").read_text(encoding="utf-8")
+
+        # The engine token may never be written to persistent git config: a `--global`
+        # rewrite outlives the step that set it and becomes the credential every later
+        # step (and every later `git` invocation) silently uses.
+        for text in (workflow, windows_ci):
+            self.assertNotIn("git config --global", text)
+        # ENGINE_PAT is used exactly two ways, both process-scoped: a `git -c` on the one
+        # clone, and the GIT_CONFIG_* environment for the one cargo build — removed again in
+        # `finally` so nothing after the build inherits it.
+        for line in workflow.splitlines():
+            if "insteadOf" in line and not line.strip().startswith("#"):
+                self.assertTrue(
+                    'git -c "url.' in line or "GIT_CONFIG_KEY_0" in line,
+                    f"unscoped credential rewrite: {line.strip()}",
+                )
+        build_start = workflow.index("- name: Build + stage burrow conductor")
+        build_end = workflow.index("- name: Telemetry key presence")
+        build_step = workflow[build_start:build_end]
+        self.assertIn("$env:GIT_CONFIG_COUNT = '1'", build_step)
+        self.assertIn("Remove-Item Env:GIT_CONFIG_COUNT, Env:GIT_CONFIG_KEY_0, Env:GIT_CONFIG_VALUE_0", build_step)
+        self.assertEqual(
+            workflow.count("ENGINE_PAT: ${{ secrets.ENGINE_PAT }}"),
+            1,
+            "the engine token belongs to the conductor build step alone",
+        )
+        # burrow-cli is private: exactly one clone, authenticated, and the run fails closed
+        # when the token is absent — no unauthenticated first attempt to mask a 403.
+        self.assertEqual(build_step.count("clone --quiet https://github.com/caezium/burrow-cli.git"), 1)
+        self.assertIn("if (-not $env:ENGINE_PAT)", build_step)
+        self.assertIn("exit 1", build_step)
+        # The publish output is hard-asserted, never warned about.
+        self.assertIn('Assets\\burrow.exe missing', workflow)
+
+        # Every action in both Windows workflows is pinned to a commit SHA with a version
+        # comment, like ci.yml — a floating major tag is whatever the publisher pushes next.
+        for name, text in (("windows-release.yml", workflow), ("windows-ci.yml", windows_ci)):
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith(("uses:", "- uses:")):
+                    continue
+                self.assertRegex(
+                    stripped,
+                    r"uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+$",
+                    f"{name}: unpinned action: {stripped}",
+                )
+
     def test_release_notes_are_validated_before_sparkle_embeds_them(self) -> None:
         workflow = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
 

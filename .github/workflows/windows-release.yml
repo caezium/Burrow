@@ -42,11 +42,12 @@ jobs:
       BURROWWIN_POSTHOG_API_KEY: ${{ secrets.BURROWWIN_POSTHOG_API_KEY }}
       BURROWWIN_POSTHOG_HOST: ${{ secrets.BURROWWIN_POSTHOG_HOST }}
     steps:
-      # Pinned to a SHA (supply-chain hygiene), matching windows-ci.yml.
+      # Every action is pinned to a commit SHA (supply-chain hygiene), matching ci.yml; the
+      # version comment is what a reviewer bumps, the SHA is what actually runs.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 8.0.x
 
@@ -97,13 +98,24 @@ jobs:
             Write-Host "::error::cloned caezium/burrow-cli, but commit $sha does not exist on any branch there."
             exit 1
           }
-          # cargo build fetches the private burrow-engine — authorize github.com for the CLI
-          # fetcher. Set AFTER the burrow-cli clone above so this broader rewrite can't affect
-          # that clone's own explicit (and narrower, -c-scoped) token use.
-          git config --global url."https://x-access-token:$($env:ENGINE_PAT)@github.com/".insteadOf "https://github.com/"
-          cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::cargo build of burrow-cli failed (exit $LASTEXITCODE)."
+          # cargo build fetches the private burrow-engine crate over git — authorize github.com
+          # for the CLI fetcher through a PROCESS-SCOPED rewrite (GIT_CONFIG_COUNT/KEY/VALUE are
+          # read by git from the environment and written nowhere), the same shape release.yml
+          # used for its conductor build. It used to be a GLOBAL url.insteadOf rewrite, which
+          # persisted the token in the runner's ~/.gitconfig for every later step in the job —
+          # none of them should ever authenticate as the engine token. The variables are
+          # removed again in `finally` so even a later step in THIS shell would not inherit them.
+          try {
+            $env:GIT_CONFIG_COUNT = '1'
+            $env:GIT_CONFIG_KEY_0 = "url.https://x-access-token:$($env:ENGINE_PAT)@github.com/.insteadOf"
+            $env:GIT_CONFIG_VALUE_0 = 'https://github.com/'
+            cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
+            $cargoExit = $LASTEXITCODE
+          } finally {
+            Remove-Item Env:GIT_CONFIG_COUNT, Env:GIT_CONFIG_KEY_0, Env:GIT_CONFIG_VALUE_0 -ErrorAction SilentlyContinue
+          }
+          if ($cargoExit -ne 0) {
+            Write-Host "::error::cargo build of burrow-cli failed (exit $cargoExit)."
             exit 1
           }
           Copy-Item (Join-Path $dest 'target\release\burrow.exe') 'windows\Assets\burrow.exe' -Force
@@ -144,7 +156,7 @@ jobs:
           Write-Host "conductor: present / engine: present"
 
       - name: Upload published app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: burrowwin-win-x64-publish
           path: windows/artifacts/release-publish
