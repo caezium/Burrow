@@ -1,0 +1,235 @@
+{
+  "collected_at": "2026-07-16T10:48:50.611799-07:00",
+  "host": "Henrys-MacBook.local",
+  "platform": "darwin 26.5.2",
+  "uptime": "3d 2h",
+  "uptime_seconds": 267575,
+  "procs": 717,
+  "hardware": {
+    "model": "MacBook Pro",
+    "cpu_model": "Apple M4 Pro",
+    "total_ram": "24.0 GB",
+    "disk_size": "460.4 GB",
+    "os_version": "macOS 26.5.2",
+    "refresh_rate": ""
+  },
+  "health_score": 73,
+  "health_score_msg": "Good: Disk Almost Full",
+  "cpu": {
+    "usage": 41.240981239374186,
+    "per_core": [
+      55.555555559148615,
+      44.44444444085138,
+      40.000000023283064,
+      44.44444445702017,
+      11.111111118297243,
+      19.999999994179234,
+      27.272727275132546,
+      19.999999988358468,
+      9.999999979627319,
+      54.54545455026509,
+      59.9999999825377,
+      69.9999999825377,
+      60.000000005820766,
+      59.999999994179234
+    ],
+    "per_core_estimated": false,
+    "load1": 5.96484375,
+    "load5": 7.1875,
+    "load15": 6.796875,
+    "core_count": 14,
+    "logical_cpu": 14,
+    "p_core_count": 10,
+    "e_core_count": 4
+  },
+  "gpu": [
+    {
+      "name": "Apple M4 Pro",
+      "usage": -1,
+      "memory_used": 0,
+      "memory_total": 0,
+      "core_count": 20,
+      "note": "sppci_vendor_Apple"
+    }
+  ],
+  "memory": {
+    "used": 20947140608,
+    "total": 25769803776,
+    "available": 4822663168,
+    "used_percent": 81.28560384114583,
+    "swap_used": 12517769216,
+    "swap_total": 13958643712,
+    "cached": 3232694272,
+    "pressure": ""
+  },
+  "disks": [
+    {
+      "mount": "/",
+      "device": "/dev/disk3s1s1",
+      "used": 487365140480,
+      "total": 494384795648,
+      "used_percent": 98.58012316928169,
+      "fstype": "apfs",
+      "external": false
+    },
+    {
+      "mount": "/Library/Developer/CoreSimulator/Volumes/iOS_23B86",
+      "device": "/dev/disk5s1",
+      "used": 17111867392,
+      "total": 17572036608,
+      "used_percent": 97.3812414220074,
+      "fstype": "apfs",
+      "external": true
+    }
+  ],
+  "trash_size": 616010685,
+  "trash_approx": false,
+  "disk_io": {
+    "read_rate": 0,
+    "write_rate": 0
+  },
+  "network": [
+    {
+      "name": "en0",
+      "rx_rate_mbs": 0.018720626831054688,
+      "tx_rate_mbs": 0.001373291015625,
+      "ip": "192.168.1.70"
+    },
+    {
+      "name": "en4",
+      "rx_rate_mbs": 0,
+      "tx_rate_mbs": 0,
+      "ip": ""
+    },
+    {
+      "name": "en5",
+      "rx_rate_mbs": 0,
+      "tx_rate_mbs": 0,
+      "ip": ""
+    }
+  ],
+  "network_history": {
+    "rx_history": [
+      0.018720626831054688
+    ],
+    "tx_history": [
+      0.001373291015625
+    ]
+  },
+  "proxy": {
+    "enabled": true,
+    "type": "HTTP",
+    "host": "127.0.0.1:1082"
+  },
+  "batteries": [
+    {
+      "percent": 100,
+      "status": "discharging",
+      "time_left": "4:52",
+      "health": "Good",
+      "cycle_count": 595,
+      "capacity": 91
+    }
+  ],
+  "thermal": {
+    "cpu_temp": 0,
+    "gpu_temp": 0,
+    "battery_temp": 30.69,
+    "fan_speed": 0,
+    "fan_count": 0,
+    "system_power": 0,
+    "adapter_power": 0,
+    "battery_power": -21.568
+  },
+  "sensors": null,
+  "bluetooth": [
+    {
+      "name": "Rainy 75-1",
+      "connected": false,
+      "battery": ""
+    },
+    {
+      "name": "DualSense Wireless Controller",
+      "connected": false,
+      "battery": ""
+    },
+    {
+      "name": "henry’s Mac Studio",
+      "connected": false,
+      "battery": ""
+    },
+    {
+      "name": "Henwy’s Ipad",
+      "connected": false,
+      "battery": ""
+    },
+    {
+      "name": "Hidden Network",
+      "connected": false,
+      "battery": ""
+    },
+    {
+      "name": "K1 LITE_5.0 ",
+      "connected": false,
+      "battery": ""
+    },
+    {
+      "name": "MOMENTUM 4",
+      "connected": false,
+      "battery": ""
+    }
+  ],
+  "top_processes": [
+    {
+      "pid": 602,
+      "ppid": 1,
+      "name": "WindowServer",
+      "command": "WindowServer",
+      "cpu": 43.9,
+      "memory": 0.4,
+      "memory_bytes": 90914816
+    },
+    {
+      "pid": 74492,
+      "ppid": 1,
+      "name": "zen",
+      "command": "zen",
+      "cpu": 41.1,
+      "memory": 3.3,
+      "memory_bytes": 848871424
+    },
+    {
+      "pid": 1369,
+      "ppid": 1,
+      "name": "Finder",
+      "command": "Finder",
+      "cpu": 33.5,
+      "memory": 0.2,
+      "memory_bytes": 45006848
+    },
+    {
+      "pid": 1159,
+      "ppid": 1,
+      "name": "fileproviderd",
+      "command": "fileproviderd",
+      "cpu": 31.1,
+      "memory": 0.2,
+      "memory_bytes": 48431104
+    },
+    {
+      "pid": 49964,
+      "ppid": 49963,
+      "name": "claude",
+      "command": "claude",
+      "cpu": 23.7,
+      "memory": 0.8,
+      "memory_bytes": 217563136
+    }
+  ],
+  "process_watch": {
+    "enabled": true,
+    "cpu_threshold": 100,
+    "window": "5m0s"
+  },
+  "process_alerts": []
+}
