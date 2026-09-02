@@ -147,6 +147,10 @@ final class SnapshotProducerEngineTests: XCTestCase {
             return t
         }
 
+        /// Timers armed and not yet fired or cancelled — how a test observes that the
+        /// producer re-armed its poll after the watch stream ended, without a wall clock.
+        var pending: Int { scheduled.filter { !$0.token.cancelled }.count }
+
         func advance(by interval: TimeInterval) {
             let target = current.addingTimeInterval(interval)
             while true {
@@ -308,6 +312,66 @@ final class SnapshotProducerEngineTests: XCTestCase {
         p.start()
         XCTAssertNil(MetricsStore(db: db).latest(), "malformed snapshot never reaches the DB")
         XCTAssertNil(p.live.lastSnapshot)
+    }
+
+    // MARK: `status --watch`
+
+    /// Spin the main run loop until `condition` holds. The watch consumer is a Task that
+    /// publishes through `DispatchQueue.main.async`, so a synchronous assertion right after
+    /// `start()` would race it; everything else in this file is clock-driven and needs no wait.
+    private func waitUntil(_ what: String, timeout: TimeInterval = 3,
+                           file: StaticString = #filePath, line: UInt = #line,
+                           _ condition: () -> Bool) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() && Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+        XCTAssertTrue(condition(), "timed out waiting for \(what)", file: file, line: line)
+    }
+
+    /// One long-lived `status --watch` process feeds the dashboard: every NDJSON line is
+    /// published, only lines due at the configured interval are persisted, and NO poll is
+    /// spawned while the stream is alive. When the stream ends the producer falls back to
+    /// polling — armed only then, so a dropped stream never freezes the dashboard and a live
+    /// one is never doubled by a per-tick spawn.
+    func testWatchStream_publishesEveryLine_persistsThrottled_thenFallsBackToPolling() throws {
+        let clock = ManualClock(start: Date(timeIntervalSince1970: 0))
+        var polls = 0
+        let status = CannedStatus(json: { polls += 1; return self.holeyJSON(seq: polls) })
+        // The fixture stream: three ticks the engine would write (`status --watch` emits the
+        // buffered `status` data object per line), then the process exiting.
+        func tick(_ seq: Int, health: Int) -> String {
+            holeyJSON(seq: seq).replacingOccurrences(of: "\"health_score\":90", with: "\"health_score\":\(health)")
+        }
+        let watch = AsyncStream<ProcessEvent> { cont in
+            cont.yield(.line(tick(10, health: 71)))
+            cont.yield(.line(tick(11, health: 72)))
+            cont.yield(.line(tick(12, health: 73)))
+            cont.yield(.exited(0))
+            cont.finish()
+        }
+        var vended = 0
+        let p = SnapshotProducer(deps: .init(status: status, hardware: FakeCounters(), clock: clock,
+                                             sink: DBSnapshotSink(db: db),
+                                             snapshotInterval: { 60 }, work: { $0() },
+                                             statusWatch: { vended += 1; return watch }))
+        p.setForeground(true)   // someone is watching, so non-persisted lines still publish
+        p.start()
+
+        XCTAssertEqual(vended, 1, "the stream is opened once, not per tick")
+        XCTAssertEqual(polls, 1, "one seed poll before the stream takes over")
+        waitUntil("the last streamed line to publish") { p.live.lastSnapshot?.healthScore == 73 }
+        XCTAssertEqual(persistedCount(), 2,
+                       "the seed sample plus the first streamed line; the next two are within the "
+                       + "60 s interval and are published only")
+        XCTAssertEqual(polls, 1, "no `status --json` spawn while the stream is live")
+
+        // The stream ended → the poll cadence is armed as the fallback (live timer + poll).
+        waitUntil("the poll timer to be re-armed after the stream ended") { clock.pending == 2 }
+        clock.advance(by: 5)    // foreground poll cadence: min(5, configured 60)
+        XCTAssertEqual(polls, 2, "polling resumed once the stream was gone")
+        XCTAssertEqual(persistedCount(), 3)
+        XCTAssertEqual(p.live.lastSnapshot?.healthScore, 90, "the poll's snapshot is published too")
     }
 
     func testStop_cancelsBothCadences() {

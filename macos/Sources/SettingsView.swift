@@ -500,7 +500,7 @@ struct SettingsView: View {
                                     (60, "60 sec"), (120, "2 min"), (300, "5 min")]) {
                     Store.sampleIntervalSeconds = $0
                 }
-                footnote("With Mole 1.44+ Burrow streams `mo status --watch` for live status; on older mo it falls back to polling `mo status --json` at this cadence. 60 s is plenty for charts; tighter intervals give finer detail at the cost of more subprocess churn.")
+                footnote("Burrow streams `status --watch` from the bundled engine for live status, and this is how often a snapshot is written to history. If the stream ever drops (or a system mo older than 1.44 is in use) it falls back to polling `status --json` at this cadence. 60 s is plenty for charts; tighter intervals give finer detail at the cost of more history rows.")
             }
         }
     }

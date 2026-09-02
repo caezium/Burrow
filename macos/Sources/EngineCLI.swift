@@ -406,21 +406,22 @@ enum EngineCLI {
     ///
     /// Keyed to what answered, not to how big its number is:
     ///
-    ///   * `.envelope` — the Rust `burrow-engine` has no status streamer at all. It rejects
-    ///     the flag outright (`{"ok":false,…,"unknown status option: --watch"}`, exit 2), so
-    ///     there is nothing to stream no matter what it numbers itself. This used to be a
-    ///     `>= 1.44.0` comparison, which returned the right answer for the wrong reason: the
-    ///     engine is a 0.x line, so the compare said no. The day it ships 1.0 that compare
-    ///     silently flips to yes and the app starts asking a hard-erroring command for a
-    ///     stream. When the engine DOES grow a streamer it has to announce it — a capability
-    ///     field in the `version` payload, read here — never re-derived from the number.
+    ///   * `.envelope` — the bundled `burrow-engine` streams (`status --watch [--interval s]`,
+    ///     one NDJSON line per tick, each line the same object `status` puts in its envelope's
+    ///     `data`; exits 0 when the reader closes the pipe — BUR-132). The engine ships INSIDE
+    ///     the app and has no version drift the app could be behind, so the answer for an
+    ///     envelope-speaking engine is simply yes: there is no older envelope engine this build
+    ///     can be paired with. Note it is a capability answer, not a version compare — the
+    ///     engine numbers itself on a 0.x line that has nothing to do with mo's, and a compare
+    ///     against `minimumWatchVersion` here would be meaningless (it used to be, and it
+    ///     said "no" for the wrong reason).
     ///   * `.moBanner` — mo-family, so mo's scale applies and the version compare is
-    ///     meaningful. Note the fork shares the Rust engine's product name; only `kind`
+    ///     meaningful. Note the digger fork shares the Rust engine's product name; only `kind`
     ///     tells them apart, which is why this switches on `kind` first.
     static func supportsWatch(_ engine: EngineVersion) -> Bool {
         switch engine.kind {
         case .envelope:
-            return false
+            return true
         case .moBanner:
             let minimum = engine.name.caseInsensitiveCompare(diggerForkName) == .orderedSame
                 ? minimumDiggerForkWatchVersion

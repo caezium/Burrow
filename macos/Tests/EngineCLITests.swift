@@ -118,18 +118,18 @@ final class EngineCLITests: XCTestCase {
     // It must key off WHICH program answered, because the two number themselves on scales
     // that have nothing to do with each other.
 
-    func testSupportsWatch_theRustEngineNeverStreamsHoweverItNumbersItself() throws {
+    func testSupportsWatch_theBundledEngineStreamsWhateverItNumbersItself() throws {
         let today = try XCTUnwrap(EngineCLI.parseVersionReport(Captured(stdout: Self.engineVersionStdout, stderr: "", exitCode: 0)))
-        XCTAssertFalse(EngineCLI.supportsWatch(today))
+        XCTAssertTrue(EngineCLI.supportsWatch(today),
+                      "the bundled engine serves `status --watch` (BUR-132); the app streams it")
 
-        // The regression this replaces: the old gate was `version >= 1.44.0`, which said no
-        // only because the engine is a 0.x line. Ship 1.0 and it silently flipped to yes —
-        // and `status --watch` is a hard error on this engine
-        // (`{"ok":false,…,"unknown status option: --watch"}`, exit 2).
-        for shipped in ["1.0.0", "1.44.0", "2.7.3"] {
+        // The answer is a capability of WHAT answered, never a compare against mo's scale: the
+        // engine's 0.x numbering sits below every `minimum*Version` in EngineCLI, and a compare
+        // there once returned "no" for the wrong reason. Whatever it numbers itself, it streams.
+        for shipped in ["0.1.0", "1.0.0", "1.44.0", "2.7.3"] {
             let future = EngineCLI.EngineVersion(version: shipped, name: "burrow-engine", kind: .envelope)
-            XCTAssertFalse(EngineCLI.supportsWatch(future),
-                           "the engine at \(shipped) still has no status streamer")
+            XCTAssertTrue(EngineCLI.supportsWatch(future),
+                          "the envelope engine at \(shipped) still streams")
         }
     }
 
