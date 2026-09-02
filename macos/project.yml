@@ -126,10 +126,11 @@ targets:
         copy:
           destination: executables
     postBuildScripts:
-      - name: Bundle burrow-engine (MIT)
+      - name: Bundle burrow-engine (FSL-1.1)
         basedOnDependencyAnalysis: false
         script: |
-          # Build the ONE MIT `burrow-engine` binary and stage it as Resources/burrow — it does all
+          # Build the ONE `burrow-engine` binary (FSL-1.1-ALv2, see NOTICE) and stage it as
+          # Resources/burrow — it does all
           # the work natively AND emits the stable Burrow envelope + NDJSON streaming, so a single
           # bundled binary serves every command (no separate engine dir, no conductor).
           #

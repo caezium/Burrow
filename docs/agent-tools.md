@@ -17,8 +17,8 @@ of either era. See [Protocol surface](#protocol-surface) at the bottom.
 
 - **Read-only (23)** — observe and diagnose. Always safe; call these proactively whenever a
   question is about *this machine's* state, history, or health.
-- **Actuating, gated (5)** — clean / optimize / uninstall / purge / installer. **Preview by
-  default** (`--dry-run`); a real run needs `confirm: true` **and** the user's Settings
+- **Actuating, gated (6)** — clean / optimize / uninstall / purge / installer / evict. **Preview
+  by default** (`--dry-run`); a real run needs `confirm: true` **and** the user's Settings
   opt-in ("Let agents run cleanups", plus a second switch for uninstall). Without the opt-in
   the call is refused and reported as blocked — so it's safe to attempt, but never assume it
   will execute.
@@ -89,6 +89,7 @@ it. Real cleans run at user level (not elevated).
 | **burrow_clean** | Removes caches, logs, temp files, leftovers (`mo clean`). The scan can take minutes on a full disk; a `timed_out: true` result means the run was killed, not that nothing needed cleaning. | Dry-run unless `confirm:true` **and** "Let agents run cleanups" is on, else blocked. | `confirm` |
 | **burrow_optimize** | Refreshes caches/services, safe maintenance (`mo optimize`). | Same gate as clean. | `confirm` |
 | **burrow_uninstall** | Uninstalls apps + leftovers (`mo uninstall`). Files go to Trash unless `permanent:true`. | Needs `confirm:true` **and both** opt-ins; aborts unless the matcher resolves exactly the apps you named. Call `burrow_list_apps` first. | `apps` (required), `confirm`, `permanent` |
+| **burrow_evict** | Evicts the *local copies* of cloud-synced files (iCloud Drive) via `burrow evict` — they stay in the cloud and re-download on access, so disk is reclaimed and nothing is deleted. Paths must be absolute and exist. macOS only. | Dry-run (existence report) unless `confirm:true` **and** "Let agents run cleanups" is on, else blocked. | `paths` (required), `confirm` |
 | **burrow_purge** | Finds dev build artifacts (`node_modules`, `target/`, …). | **Preview-only over MCP** — returns the dry-run list; the real purge is an interactive flow in the app. | `confirm` (reserved) |
 | **burrow_installer** | Finds leftover installers (`.dmg`/`.pkg`/…). | **Preview-only over MCP**, like purge. | `confirm` (reserved) |
 
@@ -113,7 +114,7 @@ answers, so a host can offer the right investigation as one click.
 
 **Tasks** — a client that declares `io.modelcontextprotocol/tasks` gets a task handle instead
 of a blocking call for the slow tools (`burrow_analyze`, `burrow_dupes`, `burrow_photos`,
-`burrow_orphans`, and the five actuating ones). Poll `tasks/get` until terminal; pass a
+`burrow_orphans`, and the actuating clean/optimize/uninstall/purge/installer). Poll `tasks/get` until terminal; pass a
 `progressToken` if you want `notifications/progress` while it runs. Without the extension the
 same call behaves exactly as before. This is what stops a multi-minute clean coming back as
 `timed_out: true`, which reads like "nothing to clean" when it means "we gave up".

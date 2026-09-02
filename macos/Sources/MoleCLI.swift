@@ -234,13 +234,13 @@ enum MoleCLI {
         engineUpdateInstruction(for: currentEngineUpdatePolicy)
     }
 
-    /// The MIT engine normally ships BUNDLED inside the app (zero install). This is only the
-    /// fallback hint shown if the bundled copy is somehow unavailable — reinstalling the app
-    /// restores it.
+    /// The engine ships BUNDLED inside the app (zero install). This is only the fallback hint
+    /// shown if the bundled copy is somehow unavailable — reinstalling the app restores it.
+    /// `caezium/tap/burrow` is the cask `release.yml` bumps in caezium/homebrew-tap.
     static let installCommand = "brew reinstall --cask caezium/tap/burrow"
-    /// The engine fork (the MIT engine is bundled with the app, pinned at mo's last MIT
-    /// release before upstream relicensed to GPL-3.0).
-    static let repoURL = URL(string: "https://github.com/caezium/burrow-digger")!
+    /// The bundled engine's source: `caezium/burrow-engine` (FSL-1.1-ALv2, the crate the
+    /// vendor/burrow-engine submodule tracks). Not the retired burrow-digger fork.
+    static let repoURL = URL(string: "https://github.com/caezium/burrow-engine")!
 
     /// What the resolved engine binary answered when asked for its version.
     ///

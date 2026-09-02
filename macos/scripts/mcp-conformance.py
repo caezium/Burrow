@@ -110,7 +110,7 @@ check("tools/list.ttlMs", isinstance(tl.get("ttlMs"), int))
 check("tools/list.cacheScope", tl.get("cacheScope") in ("public", "private"))
 names = [t["name"] for t in tools]
 check("tools/list deterministic order", names == sorted(names), names[:4])
-check("tools/list count", len(tools) == 28, len(tools))
+check("tools/list count", len(tools) == 29, len(tools))
 
 missing_ann = [t["name"] for t in tools if "annotations" not in t]
 check("every tool has annotations", not missing_ann, missing_ann)
@@ -118,7 +118,7 @@ missing_title = [t["name"] for t in tools if "title" not in t]
 check("every tool has a title", not missing_title, missing_title)
 
 ro = {t["name"] for t in tools if t.get("annotations", {}).get("readOnlyHint")}
-mutating = {"burrow_clean", "burrow_optimize", "burrow_uninstall", "burrow_purge", "burrow_installer"}
+mutating = {"burrow_clean", "burrow_optimize", "burrow_uninstall", "burrow_purge", "burrow_installer", "burrow_evict"}
 check("mutating tools are not readOnly", not (ro & mutating), sorted(ro & mutating))
 check("23 read-only tools", len(ro) == 23, len(ro))
 # By name, with .get: a server that omits a tool should FAIL that check and let
@@ -133,7 +133,7 @@ check("burrow_report present", report is not None)
 check("burrow_report has no outputSchema (markdown)",
       bool(report) and "outputSchema" not in report)
 schema_count = sum(1 for t in tools if "outputSchema" in t)
-check("27 tools declare outputSchema", schema_count == 27, schema_count)
+check("28 tools declare outputSchema", schema_count == 28, schema_count)
 
 # ------------------------------------------------------------- tools/call
 r = c.result("tools/call", {"name": "burrow_info", "arguments": {}})

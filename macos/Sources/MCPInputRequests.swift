@@ -61,6 +61,11 @@ enum MCPInputRequests {
                 key: "paths",
                 message: "Which directories should be scanned for duplicate files? Absolute paths, separated by commas.",
                 isList: true, placeholder: "/Users/you/Downloads, /Users/you/Documents")
+        case "burrow_evict" where blankList("paths"):
+            return MissingArgument(
+                key: "paths",
+                message: "Which cloud-synced files or folders should have their local copies evicted? Absolute paths, separated by commas.",
+                isList: true, placeholder: "/Users/you/Library/Mobile Documents/com~apple~CloudDocs/Archive")
         case "burrow_orphans" where blankString("path"):
             return MissingArgument(
                 key: "path",
