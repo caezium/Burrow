@@ -51,7 +51,7 @@ struct PhotosView: View {
     private var toolbar: some View {
         HStack(spacing: 8) {
             Button { model.goUp() } label: {
-                Image(systemName: "arrow.up").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.up").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(model.canGoUp ? Brand.textSecondary : Brand.textTertiary.opacity(0.35))
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
@@ -65,7 +65,7 @@ struct PhotosView: View {
             }
             ForEach(Array(model.crumbs.enumerated()), id: \.offset) { idx, crumb in
                 if idx > 0 {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                    Image(systemName: "chevron.right").font(.system(size: Brand.scaled(9), weight: .semibold))
                         .foregroundStyle(Brand.textTertiary)
                 }
                 Button { model.goToCrumb(idx) } label: {
@@ -81,14 +81,14 @@ struct PhotosView: View {
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             }
             Button { pickFolder() } label: {
-                Image(systemName: "folder").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "folder").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
             .disabled(!BurrowEngine.isAvailable)
             .help(NSLocalizedString("Choose a folder…", comment: ""))
             Button { model.rescan() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(model.folder == nil ? Brand.textTertiary.opacity(0.35) : Brand.textSecondary)
             }
             .buttonStyle(.plain)
@@ -115,7 +115,7 @@ struct PhotosView: View {
 
     private var idleState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "photo.on.rectangle.angled").font(.system(size: 26)).foregroundStyle(Tool.photos.accent)
+            Image(systemName: "photo.on.rectangle.angled").font(.system(size: Brand.scaled(26))).foregroundStyle(Tool.photos.accent)
             Text(NSLocalizedString("Spot the shots that echo", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("Choose a folder and Burrow clusters visually-similar PNG and JPEG images by perceptual hash — near-duplicate screenshots, burst shots, re-exports. Read-only: review the sets, reveal anything in Finder.", comment: ""))
@@ -123,9 +123,9 @@ struct PhotosView: View {
                 .multilineTextAlignment(.center).frame(maxWidth: 440)
             Button { pickFolder() } label: {
                 Text(NSLocalizedString("Choose a folder…", comment: ""))
-                    .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
+                    .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.onInverse)
                     .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(Capsule().fill(.white))
+                    .background(Capsule().fill(Brand.inverse))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -160,7 +160,7 @@ struct PhotosView: View {
         let skipped = report.skippedNote
         return VStack(spacing: 8) {
             Image(systemName: skipped == nil ? "checkmark.circle" : "photo.badge.exclamationmark")
-                .font(.system(size: 24)).foregroundStyle(Tool.photos.accent)
+                .font(.system(size: Brand.scaled(24))).foregroundStyle(Tool.photos.accent)
             Text(skipped == nil
                  ? NSLocalizedString("No look-alikes here", comment: "")
                  : NSLocalizedString("Nothing scannable here", comment: ""))
@@ -211,7 +211,7 @@ struct PhotosView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "photo.stack")
-                    .font(.system(size: 13)).foregroundStyle(Tool.photos.accent)
+                    .font(.system(size: Brand.scaled(13))).foregroundStyle(Tool.photos.accent)
                     .frame(width: 20)
                     .accessibilityHidden(true)
                 Text(String(format: NSLocalizedString("%d look-alike photos", comment: ""), group.paths.count))
@@ -248,7 +248,7 @@ struct PhotosView: View {
             Spacer()
             Button { AnalyzeIcons.reveal(path) } label: {
                 Image(systemName: "magnifyingglass.circle")
-                    .font(.system(size: 12)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(12))).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain)
             .help(NSLocalizedString("Reveal in Finder", comment: ""))
@@ -269,7 +269,7 @@ private struct PhotoThumbView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(Brand.chipFill)
             if let image {
                 Image(nsImage: image)
                     .resizable().aspectRatio(contentMode: .fill)
@@ -277,7 +277,7 @@ private struct PhotoThumbView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             } else {
                 Image(systemName: "photo")
-                    .font(.system(size: 9)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.textTertiary)
             }
         }
         .frame(width: 22, height: 22)

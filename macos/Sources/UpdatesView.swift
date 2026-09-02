@@ -184,7 +184,7 @@ struct UpdatesView: View {
                 }
                 if model.checked, model.availableItems.isEmpty, model.brewItems.isEmpty {
                     VStack(spacing: 10) {
-                        Image(systemName: "checkmark.seal.fill").font(.system(size: 30)).foregroundStyle(Brand.green)
+                        Image(systemName: "checkmark.seal.fill").font(.system(size: Brand.scaled(30))).foregroundStyle(Brand.green)
                         Text("Everything's up to date").font(Brand.serif(18)).foregroundStyle(Brand.textPrimary)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 36)
@@ -311,7 +311,7 @@ struct UpdatesView: View {
         let phase = model.phase(for: item.id)
         return HStack(spacing: 12) {
             Image(systemName: item.kind == "cask" ? "macwindow" : "shippingbox")
-                .font(.system(size: 14)).foregroundStyle(Tool.apps.accent).frame(width: 28)
+                .font(.system(size: Brand.scaled(14))).foregroundStyle(Tool.apps.accent).frame(width: 28)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 7) {
                     Text(item.name).font(Brand.sans(13, .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)

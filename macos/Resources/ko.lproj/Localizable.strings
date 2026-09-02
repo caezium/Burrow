@@ -868,3 +868,13 @@
 "These stay installed — only the reviewed support files move to the Trash, and you can put them back:\n\n%@" = "다음 앱은 설치된 상태로 남습니다. 확인한 관련 파일만 휴지통으로 이동하며, 나중에 되돌릴 수 있습니다:\n\n%@";
 "Remove data from %d app?" = "앱 %d개의 데이터를 삭제할까요?";
 "Remove data from %d apps?" = "앱 %d개의 데이터를 삭제할까요?";
+
+/* Appearance — interface text scale (issue #407; Small/Medium/Large also serve the per-widget menu-bar picker) */
+"Appearance" = "모양";
+"Text size" = "텍스트 크기";
+"Default" = "기본";
+"Small" = "작게";
+"Medium" = "중간";
+"Large" = "크게";
+"Extra Large" = "아주 크게";
+"Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "앱 전체와 메뉴 막대 팝업의 텍스트와 아이콘 크기를 조절합니다. 재실행이 필요 없습니다. 메뉴 막대 항목 자체의 텍스트 크기는 '메뉴 막대'에서 위젯별로 따로 설정합니다.";

@@ -282,11 +282,11 @@ struct TaskReportView: View {
     @ViewBuilder
     private func marker(_ m: TaskMarker) -> some View {
         switch m {
-        case .action: Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(accent)
-        case .ok:     Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Brand.green)
-        case .review: Image(systemName: "exclamationmark.circle.fill").font(.system(size: 9)).foregroundStyle(Brand.gold)
-        case .error:  Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Brand.red)
-        case .info:   Image(systemName: "minus").font(.system(size: 9, weight: .bold)).foregroundStyle(Brand.textTertiary)
+        case .action: Image(systemName: "arrow.right").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(accent)
+        case .ok:     Image(systemName: "checkmark").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(Brand.green)
+        case .review: Image(systemName: "exclamationmark.circle.fill").font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.gold)
+        case .error:  Image(systemName: "xmark").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(Brand.red)
+        case .info:   Image(systemName: "minus").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(Brand.textTertiary)
         }
     }
     private func textColor(_ m: TaskMarker) -> Color {
@@ -322,9 +322,9 @@ struct PillButton: View {
         Button(action: action) {
             Text(NSLocalizedString(title, comment: ""))
                 .font(Brand.sans(13, .semibold))
-                .foregroundStyle(filled ? Color.black : Brand.textPrimary)
+                .foregroundStyle(filled ? Brand.onInverse : Brand.textPrimary)
                 .padding(.horizontal, 22).padding(.vertical, 10)
-                .background(Capsule().fill(filled ? Color.white : Color.white.opacity(0.08)))
+                .background(Capsule().fill(filled ? Brand.inverse : Brand.chipFill))
                 .overlay(filled ? nil : Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -371,7 +371,7 @@ struct ViewLogDisclosure: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: Brand.scaled(9), weight: .semibold))
                         Text("View Log").font(Brand.mono(11))
                         Spacer()
                     }
@@ -409,7 +409,7 @@ struct DoneBanner: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(accent.opacity(0.18)).frame(width: 38, height: 38)
-                Image(systemName: "checkmark").font(.system(size: 16, weight: .bold)).foregroundStyle(accent)
+                Image(systemName: "checkmark").font(.system(size: Brand.scaled(16), weight: .bold)).foregroundStyle(accent)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(NSLocalizedString(title, comment: "")).font(Brand.sans(15, .semibold)).foregroundStyle(Brand.textPrimary)

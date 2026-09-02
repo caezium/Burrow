@@ -61,7 +61,7 @@ struct NetView: View {
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             }
             Button { model.scan() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
@@ -84,7 +84,7 @@ struct NetView: View {
 
     private var idleState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "arrow.up.arrow.down").font(.system(size: 26)).foregroundStyle(Tool.net.accent)
+            Image(systemName: "arrow.up.arrow.down").font(.system(size: Brand.scaled(26))).foregroundStyle(Tool.net.accent)
             Text(NSLocalizedString("Watch what travels the tunnels", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("One nettop sample of every process's bytes in and out, biggest talkers first. Read-only — it names the talkers, it doesn't quiet them.", comment: ""))
@@ -92,9 +92,9 @@ struct NetView: View {
                 .multilineTextAlignment(.center).frame(maxWidth: 440)
             Button { model.scan() } label: {
                 Text(NSLocalizedString("Sample now", comment: ""))
-                    .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
+                    .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.onInverse)
                     .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(Capsule().fill(.white))
+                    .background(Capsule().fill(Brand.inverse))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -121,7 +121,7 @@ struct NetView: View {
 
     private var quietState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle").font(.system(size: 24)).foregroundStyle(Tool.net.accent)
+            Image(systemName: "checkmark.circle").font(.system(size: Brand.scaled(24))).foregroundStyle(Tool.net.accent)
             Text(NSLocalizedString("All quiet", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("No process moved bytes during the sample window.", comment: ""))

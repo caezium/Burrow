@@ -99,6 +99,15 @@ struct RootView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The interface text scale (issue #407). Brand's font factories read the
+    /// factor themselves at body evaluation; observing here makes a Settings
+    /// change re-evaluate the tree from the root so fonts resolve at the new
+    /// size. Deliberately NOT `.id(_:)` — an identity change would destroy
+    /// every descendant's @State/@StateObject (Analyze results, Clean review
+    /// selections) just to change a font size. Equatable-gated leaves that
+    /// skip the re-evaluation catch up on their next data tick.
+    @ObservedObject private var typeScale = TypeScale.shared
+
     init(db: DB, producer: SnapshotProducer, feeds: FeedHub, delegate: AppDelegate?, initialPane: Pane = .home) {
         self.db = db
         self.producer = producer
@@ -192,7 +201,10 @@ struct RootView: View {
         }
         // At most one banner at a time. FDA outranks the helper: without it
         // scans can't read the caches the helper would elevate over anyway.
-        .overlay(alignment: .bottom) {
+        // A safe-area inset, NOT an overlay: panes anchor their own confirm
+        // footers to the bottom edge, and an overlay drawn over them swallowed
+        // their clicks (#410 — the banner sat exactly on Clean's confirm pill).
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if !fdaGranted, !fdaBannerDismissed {
                 AccessBanner(
                     title: NSLocalizedString("Full Disk Access is off", comment: ""),

@@ -78,7 +78,7 @@ struct CleanReviewView: View {
             }
             Spacer()
             Button { onExit() } label: {
-                Image(systemName: "chevron.left").font(.system(size: 11, weight: .bold))
+                Image(systemName: "chevron.left").font(.system(size: Brand.scaled(11), weight: .bold))
                     .foregroundStyle(Brand.textSecondary)
                     .frame(width: 24, height: 24).contentShape(Rectangle())
             }
@@ -96,7 +96,7 @@ struct CleanReviewView: View {
 
     private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 15))
+            Image(systemName: symbol).font(.system(size: Brand.scaled(15)))
                 .foregroundStyle(Brand.textSecondary)
                 .frame(width: 26, height: 26).contentShape(Rectangle())
         }
@@ -119,7 +119,7 @@ struct CleanReviewView: View {
                 HStack(spacing: 11) {
                     triStateBox(state) { selection.toggleCategory(category.name) }
                     Image(systemName: Self.glyph(for: category.name))
-                        .font(.system(size: 13)).foregroundStyle(accent)
+                        .font(.system(size: Brand.scaled(13))).foregroundStyle(accent)
                         .frame(width: 20)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
@@ -136,7 +136,7 @@ struct CleanReviewView: View {
                     Text(verbatim: "\(Fmt.bytes(selection.selectedBytes(in: category))) / \(Fmt.bytes(category.totalBytes))")
                         .font(Brand.mono(11, .medium)).foregroundStyle(Brand.blue)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textTertiary)
+                        .font(.system(size: Brand.scaled(10), weight: .semibold)).foregroundStyle(Brand.textTertiary)
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
                 }
                 .padding(13)
@@ -168,13 +168,13 @@ struct CleanReviewView: View {
         Button(action: action) {
             ZStack {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(state == .none ? Color.white.opacity(0.07) : accent.opacity(0.9))
+                    .fill(state == .none ? Brand.chipFill : accent.opacity(0.9))
                     .frame(width: 17, height: 17)
                 switch state {
                 case .all:
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.black)
+                    Image(systemName: "checkmark").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(.black)
                 case .mixed:
-                    Image(systemName: "minus").font(.system(size: 9, weight: .bold)).foregroundStyle(.black)
+                    Image(systemName: "minus").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(.black)
                 case .none:
                     EmptyView()
                 }
@@ -194,10 +194,10 @@ struct CleanReviewView: View {
             Button { selection.toggle(item.path) } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(ticked ? accent.opacity(0.9) : Color.white.opacity(0.07))
+                        .fill(ticked ? accent.opacity(0.9) : Brand.chipFill)
                         .frame(width: 15, height: 15)
                     if ticked {
-                        Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(.black)
+                        Image(systemName: "checkmark").font(.system(size: Brand.scaled(8), weight: .bold)).foregroundStyle(.black)
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Brand.hairline, lineWidth: 1))
@@ -232,7 +232,7 @@ struct CleanReviewView: View {
                 .frame(minWidth: 56, alignment: .trailing)
             Button { AnalyzeIcons.reveal(item.path) } label: {
                 Image(systemName: "magnifyingglass.circle")
-                    .font(.system(size: 12)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(12))).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain)
             .help(NSLocalizedString("Reveal in Finder", comment: ""))
@@ -281,9 +281,9 @@ struct CleanReviewView: View {
             Spacer()
             Button { onConfirm(selection) } label: {
                 Text(pillLabel)
-                    .font(Brand.sans(13, .semibold)).foregroundStyle(.black)
+                    .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.onInverse)
                     .padding(.horizontal, 20).padding(.vertical, 10)
-                    .background(Capsule().fill(Color.white))
+                    .background(Capsule().fill(Brand.inverse))
             }
             .buttonStyle(.plain)
             .disabled(selection.selectedCount == 0)

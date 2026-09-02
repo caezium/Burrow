@@ -87,7 +87,7 @@ struct ProcessInspectorView: View {
             Spacer()
             chips
             Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill").font(.system(size: 16)).foregroundStyle(Brand.textTertiary)
+                Image(systemName: "xmark.circle.fill").font(.system(size: Brand.scaled(16))).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain).accessibilityLabel(NSLocalizedString("Close", comment: ""))
         }
@@ -180,7 +180,7 @@ struct ProcessInspectorView: View {
         section("Hierarchy", "list.bullet.indent") {
             ForEach(Array(children.prefix(10).enumerated()), id: \.offset) { _, c in
                 HStack(spacing: 8) {
-                    Image(systemName: "arrow.turn.down.right").font(.system(size: 9)).foregroundStyle(Brand.textTertiary)
+                    Image(systemName: "arrow.turn.down.right").font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.textTertiary)
                     Text(c.name).font(Brand.sans(12)).foregroundStyle(Brand.textPrimary).lineLimit(1)
                     Spacer(minLength: 8)
                     Text(verbatim: "\(c.pid)").font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
@@ -203,7 +203,7 @@ struct ProcessInspectorView: View {
             VStack(alignment: .leading, spacing: 7) { rows() }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.black.opacity(0.18)))
+                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Brand.insetFill))
                 .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
         }
     }

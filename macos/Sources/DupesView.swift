@@ -59,7 +59,7 @@ struct DupesView: View {
     private var toolbar: some View {
         HStack(spacing: 8) {
             Button { model.goUp() } label: {
-                Image(systemName: "arrow.up").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.up").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(model.canGoUp ? Brand.textSecondary : Brand.textTertiary.opacity(0.35))
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
@@ -73,7 +73,7 @@ struct DupesView: View {
             }
             ForEach(Array(model.crumbs.enumerated()), id: \.offset) { idx, crumb in
                 if idx > 0 {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                    Image(systemName: "chevron.right").font(.system(size: Brand.scaled(9), weight: .semibold))
                         .foregroundStyle(Brand.textTertiary)
                 }
                 Button { model.goToCrumb(idx) } label: {
@@ -89,14 +89,14 @@ struct DupesView: View {
                     .font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             }
             Button { pickFolder() } label: {
-                Image(systemName: "folder").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "folder").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
             .disabled(!BurrowEngine.isAvailable)
             .help(NSLocalizedString("Choose a folder…", comment: ""))
             Button { model.rescan() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(model.folder == nil ? Brand.textTertiary.opacity(0.35) : Brand.textSecondary)
             }
             .buttonStyle(.plain)
@@ -123,7 +123,7 @@ struct DupesView: View {
 
     private var idleState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "doc.on.doc").font(.system(size: 26)).foregroundStyle(Tool.dupes.accent)
+            Image(systemName: "doc.on.doc").font(.system(size: Brand.scaled(26))).foregroundStyle(Tool.dupes.accent)
             Text(NSLocalizedString("Find what you've stashed twice", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("Choose a folder and Burrow finds byte-identical copies, preselects all but one of each, and moves the extras to the Trash — or reclaims their space with APFS clones, deleting nothing.", comment: ""))
@@ -131,9 +131,9 @@ struct DupesView: View {
                 .multilineTextAlignment(.center).frame(maxWidth: 440)
             Button { pickFolder() } label: {
                 Text(NSLocalizedString("Choose a folder…", comment: ""))
-                    .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
+                    .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.onInverse)
                     .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(Capsule().fill(.white))
+                    .background(Capsule().fill(Brand.inverse))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -164,7 +164,7 @@ struct DupesView: View {
 
     private var cleanState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle").font(.system(size: 24)).foregroundStyle(Tool.dupes.accent)
+            Image(systemName: "checkmark.circle").font(.system(size: Brand.scaled(24))).foregroundStyle(Tool.dupes.accent)
             Text(NSLocalizedString("No duplicates here", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(NSLocalizedString("Every file in this folder is one of a kind.", comment: ""))
@@ -215,7 +215,7 @@ struct DupesView: View {
                 HStack(spacing: 10) {
                     triStateBox(model.selection.groupState(group)) { model.toggleGroup(group) }
                     Image(systemName: "doc.on.doc")
-                        .font(.system(size: 13)).foregroundStyle(Tool.dupes.accent)
+                        .font(.system(size: Brand.scaled(13))).foregroundStyle(Tool.dupes.accent)
                         .frame(width: 20)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
@@ -234,7 +234,7 @@ struct DupesView: View {
                     Text(verbatim: "\(Fmt.bytes(group.fileLen * Int64(model.selection.selectedCount(in: group)))) / \(Fmt.bytes(group.redundantBytes))")
                         .font(Brand.mono(11, .medium)).foregroundStyle(Tool.dupes.accent)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textTertiary)
+                        .font(.system(size: Brand.scaled(10), weight: .semibold)).foregroundStyle(Brand.textTertiary)
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
                 }
                 .padding(13)
@@ -265,13 +265,13 @@ struct DupesView: View {
         Button(action: action) {
             ZStack {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(state == .none ? Color.white.opacity(0.07) : Tool.dupes.accent.opacity(0.9))
+                    .fill(state == .none ? Brand.chipFill : Tool.dupes.accent.opacity(0.9))
                     .frame(width: 17, height: 17)
                 switch state {
                 case .all:
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.black)
+                    Image(systemName: "checkmark").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(.black)
                 case .mixed:
-                    Image(systemName: "minus").font(.system(size: 9, weight: .bold)).foregroundStyle(.black)
+                    Image(systemName: "minus").font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(.black)
                 case .none:
                     EmptyView()
                 }
@@ -289,10 +289,10 @@ struct DupesView: View {
             Button { model.toggle(path) } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(ticked ? Tool.dupes.accent.opacity(0.9) : Color.white.opacity(0.07))
+                        .fill(ticked ? Tool.dupes.accent.opacity(0.9) : Brand.chipFill)
                         .frame(width: 15, height: 15)
                     if ticked {
-                        Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(.black)
+                        Image(systemName: "checkmark").font(.system(size: Brand.scaled(8), weight: .bold)).foregroundStyle(.black)
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Brand.hairline, lineWidth: 1))
@@ -321,7 +321,7 @@ struct DupesView: View {
                 .frame(minWidth: 56, alignment: .trailing)
             Button { AnalyzeIcons.reveal(path) } label: {
                 Image(systemName: "magnifyingglass.circle")
-                    .font(.system(size: 12)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(12))).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain)
             .help(NSLocalizedString("Reveal in Finder", comment: ""))
@@ -337,7 +337,7 @@ struct DupesView: View {
                 Text(NSLocalizedString("Reclaim via clones…", comment: ""))
                     .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.textPrimary)
                     .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .background(Capsule().fill(Brand.chipFill))
                     .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -348,9 +348,9 @@ struct DupesView: View {
                 Text(String(format: NSLocalizedString("Move to Trash · %@", comment: "confirm pill"),
                             Fmt.bytes(model.selection.selectedBytes(in: report))))
                     .font(Brand.sans(12, .semibold))
-                    .foregroundStyle(model.selection.isEmpty ? Brand.textTertiary : .black)
+                    .foregroundStyle(model.selection.isEmpty ? Brand.textTertiary : Brand.onInverse)
                     .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(Capsule().fill(model.selection.isEmpty ? Color.white.opacity(0.06) : Color.white))
+                    .background(Capsule().fill(model.selection.isEmpty ? Brand.chipFill : Brand.inverse))
             }
             .buttonStyle(.plain)
             .disabled(model.selection.isEmpty || model.deduping || model.scanning)

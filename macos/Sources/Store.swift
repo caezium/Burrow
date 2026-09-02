@@ -75,6 +75,40 @@ enum MenuBarTextSize: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Text scale for the whole interface (issue #407 — the popup and panes
+/// read too small on 13" displays). Multiplies every Brand font and glyph
+/// size through `Brand.scaled(_:)` rather than transform-zooming the
+/// window, so text stays sharp and layout reflows. `.standard` is the
+/// historical 1.0, so existing users see no change until they pick a
+/// larger one. The menu-bar status item is deliberately NOT covered — the
+/// menu bar's height is fixed by macOS and the item already has its own
+/// per-widget `MenuBarTextSize`.
+enum InterfaceScale: String, Codable, CaseIterable, Identifiable {
+    case standard, medium, large, extraLarge
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .standard:   return NSLocalizedString("Default", comment: "")
+        case .medium:     return NSLocalizedString("Medium", comment: "")
+        case .large:      return NSLocalizedString("Large", comment: "")
+        case .extraLarge: return NSLocalizedString("Extra Large", comment: "")
+        }
+    }
+
+    /// The multiplier applied to point sizes. Steps chosen so `.medium` is
+    /// a nudge and `.extraLarge` roughly matches bumping the smallest 9 pt
+    /// footnotes to a comfortable ~13.5 pt.
+    var factor: CGFloat {
+        switch self {
+        case .standard:   return 1.0
+        case .medium:     return 1.15
+        case .large:      return 1.3
+        case .extraLarge: return 1.5
+        }
+    }
+}
+
 /// A section of the menu-bar popover (`PopupView`) the user can show/hide
 /// (issue #82 — the popup is the surface they actually wanted to customize).
 enum PopupSection: String, Codable, CaseIterable, Identifiable {
@@ -190,6 +224,15 @@ enum Store {
     static var showMenuBarIcon: Bool {
         get { d.object(forKey: "show_menu_bar_icon") as? Bool ?? true }
         set { write(newValue, "show_menu_bar_icon") }
+    }
+
+    // MARK: - Appearance
+
+    /// The interface text scale (issue #407). Consumed via `TypeScale.shared`,
+    /// which caches the factor and republishes changes to the window roots.
+    static var interfaceScale: InterfaceScale {
+        get { InterfaceScale(rawValue: d.string(forKey: "interface_scale") ?? "") ?? .standard }
+        set { write(newValue.rawValue, "interface_scale") }
     }
 
     // MARK: - Language

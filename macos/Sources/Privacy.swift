@@ -183,7 +183,7 @@ struct FullDiskAccessRequired: View {
             Spacer()
             ZStack {
                 Circle().fill(accent.opacity(0.15)).frame(width: 64, height: 64)
-                Image(systemName: "lock.shield").font(.system(size: 28)).foregroundStyle(accent)
+                Image(systemName: "lock.shield").font(.system(size: Brand.scaled(28))).foregroundStyle(accent)
             }
             VStack(spacing: 8) {
                 Text("Grant Full Disk Access to scan")

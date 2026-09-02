@@ -325,7 +325,7 @@ struct MoInteractiveView: View {
                     Text(selected.isEmpty ? LocalizedStringKey("Remove") : "Remove (\(selected.count))")
                         .font(Brand.sans(12, .semibold)).foregroundStyle(selected.isEmpty ? Brand.textTertiary : .white)
                         .padding(.horizontal, 14).padding(.vertical, 6)
-                        .background(Capsule().fill(selected.isEmpty ? Color.white.opacity(0.06) : cfg.tool.accent))
+                        .background(Capsule().fill(selected.isEmpty ? Brand.chipFill : cfg.tool.accent))
                 }.buttonStyle(.plain).disabled(selected.isEmpty)
             }
             .padding(.horizontal, 18).padding(.vertical, 10)
@@ -387,7 +387,7 @@ struct MoInteractiveView: View {
 
     private func messageView(icon: String, color: Color, text: String) -> some View {
         VStack(spacing: 12) { Spacer()
-            Image(systemName: icon).font(.system(size: 24)).foregroundStyle(color)
+            Image(systemName: icon).font(.system(size: Brand.scaled(24))).foregroundStyle(color)
             Text(text).font(Brand.sans(13)).foregroundStyle(Brand.textSecondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 420)
             Button { backToHero() } label: {
@@ -414,7 +414,7 @@ struct MoItemRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 15)).foregroundStyle(Brand.textTertiary).frame(width: 22)
+            Image(systemName: icon).font(.system(size: Brand.scaled(15))).foregroundStyle(Brand.textTertiary).frame(width: 22)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.name).font(Brand.sans(13, .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
                 Text("\(item.size)\(item.location.isEmpty ? "" : " · \(item.location)")")
@@ -423,11 +423,11 @@ struct MoItemRow: View {
             Spacer(minLength: 8)
             if gitWarn {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11)).foregroundStyle(.yellow)
+                    .font(.system(size: Brand.scaled(11))).foregroundStyle(.yellow)
                     .help(NSLocalizedString("Uncommitted or unpushed git changes in this repo", comment: ""))
             }
             Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 17)).foregroundStyle(selected ? accent : Brand.textTertiary)
+                .font(.system(size: Brand.scaled(17))).foregroundStyle(selected ? accent : Brand.textTertiary)
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(hover ? Brand.cardFillHover : Color.clear)

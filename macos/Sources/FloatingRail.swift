@@ -65,7 +65,7 @@ struct FloatingRail: View {
                 RailButton(label: tool.title, isOn: on, accent: tool.accent, gradient: true,
                            action: { select(.tool(tool)) }) {
                     Image(systemName: tool.glyph)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: Brand.scaled(16), weight: .medium))
                         .foregroundStyle(on ? Brand.onAccent : Brand.textSecondary)
                 }
             }
@@ -76,7 +76,7 @@ struct FloatingRail: View {
                        isOn: selected == .settings, accent: Brand.accent, gradient: false,
                        action: { select(.settings) }) {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: Brand.scaled(15), weight: .medium))
                     .foregroundStyle(selected == .settings ? Brand.onAccent : Brand.textSecondary)
             }
         }

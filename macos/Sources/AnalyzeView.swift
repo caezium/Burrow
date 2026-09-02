@@ -73,7 +73,7 @@ struct AnalyzeView: View {
                 }
                 Spacer(minLength: 2)
                 if e.isDir {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                    Image(systemName: "chevron.right").font(.system(size: Brand.scaled(9), weight: .semibold))
                         .foregroundStyle(Brand.textTertiary)
                 }
             }
@@ -101,7 +101,7 @@ struct AnalyzeView: View {
                     scanningProgress
                 } else if let err = model.error {
                     VStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle").font(.system(size: 22)).foregroundStyle(Brand.orange)
+                        Image(systemName: "exclamationmark.triangle").font(.system(size: Brand.scaled(22))).foregroundStyle(Brand.orange)
                         Text(err).font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
                             .multilineTextAlignment(.center).frame(maxWidth: 340)
                     }
@@ -148,7 +148,7 @@ struct AnalyzeView: View {
     private var toolbar: some View {
         HStack(spacing: 6) {
             Button { model.goUp() } label: {
-                Image(systemName: "arrow.up").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.up").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(model.canGoUp ? Brand.textSecondary : Brand.textTertiary.opacity(0.35))
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
@@ -157,7 +157,7 @@ struct AnalyzeView: View {
             .help(NSLocalizedString("Go up", comment: ""))
             ForEach(Array(model.crumbs.enumerated()), id: \.offset) { idx, crumb in
                 if idx > 0 {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                    Image(systemName: "chevron.right").font(.system(size: Brand.scaled(9), weight: .semibold))
                         .foregroundStyle(Brand.textTertiary)
                 }
                 Button { model.goToCrumb(idx) } label: {
@@ -170,13 +170,13 @@ struct AnalyzeView: View {
             Spacer()
             Text(model.usageLine).font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             Button { model.scanWholeDisk() } label: {
-                Image(systemName: "externaldrive").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "externaldrive").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(model.crumbs.first?.path == "/" ? Brand.textTertiary.opacity(0.35) : Brand.textSecondary)
             }
             .buttonStyle(.plain).disabled(model.crumbs.first?.path == "/")
             .help(NSLocalizedString("Scan the whole disk", comment: ""))
             Button { model.refresh() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
@@ -278,7 +278,7 @@ struct TreemapView: View {
         var lines: [GraphicsContext.ResolvedText] = []
         if cell.width > 96, cell.height > 52 {
             lines.append(label.resolve(Text(Image(systemName: e.isDir ? "folder.fill" : "doc.fill"))
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.9))))
+                .font(.system(size: Brand.scaled(12))).foregroundStyle(.white.opacity(0.9))))
         }
         lines.append(label.resolve(Text(e.name).font(Brand.sans(11, .medium)).foregroundStyle(.white)))
         lines.append(label.resolve(Text(Fmt.bytes(e.size)).font(Brand.mono(9)).foregroundStyle(.white.opacity(0.85))))

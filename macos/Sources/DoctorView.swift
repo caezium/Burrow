@@ -73,7 +73,7 @@ struct DoctorView: View {
 
     private func row(_ c: Doctor.Check) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: glyph(c.level)).font(.system(size: 15))
+            Image(systemName: glyph(c.level)).font(.system(size: Brand.scaled(15)))
                 .foregroundStyle(tint(c.level)).frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(c.name).font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)

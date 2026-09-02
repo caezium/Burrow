@@ -87,7 +87,7 @@ struct SoftwareView: View {
             if model.segment == .uninstall {
                 sortChips
                 Button { model.load() } label: {
-                    Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                    Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                         .foregroundStyle(Brand.textSecondary)
                 }
                 .buttonStyle(.plain)
@@ -97,7 +97,7 @@ struct SoftwareView: View {
             } else if model.segment == .startup {
                 startupFilter
                 Button { startup.reload() } label: {
-                    Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                    Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                         .foregroundStyle(Brand.textSecondary)
                 }
                 .buttonStyle(.plain)
@@ -119,7 +119,7 @@ struct SoftwareView: View {
                         Image(systemName: active
                               ? (model.sortAscending ? "chevron.up" : "chevron.down")
                               : "chevron.up.chevron.down")
-                            .font(.system(size: active ? 7 : 8, weight: .semibold))
+                            .font(.system(size: Brand.scaled(active ? 7 : 8), weight: .semibold))
                     }
                     .foregroundStyle(active ? Tool.apps.accent : Brand.textSecondary)
                     .padding(.horizontal, 8).padding(.vertical, 4)
@@ -143,7 +143,7 @@ struct SoftwareView: View {
             if BrewClient.isInstalled { seg("Services", .services) }
         }
         .padding(3)
-        .background(Capsule().fill(Color.black.opacity(0.22)))
+        .background(Capsule().fill(Brand.insetFill))
         .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
@@ -151,21 +151,21 @@ struct SoftwareView: View {
         let on = model.segment == value
         return Button { model.segment = value } label: {
             Text(NSLocalizedString(title, comment: "")).font(Brand.mono(11, on ? .semibold : .regular))
-                .foregroundStyle(on ? .black : Brand.textSecondary)
+                .foregroundStyle(on ? Brand.onInverse : Brand.textSecondary)
                 .padding(.horizontal, 12).padding(.vertical, 5)
-                .background { if on { Capsule().fill(.white) } }
+                .background { if on { Capsule().fill(Brand.inverse) } }
                 .contentShape(Capsule())
         }.buttonStyle(.plain)
     }
 
     private var searchField: some View {
         HStack(spacing: 5) {
-            Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(Brand.textTertiary)
+            Image(systemName: "magnifyingglass").font(.system(size: Brand.scaled(10))).foregroundStyle(Brand.textTertiary)
             TextField("Search apps", text: $model.query)
                 .textFieldStyle(.plain).font(Brand.sans(12)).frame(width: 130)
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(Capsule().fill(Color.black.opacity(0.22)))
+        .background(Capsule().fill(Brand.insetFill))
         .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
@@ -181,12 +181,12 @@ struct SoftwareView: View {
 
     private var startupSearch: some View {
         HStack(spacing: 5) {
-            Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(Brand.textTertiary)
+            Image(systemName: "magnifyingglass").font(.system(size: Brand.scaled(10))).foregroundStyle(Brand.textTertiary)
             TextField("Search items", text: $startup.query)
                 .textFieldStyle(.plain).font(Brand.sans(12)).frame(width: 130)
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(Capsule().fill(Color.black.opacity(0.22)))
+        .background(Capsule().fill(Brand.insetFill))
         .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
@@ -218,7 +218,7 @@ struct SoftwareView: View {
                     VStack(spacing: 8) {
                         Spacer()
                         Image(systemName: "questionmark.app.dashed")
-                            .font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+                            .font(.system(size: Brand.scaled(26))).foregroundStyle(Brand.textTertiary)
                         Text("App inventory isn't available")
                             .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
                         Text("Burrow couldn't list installed apps this time. You can still uninstall from Finder in the meantime.")
@@ -235,7 +235,7 @@ struct SoftwareView: View {
                     VStack(spacing: 8) {
                         Spacer()
                         Image(systemName: "checkmark.circle")
-                            .font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+                            .font(.system(size: Brand.scaled(26))).foregroundStyle(Brand.textTertiary)
                         Text("No apps found")
                             .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
                         Spacer()
@@ -291,9 +291,9 @@ struct SoftwareView: View {
             } label: {
                 Text(model.uninstallButtonTitle)
                     .font(Brand.sans(12, .semibold))
-                    .foregroundStyle(model.selected.isEmpty ? Brand.textTertiary : .black)
+                    .foregroundStyle(model.selected.isEmpty ? Brand.textTertiary : Brand.onInverse)
                     .padding(.horizontal, 16).padding(.vertical, 7)
-                    .background(Capsule().fill(model.selected.isEmpty ? Color.white.opacity(0.06) : Color.white))
+                    .background(Capsule().fill(model.selected.isEmpty ? Brand.chipFill : Brand.inverse))
             }
             .buttonStyle(.plain)
             .disabled(model.selected.isEmpty)
@@ -318,7 +318,7 @@ struct AppRow: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 9, weight: .semibold)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(9), weight: .semibold)).foregroundStyle(Brand.textTertiary)
                     .frame(width: 12)
                 Image(nsImage: SoftwareIcons.icon(app.path)).resizable().frame(width: 30, height: 30)
                 VStack(alignment: .leading, spacing: 1) {
@@ -336,7 +336,7 @@ struct AppRow: View {
                 }
                 Button(action: onToggle) {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 17))
+                        .font(.system(size: Brand.scaled(17)))
                         .foregroundStyle(selected ? Tool.apps.accent : Brand.textTertiary)
                 }
                 .buttonStyle(.plain)
@@ -418,7 +418,7 @@ struct AppRow: View {
                 }
             }
             .padding(12)
-            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.black.opacity(0.22)))
+            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Brand.insetFill))
             .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
         } else if preview != nil {
             // Still says nothing about what Remove will then do, for the one reason that survived
@@ -449,7 +449,7 @@ struct AppRow: View {
             } label: {
                 Image(systemName: allSelected ? "checkmark.square.fill"
                       : (selectedCount == 0 ? "square" : "minus.square.fill"))
-                    .font(.system(size: 12))
+                    .font(.system(size: Brand.scaled(12)))
                     .foregroundStyle(selectedCount == 0 ? Brand.textTertiary : Tool.apps.accent)
             }
             .buttonStyle(.plain)
@@ -477,13 +477,13 @@ struct AppRow: View {
             } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(ticked ? Tool.apps.accent.opacity(0.9) : Color.white.opacity(0.07))
+                        .fill(ticked ? Tool.apps.accent.opacity(0.9) : Brand.chipFill)
                         .frame(width: 14, height: 14)
                     if refusal != nil {
-                        Image(systemName: "lock.fill").font(.system(size: 7, weight: .bold))
+                        Image(systemName: "lock.fill").font(.system(size: Brand.scaled(7), weight: .bold))
                             .foregroundStyle(Brand.textTertiary)
                     } else if ticked {
-                        Image(systemName: "checkmark").font(.system(size: 7, weight: .bold)).foregroundStyle(.black)
+                        Image(systemName: "checkmark").font(.system(size: Brand.scaled(7), weight: .bold)).foregroundStyle(.black)
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Brand.hairline, lineWidth: 1))
@@ -500,18 +500,18 @@ struct AppRow: View {
                 .lineLimit(1).truncationMode(.middle)
             if let refusal {
                 Image(systemName: "hand.raised.fill")
-                    .font(.system(size: 9)).foregroundStyle(Brand.gold)
+                    .font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.gold)
                     .help(refusal)
                     .accessibilityLabel(refusal)
             }
             if UninstallPlan.isInputMethod(entry.path) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 9)).foregroundStyle(Brand.gold)
+                    .font(.system(size: Brand.scaled(9))).foregroundStyle(Brand.gold)
                     .help(NSLocalizedString("Input method — removing this can disable typing for its language until you log out.", comment: ""))
             }
             Spacer()
             Button { AnalyzeIcons.reveal(entry.expandedPath) } label: {
-                Image(systemName: "magnifyingglass.circle").font(.system(size: 11)).foregroundStyle(Brand.textTertiary)
+                Image(systemName: "magnifyingglass.circle").font(.system(size: Brand.scaled(11))).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain)
             .help(NSLocalizedString("Reveal in Finder", comment: ""))
@@ -1763,7 +1763,7 @@ struct StartupView: View {
             }
             Spacer(minLength: 8)
             Button { AnalyzeIcons.reveal(item.plistPath) } label: {
-                Image(systemName: "magnifyingglass.circle").font(.system(size: 12)).foregroundStyle(Brand.textTertiary)
+                Image(systemName: "magnifyingglass.circle").font(.system(size: Brand.scaled(12))).foregroundStyle(Brand.textTertiary)
             }
             .buttonStyle(.plain)
             .help(NSLocalizedString("Reveal in Finder", comment: ""))
@@ -1782,7 +1782,7 @@ struct StartupView: View {
                         ? NSLocalizedString("enabled", comment: "") : NSLocalizedString("disabled", comment: ""))
             } else {
                 Image(systemName: "lock")
-                    .font(.system(size: 10)).foregroundStyle(Brand.textTertiary)
+                    .font(.system(size: Brand.scaled(10))).foregroundStyle(Brand.textTertiary)
                     .help(NSLocalizedString("Review only — managed by its app or the system.", comment: ""))
                     .accessibilityLabel(NSLocalizedString("Review only", comment: ""))
             }

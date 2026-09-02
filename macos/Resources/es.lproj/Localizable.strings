@@ -868,3 +868,13 @@
 "These stay installed — only the reviewed support files move to the Trash, and you can put them back:\n\n%@" = "Estas siguen instaladas: solo van a la papelera los archivos de apoyo revisados, y puedes devolverlos a su sitio:\n\n%@";
 "Remove data from %d app?" = "¿Eliminar los datos de %d app?";
 "Remove data from %d apps?" = "¿Eliminar los datos de %d apps?";
+
+/* Appearance — interface text scale (issue #407; Small/Medium/Large also serve the per-widget menu-bar picker) */
+"Appearance" = "Apariencia";
+"Text size" = "Tamaño del texto";
+"Default" = "Predeterminado";
+"Small" = "Pequeño";
+"Medium" = "Mediano";
+"Large" = "Grande";
+"Extra Large" = "Extragrande";
+"Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "Escala el texto y los iconos en toda la app y en el panel de la barra de menús, sin necesidad de reiniciar. El elemento de la barra de menús conserva su propio tamaño de texto, configurado por widget en «Barra de menús».";

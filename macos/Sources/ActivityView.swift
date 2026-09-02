@@ -38,7 +38,7 @@ struct ActivityView: View {
             }
             Spacer()
             Button { model.reload() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(12), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }.buttonStyle(.plain)
         }
@@ -52,7 +52,7 @@ struct ActivityView: View {
         } else if model.sessions.isEmpty {
             VStack(spacing: 8) {
                 Spacer()
-                Image(systemName: "clock.badge.questionmark").font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+                Image(systemName: "clock.badge.questionmark").font(.system(size: Brand.scaled(26))).foregroundStyle(Brand.textTertiary)
                 Text("No cleanup history yet").font(Brand.mono(12)).foregroundStyle(Brand.textSecondary)
                 Text("Run a Clean or Optimize and it'll show up here.").font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
                 Spacer()
@@ -76,7 +76,7 @@ private struct SessionRow: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Image(systemName: glyph).font(.system(size: 12, weight: .semibold)).foregroundStyle(accent)
+                    Image(systemName: glyph).font(.system(size: Brand.scaled(12), weight: .semibold)).foregroundStyle(accent)
                     Text(session.command.capitalized).font(Brand.sans(13, .semibold)).foregroundStyle(Brand.textPrimary)
                     if !session.isComplete {
                         Text("incomplete").font(Brand.mono(9)).foregroundStyle(Brand.orange)

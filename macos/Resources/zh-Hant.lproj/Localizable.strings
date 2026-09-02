@@ -853,3 +853,13 @@
 "These stay installed — only the reviewed support files move to the Trash, and you can put them back:\n\n%@" = "以下 App 會保持安裝狀態 —— 只有經確認的支援檔案會移到垃圾桶，你可以把它們放回原處：\n\n%@";
 "Remove data from %d app?" = "刪除 %d 個 App 的資料？";
 "Remove data from %d apps?" = "刪除 %d 個 App 的資料？";
+
+/* Appearance — interface text scale (issue #407; Small/Medium/Large also serve the per-widget menu-bar picker) */
+"Appearance" = "外觀";
+"Text size" = "文字大小";
+"Default" = "預設";
+"Small" = "小";
+"Medium" = "中";
+"Large" = "大";
+"Extra Large" = "特大";
+"Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "縮放整個應用程式與選單列彈出視窗中的文字和圖示，無需重新啟動。選單列項目本身的文字大小仍在「選單列」設定中按元件單獨調整。";

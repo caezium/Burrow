@@ -16,7 +16,7 @@ enum ConductorScanStates {
     /// pane-specific sentence ("Duplicate scanning runs through the bundled `burrow` CLI. …").
     static func conductorMissing(_ explanation: String) -> some View {
         VStack(spacing: 10) {
-            Image(systemName: "shippingbox").font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
+            Image(systemName: "shippingbox").font(.system(size: Brand.scaled(26))).foregroundStyle(Brand.textTertiary)
             Text(NSLocalizedString("The bundled burrow conductor is missing", comment: ""))
                 .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
             Text(explanation)
@@ -27,7 +27,7 @@ enum ConductorScanStates {
 
     static func errorState(_ message: String) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 22)).foregroundStyle(Brand.orange)
+            Image(systemName: "exclamationmark.triangle").font(.system(size: Brand.scaled(22))).foregroundStyle(Brand.orange)
             Text(message).font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 340)
         }

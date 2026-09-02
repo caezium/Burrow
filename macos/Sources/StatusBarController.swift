@@ -70,7 +70,7 @@ final class StatusBarController: NSObject, NSMenuDelegate, NSPopoverDelegate {
         popover.appearance = NSAppearance(named: .darkAqua)
         // Initial size hint for the first measurement pass; HUDController
         // then drives the real (screen-capped) size via preferredContentSize.
-        popover.contentSize = NSSize(width: 334, height: 560)
+        popover.contentSize = NSSize(width: Brand.scaled(334), height: 560)
         popover.contentViewController = HUDController(
             root: PopupView(db: db, live: producer.live, feeds: delegate.feeds, delegate: delegate))
         self.popover = popover

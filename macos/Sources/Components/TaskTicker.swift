@@ -109,7 +109,7 @@ struct TaskTickerView: View {
                 .scrollIndicators(.hidden)
                 .frame(height: CGFloat(Self.visibleRows) * 19 + 20)
                 .frame(maxWidth: 460)
-                .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Color.black.opacity(0.25)))
+                .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Brand.insetFill))
                 .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))
                 // Deferred past the current update transaction: a synchronous
                 // scrollTo here mutates the scroll responder graph mid-way
@@ -133,11 +133,11 @@ struct TaskTickerView: View {
     private func markerGlyph(_ marker: TaskMarker) -> some View {
         switch marker {
         case .error:
-            Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(Brand.red)
+            Image(systemName: "xmark").font(.system(size: Brand.scaled(8), weight: .bold)).foregroundStyle(Brand.red)
         case .review:
-            Image(systemName: "exclamationmark.circle").font(.system(size: 8)).foregroundStyle(Brand.gold)
+            Image(systemName: "exclamationmark.circle").font(.system(size: Brand.scaled(8))).foregroundStyle(Brand.gold)
         default:
-            Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(Brand.green)
+            Image(systemName: "checkmark").font(.system(size: Brand.scaled(8), weight: .bold)).foregroundStyle(Brand.green)
         }
     }
 }

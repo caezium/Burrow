@@ -868,3 +868,13 @@
 "These stay installed — only the reviewed support files move to the Trash, and you can put them back:\n\n%@" = "Они остаются установленными — в Корзину перемещаются только проверенные вспомогательные файлы, и вы можете их вернуть:\n\n%@";
 "Remove data from %d app?" = "Удалить данные из %d приложения?";
 "Remove data from %d apps?" = "Удалить данные из %d приложений?";
+
+/* Appearance — interface text scale (issue #407; Small/Medium/Large also serve the per-widget menu-bar picker) */
+"Appearance" = "Оформление";
+"Text size" = "Размер текста";
+"Default" = "По умолчанию";
+"Small" = "Маленький";
+"Medium" = "Средний";
+"Large" = "Крупный";
+"Extra Large" = "Очень крупный";
+"Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "Масштабирует текст и значки во всём приложении и во всплывающем окне строки меню — без перезапуска. Размер текста самого элемента строки меню настраивается отдельно для каждого виджета в разделе «Строка меню».";

@@ -145,7 +145,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func showInstallWindow() {
         NSApp.setActivationPolicy(.regular)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 320),
+            // Sized with the interface text scale so larger type doesn't clip
+            // in a fixed, non-resizable frame.
+            contentRect: NSRect(x: 0, y: 0, width: Brand.scaled(460), height: Brand.scaled(320)),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
@@ -304,7 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 // be screenshotted (the real popover needs a menu-bar click).
                 let host = NSHostingView(rootView: PopupView(db: db, live: producer.live,
                                                              feeds: self.feeds, delegate: self))
-                let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 334, height: 720),
+                let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: Brand.scaled(334), height: 720),
                                    styleMask: [.titled, .closable], backing: .buffered, defer: false)
                 win.title = "HUD Preview (dev)"
                 win.contentView = host
@@ -356,7 +358,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         NSApp.setActivationPolicy(.regular)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 560),
+            // Sized with the interface text scale so larger type doesn't clip
+            // in a fixed, non-resizable frame.
+            contentRect: NSRect(x: 0, y: 0, width: Brand.scaled(720), height: Brand.scaled(560)),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true

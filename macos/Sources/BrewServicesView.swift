@@ -44,7 +44,7 @@ struct BrewServicesView: View {
     private func note(_ id: String, systemImage: String, text: String) -> some View {
         VStack(spacing: 10) {
             Spacer()
-            Image(systemName: systemImage).font(.system(size: 22)).foregroundStyle(Brand.textTertiary)
+            Image(systemName: systemImage).font(.system(size: Brand.scaled(22))).foregroundStyle(Brand.textTertiary)
             Text(text).font(Brand.sans(13)).foregroundStyle(Brand.textSecondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 360)
             Spacer()
@@ -66,7 +66,7 @@ struct BrewServicesView: View {
             } else {
                 if s.running {
                     Button { model.restart(s.name) } label: {
-                        Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                        Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(11), weight: .semibold))
                             .foregroundStyle(Brand.textSecondary)
                     }
                     .buttonStyle(.plain).help(NSLocalizedString("Restart", comment: ""))

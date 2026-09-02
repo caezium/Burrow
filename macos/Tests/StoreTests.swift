@@ -50,6 +50,29 @@ final class StoreTests: XCTestCase {
         XCTAssertFalse(Store.mcpActionsEnabled)
     }
 
+    // Interface text scale (issue #407): existing users must stay at the
+    // historical 1.0 until they opt into a larger size, a choice must
+    // survive a relaunch, and a corrupted value must fall back rather
+    // than crash or shrink the UI.
+    func testInterfaceScale_defaultsToStandard() {
+        XCTAssertEqual(Store.interfaceScale, .standard)
+        XCTAssertEqual(InterfaceScale.standard.factor, 1.0)
+    }
+
+    func testInterfaceScale_persistsAndFallsBackOnGarbage() {
+        Store.interfaceScale = .extraLarge
+        XCTAssertEqual(Store.interfaceScale, .extraLarge)
+        Store.d.set("humongous", forKey: "interface_scale")
+        XCTAssertEqual(Store.interfaceScale, .standard)
+    }
+
+    func testInterfaceScale_factorsGrowWithEachStep() {
+        let factors = InterfaceScale.allCases.map(\.factor)
+        XCTAssertEqual(factors, factors.sorted())
+        XCTAssertEqual(Set(factors).count, factors.count, "two scale steps share a factor")
+        XCTAssertEqual(factors.first, 1.0, "the smallest step must be the historical size")
+    }
+
     func testMCPIrreversible_defaultFalseAndPersists() {
         XCTAssertFalse(Store.mcpIrreversibleEnabled)
         Store.mcpIrreversibleEnabled = true

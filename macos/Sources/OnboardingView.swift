@@ -54,7 +54,7 @@ struct OnboardingView: View {
         HStack(spacing: 7) {
             ForEach(0..<2, id: \.self) { i in
                 Capsule()
-                    .fill(Color.white.opacity(i == page ? 0.95 : 0.30))
+                    .fill(Brand.ink.opacity(i == page ? 0.95 : 0.30))
                     .frame(width: i == page ? 28 : 14, height: 4)
             }
         }
@@ -121,7 +121,7 @@ struct OnboardingView: View {
         HStack(spacing: 12) {
             Circle()
                 .fill((engine?.installed ?? false) ? Brand.green
-                      : (engine == nil ? Color.white.opacity(0.22) : Brand.amber))
+                      : (engine == nil ? Brand.ink.opacity(0.22) : Brand.amber))
                 .frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 3) {
                 Text(NSLocalizedString("Cleaning engine", comment: ""))
@@ -197,7 +197,7 @@ struct OnboardingView: View {
                             featureLine(NSLocalizedString("Open source — read every line", comment: ""))
                             Link(destination: URL(string: "https://github.com/caezium/Burrow")!) {
                                 Image(systemName: "arrow.up.right.square")
-                                    .font(.system(size: 10)).foregroundStyle(Brand.textTertiary)
+                                    .font(.system(size: Brand.scaled(10))).foregroundStyle(Brand.textTertiary)
                             }
                             .accessibilityLabel(NSLocalizedString("Open the Burrow repository on GitHub", comment: ""))
                         }
@@ -235,7 +235,7 @@ struct OnboardingView: View {
     private var heroMark: some View {
         ZStack {
             Circle()
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(Brand.hairline, lineWidth: 1)
                 .frame(width: 124, height: 124)
             Circle()
                 .fill(RadialGradient(colors: [Brand.cream.opacity(0.9), Brand.cream.opacity(0.12)],
@@ -253,7 +253,7 @@ struct OnboardingView: View {
     private func featureLine(_ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .bold)).foregroundStyle(Brand.green)
+                .font(.system(size: Brand.scaled(9), weight: .bold)).foregroundStyle(Brand.green)
                 .padding(3)
                 .background(Circle().fill(Brand.green.opacity(0.15)))
                 .accessibilityHidden(true)

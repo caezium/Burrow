@@ -349,7 +349,7 @@ struct HistoryView: View {
                 Text(String(format: NSLocalizedString("· latest %ds ago", comment: ""), s)).font(Brand.mono(10)).foregroundStyle(Brand.textTertiary)
             }
             Button { loading = true; board?.refresh() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "arrow.clockwise").font(.system(size: Brand.scaled(12), weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
             }.buttonStyle(.plain).keyboardShortcut("r", modifiers: .command)
         }
