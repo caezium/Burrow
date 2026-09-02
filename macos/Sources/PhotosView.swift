@@ -140,9 +140,9 @@ struct PhotosView: View {
                 .multilineTextAlignment(.center).frame(maxWidth: 440)
             Button { pickFolder() } label: {
                 Text(NSLocalizedString("Choose a folder…", comment: ""))
-                    .font(Brand.sans(12, .semibold)).foregroundStyle(.black)
+                    .font(Brand.sans(12, .semibold)).foregroundStyle(Brand.onInverse)
                     .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(Capsule().fill(.white))
+                    .background(Capsule().fill(Brand.inverse))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -290,7 +290,7 @@ private struct PhotoThumbView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(Brand.chipFill)
             if let image {
                 Image(nsImage: image)
                     .resizable().aspectRatio(contentMode: .fill)

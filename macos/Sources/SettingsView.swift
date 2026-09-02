@@ -230,9 +230,9 @@ struct SettingsView: View {
                 Button { withAnimation(.easeOut(duration: 0.14)) { tab = t } } label: {
                     Text(t.label)
                         .font(Brand.mono(12, on ? .semibold : .regular))
-                        .foregroundStyle(on ? Color.black : Brand.textSecondary)
+                        .foregroundStyle(on ? Brand.onInverse : Brand.textSecondary)
                         .padding(.horizontal, 12).padding(.vertical, 5)
-                        .background { if on { Capsule().fill(.white) } }
+                        .background { if on { Capsule().fill(Brand.inverse) } }
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -240,7 +240,7 @@ struct SettingsView: View {
             }
         }
         .padding(3)
-        .background(Capsule().fill(Color.black.opacity(0.22)))
+        .background(Capsule().fill(Brand.insetFill))
         .overlay(Capsule().strokeBorder(Brand.hairline, lineWidth: 1))
     }
 
@@ -1046,7 +1046,7 @@ struct SettingsView: View {
             }
         }
         .padding(11)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.25)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Brand.insetFill))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Brand.hairline, lineWidth: 1))
     }
 

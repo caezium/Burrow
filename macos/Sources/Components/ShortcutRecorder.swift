@@ -32,7 +32,7 @@ struct ShortcutRecorder: View {
                     .foregroundStyle(recording ? Brand.amber : Brand.textPrimary)
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .frame(minWidth: 86)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(recording ? 0.14 : 0.08)))
+                    .background(RoundedRectangle(cornerRadius: 7).fill(Brand.ink.opacity(recording ? 0.14 : 0.08)))
                     .overlay(RoundedRectangle(cornerRadius: 7)
                         .strokeBorder(recording ? Brand.amber.opacity(0.5) : Brand.hairline, lineWidth: 1))
             }

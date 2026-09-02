@@ -54,7 +54,7 @@ struct OnboardingView: View {
         HStack(spacing: 7) {
             ForEach(0..<2, id: \.self) { i in
                 Capsule()
-                    .fill(Color.white.opacity(i == page ? 0.95 : 0.30))
+                    .fill(Brand.ink.opacity(i == page ? 0.95 : 0.30))
                     .frame(width: i == page ? 28 : 14, height: 4)
             }
         }
@@ -121,7 +121,7 @@ struct OnboardingView: View {
         HStack(spacing: 12) {
             Circle()
                 .fill((engine?.installed ?? false) ? Brand.green
-                      : (engine == nil ? Color.white.opacity(0.22) : Brand.amber))
+                      : (engine == nil ? Brand.ink.opacity(0.22) : Brand.amber))
                 .frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 3) {
                 Text(NSLocalizedString("Cleaning engine", comment: ""))
@@ -235,7 +235,7 @@ struct OnboardingView: View {
     private var heroMark: some View {
         ZStack {
             Circle()
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(Brand.hairline, lineWidth: 1)
                 .frame(width: 124, height: 124)
             Circle()
                 .fill(RadialGradient(colors: [Brand.cream.opacity(0.9), Brand.cream.opacity(0.12)],
