@@ -166,20 +166,24 @@ enum EngineCLI {
             home: user.canonicalHome, username: user.username, uid: UInt32(user.uid))
             .map { "\($0.key)=\($0.value)" }
         let isolatedEnvironment = ["/usr/bin/env", "-i"] + environment
+        // `do shell script … with administrator privileges` inherits the
+        // caller's PATH on current macOS releases. Start from an empty
+        // environment so no user-writable tool can be resolved by the
+        // root engine or one of its child scripts.
+        let engine = (isolatedEnvironment + [command.executable.path] + args)
+            .map(shellQuote).joined(separator: " ")
         let run: String
         if let cleanupPlan {
-            // Boundary checks and deletes both come from the plan, so the
-            // authorization and what it authorizes cannot drift apart. Running
-            // them inside the redirect means a refused check explains itself in
-            // the run log rather than vanishing into osascript's stderr.
-            run = cleanupPlan.irreversibleCleanupShell()
+            // A reviewed clean: the plan's boundary checks (expiry, pinned
+            // identities of every root and entry) run first, and only then the
+            // engine over the plan file named in `args`. The checks and the
+            // paths both come from the plan, so the authorization and what it
+            // authorizes cannot drift apart. Running them inside the redirect
+            // means a refused check explains itself in the run log rather than
+            // vanishing into osascript's stderr.
+            run = cleanupPlan.guardedShell(running: engine)
         } else {
-            // `do shell script … with administrator privileges` inherits the
-            // caller's PATH on current macOS releases. Start from an empty
-            // environment so no user-writable tool can be resolved by the
-            // root engine or one of its child scripts.
-            run = (isolatedEnvironment + [command.executable.path] + args)
-                .map(shellQuote).joined(separator: " ")
+            run = engine
         }
 
         if let sink = logSink {

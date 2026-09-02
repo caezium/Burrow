@@ -133,6 +133,10 @@ struct ToolOperation<Report: Sendable> {
     /// the result line a completion notification carries (freed bytes
     /// etc.). nil keeps the last streamed line.
     var finalDetail: (@Sendable (Report) -> String)? = nil
+    /// Runs exactly once when the operation is over, however it ended —
+    /// exit, auth cancelled, stopped, or refused before it spawned. The
+    /// reviewed clean deletes its plan file here.
+    var finally: (@Sendable () -> Void)? = nil
 
     /// "Scan with admin": the same operation, elevated — root bypasses TCC
     /// so the gate no longer applies.
@@ -193,6 +197,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
     private var task: Task<Void, Never>?
     private var currentElevated = false
     private var currentLabel: String?
+    private var currentFinally: (@Sendable () -> Void)?
     private var telemetryFeature: String?
     private var telemetryStartedAt: Date?
     private var cancelRequested = false
@@ -285,6 +290,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
             state = .finished(.failed(op.elevated
                 ? "The bundled engine is missing. Reinstall Burrow to restore it: \(EngineCLI.installCommand)"
                 : "mo not found"))
+            op.finally?()
             return
         }
 
@@ -293,6 +299,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
             do { invokingUser = try resolveInvokingUser() }
             catch {
                 state = .finished(.failed(error.localizedDescription))
+                op.finally?()
                 return
             }
         } else {
@@ -316,6 +323,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         telemetryStartedAt = Date()
         cancelRequested = false
         reactivated = false
+        currentFinally = op.finally
         if let label = op.label { center.begin(opID, label: label, notifiesOnEnd: op.notifyOnEnd) }
         if let telemetryFeature {
             Telemetry.capture("feature_operation_started", [
@@ -354,6 +362,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                 case .exited(let code):
                     guard !self.cancelRequested else { return }
                     self.reactivateIfElevated(op)   // backstop: no-output runs
+                    defer { self.runFinally() }
                     self.rawLog = lines.joined(separator: "\n")
                     if code == 0 {
                         self.report = op.reduce(lines)
@@ -367,10 +376,14 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                         }
                         self.captureTelemetryCompletion(result: "succeeded")
                     } else {
-                        // A cleanup report may contain the preview's optimistic
-                        // summary even though the exact-tree guard stopped the
-                        // deletion. Do not render or notify with that summary.
-                        self.report = op.cleanupPlan == nil ? op.reduce(lines) : nil
+                        // A reviewed clean refused at the boundary never ran
+                        // the engine, so there is nothing to report — the
+                        // failure message says so. Every other nonzero exit is
+                        // reduced from the engine's own lines (what it removed,
+                        // what it refused and why), never from the preview.
+                        let refusedBeforeRunning = op.cleanupPlan != nil
+                            && code == ElevatedExitCode.boundaryCheckFailed
+                        self.report = refusedBeforeRunning ? nil : op.reduce(lines)
                         let message = Self.failureMessage(exitCode: code,
                                                           isCleanup: op.cleanupPlan != nil)
                         self.state = .finished(.failed(message))
@@ -389,6 +402,7 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
                     // not by a view-level "elevated + nonzero + no output" guess.
                     guard !self.cancelRequested else { return }
                     self.reactivateIfElevated(op)
+                    defer { self.runFinally() }
                     self.report = op.reduce(lines)
                     self.rawLog = lines.joined(separator: "\n")
                     self.state = .finished(.failed(NSLocalizedString("authorization cancelled", comment: "")))
@@ -406,6 +420,15 @@ final class OperationFlow<Report: Sendable>: ObservableObject {
         state = .finished(.cancelled)
         if currentLabel != nil { center.end(opID, success: false) }
         captureTelemetryCompletion(result: "cancelled")
+        runFinally()
+    }
+
+    /// The operation's `finally`, once. Cleared as it runs so no terminal path
+    /// can fire it twice.
+    private func runFinally() {
+        let body = currentFinally
+        currentFinally = nil
+        body?()
     }
 
     /// Back to the idle hero — the report screen's "Back" button.

@@ -295,6 +295,41 @@ final class EngineCLITests: XCTestCase {
         XCTAssertEqual(vars["HOME"], "/Users/test")
     }
 
+    /// A reviewed clean's script: the plan's boundary checks (expiry, then the pinned identity
+    /// of every root and entry) come FIRST, and the engine over the plan file comes LAST — the
+    /// shell itself deletes nothing. A refused check exits `boundaryCheckFailed` before the
+    /// engine is spawned.
+    func testElevatedScript_reviewedCleanRunsTheBoundaryChecksThenTheEngineOverThePlan() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("burrow-elevated-plan-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let canonical = URL(fileURLWithPath: try XCTUnwrap(InvokingUserIdentity.canonicalPath(root.path)),
+                            isDirectory: true)
+        let item = canonical.appendingPathComponent("cache")
+        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
+        let snapshot = try CleanupSnapshot.capture(
+            list: CleanList(categories: [.init(name: "T", items: [
+                .init(path: item.path, sizeBytes: 1, sizeText: "1B", itemCount: nil)])],
+                            summaryTotalText: "1B", summaryItemCount: 1),
+            approvedRootURLs: [canonical])
+        let plan = try snapshot.plan(selectedPaths: [item.path])
+
+        let s = EngineCLI.elevatedScript(
+            command: fakeCommand("/tmp/mo"),
+            args: ["clean", "--permanent", "--plan", "/Users/test/Library/Application Support/Burrow/clean-plans/x.plan", "--apply", "--stream"],
+            cleanupPlan: plan)
+        let engine = "'/tmp/mo' 'clean' '--permanent' '--plan' '/Users/test/Library/Application Support/Burrow/clean-plans/x.plan' '--apply' '--stream'"
+        XCTAssertTrue(s.contains(engine), s)
+        XCTAssertFalse(s.contains("-delete"), "the script no longer deletes; the engine does, from the plan")
+        let checkIndex = try XCTUnwrap(s.range(of: "/bin/date +%s")).lowerBound
+        let identityIndex = try XCTUnwrap(s.range(of: "/usr/bin/stat -f '%d:%i:%u:%p' -- '\(item.path)'")).lowerBound
+        let engineIndex = try XCTUnwrap(s.range(of: engine)).lowerBound
+        XCTAssertLessThan(checkIndex, engineIndex, "expiry is checked before the engine runs")
+        XCTAssertLessThan(identityIndex, engineIndex, "the reviewed identity is checked before the engine runs")
+        XCTAssertTrue(s.contains("|| exit \(ElevatedExitCode.boundaryCheckFailed)"))
+    }
+
     func testElevatedScript_neutralizesShellMetacharacters() {
         let s = EngineCLI.elevatedScript(command: fakeCommand("/tmp/$(reboot)/mo"),
                                        args: ["a;b", "`x`"])

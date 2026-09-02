@@ -350,6 +350,138 @@ final class OperationFlowTests: XCTestCase {
         XCTAssertFalse(message.contains("Nothing was cleaned"), message)
     }
 
+    // MARK: - The reviewed clean: plan-then-execute
+
+    private func makeReviewedPlan() throws -> (plan: CleanupExecutionPlan, parent: URL, item: URL) {
+        var parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("burrow-flow-plan-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        parent = URL(fileURLWithPath: try XCTUnwrap(
+            InvokingUserIdentity.canonicalPath(parent.path)), isDirectory: true)
+        let item = parent.appendingPathComponent("reviewed-cache")
+        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: false)
+        let snapshot = try CleanupSnapshot.capture(
+            list: CleanList(categories: [
+                .init(name: "Test", items: [
+                    .init(path: item.path, sizeBytes: 1, sizeText: "1B", itemCount: nil),
+                ]),
+            ], summaryTotalText: "1B", summaryItemCount: 1),
+            approvedRootURLs: [parent])
+        return (try snapshot.plan(selectedPaths: [item.path]), parent, item)
+    }
+
+    /// Confirm on the review runs `clean --apply --permanent --plan <file> --stream` over the plan
+    /// file — not a fresh `clean` — elevated, with the plan still attached for the routes' own
+    /// checks; the file lists exactly the reviewed paths and is deleted once the run ends.
+    func testReviewedClean_runsTheEngineOverThePlanFile_thenDeletesIt() async throws {
+        let (plan, parent, item) = try makeReviewedPlan()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let planFile = try plan.writePlanFile(in: parent.appendingPathComponent("plans"))
+        XCTAssertEqual(try String(contentsOf: planFile, encoding: .utf8)
+                           .split(separator: "\n").map(String.init).filter { !$0.hasPrefix("#") },
+                       [item.path], "the plan file lists exactly the reviewed paths")
+
+        let port = FakeProcessPort(script: [
+            .line(#"{"event":"removed","path":"\#(item.path)","bytes":1}"#),
+            .line(#"{"event":"done","freed_bytes":1,"freed_human":"1B","moved_to_trash_bytes":0,"moved_to_trash_human":"0B","removed":1,"failed":0,"protected":0}"#),
+            .exited(0),
+        ])
+        let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
+                                                resolveEngine: { _ in "/fake/bundled/burrow" },
+                                                center: OperationCenter())
+        ConductorBundleFixture.withStreamSwitch(true) {
+            ConductorBundleFixture.withConductor(present: true) {
+                flow.start(.reviewedClean(plan: plan, planFile: planFile,
+                                          categoryOf: { _ in "Test" }, label: "Cleaning reviewed caches"))
+            }
+        }
+        await settle(flow)
+
+        let spec = try XCTUnwrap(port.specs.first)
+        XCTAssertEqual(spec.arguments, ["clean", "--permanent", "--plan", planFile.path, "--apply", "--stream"])
+        XCTAssertTrue(spec.elevated)
+        XCTAssertTrue(spec.requiresCurrentBundle, "the engine run is bundle-sealed like every elevated engine run")
+        XCTAssertEqual(spec.cleanupPlan, plan, "the routes still get the plan for their own checks")
+        XCTAssertEqual(URL(fileURLWithPath: spec.executable).lastPathComponent, "burrow")
+        guard case .finished(.done(exit: 0)) = flow.state else { return XCTFail("\(flow.state)") }
+        XCTAssertEqual(flow.report?.groups.map(\.title), ["Test"], "grouped under the review's category")
+        XCTAssertEqual(flow.report?.summary?.completionLine, "Cleaned 1B · 1 items")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planFile.path),
+                       "the plan file is deleted once the run has ended")
+    }
+
+    /// With the streaming switch off the same run is buffered: `--apply`, no `--stream`, still
+    /// the plan file and never a fresh clean.
+    func testReviewedClean_withoutStreaming_stillRunsThePlanNotAFreshClean() async throws {
+        let (plan, parent, _) = try makeReviewedPlan()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let planFile = try plan.writePlanFile(in: parent.appendingPathComponent("plans"))
+        EngineCLI.bundledExecutableOverride = "/fake/bundled/burrow"
+        defer { EngineCLI.bundledExecutableOverride = nil }
+        let port = FakeProcessPort(script: [.exited(0)])
+        let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
+                                                resolveEngine: { _ in "/fake/bundled/burrow" },
+                                                center: OperationCenter())
+        ConductorBundleFixture.withStreamSwitch(false) {
+            flow.start(.reviewedClean(plan: plan, planFile: planFile, label: "Cleaning reviewed caches"))
+        }
+        await settle(flow)
+        let spec = try XCTUnwrap(port.specs.first)
+        XCTAssertEqual(spec.arguments, ["clean", "--permanent", "--plan", planFile.path, "--apply"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planFile.path))
+    }
+
+    /// A refused path is in the report, never dropped: the engine's `protected` line with its
+    /// reason renders as a review item, and the nonzero exit reads as a partial run.
+    func testReviewedClean_showsTheEnginesRefusals() async throws {
+        let (plan, parent, item) = try makeReviewedPlan()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let planFile = try plan.writePlanFile(in: parent.appendingPathComponent("plans"))
+        let port = FakeProcessPort(script: [
+            .line(#"{"event":"protected","path":"\#(item.path)","reason":"not_a_clean_target"}"#),
+            .line(#"{"event":"done","freed_bytes":0,"freed_human":"0B","moved_to_trash_bytes":0,"moved_to_trash_human":"0B","removed":0,"failed":0,"protected":1}"#),
+            .exited(1),
+        ])
+        let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
+                                                resolveEngine: { _ in "/fake/bundled/burrow" },
+                                                center: OperationCenter())
+        ConductorBundleFixture.withStreamSwitch(true) {
+            ConductorBundleFixture.withConductor(present: true) {
+                flow.start(.reviewedClean(plan: plan, planFile: planFile, label: "Cleaning reviewed caches"))
+            }
+        }
+        await settle(flow)
+        guard case .finished(.failed(let message)) = flow.state else { return XCTFail("\(flow.state)") }
+        XCTAssertTrue(message.contains("could not be removed"), message)
+        // The report is reduced from the engine's own lines even on failure: nothing optimistic.
+        let items = flow.report?.groups.flatMap(\.items) ?? []
+        XCTAssertEqual(items.map(\.marker), [.review])
+        XCTAssertEqual(items.first?.text, "\(item.path) — refused: not a clean target")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planFile.path))
+    }
+
+    /// The plan file is removed on every terminal path, including a refusal before the spawn.
+    func testReviewedClean_deletesThePlanFileWhenTheRunIsRefusedBeforeSpawning() async throws {
+        let (plan, parent, _) = try makeReviewedPlan()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let planFile = try plan.writePlanFile(in: parent.appendingPathComponent("plans"))
+        let port = FakeProcessPort(script: [])
+        let flow = OperationFlow<TaskRunReport>(
+            process: port, hasFullDiskAccess: { true },
+            resolveEngine: { _ in "/fake/bundled/burrow" },
+            resolveInvokingUser: { throw ElevatedSetupError.noInvokingUser },
+            center: OperationCenter())
+        ConductorBundleFixture.withStreamSwitch(true) {
+            ConductorBundleFixture.withConductor(present: true) {
+                flow.start(.reviewedClean(plan: plan, planFile: planFile, label: "Cleaning reviewed caches"))
+            }
+        }
+        await settle(flow)
+        guard case .finished(.failed) = flow.state else { return XCTFail("\(flow.state)") }
+        XCTAssertTrue(port.specs.isEmpty, "nothing spawned")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planFile.path))
+    }
+
     /// This is about the DIRECT engine path, so it has to pin the no-conductor world: with a
     /// conductor staged, `streamOverride` supplies an executable for a non-elevated `clean`
     /// before `resolveEngine` is ever consulted, and the unresolvable-engine branch under test is

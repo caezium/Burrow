@@ -54,25 +54,38 @@ enum BurrowStreamReport {
     /// skipped, so a stray warning on stderr never breaks the result screen. `title` names the one
     /// group the items land in — pass `groupTitle(forMo:)`; the default keeps clean's wording for
     /// the clean-only callers.
-    static func reduce(_ lines: [String], title: String? = nil) -> TaskRunReport {
+    static func reduce(_ lines: [String], title: String? = nil,
+                       categoryOf: ((String) -> String?)? = nil) -> TaskRunReport {
         var items: [TaskItem] = []
+        // `categoryOf` groups items back under the review categories the user ticked them in
+        // (the reviewed clean); without it every item lands in the one `title` group.
+        var groupNames: [String] = []
+        var grouped: [String: [TaskItem]] = [:]
         var summary: TaskSummary?
+
+        func add(_ item: TaskItem, path: String?) {
+            items.append(item)
+            guard let categoryOf else { return }
+            let name = path.flatMap(categoryOf) ?? title ?? cleanupTitle
+            if grouped[name] == nil { groupNames.append(name) }
+            grouped[name, default: []].append(item)
+        }
 
         for line in lines {
             guard let obj = object(from: line), let event = obj["event"] as? String else { continue }
             switch event {
             case "removed":
-                if let p = obj["path"] as? String { items.append(TaskItem(marker: .ok, text: p)) }
+                if let p = obj["path"] as? String { add(TaskItem(marker: .ok, text: p), path: p) }
             case "would_remove":
-                if let p = obj["path"] as? String { items.append(TaskItem(marker: .action, text: p)) }
+                if let p = obj["path"] as? String { add(TaskItem(marker: .action, text: p), path: p) }
             case "failed":
-                if let p = obj["path"] as? String { items.append(TaskItem(marker: .error, text: p)) }
+                if let p = obj["path"] as? String { add(TaskItem(marker: .error, text: p), path: p) }
             case "protected":
                 // A refusal is never silently dropped: it lands in the report with the
                 // engine's reason when it gives one (`not_a_clean_target` for a plan path
                 // outside the clean roots), so the user can see WHAT was left and why.
                 if let p = obj["path"] as? String {
-                    items.append(TaskItem(marker: .review, text: protectedText(p, reason: obj["reason"] as? String)))
+                    add(TaskItem(marker: .review, text: protectedText(p, reason: obj["reason"] as? String)), path: p)
                 }
             case "task":
                 if let name = obj["name"] as? String {
@@ -80,14 +93,14 @@ enum BurrowStreamReport {
                     if obj["skipped"] as? Bool == true {
                         // Skipped is not failed: nothing was attempted. The engine says why
                         // (`requires_admin` when an un-elevated run met a root-only task).
-                        items.append(TaskItem(marker: .info,
-                                              text: skippedText(name, reason: obj["reason"] as? String)))
+                        add(TaskItem(marker: .info,
+                                     text: skippedText(name, reason: obj["reason"] as? String)), path: nil)
                     } else {
-                        items.append(TaskItem(marker: ok ? .ok : .error, text: name))
+                        add(TaskItem(marker: ok ? .ok : .error, text: name), path: nil)
                     }
                 }
             case "would_run":
-                if let name = obj["name"] as? String { items.append(TaskItem(marker: .action, text: name)) }
+                if let name = obj["name"] as? String { add(TaskItem(marker: .action, text: name), path: nil) }
             case "done":
                 summary = makeSummary(from: obj, itemCount: items.count)
             default:
@@ -95,7 +108,14 @@ enum BurrowStreamReport {
             }
         }
 
-        let groups = items.isEmpty ? [] : [TaskGroup(title: title ?? cleanupTitle, items: items)]
+        let groups: [TaskGroup]
+        if items.isEmpty {
+            groups = []
+        } else if categoryOf != nil {
+            groups = groupNames.map { TaskGroup(title: $0, items: grouped[$0] ?? []) }
+        } else {
+            groups = [TaskGroup(title: title ?? cleanupTitle, items: items)]
+        }
 
         // Nothing was NDJSON → parse the lines as mo's human text instead of returning a blank
         // report. That path is live, not hypothetical: `OperationFlow.start` only appends

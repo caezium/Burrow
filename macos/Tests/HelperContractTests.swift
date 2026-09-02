@@ -195,9 +195,11 @@ final class HelperContractTests: XCTestCase {
     }
 
     func testSystemTools_setIsExactlyWhatTheOperationsNeed() {
+        // `find` left with the reviewed clean's `find -delete` loop: the engine's own rails
+        // delete now, from a plan file, so root has one fewer general-purpose tool to run.
         XCTAssertEqual(HelperSystemTool.all,
                        ["/usr/bin/dscacheutil", "/usr/bin/killall",
-                        "/usr/sbin/ipconfig", "/usr/bin/sfltool", "/usr/bin/find"])
+                        "/usr/sbin/ipconfig", "/usr/bin/sfltool"])
     }
 
     /// No step may ever name a shell. The path this replaces elevated
@@ -205,13 +207,12 @@ final class HelperContractTests: XCTestCase {
     /// which put a command string in front of a root shell parser.
     func testSteps_neverInvokeAShell() {
         let shells = ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/env"]
-        // Give the reviewed clean its path list, as the sibling argv test does.
-        // Without one it resolves to no steps, so the `find` step — the only
-        // one built from caller-supplied data, and thus the one most worth
-        // checking for a shell — was never actually examined here.
-        let reviewedPaths = ["/Users/henry/Library/Caches/example"]
+        // Give the reviewed clean its plan file, as the sibling argv test does.
+        // Without one it resolves to no steps, so the step built around the
+        // one caller-derived value would never actually be examined here.
+        let planFile = "/private/tmp/burrow-helper-plan.abc123/plan.plan"
         for operation in HelperOperation.allCases {
-            for step in operation.steps(interface: "en0", reviewedPaths: reviewedPaths) {
+            for step in operation.steps(interface: "en0", reviewedPlanFile: planFile) {
                 if case .system(let path) = step.executable {
                     XCTAssertFalse(shells.contains(path), "\(operation) must not run a shell")
                     XCTAssertTrue(HelperSystemTool.all.contains(path),
@@ -336,11 +337,10 @@ final class HelperContractTests: XCTestCase {
     /// anywhere in here would signal that someone started templating strings
     /// into a command that runs as root.
     func testArguments_neverEmptyAndNeverShellMetacharacters() {
-        // The reviewed clean is driven by its path list, so it is given one —
-        // and a path the daemon would have had to validate before it got here.
-        let reviewedPaths = ["/Users/henry/Library/Caches/example"]
+        // The reviewed clean is driven by the daemon's plan file, so it is given one.
+        let planFile = "/private/tmp/burrow-helper-plan.abc123/plan.plan"
         for op in HelperOperation.allCases {
-            let steps = op.steps(interface: "en0", reviewedPaths: reviewedPaths)
+            let steps = op.steps(interface: "en0", reviewedPlanFile: planFile)
             XCTAssertFalse(steps.isEmpty, "\(op) must resolve to at least one command")
             for token in steps.flatMap(\.arguments) {
                 XCTAssertFalse(token.contains(where: { ";|&`$<>\n\0".contains($0) }),
@@ -707,20 +707,21 @@ final class HelperReviewedRequestTests: XCTestCase {
         XCTAssertNil(HelperOperation.cleanReviewed.engineArguments)
     }
 
-    func testStepsAreFixedFindInvocationsOverTheValidatedPaths() {
-        let paths = ["/Users/henry/Library/Caches/a", "/Library/Caches/b"]
-        let steps = HelperOperation.cleanReviewed.steps(interface: nil, reviewedPaths: paths)
-        XCTAssertEqual(steps.count, 2)
-        for (step, path) in zip(steps, paths) {
-            XCTAssertEqual(step.executable, .system(HelperSystemTool.find))
-            XCTAssertEqual(step.arguments, ["-x", path, "-depth", "-delete"])
-        }
-        XCTAssertTrue(HelperSystemTool.all.contains(HelperSystemTool.find))
+    /// The reviewed clean is ONE engine run over the daemon's plan file, with fixed flags:
+    /// `--apply --permanent` (this is the permanent path), `--plan <file>` (no re-scan; the
+    /// engine removes only the listed paths, each through its rails), `--stream` (live relay).
+    func testStepsAreOneEngineRunOverTheDaemonsPlanFile() {
+        let planFile = "/private/tmp/burrow-helper-plan.abc123/plan.plan"
+        let steps = HelperOperation.cleanReviewed.steps(interface: nil, reviewedPlanFile: planFile)
+        XCTAssertEqual(steps, [HelperStep(
+            executable: .bundledEngine,
+            arguments: ["clean", "--apply", "--permanent", "--plan", planFile, "--stream"])])
+        XCTAssertTrue(HelperOperation.cleanReviewed.usesBundledEngine)
     }
 
-    func testNoReviewedPathsMeansNoStepsRatherThanADeleteOfSomethingElse() {
+    func testNoPlanFileMeansNoStepsRatherThanACleanOfSomethingElse() {
         XCTAssertTrue(HelperOperation.cleanReviewed.steps(interface: nil,
-                                                          reviewedPaths: []).isEmpty)
+                                                          reviewedPlanFile: nil).isEmpty)
     }
 }
 
