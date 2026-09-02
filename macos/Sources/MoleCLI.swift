@@ -160,15 +160,11 @@ enum MoleCLI {
         }
 
         let user = command.invokingUser
-        let environment = [
-            "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME=\(user.canonicalHome)",
-            "USER=\(user.username)",
-            "LOGNAME=\(user.username)",
-            "SUDO_USER=\(user.username)",
-            "SUDO_UID=\(user.uid)",
-            "LC_ALL=C",
-        ]
+        // The same variables the privileged helper gives its root child — including the engine's
+        // BURROW_HOME / BURROW_PRIVILEGED contract — so both elevation routes agree.
+        let environment = PrivilegedEngineEnvironment.variables(
+            home: user.canonicalHome, username: user.username, uid: UInt32(user.uid))
+            .map { "\($0.key)=\($0.value)" }
         let isolatedEnvironment = ["/usr/bin/env", "-i"] + environment
         let run: String
         if let cleanupPlan {

@@ -242,15 +242,50 @@ struct HelperResolvedInvokingUser: Equatable, Sendable {
 
     /// A complete, deterministic environment for every root child. Nothing is
     /// inherited from launchd and no client-provided string is copied here.
+    /// Built by `PrivilegedEngineEnvironment` so the daemon and the osascript
+    /// path hand the engine the same variables.
     var childEnvironment: [String: String] {
+        Dictionary(uniqueKeysWithValues: PrivilegedEngineEnvironment.variables(
+            home: canonicalHome, username: username, uid: uid).map { ($0.key, $0.value) })
+    }
+}
+
+/// The environment every ELEVATED engine invocation runs with — the one
+/// builder behind both elevation routes (the privileged helper's
+/// `childEnvironment` and the osascript `elevatedScript` preamble), so the
+/// two cannot hand the engine different facts about who asked.
+///
+/// Two variables are the engine's own privileged-run contract (burrow-engine
+/// BUR-130/BUR-141) and exist because a root process has a root `$HOME`:
+///
+///   * `BURROW_HOME` — the invoking user's real home, as the engine's
+///     highest-precedence home override. Without it an elevated uninstall
+///     enumerates leftovers under `/var/root`, finds none, and reports "no
+///     support files" about an app with hundreds of megabytes of them; the
+///     engine refuses to run with a `/var/root` home unless this is set.
+///   * `BURROW_PRIVILEGED=1` — tells the engine it is running with rights
+///     the invoking user does not have, so it ignores `BURROW_FCLONES` /
+///     `BURROW_BRCTL` overrides pointing outside its own bundle directory.
+///     A user-writable override is exactly what must never be handed root.
+///
+/// Ordered, because the osascript preamble is a shell string and tests pin
+/// its exact text.
+enum PrivilegedEngineEnvironment {
+    static let homeKey = "BURROW_HOME"
+    static let privilegedKey = "BURROW_PRIVILEGED"
+    static let privilegedValue = "1"
+
+    static func variables(home: String, username: String, uid: UInt32) -> [(key: String, value: String)] {
         [
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME": canonicalHome,
-            "USER": username,
-            "LOGNAME": username,
-            "SUDO_USER": username,
-            "SUDO_UID": String(uid),
-            "LC_ALL": "C",
+            ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
+            ("HOME", home),
+            ("USER", username),
+            ("LOGNAME", username),
+            ("SUDO_USER", username),
+            ("SUDO_UID", String(uid)),
+            ("LC_ALL", "C"),
+            (homeKey, home),
+            (privilegedKey, privilegedValue),
         ]
     }
 }

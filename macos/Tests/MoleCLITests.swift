@@ -282,6 +282,25 @@ final class MoleCLITests: XCTestCase {
         XCTAssertTrue(s.contains("'LC_ALL=C'"))
     }
 
+    /// The engine's privileged-run contract rides on every elevated invocation: BURROW_HOME
+    /// names the invoking user's real home (the engine refuses a /var/root home without it, and
+    /// would otherwise enumerate root's ~/Library for leftovers), and BURROW_PRIVILEGED=1 makes
+    /// it ignore sidecar overrides outside its own bundle. Both spelled exactly — the engine
+    /// reads these names, not a paraphrase.
+    func testElevatedScript_carriesTheEnginesPrivilegedRunContract() {
+        let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/mo"), args: ["uninstall", "--apply", "com.x.Y"])
+        XCTAssertTrue(s.contains("'BURROW_HOME=/Users/test'"), s)
+        XCTAssertTrue(s.contains("'BURROW_PRIVILEGED=1'"), s)
+        XCTAssertFalse(s.contains("BURROW_HOME=/var/root"))
+        // The same builder feeds the privileged helper, so the two routes cannot disagree.
+        let vars = Dictionary(uniqueKeysWithValues:
+            PrivilegedEngineEnvironment.variables(home: "/Users/test", username: "test", uid: 501)
+                .map { ($0.key, $0.value) })
+        XCTAssertEqual(vars["BURROW_HOME"], "/Users/test")
+        XCTAssertEqual(vars["BURROW_PRIVILEGED"], "1")
+        XCTAssertEqual(vars["HOME"], "/Users/test")
+    }
+
     func testElevatedScript_neutralizesShellMetacharacters() {
         let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/$(reboot)/mo"),
                                        args: ["a;b", "`x`"])

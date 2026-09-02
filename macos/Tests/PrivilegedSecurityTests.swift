@@ -71,6 +71,8 @@ final class PrivilegedIdentityTests: XCTestCase {
         XCTAssertTrue(script.contains("'HOME=/Users/name with space'"))
         XCTAssertTrue(script.contains("'SUDO_UID=501'"))
         XCTAssertFalse(script.contains("HOME=/var/root"))
+        XCTAssertTrue(script.contains("'BURROW_HOME=/Users/name with space'"))
+        XCTAssertTrue(script.contains("'BURROW_PRIVILEGED=1'"))
     }
 
     /// The layout every shipped copy of Burrow actually has.

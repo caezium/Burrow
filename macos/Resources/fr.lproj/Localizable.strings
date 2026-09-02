@@ -485,7 +485,7 @@
 "“%1$@” resolves to %2$d applications (%3$@), so the engine refuses to act on it. Remove them one at a time." = "« %1$@ » correspond à %2$d applications (%3$@) ; le moteur refuse donc d'agir. Supprime-les une par une.";
 "The engine resolved %1$d applications for %2$d selected, so the sets don't line up." = "Le moteur a trouvé %1$d applications pour %2$d sélectionnées : les ensembles ne concordent pas.";
 "The engine won't remove %1$@: %2$@" = "Le moteur ne supprimera pas %1$@ : %2$@";
-"Needs an administrator: %@. Burrow doesn't elevate this run, so it may fail on the app itself." = "Nécessite un administrateur : %@. Burrow n'élève pas les droits pour cette exécution ; la suppression de l'app elle-même peut donc échouer.";
+"Needs an administrator: %@. Burrow will ask for an administrator password and remove it with that authorization." = "Nécessite un administrateur : %@. Burrow demandera un mot de passe administrateur et supprimera l'app avec cette autorisation.";
 "one of these apps" = "l'une de ces apps";
 "Homebrew removes %1$@: `%2$@`. `--zap` also deletes configuration and data the cask declares, which the preview can't list." = "Homebrew supprime %1$@ : `%2$@`. `--zap` efface aussi la configuration et les données déclarées par le cask, que l'aperçu ne peut pas lister.";
 "aborted — nothing removed" = "interrompu — rien supprimé";

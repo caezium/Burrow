@@ -356,8 +356,49 @@ final class UninstallGuardTests: XCTestCase {
         XCTAssertTrue(plan.requiresAdmin)
         XCTAssertNil(UninstallGuard.abortReason(confirmed: ["org.localsend.localsendApp"],
                                                 dryRun: .engine(plan), expecting: []))
-        XCTAssertTrue(UninstallGuard.advisories(for: plan).contains { $0.contains("LocalSend") },
-                      "the advisory must name the app that needs elevation")
+        let advisory = try XCTUnwrap(UninstallGuard.advisories(for: plan).first { $0.contains("LocalSend") },
+                                     "the advisory must name the app that needs elevation")
+        XCTAssertTrue(advisory.contains("administrator password"),
+                      "the advisory announces the prompt the elevated route raises, not a failure: \(advisory)")
+        XCTAssertFalse(advisory.contains("doesn't elevate"), "GitHub #253: that sentence was the bug")
+    }
+
+    // MARK: - Elevation route (GitHub #253 / BUR-139)
+
+    /// `requires_admin` is what makes the apply run elevated — the bundle cannot come off any
+    /// other way, and the advisory above promises a password prompt that this is what delivers.
+    func testElevation_requiresAdminRoutesTheApplyThroughThePrivilegedPath() throws {
+        let elevated = dryRunPlain
+            .replacingOccurrences(of: "\"needs_admin\":false", with: "\"needs_admin\":true")
+            .replacingOccurrences(of: "\"requires_admin\":false", with: "\"requires_admin\":true")
+        guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: elevated, stderr: "") else {
+            return XCTFail("expected the engine case")
+        }
+        XCTAssertEqual(UninstallGuard.elevation(for: plan), .elevated(apps: ["LocalSend"]))
+    }
+
+    /// A per-app `needs_admin` is enough on its own: the top-level flag is derived from it, and
+    /// the route must not depend on which of the two the engine happens to set.
+    func testElevation_aPerAppNeedsAdminAloneIsEnough() throws {
+        let elevated = dryRunPlain
+            .replacingOccurrences(of: "\"needs_admin\":false", with: "\"needs_admin\":true")
+        guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: elevated, stderr: "") else {
+            return XCTFail("expected the engine case")
+        }
+        XCTAssertFalse(plan.requiresAdmin)
+        XCTAssertEqual(UninstallGuard.elevation(for: plan), .elevated(apps: ["LocalSend"]))
+    }
+
+    /// The only elevation the app ever does for an uninstall is the one the dry run asked for:
+    /// a user-writable bundle and its ~/Library leftovers stay with the invoking user.
+    func testElevation_noAdminRequirementStaysUnelevated() throws {
+        for fixture in [dryRunPlain, dryRunBrew, dryRunUnknown] {
+            guard case .engine(let plan) = UninstallGuard.readDryRun(stdout: fixture, stderr: "") else {
+                return XCTFail("expected the engine case")
+            }
+            XCTAssertEqual(UninstallGuard.elevation(for: plan), .unelevated)
+            XCTAssertFalse(UninstallGuard.advisories(for: plan).contains { $0.contains("administrator") })
+        }
     }
 
     // MARK: - Outcomes

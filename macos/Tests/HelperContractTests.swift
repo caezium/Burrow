@@ -58,6 +58,9 @@ final class HelperContractTests: XCTestCase {
         XCTAssertEqual(resolved.childEnvironment["SUDO_USER"], "jane doe")
         XCTAssertEqual(resolved.childEnvironment["SUDO_UID"], "502")
         XCTAssertFalse(resolved.childEnvironment.values.contains("/var/root"))
+        // The engine's privileged-run contract, on the helper route too.
+        XCTAssertEqual(resolved.childEnvironment["BURROW_HOME"], "/Users/Jane Doe")
+        XCTAssertEqual(resolved.childEnvironment["BURROW_PRIVILEGED"], "1")
     }
 
     func testRequestCarriesAnExplicitInvokingUserClaimAndRejectsItsAbsence() throws {

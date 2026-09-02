@@ -1487,12 +1487,41 @@ final class SoftwareModel: ObservableObject {
                 DispatchQueue.main.sync { MainActor.assumeIsolated { self.trashSubsets(subsets) } }
             }
 
-            // Verified — the ticket's stdin answers mo's prompts (proceed +
-            // final confirm); they only ever apply to the set the dry run
-            // just pinned.
-            let res = try? MoEngine.shared.capture(
-                MoCommand(target: .executable(ticket.command.spawnPath), args: ticket.command.args,
-                          stdin: ticket.command.stdin, timeout: ticket.command.timeout ?? 600))
+            // Verified. HOW the apply runs is the dry run's call (`UninstallGuard.elevation`):
+            // a bundle the invoking user cannot write needs administrator rights, and the only
+            // honest way to give it those is the same elevation Clean/Optimize use — macOS asks
+            // the user to authenticate, then the sealed engine runs as root with BURROW_HOME
+            // pointing back at this user's home so the leftovers it removes alongside the
+            // bundle are this user's, not root's. Everything else stays un-elevated: the
+            // ticket's stdin answers a legacy mo's prompts (proceed + final confirm), and they
+            // only ever apply to the set the dry run just pinned.
+            let elevation: UninstallGuard.Elevation
+            if case .engine(let plan) = reading { elevation = UninstallGuard.elevation(for: plan) }
+            else { elevation = .unelevated }
+            let res: Captured?
+            switch elevation {
+            case .unelevated:
+                res = try? MoEngine.shared.capture(
+                    MoCommand(target: .executable(ticket.command.spawnPath), args: ticket.command.args,
+                              stdin: ticket.command.stdin, timeout: ticket.command.timeout ?? 600))
+            case .elevated:
+                switch ElevatedEngineRun.capture(executable: ticket.command.spawnPath,
+                                                 args: ticket.command.args,
+                                                 timeout: ticket.command.timeout ?? 600) {
+                case .captured(let captured):
+                    res = captured
+                case .authCancelled:
+                    Task { @MainActor in
+                        self.loading = false
+                        OperationCenter.shared.end(opId, success: false,
+                                                   detail: NSLocalizedString("cancelled — nothing removed", comment: ""))
+                    }
+                    return
+                case .launchFailed(let reason):
+                    // Read by the failure branch below as the engine's reason: nothing ran.
+                    res = Captured(stdout: "", stderr: reason, exitCode: ElevatedExitCode.launchFailed)
+                }
+            }
             // A zero exit alone isn't removal: an `ok:false` envelope is the engine saying it
             // refused or failed, so it counts as a failure here too. Narrowing only — a legacy
             // `mo` emits no envelope, and a success envelope leaves this untouched, so no

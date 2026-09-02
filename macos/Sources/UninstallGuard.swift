@@ -485,18 +485,49 @@ enum UninstallGuard {
         return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
+    // MARK: - How the apply is run: elevated or not
+
+    /// Which process the real removal runs in, decided from the post-consent dry run.
+    enum Elevation: Equatable {
+        /// Every bundle is writable by the invoking user: the apply runs as that user, exactly
+        /// like the dry run did. Leftovers under `~/Library` never need more than that.
+        case unelevated
+        /// At least one bundle needs administrator rights (the engine's `requires_admin`, or a
+        /// per-app `needs_admin`). The apply runs through the privileged path, so macOS asks
+        /// the user to authenticate; `apps` names the bundles that made it necessary, for the
+        /// prompt copy.
+        case elevated(apps: [String])
+    }
+
+    /// The route for `plan`. Pure, so the decision is testable without a prompt.
+    ///
+    /// An elevated run is the ONLY way a root-owned bundle comes off: the un-elevated apply
+    /// hits EPERM on it and the engine then leaves its support files alone too (`partial`),
+    /// which is the re-opened GitHub #253 — the user was told "needs an administrator" and
+    /// nothing asked them for one. Elevating here is what turns that advisory back into a
+    /// prompt. It is also the ONLY time the app elevates an uninstall: a plan with no admin
+    /// requirement stays as the invoking user, because root is not a better way to trash
+    /// files under that user's own home, and `BURROW_HOME` (see
+    /// `PrivilegedEngineEnvironment`) is what keeps the elevated engine looking under the
+    /// user's home rather than root's for the leftovers it removes alongside the bundle.
+    static func elevation(for plan: Plan) -> Elevation {
+        let admin = plan.adminApps.map(\.name)
+        guard plan.requiresAdmin || !admin.isEmpty else { return .unelevated }
+        return .elevated(apps: admin)
+    }
+
     /// Facts the dry run turned up that the run's REPORT has to mention — they do not block, and
     /// deliberately so.
     ///
     /// `requiresAdmin` in particular is NOT an abort: the engine's `needs_admin` is an `access(2)`
-    /// approximation that does not consult ACLs, so refusing on it would block removals that would
-    /// have worked. The engine attempts the removal regardless and, if it fails, reports the
-    /// oracle's own `"Re-run with administrator privileges"` suggestion — which `Outcome` surfaces.
+    /// approximation that does not consult ACLs. It is what makes the apply run ELEVATED (see
+    /// `elevation(for:)`), so the advisory tells the user a password prompt is coming rather
+    /// than predicting a failure.
     static func advisories(for plan: Plan) -> [String] {
         var out: [String] = []
-        if plan.requiresAdmin {
-            let names = plan.adminApps.map(\.name).joined(separator: ", ")
-            out.append(String(format: NSLocalizedString("Needs an administrator: %@. Burrow doesn't elevate this run, so it may fail on the app itself.", comment: "uninstall advisory"),
+        if case .elevated(let apps) = elevation(for: plan) {
+            let names = apps.joined(separator: ", ")
+            out.append(String(format: NSLocalizedString("Needs an administrator: %@. Burrow will ask for an administrator password and remove it with that authorization.", comment: "uninstall advisory"),
                               names.isEmpty ? NSLocalizedString("one of these apps", comment: "uninstall advisory") : names))
         }
         for command in plan.externalCommands {
