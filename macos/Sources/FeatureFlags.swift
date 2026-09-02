@@ -73,8 +73,9 @@ enum FeatureFlags {
         return value
     }
 
-    /// One fixed-name exposure event per flag per launch, carrying only the
-    /// allowlisted key and its boolean. The key is only marked reported
+    /// One PostHog-native `$feature_flag_called` exposure per flag per launch,
+    /// carrying only the allowlisted key and its boolean under the property
+    /// names PostHog's flag usage views read. The key is only marked reported
     /// when `Telemetry` can actually queue the event; while opted out,
     /// before `start()`, or without a release key, the lookup remains
     /// eligible so a later enabled session can emit the exposure.
@@ -84,7 +85,7 @@ enum FeatureFlags {
         let alreadyReported = !exposedThisLaunch.insert(key).inserted
         lock.unlock()
         guard !alreadyReported else { return }
-        Telemetry.capture("feature_flag_exposed", ["flag": key.rawValue, "value": value])
+        Telemetry.capture("$feature_flag_called", ["$feature_flag": key.rawValue, "$feature_flag_response": value])
     }
 
     // MARK: - Remote payload filter
