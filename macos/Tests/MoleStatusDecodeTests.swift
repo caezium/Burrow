@@ -197,6 +197,27 @@ final class MoleStatusDecodeTests: XCTestCase {
         XCTAssertNoThrow(try decode(object))
     }
 
+    /// BUR-140: the engine samples CPU over a real window now and says so with
+    /// `cpu.per_core_estimated:false` (true on the old quantised path). The decoder reads the
+    /// per-core array either way and never keys on the flag — nothing in the app hard-codes the
+    /// old quantised expectations.
+    func testCPU_toleratesPerCoreEstimatedEitherWayOrAbsent() throws {
+        for flag in [false, true] {
+            var object = try goldenObject()
+            var cpu = try XCTUnwrap(object["cpu"] as? [String: Any])
+            cpu["per_core_estimated"] = flag
+            object["cpu"] = cpu
+            let s = try decode(object)
+            XCTAssertEqual(s.cpu.perCore?.count, 14, "per_core_estimated=\(flag) still decodes the cores")
+            XCTAssertEqual(s.cpu.usage, 41.240981239374186, accuracy: 1e-9)
+        }
+        var object = try goldenObject()
+        var cpu = try XCTUnwrap(object["cpu"] as? [String: Any])
+        cpu.removeValue(forKey: "per_core_estimated")
+        object["cpu"] = cpu
+        XCTAssertNoThrow(try decode(object), "an engine that never sends the flag decodes too")
+    }
+
     // MARK: - Helpers
 
     private func decode(_ json: String) throws -> MoleStatus {
