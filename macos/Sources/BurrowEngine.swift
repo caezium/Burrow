@@ -166,13 +166,18 @@ enum BurrowEngine {
         (Store.d.object(forKey: streamingKey) as? Bool) ?? true
     }
 
-    /// Default OFF: the per-child walk stays the default because its "scanning <child> · k/N"
-    /// progress tells the user WHAT is being measured. The single streamed `analyze --progress` is
-    /// faster but its only signal is a running file count (the engine's per-tick path is usually
-    /// empty), which reads as opaque. Opt into the fast-but-opaque path with:
-    ///   `defaults write dev.caezium.Burrow BurrowStreamAnalyze -bool YES`
+    /// The analyze kill-switch key (`BurrowStreamAnalyze`), read through `Store.d` like
+    /// `streamingKey`.
+    static let streamingAnalyzeKey = "BurrowStreamAnalyze"
+
+    /// Default ON: the treemap scan streams `analyze --progress <path>` — the engine's one
+    /// concurrent walk, reporting its live file/dir/byte counters and the path it is on per tick,
+    /// then the full analyze payload as the terminal `result` line (BUR-132) — instead of one
+    /// `analyze` spawn per child directory. Any miss (no bundled engine, a stream that ends
+    /// without a result, the 30 s cap) still falls through to the per-child walk. Kill-switch:
+    ///   `defaults write dev.caezium.Burrow BurrowStreamAnalyze -bool NO`
     static var streamingAnalyzeEnabled: Bool {
-        (Store.d.object(forKey: "BurrowStreamAnalyze") as? Bool) ?? false
+        (Store.d.object(forKey: streamingAnalyzeKey) as? Bool) ?? true
     }
 
     /// The engine commands that take `--stream` and are forwarded with it: clean, optimize and

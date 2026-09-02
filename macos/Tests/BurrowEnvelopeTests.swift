@@ -278,6 +278,21 @@ final class BurrowEnvelopeTests: XCTestCase {
         }
     }
 
+    /// The treemap streams `analyze --progress` by default now that the engine emits it; the
+    /// key stays as a kill-switch.
+    func testStreamingAnalyze_onByDefault_withAKillSwitch() {
+        let saved = Store.d
+        let scratch = UserDefaults(suiteName: StoreTests.scratchSuite)!
+        scratch.removePersistentDomain(forName: StoreTests.scratchSuite)
+        Store.d = scratch
+        defer { scratch.removePersistentDomain(forName: StoreTests.scratchSuite); Store.d = saved }
+        XCTAssertTrue(BurrowEngine.streamingAnalyzeEnabled)
+        scratch.set(false, forKey: BurrowEngine.streamingAnalyzeKey)
+        XCTAssertFalse(BurrowEngine.streamingAnalyzeEnabled)
+        scratch.set(true, forKey: BurrowEngine.streamingAnalyzeKey)
+        XCTAssertTrue(BurrowEngine.streamingAnalyzeEnabled)
+    }
+
     /// No conductor staged → no override, whatever the switch says, because there is nothing to
     /// route to. This is the fallback every call site depends on.
     func testStreamOverride_withoutBundledConductor_keepsDirectEngine() {
