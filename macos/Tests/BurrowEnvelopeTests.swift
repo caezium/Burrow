@@ -265,13 +265,14 @@ final class BurrowEnvelopeTests: XCTestCase {
         }
     }
 
-    func testShouldStreamViaConductor_onlyClean_andOptimize_whenSwitchIsOn() {
+    func testShouldStreamViaConductor_onlyTheCommandsTheEngineStreams_whenSwitchIsOn() {
         withStreamSwitch(true) {
             XCTAssertTrue(BurrowEngine.shouldStreamViaConductor(command: "clean"))
             XCTAssertTrue(BurrowEngine.shouldStreamViaConductor(command: "optimize"))
-            // purge/installer are the interactive PTY flow; uninstall is matcher-gated — neither is
-            // ever streamed, switch on or off.
-            XCTAssertFalse(BurrowEngine.shouldStreamViaConductor(command: "purge"))
+            // `purge --stream` speaks clean's NDJSON vocabulary (BUR-132) and streams too.
+            XCTAssertTrue(BurrowEngine.shouldStreamViaConductor(command: "purge"))
+            // installer has no --stream in the engine (it runs buffered); uninstall is
+            // matcher-gated — neither is ever streamed, switch on or off.
             XCTAssertFalse(BurrowEngine.shouldStreamViaConductor(command: "installer"))
             XCTAssertFalse(BurrowEngine.shouldStreamViaConductor(command: "uninstall"))
         }

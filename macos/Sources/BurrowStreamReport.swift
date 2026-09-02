@@ -72,7 +72,13 @@ enum BurrowStreamReport {
         }
 
         for line in lines {
-            guard let obj = object(from: line), let event = obj["event"] as? String else { continue }
+            guard let obj = object(from: line) else { continue }
+            guard let event = obj["event"] as? String else {
+                // Not an event: a buffered run's one envelope line (the streaming switch off, or
+                // `installer`, which the engine has no `--stream` for). It is the whole report.
+                if let buffered = reduceEnvelope(obj, title: title ?? cleanupTitle) { return buffered }
+                continue
+            }
             switch event {
             case "removed":
                 if let p = obj["path"] as? String { add(TaskItem(marker: .ok, text: p), path: p) }
@@ -165,6 +171,60 @@ enum BurrowStreamReport {
     }
 
     // MARK: - internals
+
+    /// One buffered envelope (`{"ok":…,"data":{…}}`) reduced to the same report the NDJSON path
+    /// yields, so a run that wasn't streamed still renders every path it touched or refused:
+    /// clean's `items`/`removed`/`errors`/`protected`, purge's `artifacts`, installer's
+    /// `installers`, optimize's `tasks`/`results`. nil when the object isn't an envelope.
+    private static func reduceEnvelope(_ obj: [String: Any], title: String) -> TaskRunReport? {
+        guard obj["ok"] is Bool else { return nil }
+        if obj["ok"] as? Bool == false {
+            let message = (obj["error"] as? [String: Any])?["message"] as? String
+                ?? NSLocalizedString("The engine reported an error.", comment: "")
+            return (groups: [TaskGroup(title: title, items: [TaskItem(marker: .error, text: message)])],
+                    summary: nil)
+        }
+        guard let data = obj["data"] as? [String: Any] else { return nil }
+        var items: [TaskItem] = []
+        if data["dry_run"] as? Bool == true {
+            for list in ["items", "artifacts", "installers", "tasks"] {
+                for entry in data[list] as? [[String: Any]] ?? [] {
+                    if let p = entry["path"] as? String { items.append(TaskItem(marker: .action, text: p)) }
+                    else if let n = entry["name"] as? String { items.append(TaskItem(marker: .action, text: n)) }
+                }
+            }
+            let total = intField(data, "total_bytes") ?? 0
+            let space = data["total_human"] as? String ?? (total > 0 ? Fmt.bytes(Int64(total)) : "")
+            let count = intField(data, "count") ?? items.count
+            let groups = items.isEmpty ? [] : [TaskGroup(title: title, items: items)]
+            return (groups: groups,
+                    summary: TaskSummary(space: space, items: count > 0 ? String(count) : "", categories: ""))
+        }
+        let removed = data["removed"] as? [[String: Any]] ?? []
+        for entry in removed {
+            if let p = entry["path"] as? String { items.append(TaskItem(marker: .ok, text: p)) }
+        }
+        for entry in data["errors"] as? [[String: Any]] ?? [] {
+            if let p = entry["path"] as? String { items.append(TaskItem(marker: .error, text: p)) }
+        }
+        for p in data["protected"] as? [String] ?? [] {
+            items.append(TaskItem(marker: .review, text: protectedText(p, reason: nil)))
+        }
+        let results = data["results"] as? [[String: Any]] ?? []
+        for entry in results {
+            guard let name = entry["name"] as? String else { continue }
+            if entry["skipped"] as? Bool == true {
+                items.append(TaskItem(marker: .info, text: skippedText(name, reason: entry["reason"] as? String)))
+            } else {
+                items.append(TaskItem(marker: (entry["ok"] as? Bool ?? true) ? .ok : .error, text: name))
+            }
+        }
+        let groups = items.isEmpty ? [] : [TaskGroup(title: title, items: items)]
+        // `makeSummary` reads the same `freed_bytes` / `moved_to_trash_bytes` fields the `done`
+        // line carries; `removed` is an array here rather than a count, so the count is passed.
+        return (groups: groups,
+                summary: makeSummary(from: data, itemCount: results.isEmpty ? removed.count : results.count))
+    }
 
     /// "path — protected (reason)". Pure, so the wording is pinned by a test.
     static func protectedText(_ path: String, reason: String?) -> String {

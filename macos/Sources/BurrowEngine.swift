@@ -175,9 +175,11 @@ enum BurrowEngine {
         (Store.d.object(forKey: "BurrowStreamAnalyze") as? Bool) ?? false
     }
 
-    /// The streamable engine commands the conductor forwards with `--stream`. purge/installer are
-    /// an interactive TUI (PTY) and uninstall is irreversible + matcher-gated — those stay direct.
-    private static let streamableCommands: Set<String> = ["clean", "optimize"]
+    /// The engine commands that take `--stream` and are forwarded with it: clean, optimize and
+    /// purge speak one NDJSON vocabulary (`BurrowStreamReport`). installer has no `--stream` in
+    /// the engine and runs buffered (its one envelope line is reduced by the same reducer), and
+    /// uninstall is irreversible + matcher-gated — both stay direct.
+    private static let streamableCommands: Set<String> = ["clean", "optimize", "purge"]
 
     /// The pure mo→engine *semantic* mapping: `mo` runs a command LIVE by default and `--dry-run`
     /// previews it; the engine inverts that (dry-run by default, `--apply` to execute). So this

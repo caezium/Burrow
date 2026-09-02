@@ -96,6 +96,33 @@ final class BurrowStreamReportTests: XCTestCase {
         XCTAssertEqual(BurrowStreamReport.skippedText("x", reason: "other"), "x — skipped (other)")
     }
 
+    /// A buffered run (the streaming switch off, or `installer`, which has no `--stream`) is one
+    /// envelope line; it reduces to the same report, every touched or refused path included.
+    func testBufferedEnvelope_reducesLikeTheStream() {
+        let live = [#"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"clean","data":{"dry_run":false,"freed_bytes":2048,"freed_human":"2.0KB","moved_to_trash_bytes":0,"moved_to_trash_human":"0B","removed":[{"path":"/a/x","size":2048,"accounted":true}],"errors":[{"path":"/a/y","error":"denied"}],"protected":["/a/keep"],"text":"…"}}"#]
+        let report = BurrowStreamReport.reduce(live)
+        XCTAssertEqual(report.groups.first?.items.map(\.marker), [.ok, .error, .review])
+        XCTAssertEqual(report.groups.first?.items.last?.text, "/a/keep — protected")
+        XCTAssertEqual(report.summary?.completionLine, "Cleaned 2.0KB · 1 items")
+
+        let preview = [#"{"ok":true,"burrow_cli":"0.1.0","data":{"dry_run":true,"total_bytes":4096,"total_human":"4.0KB","items":[{"path":"/a/x","label":"t","size":4096,"size_human":"4.0KB"}],"text":"…"}}"#]
+        let previewReport = BurrowStreamReport.reduce(preview)
+        XCTAssertEqual(previewReport.groups.first?.items.map(\.marker), [.action])
+        XCTAssertEqual(previewReport.summary?.completionLine, "Cleaned 4.0KB · 1 items")
+
+        let optimize = [#"{"ok":true,"burrow_cli":"0.1.0","data":{"dry_run":false,"results":[{"name":"flush_dns","ok":true,"error":null,"skipped":true,"reason":"requires_admin"},{"name":"restart_dock","ok":false,"error":"x"}],"text":"…"}}"#]
+        let optimizeReport = BurrowStreamReport.reduce(optimize, title: "Maintenance")
+        XCTAssertEqual(optimizeReport.groups.first?.title, "Maintenance")
+        XCTAssertEqual(optimizeReport.groups.first?.items.map(\.marker), [.info, .error])
+        XCTAssertEqual(optimizeReport.summary?.items, "2")
+
+        let failed = [#"{"ok":false,"burrow_cli":"0.1.0","error":{"kind":"permission_denied","message":"cannot read ~/Library"}}"#]
+        let failedReport = BurrowStreamReport.reduce(failed)
+        XCTAssertEqual(failedReport.groups.first?.items.map(\.marker), [.error])
+        XCTAssertEqual(failedReport.groups.first?.items.first?.text, "cannot read ~/Library")
+        XCTAssertNil(failedReport.summary)
+    }
+
     func testOptimize_taskEvents() {
         let lines = [
             #"{"event":"task","name":"flush_dns","ok":true,"error":null}"#,
