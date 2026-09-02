@@ -120,7 +120,7 @@ struct DoctorView: View {
             free = Int64(d.total > d.used ? d.total - d.used : 0)
         }
         let moInstalled: Bool
-        if case .installed = MoEngine.shared.availability() { moInstalled = true } else { moInstalled = false }
+        if case .installed = EngineRunner.shared.availability() { moInstalled = true } else { moInstalled = false }
         let p = (latest?.memory.pressure ?? "").lowercased()
         let pressure: Doctor.MemoryPressure = p.contains("critical") ? .critical
             : (p.contains("warn") ? .warning : .normal)

@@ -64,8 +64,8 @@ struct CleanupExecutionPlan: Sendable, Equatable {
         let expiry = Int(expiresAt.timeIntervalSince1970)
         let identities = approvedRoots + items.map(\.identity)
         return ["[ \"$(/bin/date +%s)\" -le \(expiry) ]"] + identities.map { identity in
-            let path = MoleCLI.shellQuote(identity.path)
-            let token = MoleCLI.shellQuote(identity.shellStatToken)
+            let path = EngineCLI.shellQuote(identity.path)
+            let token = EngineCLI.shellQuote(identity.shellStatToken)
             return "[ \"$(/usr/bin/stat -f '%d:%i:%u:%p' -- \(path) 2>/dev/null)\" = \(token) ]"
         }
     }
@@ -93,7 +93,7 @@ struct CleanupExecutionPlan: Sendable, Equatable {
 
     /// The shell-quoted form of `orderedReviewedPaths()`, for the delete loop.
     func quotedReviewedPaths() -> [String] {
-        orderedReviewedPaths().map { MoleCLI.shellQuote($0) }
+        orderedReviewedPaths().map { EngineCLI.shellQuote($0) }
     }
 
     /// The complete irreversible cleanup: boundary checks, then the deletes.

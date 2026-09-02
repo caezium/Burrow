@@ -29,7 +29,7 @@ struct NetView: View {
             toolbar.padding(.horizontal, 18).padding(.top, 4).padding(.bottom, 12)
             Rectangle().fill(Brand.hairline).frame(height: 1)
             ZStack {
-                if !BurrowConductor.isAvailable {
+                if !BurrowEngine.isAvailable {
                     conductorMissing
                 } else if model.scanning {
                     scanningProgress
@@ -65,7 +65,7 @@ struct NetView: View {
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
-            .disabled(!BurrowConductor.isAvailable || model.scanning)
+            .disabled(!BurrowEngine.isAvailable || model.scanning)
             .help(NSLocalizedString("Sample again", comment: ""))
         }
     }
@@ -79,14 +79,7 @@ struct NetView: View {
     // MARK: States
 
     private var conductorMissing: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "shippingbox").font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
-            Text(NSLocalizedString("The bundled burrow conductor is missing", comment: ""))
-                .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
-            Text(NSLocalizedString("Network sampling runs through the bundled `burrow` CLI. This build shipped without it — a dev build without the vendor/burrow-cli submodule. Release builds include it.", comment: ""))
-                .font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
-                .multilineTextAlignment(.center).frame(maxWidth: 420)
-        }
+        ConductorScanStates.conductorMissing(NSLocalizedString("Network sampling runs through the bundled `burrow` CLI. This build shipped without it — a dev build without the vendor/burrow-cli submodule. Release builds include it.", comment: ""))
     }
 
     private var idleState: some View {
@@ -123,11 +116,7 @@ struct NetView: View {
     }
 
     private func errorState(_ message: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 22)).foregroundStyle(Brand.orange)
-            Text(message).font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
-                .multilineTextAlignment(.center).frame(maxWidth: 340)
-        }
+        ConductorScanStates.errorState(message)
     }
 
     private var quietState: some View {
@@ -211,60 +200,28 @@ struct NetView: View {
 
 // MARK: - Model
 
+/// Folderless: one `net` sample of the machine. The envelope's `data` is the net report,
+/// decoded by the pure NetReport.parse.
 @MainActor
-final class NetModel: ObservableObject {
-    @Published var scanning = false
-    @Published var report: NetReport?
-    @Published var error: String?
-
-    private let opId = UUID()
-    /// Monotonic token (same pattern as DupesModel.scanGen): only the newest
-    /// sample's result may land.
-    private var scanGen = 0
+final class NetModel: ConductorScanModel<NetReport> {
+    init() {
+        super.init(command: Command(
+            name: "net",
+            arguments: { _ in [] },
+            timeout: 60,
+            parse: { NetReport.parse($0) },
+            beginLabel: { _ in NSLocalizedString("Sampling per-app network", comment: "") },
+            successDetail: { r in String(format: NSLocalizedString("%d processes", comment: ""), r.rows.count) },
+            unreadable: NSLocalizedString("burrow net returned an unreadable report", comment: "")))
+    }
 
     /// First-activation sample: only when nothing has been sampled yet, so
     /// switching back to the tab never stomps a result the user is reading.
     func scanIfNeeded() {
-        guard BurrowConductor.isAvailable, report == nil, error == nil, !scanning else { return }
+        guard BurrowEngine.isAvailable, report == nil, error == nil, !scanning else { return }
         scan()
     }
 
-    /// Sample via the bundled conductor, off the main thread. The envelope's
-    /// `data` is the net report, decoded by the pure NetReport.parse.
-    func scan() {
-        scanGen += 1
-        let gen = scanGen
-        scanning = true
-        error = nil
-        OperationCenter.shared.begin(opId, label: NSLocalizedString("Sampling per-app network", comment: ""))
-        DispatchQueue.global(qos: .userInitiated).async {
-            let outcome: Result<NetReport, Error>
-            do {
-                let envelope = try BurrowConductor.capture("net", [], timeout: 60)
-                guard let data = envelope.data, let parsed = NetReport.parse(data) else {
-                    throw BurrowConductorError.engine(
-                        kind: "error",
-                        message: NSLocalizedString("burrow net returned an unreadable report", comment: ""))
-                }
-                outcome = .success(parsed)
-            } catch {
-                outcome = .failure(error)
-            }
-            Task { @MainActor in
-                guard gen == self.scanGen else { return }
-                self.scanning = false
-                switch outcome {
-                case .success(let r):
-                    self.report = r
-                    OperationCenter.shared.end(self.opId, success: true,
-                                               detail: String(format: NSLocalizedString("%d processes", comment: ""),
-                                                              r.rows.count))
-                case .failure(let e):
-                    self.error = e.localizedDescription
-                    OperationCenter.shared.end(self.opId, success: false,
-                                               detail: NSLocalizedString("sample failed", comment: ""))
-                }
-            }
-        }
-    }
+    /// Sample via the bundled engine, off the main thread.
+    func scan() { run() }
 }

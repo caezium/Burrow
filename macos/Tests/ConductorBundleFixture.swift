@@ -49,7 +49,7 @@ enum ConductorBundleFixture {
             scratch.removePersistentDomain(forName: StoreTests.scratchSuite)
             Store.d = saved
         }
-        if let value { scratch.set(value, forKey: BurrowConductor.streamingKey) }
+        if let value { scratch.set(value, forKey: BurrowEngine.streamingKey) }
         return try body()
     }
 
@@ -77,14 +77,14 @@ enum ConductorBundleFixture {
                 attributes: [.posixPermissions: 0o755])
         }
 
-        let saved = BurrowConductor.resourceDirectory
-        BurrowConductor.resourceDirectory = { dir }
+        let saved = BurrowEngine.resourceDirectory
+        BurrowEngine.resourceDirectory = { dir }
         defer {
-            BurrowConductor.resourceDirectory = saved
+            BurrowEngine.resourceDirectory = saved
             try? FileManager.default.removeItem(at: dir)
         }
 
-        XCTAssertEqual(BurrowConductor.isAvailable, present,
+        XCTAssertEqual(BurrowEngine.isAvailable, present,
                        "fixture failed to put the conductor lookup in the requested state",
                        file: file, line: line)
         return try body()

@@ -1170,7 +1170,7 @@ final class UpdatesModel: ObservableObject {
         let dir = (brew as NSString).deletingLastPathComponent
         env["PATH"] = "\(dir):/usr/bin:/bin:/usr/sbin:/sbin:" + (env["PATH"] ?? "")
         do {
-            let result = try MoEngine.shared.capture(
+            let result = try EngineRunner.shared.capture(
                 MoCommand(target: .executable(brew), args: args,
                           environment: env, timeout: timeout))
             return BrewResult(out: result.stdout, err: result.stderr, code: result.exitCode)

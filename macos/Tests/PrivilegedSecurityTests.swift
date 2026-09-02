@@ -67,7 +67,7 @@ final class PrivilegedIdentityTests: XCTestCase {
                                         canonicalHome: "/Users/name with space")
         let command = ValidatedElevatedCommand(executable: executable, components: [],
                                                invokingUser: user, signedBundlePath: nil)
-        let script = MoleCLI.elevatedScript(command: command, args: [])
+        let script = EngineCLI.elevatedScript(command: command, args: [])
         XCTAssertTrue(script.contains("'HOME=/Users/name with space'"))
         XCTAssertTrue(script.contains("'SUDO_UID=501'"))
         XCTAssertFalse(script.contains("HOME=/var/root"))
@@ -112,7 +112,7 @@ final class PrivilegedIdentityTests: XCTestCase {
         XCTAssertEqual(command.signedBundlePath, layout.bundle)
         // Ownership stopped being the guarantee, so the resource seal has to
         // be checked at the boundary — without it nothing is verifying this.
-        let script = MoleCLI.elevatedScript(command: command, args: ["optimize"])
+        let script = EngineCLI.elevatedScript(command: command, args: ["optimize"])
         XCTAssertTrue(script.contains("/usr/bin/codesign --verify --strict"),
                       "the signed-bundle policy is only safe with the seal check")
         XCTAssertTrue(script.contains("/usr/bin/stat -f '%d:%i:%u:%p'"),

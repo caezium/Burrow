@@ -260,7 +260,7 @@ enum ProcessSampler {
     /// call off the main thread. Empty on spawn failure — callers fall
     /// back to the snapshot's engine-provided top five.
     static func sample() -> [ProcessInfo] {
-        guard let res = try? MoleCLI.run(args: psArgs, executable: "/bin/ps", timeout: 5),
+        guard let res = try? EngineCLI.run(args: psArgs, executable: "/bin/ps", timeout: 5),
               res.exitCode == 0 else { return [] }
         return parse(res.stdout)
     }

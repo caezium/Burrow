@@ -341,8 +341,8 @@ struct PrivilegedLogSink: Sendable, Equatable {
     }
 
     var exclusiveCreationShell: String {
-        let dir = MoleCLI.shellQuote(directoryPath)
-        let file = MoleCLI.shellQuote(filePath)
+        let dir = EngineCLI.shellQuote(directoryPath)
+        let file = EngineCLI.shellQuote(filePath)
         return "umask 022; /bin/mkdir -m 0755 -- \(dir) || exit \(ElevatedExitCode.logSinkUnavailable); " +
             "( set -C; : > \(file) ) || exit \(ElevatedExitCode.logSinkUnavailable)"
     }

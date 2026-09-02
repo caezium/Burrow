@@ -147,7 +147,7 @@ final class TuneUpModel: ObservableObject {
 
     private static func scanCleanable() async -> String {
         await Task.detached(priority: .utility) { () -> String in
-            guard let res = try? MoEngine.shared.capture(
+            guard let res = try? EngineRunner.shared.capture(
                     MoCommand(target: .mo, args: ["clean", "--dry-run"], timeout: 120)),
                   res.exitCode == 0 else { return "" }
             return Self.cleanableSpace(fromCaptureStdout: res.stdout)
@@ -156,7 +156,7 @@ final class TuneUpModel: ObservableObject {
 
     private static func scanOptimize() async -> [String] {
         await Task.detached(priority: .utility) { () -> [String] in
-            guard let res = try? MoEngine.shared.capture(
+            guard let res = try? EngineRunner.shared.capture(
                     MoCommand(target: .mo, args: ["optimize", "--dry-run"], timeout: 120)),
                   res.exitCode == 0 else { return [] }
             return Self.optimizeAreas(fromCaptureStdout: res.stdout)

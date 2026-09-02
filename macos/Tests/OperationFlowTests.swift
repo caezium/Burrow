@@ -71,7 +71,7 @@ final class OperationFlowTests: XCTestCase {
     private func makeFlow(_ port: FakeProcessPort, fda: @escaping () -> Bool = { true },
                           center: OperationCenter? = nil) -> OperationFlow<CleanReport> {
         OperationFlow(process: port, hasFullDiskAccess: fda,
-                      resolveMo: { _ in "/usr/local/bin/mo" }, center: center ?? OperationCenter())
+                      resolveEngine: { _ in "/usr/local/bin/mo" }, center: center ?? OperationCenter())
     }
 
     private func settle<R>(_ flow: OperationFlow<R>) async {
@@ -217,7 +217,7 @@ final class OperationFlowTests: XCTestCase {
     func testStdinTimeoutAndPathExecutableReachSpec() async throws {
         let port = FakeProcessPort(script: [.exited(0)])
         let flow = OperationFlow<String>(process: port, hasFullDiskAccess: { true },
-                                         resolveMo: { _ in nil }, center: OperationCenter())
+                                         resolveEngine: { _ in nil }, center: OperationCenter())
         // Uninstall-style blocking run: canned confirmations + long timeout.
         let answers = String(repeating: "y\n", count: 16)
         flow.start(ToolOperation(label: nil,
@@ -255,7 +255,7 @@ final class OperationFlowTests: XCTestCase {
         let port = FakeProcessPort(script: Self.cannedCleanStream)
         let center = OperationCenter()
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
-                                                resolveMo: { _ in "/usr/local/bin/mo" }, center: center)
+                                                resolveEngine: { _ in "/usr/local/bin/mo" }, center: center)
 
         flow.start(.moleStream(["clean"], label: "Cleaning caches", notifyOnEnd: true))
         await settle(flow)
@@ -352,13 +352,13 @@ final class OperationFlowTests: XCTestCase {
 
     /// This is about the DIRECT engine path, so it has to pin the no-conductor world: with a
     /// conductor staged, `streamOverride` supplies an executable for a non-elevated `clean`
-    /// before `resolveMo` is ever consulted, and the unresolvable-engine branch under test is
+    /// before `resolveEngine` is ever consulted, and the unresolvable-engine branch under test is
     /// never reached. It previously relied on the test host happening not to bundle one.
     func testMissingExecutableFailsBeforeSpawn() {
         ConductorBundleFixture.withConductor(present: false) {
             let port = FakeProcessPort(script: [])
             let flow = OperationFlow<CleanReport>(process: port, hasFullDiskAccess: { true },
-                                                  resolveMo: { _ in nil }, center: OperationCenter())
+                                                  resolveEngine: { _ in nil }, center: OperationCenter())
             flow.start(Self.cleanOp())
             guard case .finished(.failed) = flow.state else { return XCTFail("expected failed") }
             XCTAssertTrue(port.specs.isEmpty)
@@ -368,7 +368,7 @@ final class OperationFlowTests: XCTestCase {
     func testElevatedRunFailsBeforeSpawnWhenInvokingAccountCannotBeResolved() {
         let port = FakeProcessPort(script: [.exited(0)])
         let flow = OperationFlow<CleanReport>(
-            process: port, hasFullDiskAccess: { true }, resolveMo: { _ in "/usr/bin/true" },
+            process: port, hasFullDiskAccess: { true }, resolveEngine: { _ in "/usr/bin/true" },
             resolveInvokingUser: {
                 throw InvokingUserIdentity.ResolutionError.missingAccount(501)
             }, center: OperationCenter())
@@ -381,7 +381,7 @@ final class OperationFlowTests: XCTestCase {
     //
     // `streamOverride` returning nil (the streaming switch off, or no conductor bundled) used to
     // mean the fallback spawn sent `op.arguments` straight through, untranslated. Once
-    // `MoleCLI.bundledExecutable()` became part of `resolveMo`'s resolution chain, that fallback
+    // `EngineCLI.bundledExecutable()` became part of `resolveEngine`'s resolution chain, that fallback
     // started resolving the SAME bundled engine the conductor branch would have — so the switch
     // stopped being a transport-only decision and started being able to flip a live clean into a
     // silent no-op. These pin that the fallback branch now translates whenever it resolves the
@@ -389,21 +389,21 @@ final class OperationFlowTests: XCTestCase {
     //
     // Both therefore have to REACH that branch, and two deliberate acts are what get them there.
     // `bundledExecutableOverride` is what lets the fallback recognise a bundled engine at all —
-    // it short-circuits `MoleCLI.bundledExecutable()` before the shared lookup, so it does not
-    // also make a conductor "bundled" (that is `BurrowConductor.resourceDirectory`'s seam). And
+    // it short-circuits `EngineCLI.bundledExecutable()` before the shared lookup, so it does not
+    // also make a conductor "bundled" (that is `BurrowEngine.resourceDirectory`'s seam). And
     // turning the documented `BurrowStreamViaConductor` kill switch off is what stops
     // `streamOverride` answering first: at its shipped default (ON for clean/optimize), a test
     // host that HAD staged a Resources/burrow would spawn the CONDUCTOR's
-    // `["clean", "--apply", "--stream"]` instead, whatever `resolveMo` was told to return. The
+    // `["clean", "--apply", "--stream"]` instead, whatever `resolveEngine` was told to return. The
     // switch off with an engine still bundled is exactly the production configuration these two
     // describe; without it both tests could silently assert about the branch they mean to bypass.
 
     func testFallbackPath_stillTranslatesArgv_whenResolveMoFindsTheBundledEngine() async throws {
-        MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
-        defer { MoleCLI.bundledExecutableOverride = nil }
+        EngineCLI.bundledExecutableOverride = "/fake/bundled/burrow"
+        defer { EngineCLI.bundledExecutableOverride = nil }
         let port = FakeProcessPort(script: Self.cannedCleanStream)
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
-                                                resolveMo: { _ in "/fake/bundled/burrow" },
+                                                resolveEngine: { _ in "/fake/bundled/burrow" },
                                                 center: OperationCenter())
         // A live real clean — mo-style, no --dry-run — is exactly the destructive case: reaching
         // the engine without --apply would silently no-op it (the §2 bug). The switch is read
@@ -424,15 +424,15 @@ final class OperationFlowTests: XCTestCase {
     }
 
     func testFallbackPath_leavesArgvUntranslated_whenResolveMoFindsAnExternalMo() async throws {
-        // The override is set (so `bundledExecutable()` resolves to something) but `resolveMo`
+        // The override is set (so `bundledExecutable()` resolves to something) but `resolveEngine`
         // deliberately returns a DIFFERENT path — the "bundle itself is missing, Homebrew has a
         // real mo" case. That binary speaks mo's own convention, so translating it would turn
         // this elevated PREVIEW into a live delete instead — the dangerous direction.
-        MoleCLI.bundledExecutableOverride = "/fake/bundled/burrow"
-        defer { MoleCLI.bundledExecutableOverride = nil }
+        EngineCLI.bundledExecutableOverride = "/fake/bundled/burrow"
+        defer { EngineCLI.bundledExecutableOverride = nil }
         let port = FakeProcessPort(script: Self.cannedClean)
         let flow = OperationFlow<TaskRunReport>(process: port, hasFullDiskAccess: { true },
-                                                resolveMo: { _ in "/opt/homebrew/bin/mo" },
+                                                resolveEngine: { _ in "/opt/homebrew/bin/mo" },
                                                 center: OperationCenter())
         ConductorBundleFixture.withStreamSwitch(false) {
             flow.start(.moleStream(["clean", "--dry-run"], elevated: true, label: "Scanning caches"))

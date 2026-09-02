@@ -7,7 +7,7 @@
 //
 //  ── What this replaces, and what it does not ────────────────────────────
 //  The existing elevation path builds a shell string and hands it to
-//  `osascript … with administrator privileges` (see `MoleCLI.elevatedScript`).
+//  `osascript … with administrator privileges` (see `EngineCLI.elevatedScript`).
 //  That path is password-only by construction — the `system.privilege.admin`
 //  right authenticates through SecurityAgent's classic mechanism, which never
 //  offers Touch ID — and it cannot be cancelled safely, because killing

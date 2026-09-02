@@ -553,13 +553,14 @@ final class AnalyzeModel: ObservableObject {
         isCancelled: @escaping () -> Bool = { false },
         onProgress: @escaping (String, Int, Int) -> Void
     ) throws -> DiskScanResult {
-        guard let burrow = BurrowConductor.executableURL() else { throw DiskScanError.moNotFound }
+        guard let burrow = BurrowEngine.executableURL() else { throw DiskScanError.moNotFound }
         let proc = Process()
         proc.executableURL = burrow
         proc.arguments = ["analyze", "--progress", path]
-        // No explicit `.environment` — Process inherits the app's own environment as-is, which is
-        // all this needs (the engine is self-contained; there is no sibling directory to point it
-        // at, unlike the old conductor this call site used to inject BURROW_ENGINE_DIR for).
+        // The same environment every other engine spawn gets (`BurrowEngine.environment()`): the
+        // bundled fclones and the #279 PATH augmentation. Inheriting the app's own environment
+        // here left this one spawn with the Finder-stripped PATH the rest of the app repairs.
+        proc.environment = BurrowEngine.environment()
         let out = Pipe()
         proc.standardOutput = out
         // A Pipe here would NOT discard: it has a ~64KB buffer, and once `analyze --progress`
@@ -619,7 +620,7 @@ final class AnalyzeModel: ObservableObject {
         // Opt-in live-filling treemap: stream `burrow analyze --progress` so the scan reports the
         // engine's file-level counters. Any miss (flag off, no conductor, stream failure) falls
         // through to the two-level per-child walk below, so behavior is unchanged by default.
-        if BurrowConductor.streamingAnalyzeEnabled, BurrowConductor.isAvailable,
+        if BurrowEngine.streamingAnalyzeEnabled, BurrowEngine.isAvailable,
            let streamed = try? Self.scanStreaming(path, isCancelled: isCancelled, onProgress: onProgress) {
             return streamed
         }

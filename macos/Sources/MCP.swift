@@ -580,7 +580,8 @@ struct ToolCatalog {
     /// `ran` is documented on the wire as a claim about the disk, so the per-app accounting
     /// decides it: an application removed, or a support file removed. A run that was refused
     /// outright still reports `ran: false`, which is the honest answer for it.
-    static func realRunClaim(exitCode: Int32, stdout: String, stderr: String) -> (ran: Bool, error: String?) {
+    static func realRunClaim(_ res: Captured) -> (ran: Bool, error: String?) {
+        let stdout = res.stdout, stderr = res.stderr, exitCode = res.exitCode
         let failed = BurrowEnvelope.reportsFailure(stdout: stdout)
         let outcome = UninstallGuard.readOutcome(stdout: stdout)
         let ran = outcome.map(\.changedTheDisk) ?? (exitCode == 0 && !failed)
@@ -813,7 +814,7 @@ struct ToolCatalog {
     /// pressure + disk headroom, plus the decode-drift count.
     private func callDoctor(_ args: [String: Any]) -> String {
         let moInstalled: Bool
-        if case .installed = MoEngine.shared.availability() { moInstalled = true } else { moInstalled = false }
+        if case .installed = EngineRunner.shared.availability() { moInstalled = true } else { moInstalled = false }
         let latest = self.metrics.latest()?.status
         var free: Int64 = 0, total: Int64 = 0
         if let d = latest?.disks.max(by: { $0.total < $1.total }) {
@@ -889,8 +890,7 @@ struct ToolCatalog {
     /// throws.
     private func callCleanupHistory(_ args: [String: Any]) -> String {
         let limit = max(1, min((args["limit"] as? Int) ?? 20, 200))
-        let res = Self.runMo(["history", "--json", "--limit", "\(limit)"], timeout: 15)
-        return Self.cleanupHistoryResult(exitCode: res.exitCode, stdout: res.stdout)
+        return Self.cleanupHistoryResult(Self.runEngine(["history", "--json", "--limit", "\(limit)"], timeout: 15))
     }
 
     /// Shape `mo history --json` output into the tool's reply. Pure so every branch is
@@ -906,11 +906,11 @@ struct ToolCatalog {
     /// no `ok` key just makes `.ok` default to false — so outcome 2 only fires when `burrow_cli`
     /// (present on every real envelope, success or failure, and never emitted by legacy mo's own
     /// `--json`) is actually there; otherwise this falls through to outcome 3 unchanged.
-    static func cleanupHistoryResult(exitCode: Int32, stdout: String) -> String {
-        guard exitCode == 0 else {
+    static func cleanupHistoryResult(_ res: Captured) -> String {
+        guard res.exitCode == 0 else {
             return "{\"error\":\"mo history unavailable\",\"hint\":\"call burrow_info to check whether Burrow is recording data at all\",\"sessions\":[]}"
         }
-        let out = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        let out = res.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !out.isEmpty else { return "{\"sessions\":[]}" }
         guard let envelope = try? BurrowEnvelope.parse(out), envelope.burrowCli != nil else {
             return out
@@ -975,7 +975,7 @@ struct ToolCatalog {
     private static func deletionsLogPath() -> String {
         let fallback = (NSHomeDirectory() as NSString)
             .appendingPathComponent("Library/Logs/mole/deletions.log")
-        let res = Self.runMo(["history", "--json"], timeout: 10)
+        let res = Self.runEngine(["history", "--json"], timeout: 10)
         guard res.exitCode == 0 else { return fallback }
         return Self.deletionsLogPath(fromCaptureStdout: res.stdout) ?? fallback
     }
@@ -1047,7 +1047,7 @@ struct ToolCatalog {
             // `pre.spawnPath` and `ticket.command.spawnPath` are the same file by construction —
             // the gate resolved once and put the answer on both — so the plan this reads is the
             // plan the apply below executes, and neither is re-discovered here.
-            let dry = Self.runMo(pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120,
+            let dry = Self.runEngine(pre.args, stdin: pre.stdin, timeout: pre.timeout ?? 120,
                                  executable: pre.spawnPath)
             // The decision point, and it fails closed on anything it cannot read. Against the
             // bundled engine it reads `apps[].query` — the arguments echoed back verbatim — so an
@@ -1084,7 +1084,7 @@ struct ToolCatalog {
         // Spawn the binary the gate resolved, not a fresh lookup: `ticket.command.args` is only
         // correct for that file (mo-style or engine-style), so re-discovering here could hand one
         // program the other's wire format.
-        let res = Self.runMo(ticket.command.args, stdin: ticket.command.stdin,
+        let res = Self.runEngine(ticket.command.args, stdin: ticket.command.stdin,
                              timeout: timeout, executable: ticket.command.spawnPath)
         var permanent: Bool?
         if case .uninstall(_, let p) = ticket.action, ticket.mode == .real { permanent = p }
@@ -1092,7 +1092,7 @@ struct ToolCatalog {
         // string for a run that didn't fully succeed. A PREVIEW never ran by definition, and the
         // dry run's own transcript must not be mined for a per-app outcome it doesn't contain.
         let claim = ticket.mode == .real
-            ? Self.realRunClaim(exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr)
+            ? Self.realRunClaim(res)
             : (ran: false,
                error: (BurrowEnvelope.reportsFailure(stdout: res.stdout) || res.exitCode != 0)
                    ? BurrowEnvelope.failureReason(stdout: res.stdout, stderr: res.stderr)
@@ -1128,7 +1128,7 @@ struct ToolCatalog {
         let limit = min(max((args["limit"] as? Int) ?? 100, 1), 1000)
         let minSize = Int64(max((args["min_size"] as? Int) ?? 0, 0))
         // 300 s like DiskScanner — analyze on a home dir can take a while.
-        let res = Self.runMo(["analyze", "--json", path], timeout: 300)
+        let res = Self.runEngine(["analyze", "--json", path], timeout: 300)
         if res.timedOut {
             return Self.jsonString([
                 "error": "mo analyze timed out",
@@ -1143,8 +1143,8 @@ struct ToolCatalog {
                DiskScanner.indicatesMissingJSONSupport(stderr: res.stderr) {
                 return Self.jsonString([
                     "error": "the active engine is too old for `analyze --json` " +
-                             "(needs >= \(MoleCLI.minimumAnalyzeJSONVersion)); " +
-                             MoleCLI.currentEngineUpdateInstruction,
+                             "(needs >= \(EngineCLI.minimumAnalyzeJSONVersion)); " +
+                             EngineCLI.currentEngineUpdateInstruction,
                     "path": path])
             }
             return Self.analyzeFailure(path: path, stdout: res.stdout, stderr: res.stderr)
@@ -1155,7 +1155,7 @@ struct ToolCatalog {
         // an empty entry list bolted onto it: a directory that reads as having no children.
         // `payloadBytes` unwraps the engine and passes a legacy `mo`'s bare JSON through
         // untouched, and returns nil for an `ok:false` body that somehow exited 0.
-        guard let payload = BurrowEnvelope.payloadBytes(stdout: res.stdout) else {
+        guard let payload = res.payload else {
             return Self.analyzeFailure(path: path, stdout: res.stdout, stderr: res.stderr)
         }
         let out = String(decoding: payload, as: UTF8.self)
@@ -1245,11 +1245,11 @@ struct ToolCatalog {
             let remaining = deadline.timeIntervalSinceNow
             guard remaining > 5 else { complete = false; break }
             descended += 1
-            let res = Self.runMo(["analyze", "--json", childPath], timeout: min(remaining, 60))
+            let res = Self.runEngine(["analyze", "--json", childPath], timeout: min(remaining, 60))
             // Same unwrap as the top level: decoding the envelope itself gave every descended
             // child `entries: []`, so the hotspot map read as "these directories are empty".
             guard !res.timedOut, res.exitCode == 0,
-                  let payload = BurrowEnvelope.payloadBytes(stdout: res.stdout),
+                  let payload = res.payload,
                   var child = (try? JSONSerialization.jsonObject(
                       with: payload)) as? [String: Any] else {
                 if res.timedOut { complete = false }
@@ -1271,14 +1271,14 @@ struct ToolCatalog {
     /// `mo uninstall --list` — installed apps + the exact names uninstall
     /// accepts. Read-only.
     private func callListApps() -> String {
-        let res = Self.runMo(["uninstall", "--list"], timeout: 60)
-        return Self.listAppsToolResult(exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr)
+        return Self.listAppsToolResult(Self.runEngine(["uninstall", "--list"], timeout: 60))
     }
 
     /// Shape `mo uninstall --list` output into the tool's reply. Pure so the failure branch is
     /// deterministically testable without a real spawn (mirrors `cleanupHistoryResult` above —
     /// same "may be absent on a CI runner" reasoning).
-    static func listAppsToolResult(exitCode: Int32, stdout: String, stderr: String) -> String {
+    static func listAppsToolResult(_ res: Captured) -> String {
+        let stdout = res.stdout, stderr = res.stderr, exitCode = res.exitCode
         // A zero exit is not on its own proof of a listing: an `ok:false` body is a failure
         // whatever the process claimed on the way out, and passing it through would hand an
         // agent an error document where it expects an app array. `uninstall --list` answers
@@ -1323,7 +1323,7 @@ struct ToolCatalog {
     // MARK: - Conductor discovery tools (Phase 6.3 parity, read-only)
     //
     // These expose the engine's discovery commands through the bundled
-    // binary (`burrow <cmd> --json`, BurrowConductor.capture) and pass
+    // binary (`burrow <cmd> --json`, BurrowEngine.capture) and pass
     // the envelope's `data` payload through VERBATIM — the contract tracks
     // the engine's, not ours, exactly like burrow_analyze tracks Mole's.
     // The seven discovery tools are read-only: no audit rows, no confirm
@@ -1337,13 +1337,13 @@ struct ToolCatalog {
     /// of a -32603 (same posture as the exit-127 `mo` degrade above).
     private func callConductor(_ command: String, _ args: [String],
                                timeout: TimeInterval = 300) -> String {
-        guard BurrowConductor.isAvailable else {
+        guard BurrowEngine.isAvailable else {
             return Self.jsonString([
                 "error": "the burrow conductor is not bundled in this build; \(command) is unavailable",
                 "command": command])
         }
         do {
-            let envelope = try BurrowConductor.capture(command, args, timeout: timeout)
+            let envelope = try BurrowEngine.capture(command, args, timeout: timeout)
             guard let data = envelope.data,
                   let out = String(data: data, encoding: .utf8),
                   !out.isEmpty else {
@@ -1351,7 +1351,7 @@ struct ToolCatalog {
                                         "command": command])
             }
             return out
-        } catch let BurrowConductorError.engine(kind, message) {
+        } catch let BurrowEngineError.engine(kind, message) {
             return Self.jsonString(["error": message, "kind": kind, "command": command])
         } catch {
             return Self.jsonString(["error": error.localizedDescription, "command": command])
@@ -1496,13 +1496,13 @@ struct ToolCatalog {
     /// was translated (or deliberately not translated) for.
     ///
     /// With no `executable`, the BUNDLED engine is spawned when this build ships one — the same
-    /// file and the same environment (`BurrowConductor.environment()`: the bundled fclones and
+    /// file and the same environment (`BurrowEngine.environment()`: the bundled fclones and
     /// the #279 PATH augmentation) every conductor-seam tool uses — and only a build without
     /// one falls back to `.mo` discovery. A resolved executable that IS the bundled engine gets
     /// that environment too; anything else runs with the app's own, as before.
-    private static func runMo(_ args: [String], stdin: String? = nil, timeout: TimeInterval,
-                              executable: String? = nil) -> MoleCLI.Result {
-        let bundled = BurrowConductor.executableURL()?.path
+    private static func runEngine(_ args: [String], stdin: String? = nil, timeout: TimeInterval,
+                                  executable: String? = nil) -> Captured {
+        let bundled = BurrowEngine.executableURL()?.path
         let target: MoCommand.Target
         switch (executable, bundled) {
         case (let exe?, _): target = .executable(exe)
@@ -1511,17 +1511,16 @@ struct ToolCatalog {
         }
         let environment: [String: String]?
         if case .executable(let path) = target, path == bundled {
-            environment = BurrowConductor.environment()
+            environment = BurrowEngine.environment()
         } else {
             environment = nil
         }
-        guard let cap = try? MoEngine.shared.capture(
+        guard let cap = try? EngineRunner.shared.capture(
             MoCommand(target: target, args: args, stdin: stdin, environment: environment,
                       timeout: timeout)) else {
-            return MoleCLI.Result(stdout: "", stderr: "mo not found", exitCode: 127)
+            return Captured(stdout: "", stderr: "mo not found", exitCode: 127)
         }
-        return MoleCLI.Result(stdout: cap.stdout, stderr: cap.stderr,
-                              exitCode: cap.exitCode, timedOut: cap.timedOut)
+        return cap
     }
 
     /// Strip ANSI/VT100 escape sequences so mo's TUI coloring doesn't leak

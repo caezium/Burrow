@@ -1,5 +1,5 @@
 //
-//  MoEngineTests.swift
+//  EngineRunnerTests.swift
 //  BurrowTests
 //
 //  Boundary tests for the unified runner facade (issue #48). The capture +
@@ -21,7 +21,7 @@
 import XCTest
 @testable import Burrow
 
-final class MoEngineTests: XCTestCase {
+final class EngineRunnerTests: XCTestCase {
     private enum FakeError: Error { case launchFailed }
 
     // MARK: - Scripted ports
@@ -91,7 +91,7 @@ final class MoEngineTests: XCTestCase {
     func testCapture_resolvesMoTargetThroughLocatorAndForwardsTheCommand() throws {
         let port = FakeCapturePort()
         port.result = MoleProcessResult(stdout: "out", stderr: "err", exitCode: 0)
-        let engine = MoEngine(processPort: port,
+        let engine = EngineRunner(processPort: port,
                               locator: FakeLocator(located: "/fake/bin/mo"))
 
         let captured = try engine.capture(MoCommand(
@@ -106,7 +106,7 @@ final class MoEngineTests: XCTestCase {
         XCTAssertEqual(captured.stderr, "err")
         XCTAssertEqual(captured.exitCode, 0)
         // The discovered path, args, stdin, env, and timeout reach the runner
-        // unchanged — behavior-preserving translation of the old MoleCLI.run.
+        // unchanged — behavior-preserving translation of the old EngineCLI.run.
         XCTAssertEqual(port.receivedExecutable, "/fake/bin/mo")
         XCTAssertEqual(port.receivedArgs, ["status", "--json"])
         XCTAssertEqual(port.receivedStdin, "y\n")
@@ -118,7 +118,7 @@ final class MoEngineTests: XCTestCase {
         let port = FakeCapturePort()
         // A locator that would resolve a different mo — proving the explicit
         // path (the brew straggler's shape) wins.
-        let engine = MoEngine(processPort: port,
+        let engine = EngineRunner(processPort: port,
                               locator: FakeLocator(located: "/fake/bin/mo"))
 
         _ = try engine.capture(MoCommand(
@@ -133,9 +133,9 @@ final class MoEngineTests: XCTestCase {
     func testCapture_unresolvedMoFallsBackToFalseForACleanNonzeroExit() throws {
         // The locator misses (mo not installed). The facade must NOT throw —
         // it runs /usr/bin/false so the run degrades to a nonzero exit, exactly
-        // the way MoleCLI.run did. Uses the REAL capture port for the actual
+        // the way EngineCLI.run did. Uses the REAL capture port for the actual
         // exit code.
-        let engine = MoEngine(locator: FakeLocator(located: nil))
+        let engine = EngineRunner(locator: FakeLocator(located: nil))
 
         let captured = try engine.capture(MoCommand(target: .mo, args: ["status"], timeout: 5))
 
@@ -145,7 +145,7 @@ final class MoEngineTests: XCTestCase {
     func testCapture_propagatesLaunchFailureFromPort() {
         let port = FakeCapturePort()
         port.error = FakeError.launchFailed
-        let engine = MoEngine(processPort: port,
+        let engine = EngineRunner(processPort: port,
                               locator: FakeLocator(located: "/fake/bin/mo"))
 
         XCTAssertThrowsError(try engine.capture(MoCommand(target: .mo, args: [])))
@@ -154,7 +154,7 @@ final class MoEngineTests: XCTestCase {
     func testCapture_carriesTimedOutFlagThrough() throws {
         let port = FakeCapturePort()
         port.result = MoleProcessResult(stdout: "", stderr: "", exitCode: 15, timedOut: true)
-        let engine = MoEngine(processPort: port,
+        let engine = EngineRunner(processPort: port,
                               locator: FakeLocator(located: "/fake/bin/mo"))
 
         let captured = try engine.capture(MoCommand(target: .mo, args: ["analyze"], timeout: 1))
@@ -167,18 +167,18 @@ final class MoEngineTests: XCTestCase {
 
     func testCapture_defaultTimeoutMatchesTheOldTenSecondDefault() throws {
         let port = FakeCapturePort()
-        let engine = MoEngine(processPort: port,
+        let engine = EngineRunner(processPort: port,
                               locator: FakeLocator(located: "/fake/bin/mo"))
 
         _ = try engine.capture(MoCommand(target: .mo, args: []))
 
-        XCTAssertEqual(port.receivedTimeout, 10, "unspecified timeout preserves MoleCLI.run's 10s default")
+        XCTAssertEqual(port.receivedTimeout, 10, "unspecified timeout preserves EngineCLI.run's 10s default")
     }
 
     /// End-to-end through the REAL capture port with a tiny system binary, the
-    /// same local-substitutable style MoleCLITests uses for the runner.
+    /// same local-substitutable style EngineCLITests uses for the runner.
     func testCapture_capturesEchoThroughTheRealPort() throws {
-        let engine = MoEngine()
+        let engine = EngineRunner()
         let captured = try engine.capture(MoCommand(
             target: .executable("/bin/echo"), args: ["hello world"]))
 
@@ -189,12 +189,12 @@ final class MoEngineTests: XCTestCase {
     // MARK: - Discovery availability
 
     func testAvailability_installedReportsTheLocatedPath() {
-        let engine = MoEngine(locator: FakeLocator(located: "/fake/bin/mo"))
+        let engine = EngineRunner(locator: FakeLocator(located: "/fake/bin/mo"))
         XCTAssertEqual(engine.availability(), .installed(path: "/fake/bin/mo"))
     }
 
     func testAvailability_missingWhenLocatorFindsNothing() {
-        let engine = MoEngine(locator: FakeLocator(located: nil))
+        let engine = EngineRunner(locator: FakeLocator(located: nil))
         XCTAssertEqual(engine.availability(), .missing)
     }
 
@@ -202,7 +202,7 @@ final class MoEngineTests: XCTestCase {
 
     func testStream_forwardsTheSpecToThePortUntouched() {
         let port = FakeStreamPort(script: [.exited(0)])
-        let engine = MoEngine(streamPort: port)
+        let engine = EngineRunner(streamPort: port)
 
         let spec = ProcessSpec(executable: "/usr/local/bin/mo",
                                arguments: ["clean", "--dry-run"],
@@ -222,7 +222,7 @@ final class MoEngineTests: XCTestCase {
             .line("  → npm cache, 191.8MB"),
             .exited(0),
         ])
-        let engine = MoEngine(streamPort: port)
+        let engine = EngineRunner(streamPort: port)
 
         var lines: [String] = []
         var exit: Int32?
@@ -244,7 +244,7 @@ final class MoEngineTests: XCTestCase {
     func testStream_carriesElevatedAuthCancelClassificationThrough() async {
         // The runner classifies auth-cancel; the facade just relays the event.
         let port = FakeStreamPort(script: [.authCancelled])
-        let engine = MoEngine(streamPort: port)
+        let engine = EngineRunner(streamPort: port)
 
         var sawAuthCancel = false
         for await event in engine.streamPort.events(ProcessSpec(executable: "/usr/local/bin/mo",
@@ -259,7 +259,7 @@ final class MoEngineTests: XCTestCase {
         // Default-constructed facade streams through SystemProcessPort, against a
         // tiny system binary — the same local-substitutable style the capture
         // echo test uses. Proves the production wiring spawns for real.
-        let engine = MoEngine()
+        let engine = EngineRunner()
         var lines: [String] = []
         var exit: Int32?
         for await event in engine.streamPort.events(ProcessSpec(executable: "/bin/sh",
@@ -279,7 +279,7 @@ final class MoEngineTests: XCTestCase {
 
     func testInteractive_vendsTheInjectedFactorysSession() {
         let made = FakePTY()
-        let engine = MoEngine(makePTY: { made })
+        let engine = EngineRunner(makePTY: { made })
         XCTAssertTrue(engine.interactive() === made, "interactive() returns the factory's session")
     }
 
@@ -287,7 +287,7 @@ final class MoEngineTests: XCTestCase {
         // A counter-backed factory: two calls must yield two DISTINCT sessions.
         // A shared pty would let the purge and installer hosts stomp each other's
         // child and keystrokes — the safety reason interactive() is a factory.
-        let engine = MoEngine(makePTY: { FakePTY() })
+        let engine = EngineRunner(makePTY: { FakePTY() })
         let first = engine.interactive()
         let second = engine.interactive()
         XCTAssertFalse(first === second, "each interactive() call owns its own pty session")
@@ -297,7 +297,7 @@ final class MoEngineTests: XCTestCase {
         // The default factory builds the real PTYTask — the session the purge /
         // installer hosts drive. (Behavioral PTY coverage lives in
         // MoInteractiveHostTests; here we only assert the production type.)
-        let engine = MoEngine()
+        let engine = EngineRunner()
         XCTAssertTrue(engine.interactive() is PTYTask)
     }
 }

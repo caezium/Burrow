@@ -1,5 +1,5 @@
 //
-//  BurrowConductor.swift
+//  BurrowEngine.swift
 //  Burrow
 //
 //  Runs the bundled `burrow` binary (Resources/burrow, from bundle-burrow.sh — the new
@@ -10,10 +10,10 @@
 //
 //  Resolution: the engine is entirely self-contained (it looks for nothing else — no sibling
 //  digger directory, unlike the old conductor this file used to front). Spawning reuses the
-//  tested capture stack (MoEngine + MoleProcess) via a `.executable(path)` target — no new
+//  tested capture stack (EngineRunner + MoleProcess) via a `.executable(path)` target — no new
 //  process plumbing. When it isn't bundled (dev/CI builds without the vendor/burrow-engine
 //  submodule) `isAvailable` is false and callers fall back to the direct engine resolution in
-//  `MoleCLI`.
+//  `EngineCLI`.
 //
 //  mo/engine argv are NOT the same wire format: `mo` runs a command LIVE by default and
 //  `--dry-run` previews it; the engine inverts that (dry-run by default, `--apply` to execute).
@@ -25,7 +25,7 @@
 
 import Foundation
 
-enum BurrowConductor {
+enum BurrowEngine {
 
     // MARK: - Resolution
 
@@ -41,12 +41,12 @@ enum BurrowConductor {
     static var resourceDirectory: () -> URL? = { Bundle.main.resourceURL }
 
     /// The bundled engine binary, or nil if this build didn't ship one — callers then fall
-    /// back to the direct engine (MoEngine).
+    /// back to the direct engine (EngineRunner).
     ///
-    /// This is the ONE resolver for that file: `MoleCLI.bundledExecutable()` delegates here
+    /// This is the ONE resolver for that file: `EngineCLI.bundledExecutable()` delegates here
     /// rather than doing its own `Bundle.main.url(forResource:)` lookup. Two resolvers for the
     /// same file is exactly the kind of thing that can silently disagree — and if it ever did,
-    /// `streamOverride` would fire on one answer while `resolveMo`'s fallback (via
+    /// `streamOverride` would fire on one answer while `resolveEngine`'s fallback (via
     /// `trustedExecutable()`) fell through to a Homebrew `mo` on the other, on an ELEVATED run.
     /// One implementation makes that impossible instead of merely unlikely — and putting it on
     /// this side of the call means the `resourceDirectory` seam governs both.
@@ -114,14 +114,14 @@ enum BurrowConductor {
 
     /// Run `burrow <command> [args…] --json` and return the parsed success envelope. Reuses the
     /// tested capture runner (timeout + Captured result) by targeting the conductor's exact path.
-    /// Throws `BurrowConductorError.notBundled` when no conductor is bundled, or `.engine(kind:
+    /// Throws `BurrowEngineError.notBundled` when no conductor is bundled, or `.engine(kind:
     /// message:)` on a timeout, an empty/garbled response, or an `ok:false` envelope — carrying
     /// the conductor's classified error kind so the UI can react (permissions vs unavailable vs …).
     static func capture(_ command: String,
                         _ args: [String] = [],
                         timeout: TimeInterval = 300,
-                        engine: MoEngine = .shared) throws -> BurrowEnvelope {
-        guard let exe = executableURL() else { throw BurrowConductorError.notBundled }
+                        engine: EngineRunner = .shared) throws -> BurrowEnvelope {
+        guard let exe = executableURL() else { throw BurrowEngineError.notBundled }
         let cmd = MoCommand(
             target: .executable(exe.path),
             args: argv(command: command, args: args),
@@ -133,17 +133,17 @@ enum BurrowConductor {
         // runner never throws for those) — surface it before we try to parse an empty string.
         guard !result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             if result.timedOut {
-                throw BurrowConductorError.engine(kind: "process_failed",
-                                                  message: "burrow \(command) timed out")
+                throw BurrowEngineError.engine(kind: ErrorKind.processFailed.rawValue,
+                                               message: "burrow \(command) timed out")
             }
-            throw BurrowConductorError.engine(kind: "process_failed",
-                                              message: "burrow \(command) produced no output (exit \(result.exitCode))")
+            throw BurrowEngineError.engine(kind: ErrorKind.processFailed.rawValue,
+                                           message: "burrow \(command) produced no output (exit \(result.exitCode))")
         }
 
         let envelope = try BurrowEnvelope.parse(result.stdout)
         if !envelope.ok {
-            throw BurrowConductorError.engine(
-                kind: envelope.error?.kind ?? "error",
+            throw BurrowEngineError.engine(
+                kind: envelope.error?.kind ?? ErrorKind.error.rawValue,
                 message: envelope.error?.message ?? "burrow \(command) failed")
         }
         return envelope
@@ -259,7 +259,7 @@ enum BurrowConductor {
 }
 
 /// Why a conductor run couldn't produce a usable success envelope.
-enum BurrowConductorError: Error, LocalizedError {
+enum BurrowEngineError: Error, LocalizedError {
     /// No `burrow` binary is bundled — the caller should fall back to the direct engine.
     case notBundled
     /// The conductor ran but reported (or amounted to) a failure; `kind` is the classified

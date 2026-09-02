@@ -1,5 +1,5 @@
 //
-//  MoleCLITests.swift
+//  EngineCLITests.swift
 //  BurrowTests
 //
 //  The version/capability surface is the pure piece of the engine lifecycle
@@ -13,7 +13,7 @@ import XCTest
 import Darwin
 @testable import Burrow
 
-final class MoleCLITests: XCTestCase {
+final class EngineCLITests: XCTestCase {
 
     // MARK: - Version fixtures
     //
@@ -55,8 +55,7 @@ final class MoleCLITests: XCTestCase {
     // MARK: - Version report
 
     func testVersionReport_readsTheDeclaredFieldFromTheEngineEnvelope() {
-        let report = MoleCLI.parseVersionReport(
-            stdout: Self.engineVersionStdout, stderr: "", exitCode: 0)
+        let report = EngineCLI.parseVersionReport(Captured(stdout: Self.engineVersionStdout, stderr: "", exitCode: 0))
         XCTAssertEqual(report?.version, "0.1.0")
         XCTAssertEqual(report?.name, "burrow-engine")
         XCTAssertEqual(report?.kind, .envelope)
@@ -66,21 +65,18 @@ final class MoleCLITests: XCTestCase {
     func testVersionReport_refusesAFailedRun() {
         // THE original bug: this fixture contains "0.1.0", and the old code returned it
         // from a command that had exited 2. A run that failed has no version to report.
-        XCTAssertNil(MoleCLI.parseVersionReport(
-            stdout: Self.engineErrorEnvelopeStdout, stderr: "", exitCode: 2))
+        XCTAssertNil(EngineCLI.parseVersionReport(Captured(stdout: Self.engineErrorEnvelopeStdout, stderr: "", exitCode: 2)))
         // A good payload behind a nonzero exit is still a failed run.
-        XCTAssertNil(MoleCLI.parseVersionReport(
-            stdout: Self.engineVersionStdout, stderr: "", exitCode: 1))
+        XCTAssertNil(EngineCLI.parseVersionReport(Captured(stdout: Self.engineVersionStdout, stderr: "", exitCode: 1)))
     }
 
     func testVersionReport_refusesAnErrorEnvelopeEvenOnAZeroExit() {
         // Belt and braces: `ok:false` is a refusal whatever the exit code says.
-        XCTAssertNil(MoleCLI.parseVersionReport(
-            stdout: Self.engineErrorEnvelopeStdout, stderr: "", exitCode: 0))
+        XCTAssertNil(EngineCLI.parseVersionReport(Captured(stdout: Self.engineErrorEnvelopeStdout, stderr: "", exitCode: 0)))
     }
 
     func testVersionReport_readsTheProductLineOfAMoBanner() {
-        let report = MoleCLI.parseVersionReport(stdout: Self.moBannerStdout, stderr: "", exitCode: 0)
+        let report = EngineCLI.parseVersionReport(Captured(stdout: Self.moBannerStdout, stderr: "", exitCode: 0))
         XCTAssertEqual(report?.version, "1.42.0")
         XCTAssertEqual(report?.name, "burrow-engine")
         XCTAssertEqual(report?.kind, .moBanner,
@@ -90,7 +86,7 @@ final class MoleCLITests: XCTestCase {
 
     func testVersionReport_ignoresTheDecoyNumbersInAMoBanner() {
         // Every trailing line of the real banner is dotted-numeric — macOS 26.5.2, Kernel
-        // 25.5.0, Disk Free 10.84GB — and each of them clears every minimum in MoleCLI.
+        // 25.5.0, Disk Free 10.84GB — and each of them clears every minimum in EngineCLI.
         // A first-semver-anywhere scan gets 1.42.0 only because the product line prints
         // first, so re-run the REAL fixture with its lines reversed: anchoring on the line
         // that says "version" must still land on the product.
@@ -98,20 +94,20 @@ final class MoleCLITests: XCTestCase {
             .split(whereSeparator: \.isNewline)
             .reversed()
             .joined(separator: "\n")
-        XCTAssertEqual(MoleCLI.parseVersion(reordered), "10.84",
+        XCTAssertEqual(EngineCLI.parseVersion(reordered), "10.84",
                        "the unanchored scan takes the first number it sees — that is why it is not the gate")
-        let report = MoleCLI.parseVersionReport(stdout: reordered, stderr: "", exitCode: 0)
+        let report = EngineCLI.parseVersionReport(Captured(stdout: reordered, stderr: "", exitCode: 0))
         XCTAssertEqual(report?.version, "1.42.0")
         XCTAssertEqual(report?.name, "burrow-engine")
     }
 
     func testVersionReport_nilWhenTheOutputCarriesNoVersion() {
-        XCTAssertNil(MoleCLI.parseVersionReport(stdout: "", stderr: "", exitCode: 0))
-        XCTAssertNil(MoleCLI.parseVersionReport(stdout: "no version here\n", stderr: "", exitCode: 0))
+        XCTAssertNil(EngineCLI.parseVersionReport(Captured(stdout: "", stderr: "", exitCode: 0)))
+        XCTAssertNil(EngineCLI.parseVersionReport(Captured(stdout: "no version here\n", stderr: "", exitCode: 0)))
     }
 
     func testVersionReport_fallsBackToStderrForABannerOnTheErrorStream() {
-        let report = MoleCLI.parseVersionReport(stdout: "", stderr: "mole version 1.41.0\n", exitCode: 0)
+        let report = EngineCLI.parseVersionReport(Captured(stdout: "", stderr: "mole version 1.41.0\n", exitCode: 0))
         XCTAssertEqual(report?.version, "1.41.0")
         XCTAssertEqual(report?.name, "mole")
     }
@@ -123,17 +119,16 @@ final class MoleCLITests: XCTestCase {
     // that have nothing to do with each other.
 
     func testSupportsWatch_theRustEngineNeverStreamsHoweverItNumbersItself() throws {
-        let today = try XCTUnwrap(MoleCLI.parseVersionReport(
-            stdout: Self.engineVersionStdout, stderr: "", exitCode: 0))
-        XCTAssertFalse(MoleCLI.supportsWatch(today))
+        let today = try XCTUnwrap(EngineCLI.parseVersionReport(Captured(stdout: Self.engineVersionStdout, stderr: "", exitCode: 0)))
+        XCTAssertFalse(EngineCLI.supportsWatch(today))
 
         // The regression this replaces: the old gate was `version >= 1.44.0`, which said no
         // only because the engine is a 0.x line. Ship 1.0 and it silently flipped to yes —
         // and `status --watch` is a hard error on this engine
         // (`{"ok":false,…,"unknown status option: --watch"}`, exit 2).
         for shipped in ["1.0.0", "1.44.0", "2.7.3"] {
-            let future = MoleCLI.EngineVersion(version: shipped, name: "burrow-engine", kind: .envelope)
-            XCTAssertFalse(MoleCLI.supportsWatch(future),
+            let future = EngineCLI.EngineVersion(version: shipped, name: "burrow-engine", kind: .envelope)
+            XCTAssertFalse(EngineCLI.supportsWatch(future),
                            "the engine at \(shipped) still has no status streamer")
         }
     }
@@ -142,100 +137,99 @@ final class MoleCLITests: XCTestCase {
         // The fork back-ported `--watch` onto its 1.42.0 base (cmd/status/main.go:31 declares
         // it: "stream metrics as newline-delimited JSON (NDJSON) until interrupted"), so the
         // upstream 1.44.0 gate was excluding a binary that streams.
-        let fork = try XCTUnwrap(MoleCLI.parseVersionReport(
-            stdout: Self.moBannerStdout, stderr: "", exitCode: 0))
-        XCTAssertTrue(MoleCLI.supportsWatch(fork))
+        let fork = try XCTUnwrap(EngineCLI.parseVersionReport(Captured(stdout: Self.moBannerStdout, stderr: "", exitCode: 0)))
+        XCTAssertTrue(EngineCLI.supportsWatch(fork))
     }
 
     func testSupportsWatch_stillHoldsUpstreamMoToItsOwnMinimum() {
         // The fork's back-port does not make upstream 1.42/1.43 capable — only the fork's
         // own name lowers the bar.
-        func upstream(_ v: String) -> MoleCLI.EngineVersion {
-            MoleCLI.EngineVersion(version: v, name: "Mole", kind: .moBanner)
+        func upstream(_ v: String) -> EngineCLI.EngineVersion {
+            EngineCLI.EngineVersion(version: v, name: "Mole", kind: .moBanner)
         }
-        XCTAssertFalse(MoleCLI.supportsWatch(upstream("1.42.0")))
-        XCTAssertFalse(MoleCLI.supportsWatch(upstream("1.43.9")))
-        XCTAssertTrue(MoleCLI.supportsWatch(upstream("1.44.0")))
-        XCTAssertTrue(MoleCLI.supportsWatch(upstream("1.45.2")))
+        XCTAssertFalse(EngineCLI.supportsWatch(upstream("1.42.0")))
+        XCTAssertFalse(EngineCLI.supportsWatch(upstream("1.43.9")))
+        XCTAssertTrue(EngineCLI.supportsWatch(upstream("1.44.0")))
+        XCTAssertTrue(EngineCLI.supportsWatch(upstream("1.45.2")))
     }
 
     // MARK: - parseVersion (single-line scrape)
 
     func testParseVersion_extractsSemverFromDecoratedOutput() {
-        XCTAssertEqual(MoleCLI.parseVersion("mole 1.41.0"), "1.41.0")
-        XCTAssertEqual(MoleCLI.parseVersion("v1.41.0\n"), "1.41.0")
-        XCTAssertEqual(MoleCLI.parseVersion("mole version 2.0.10 (build 7)"), "2.0.10")
+        XCTAssertEqual(EngineCLI.parseVersion("mole 1.41.0"), "1.41.0")
+        XCTAssertEqual(EngineCLI.parseVersion("v1.41.0\n"), "1.41.0")
+        XCTAssertEqual(EngineCLI.parseVersion("mole version 2.0.10 (build 7)"), "2.0.10")
     }
 
     func testParseVersion_nilWhenNoVersion() {
-        XCTAssertNil(MoleCLI.parseVersion("no version here"))
-        XCTAssertNil(MoleCLI.parseVersion(""))
+        XCTAssertNil(EngineCLI.parseVersion("no version here"))
+        XCTAssertNil(EngineCLI.parseVersion(""))
     }
 
     func testParseVersion_ignoresLoneNumbers() {
         // A bare integer isn't a version; needs at least major.minor.
-        XCTAssertNil(MoleCLI.parseVersion("built for macOS 14"))
+        XCTAssertNil(EngineCLI.parseVersion("built for macOS 14"))
     }
 
     /// The undecorated banners `parseVersion` was written for still resolve, product and
     /// all, now that the report goes through the line-anchored path.
     func testParseMoBanner_namesTheProductForUndecoratedBanners() {
-        XCTAssertEqual(MoleCLI.parseMoBanner("mole 1.41.0")?.name, "mole")
-        XCTAssertEqual(MoleCLI.parseMoBanner("mole v1.41.0")?.name, "mole")
-        XCTAssertEqual(MoleCLI.parseMoBanner("v1.41.0\n")?.name, "mo")
-        XCTAssertEqual(MoleCLI.parseMoBanner("mole version 2.0.10 (build 7)")?.version, "2.0.10")
-        XCTAssertEqual(MoleCLI.parseMoBanner("mole version 2.0.10 (build 7)")?.name, "mole")
+        XCTAssertEqual(EngineCLI.parseMoBanner("mole 1.41.0")?.name, "mole")
+        XCTAssertEqual(EngineCLI.parseMoBanner("mole v1.41.0")?.name, "mole")
+        XCTAssertEqual(EngineCLI.parseMoBanner("v1.41.0\n")?.name, "mo")
+        XCTAssertEqual(EngineCLI.parseMoBanner("mole version 2.0.10 (build 7)")?.version, "2.0.10")
+        XCTAssertEqual(EngineCLI.parseMoBanner("mole version 2.0.10 (build 7)")?.name, "mole")
     }
 
     func testEngineUpdatePolicy_keepsSignedBundleImmutable() {
         let bundled = "/Applications/Burrow.app/Contents/Resources/burrow"
         XCTAssertEqual(
-            MoleCLI.engineUpdatePolicy(executable: bundled, bundledExecutable: bundled),
+            EngineCLI.engineUpdatePolicy(executable: bundled, bundledExecutable: bundled),
             .bundledWithApp
         )
         XCTAssertEqual(
-            MoleCLI.engineUpdatePolicy(executable: "/opt/homebrew/bin/mo", bundledExecutable: nil),
+            EngineCLI.engineUpdatePolicy(executable: "/opt/homebrew/bin/mo", bundledExecutable: nil),
             .external
         )
         XCTAssertEqual(
-            MoleCLI.engineUpdatePolicy(executable: nil, bundledExecutable: nil),
+            EngineCLI.engineUpdatePolicy(executable: nil, bundledExecutable: nil),
             .unavailable
         )
         XCTAssertEqual(
-            MoleCLI.engineUpdateInstruction(for: .bundledWithApp),
+            EngineCLI.engineUpdateInstruction(for: .bundledWithApp),
             "Update Burrow to get the current bundled engine."
         )
         XCTAssertEqual(
-            MoleCLI.engineUpdateInstruction(for: .external),
+            EngineCLI.engineUpdateInstruction(for: .external),
             "Use Settings › Engine › Update external engine, then try again."
         )
         XCTAssertEqual(
-            MoleCLI.engineUpdateInstruction(for: .unavailable),
+            EngineCLI.engineUpdateInstruction(for: .unavailable),
             "Reinstall Burrow to restore the bundled engine."
         )
     }
 
-    // MARK: - Capture runner (MoleCLI.run)
+    // MARK: - Capture runner (EngineCLI.run)
     //
     // The subprocess boundary is exercised with real tiny system binaries
     // (echo / cat / false / sleep) rather than a mock — the local-substitutable
     // way to test a process runner: actual plumbing, deterministic, fast.
 
     func testRun_capturesStdoutAndExitZero() throws {
-        let r = try MoleCLI.run(args: ["hello world"], executable: "/bin/echo")
+        let r = try EngineCLI.run(args: ["hello world"], executable: "/bin/echo")
         XCTAssertEqual(r.exitCode, 0)
         XCTAssertEqual(r.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "hello world")
     }
 
     func testRun_feedsStdinToChild() throws {
         // `cat` echoes whatever it reads on stdin — proves the stdin feed lands.
-        let r = try MoleCLI.run(args: [], executable: "/bin/cat", stdin: "piped input\n")
+        let r = try EngineCLI.run(args: [], executable: "/bin/cat", stdin: "piped input\n")
         XCTAssertEqual(r.exitCode, 0)
         XCTAssertTrue(r.stdout.contains("piped input"))
     }
 
     func testRun_reportsNonZeroExit() throws {
-        let r = try MoleCLI.run(args: [], executable: "/usr/bin/false")
+        let r = try EngineCLI.run(args: [], executable: "/usr/bin/false")
         XCTAssertNotEqual(r.exitCode, 0)
     }
 
@@ -252,7 +246,7 @@ final class MoleCLITests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: big) }
 
         let start = Date()
-        let r = try MoleCLI.run(args: [big.path], executable: "/bin/cat", timeout: 5)
+        let r = try EngineCLI.run(args: [big.path], executable: "/bin/cat", timeout: 5)
         XCTAssertLessThan(Date().timeIntervalSince(start), 4.0,
                           "large output must stream out, not stall until the timeout killer")
         XCTAssertEqual(r.exitCode, 0)
@@ -266,7 +260,7 @@ final class MoleCLITests: XCTestCase {
     // the shell, then backslash/quote escaping for the AppleScript literal.
 
     func testElevatedScript_shellQuotesEveryArgument() {
-        let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/m o/mo"),
+        let s = EngineCLI.elevatedScript(command: fakeCommand("/tmp/m o/mo"),
                                        args: ["clean", "--dry-run"])
         XCTAssertTrue(s.hasPrefix("do shell script \""))
         XCTAssertTrue(s.hasSuffix("\" with administrator privileges"))
@@ -274,7 +268,7 @@ final class MoleCLITests: XCTestCase {
     }
 
     func testElevatedScript_replacesTheAmbientRootEnvironment() {
-        let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/mo"), args: ["clean"])
+        let s = EngineCLI.elevatedScript(command: fakeCommand("/tmp/mo"), args: ["clean"])
 
         XCTAssertTrue(s.contains("'/usr/bin/env' '-i'"))
         XCTAssertTrue(s.contains("'PATH=/usr/bin:/bin:/usr/sbin:/sbin'"))
@@ -288,7 +282,7 @@ final class MoleCLITests: XCTestCase {
     /// it ignore sidecar overrides outside its own bundle. Both spelled exactly — the engine
     /// reads these names, not a paraphrase.
     func testElevatedScript_carriesTheEnginesPrivilegedRunContract() {
-        let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/mo"), args: ["uninstall", "--apply", "com.x.Y"])
+        let s = EngineCLI.elevatedScript(command: fakeCommand("/tmp/mo"), args: ["uninstall", "--apply", "com.x.Y"])
         XCTAssertTrue(s.contains("'BURROW_HOME=/Users/test'"), s)
         XCTAssertTrue(s.contains("'BURROW_PRIVILEGED=1'"), s)
         XCTAssertFalse(s.contains("BURROW_HOME=/var/root"))
@@ -302,7 +296,7 @@ final class MoleCLITests: XCTestCase {
     }
 
     func testElevatedScript_neutralizesShellMetacharacters() {
-        let s = MoleCLI.elevatedScript(command: fakeCommand("/tmp/$(reboot)/mo"),
+        let s = EngineCLI.elevatedScript(command: fakeCommand("/tmp/$(reboot)/mo"),
                                        args: ["a;b", "`x`"])
         XCTAssertTrue(s.contains("'/tmp/$(reboot)/mo' 'a;b' '`x`'"),
                       "metacharacters must ride inert inside single quotes")
@@ -310,18 +304,18 @@ final class MoleCLITests: XCTestCase {
 
     func testElevatedScript_escapesAppleScriptLiteralBreakers() {
         // A double quote in a path must not terminate the AppleScript string.
-        let s = MoleCLI.elevatedScript(command: fakeCommand(#"/tmp/he said "hi"/mo"#), args: [])
+        let s = EngineCLI.elevatedScript(command: fakeCommand(#"/tmp/he said "hi"/mo"#), args: [])
         XCTAssertFalse(s.contains(#"said "hi""#), "raw quote would break out of the literal")
         XCTAssertTrue(s.contains(#"said \"hi\""#))
         // A single quote goes through the shell's '\'' dance, whose
         // backslash must itself be AppleScript-escaped.
-        let s2 = MoleCLI.elevatedScript(command: fakeCommand("/tmp/a'b/mo"), args: [])
+        let s2 = EngineCLI.elevatedScript(command: fakeCommand("/tmp/a'b/mo"), args: [])
         XCTAssertTrue(s2.contains(#"'/tmp/a'\\''b/mo'"#))
     }
 
     func testElevatedScript_redirectsThroughQuotedLogPath() {
         let sink = try! PrivilegedLogSink.make(token: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-        let s = MoleCLI.elevatedScript(command: fakeCommand("/usr/local/bin/mo"), args: ["clean"],
+        let s = EngineCLI.elevatedScript(command: fakeCommand("/usr/local/bin/mo"), args: ["clean"],
                                        logSink: sink)
         XCTAssertTrue(s.contains("> '\(sink.filePath)' 2>&1"))
     }
@@ -329,8 +323,8 @@ final class MoleCLITests: XCTestCase {
     /// Elevation may execute only the engine sealed inside Burrow.app.
     /// Homebrew prefixes and PATH entries are mutable by the invoking user.
     func testTrustedExecutable_onlyEverReturnsKnownLocations() {
-        if let p = MoleCLI.trustedExecutable() {
-            XCTAssertEqual(p, MoleCLI.bundledExecutable(),
+        if let p = EngineCLI.trustedExecutable() {
+            XCTAssertEqual(p, EngineCLI.bundledExecutable(),
                            "elevation must never use a Homebrew/user-mutable engine")
         }
     }
@@ -346,7 +340,7 @@ final class MoleCLITests: XCTestCase {
 
     func testRun_timesOutInsteadOfHanging() throws {
         let start = Date()
-        let r = try MoleCLI.run(args: ["5"], executable: "/bin/sleep", timeout: 0.4)
+        let r = try EngineCLI.run(args: ["5"], executable: "/bin/sleep", timeout: 0.4)
         let elapsed = Date().timeIntervalSince(start)
         XCTAssertLessThan(elapsed, 3.0, "the 5s sleep must be killed by the 0.4s timeout")
         XCTAssertNotEqual(r.exitCode, 0, "a terminated process is non-zero")
@@ -373,43 +367,43 @@ final class MoleCLITests: XCTestCase {
     }
 
     override func tearDown() {
-        MoleCLI.discoveryCandidates = nil
-        MoleCLI.resetDiscoveryCache()
+        EngineCLI.discoveryCandidates = nil
+        EngineCLI.resetDiscoveryCache()
         if let fakeMo { try? FileManager.default.removeItem(at: fakeMo.deletingLastPathComponent()) }
         super.tearDown()
     }
 
     func testFindExecutable_cachesAPositiveHit() throws {
         fakeMo = try makeFakeMo()
-        MoleCLI.discoveryCandidates = [fakeMo.path]
-        MoleCLI.resetDiscoveryCache()
+        EngineCLI.discoveryCandidates = [fakeMo.path]
+        EngineCLI.resetDiscoveryCache()
 
-        XCTAssertEqual(MoleCLI.findExecutable(), fakeMo.path)
+        XCTAssertEqual(EngineCLI.findExecutable(), fakeMo.path)
         // Point discovery somewhere else: a cached (still-valid) hit must
         // win without re-walking the candidate list.
-        MoleCLI.discoveryCandidates = ["/nonexistent/mo"]
-        XCTAssertEqual(MoleCLI.findExecutable(), fakeMo.path, "valid cache hit skips re-discovery")
+        EngineCLI.discoveryCandidates = ["/nonexistent/mo"]
+        XCTAssertEqual(EngineCLI.findExecutable(), fakeMo.path, "valid cache hit skips re-discovery")
     }
 
     func testFindExecutable_revalidatesAndDropsAStaleHit() throws {
         fakeMo = try makeFakeMo()
-        MoleCLI.discoveryCandidates = [fakeMo.path]
-        MoleCLI.resetDiscoveryCache()
-        XCTAssertEqual(MoleCLI.findExecutable(), fakeMo.path)
+        EngineCLI.discoveryCandidates = [fakeMo.path]
+        EngineCLI.resetDiscoveryCache()
+        XCTAssertEqual(EngineCLI.findExecutable(), fakeMo.path)
 
         try FileManager.default.removeItem(at: fakeMo)
-        XCTAssertNil(MoleCLI.findExecutable(),
+        XCTAssertNil(EngineCLI.findExecutable(),
                      "a vanished binary must not keep being served from the cache")
     }
 
     func testFindExecutable_neverCachesAMiss() throws {
-        MoleCLI.discoveryCandidates = ["/nonexistent/mo"]
-        MoleCLI.resetDiscoveryCache()
-        XCTAssertNil(MoleCLI.findExecutable())
+        EngineCLI.discoveryCandidates = ["/nonexistent/mo"]
+        EngineCLI.resetDiscoveryCache()
+        XCTAssertNil(EngineCLI.findExecutable())
 
         // mo gets installed mid-session → the next lookup must see it.
         fakeMo = try makeFakeMo()
-        MoleCLI.discoveryCandidates = [fakeMo.path]
-        XCTAssertEqual(MoleCLI.findExecutable(), fakeMo.path)
+        EngineCLI.discoveryCandidates = [fakeMo.path]
+        XCTAssertEqual(EngineCLI.findExecutable(), fakeMo.path)
     }
 }

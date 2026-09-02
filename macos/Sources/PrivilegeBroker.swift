@@ -5,7 +5,7 @@
 //  The elevated-execution seam (issue #48). One elevated `mo` run = one
 //  osascript `do shell script … with administrator privileges` = one
 //  macOS auth prompt. That spawn was previously hand-rolled inline in
-//  `MoleCLI.runElevated` against a raw `Process`, so the riskiest code in
+//  `EngineCLI.runElevated` against a raw `Process`, so the riskiest code in
 //  the app — the path that runs as ROOT — was the path no test could reach.
 //
 //  This is the sibling of `MoleProcessPort` (the #29 capture-spawn runner):
@@ -19,7 +19,7 @@
 //  signal is the exit status.
 //
 //  Live caller: `Connectivity.run` (flush DNS / renew DHCP), which constructs
-//  `SystemPrivilegeBroker` directly. The `MoleCLI.runElevated` wrapper that
+//  `SystemPrivilegeBroker` directly. The `EngineCLI.runElevated` wrapper that
 //  used to sit in front of this was deleted along with the `mo touchid`
 //  setting, its only user.
 //
@@ -59,7 +59,7 @@ extension ElevatedOutcome {
 // MARK: - Port
 
 /// The one elevated-spawn boundary. `openElevated` builds the osascript
-/// invocation (via `MoleCLI.elevatedScript`, the one shared two-pass quoter),
+/// invocation (via `EngineCLI.elevatedScript`, the one shared two-pass quoter),
 /// runs it once, and classifies the result. Production spawns real osascript;
 /// tests script the outcome without touching the GUI.
 protocol PrivilegeBroker: Sendable {
@@ -90,7 +90,7 @@ struct SystemPrivilegeBroker: PrivilegeBroker {
         } catch {
             return .launchFailed
         }
-        let script = MoleCLI.elevatedScript(command: command, args: args)
+        let script = EngineCLI.elevatedScript(command: command, args: args)
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         task.arguments = ["-e", script]
@@ -157,7 +157,7 @@ enum ElevatedEngineRun {
     /// a dev build that resolved an external engine is refused here (exit 126 with the
     /// reason in the transcript) rather than elevated.
     static func capture(executable: String, args: [String], timeout: TimeInterval,
-                        port: ProcessPort = MoEngine.shared.streamPort,
+                        port: ProcessPort = EngineRunner.shared.streamPort,
                         invokingUser: InvokingUserIdentity? = nil) -> Outcome {
         let user: InvokingUserIdentity
         do { user = try invokingUser ?? InvokingUserIdentity.current() }

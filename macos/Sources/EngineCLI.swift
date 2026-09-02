@@ -1,5 +1,5 @@
 //
-//  MoleCLI.swift
+//  EngineCLI.swift
 //  Burrow
 //
 //  Wrapper around Burrow's bundled engine, with a system-installed `mo` as
@@ -22,7 +22,7 @@ import Foundation
 import AppKit  // NSAlert
 import os
 
-enum MoleCLI {
+enum EngineCLI {
     enum EngineUpdatePolicy: Equatable {
         /// The engine is inside Burrow.app and must stay immutable so the
         /// Developer ID resource seal remains valid. It updates with Burrow.
@@ -99,11 +99,11 @@ enum MoleCLI {
         // speaks the envelope.
         //
         // Deliberately delegated rather than re-derived here with a second `Bundle` API: this and
-        // `BurrowConductor.executableURL()` name the SAME file, and two lookups for one file can
+        // `BurrowEngine.executableURL()` name the SAME file, and two lookups for one file can
         // silently disagree — see that function's doc for the elevated-run hazard if they ever do.
-        // Delegating also means `BurrowConductor.resourceDirectory` governs both, so a test can
+        // Delegating also means `BurrowEngine.resourceDirectory` governs both, so a test can
         // choose "conductor bundled / not bundled" once instead of per resolver.
-        return BurrowConductor.executableURL()?.path
+        return BurrowEngine.executableURL()?.path
     }
 
     /// The only engine Burrow may run as root. Homebrew prefixes are normally
@@ -284,7 +284,7 @@ enum MoleCLI {
     /// Spawns a subprocess — call OFF the main thread.
     static func versionReport() -> EngineVersion? {
         guard let res = try? run(args: ["--version"], timeout: 5) else { return nil }
-        return parseVersionReport(stdout: res.stdout, stderr: res.stderr, exitCode: res.exitCode)
+        return parseVersionReport(res)
     }
 
     /// Turn one `--version` run into an `EngineVersion`. Pure → unit-tested against real
@@ -296,8 +296,9 @@ enum MoleCLI {
     /// it anyway — landing on the envelope's own `"burrow_cli":"0.1.0"` field and handing
     /// five call sites a number that described the envelope format, not the engine. A run
     /// that failed has no version to report; say nil.
-    static func parseVersionReport(stdout: String, stderr: String, exitCode: Int32) -> EngineVersion? {
-        guard exitCode == 0 else { return nil }
+    static func parseVersionReport(_ res: Captured) -> EngineVersion? {
+        guard res.exitCode == 0 else { return nil }
+        let stdout = res.stdout, stderr = res.stderr
 
         // The engine declares its version in a named field. Read the field. Do NOT scrape:
         // the envelope also carries `burrow_cli` (the format version) and, on other
@@ -430,7 +431,7 @@ enum MoleCLI {
 
     /// Whether the resolved engine supports `status --watch`. Spawns `--version` — call OFF
     /// the main thread. Resolves through the same `findExecutable()` that
-    /// `MoEngine.statusWatch()` spawns, so the binary asked is the binary streamed.
+    /// `EngineRunner.statusWatch()` spawns, so the binary asked is the binary streamed.
     static func supportsWatch() -> Bool {
         guard let engine = versionReport() else { return false }
         return supportsWatch(engine)
@@ -448,17 +449,6 @@ enum MoleCLI {
             if a != b { return a > b }
         }
         return true
-    }
-
-    /// Result of a subprocess invocation. `exitCode == 0` is the success
-    /// convention; callers that care about diagnostics should look at
-    /// `stderr` when it's non-zero, and `timedOut` distinguishes "the
-    /// timeout killed it" from a genuine failure (issue #48).
-    struct Result {
-        let stdout: String
-        let stderr: String
-        let exitCode: Int32
-        var timedOut: Bool = false
     }
 
     /// The subprocess runner. Production uses `SystemMoleProcess`; tests inject
@@ -480,7 +470,7 @@ enum MoleCLI {
     static func run(args: [String],
                     executable: String? = nil,
                     stdin: String? = nil,
-                    timeout: TimeInterval = 10) throws -> Result {
+                    timeout: TimeInterval = 10) throws -> Captured {
         let resolvedExecutable = executable ?? (findExecutable() ?? "/usr/bin/false")
         let processResult = try MoleProcess.capture(
             executable: resolvedExecutable,
@@ -489,7 +479,8 @@ enum MoleCLI {
             timeout: timeout,
             port: processPort
         )
-        return Result(
+        // `Captured` — the one capture result type (EngineRunner's) — rather than a private twin.
+        return Captured(
             stdout: processResult.stdout,
             stderr: processResult.stderr,
             exitCode: processResult.exitCode,

@@ -31,7 +31,7 @@ struct DupesView: View {
             toolbar.padding(.horizontal, 18).padding(.top, 4).padding(.bottom, 12)
             Rectangle().fill(Brand.hairline).frame(height: 1)
             ZStack {
-                if !BurrowConductor.isAvailable {
+                if !BurrowEngine.isAvailable {
                     conductorMissing
                 } else if model.scanning {
                     scanningProgress
@@ -93,14 +93,14 @@ struct DupesView: View {
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
-            .disabled(!BurrowConductor.isAvailable)
+            .disabled(!BurrowEngine.isAvailable)
             .help(NSLocalizedString("Choose a folder…", comment: ""))
             Button { model.rescan() } label: {
                 Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(model.folder == nil ? Brand.textTertiary.opacity(0.35) : Brand.textSecondary)
             }
             .buttonStyle(.plain)
-            .disabled(!BurrowConductor.isAvailable || model.folder == nil || model.scanning)
+            .disabled(!BurrowEngine.isAvailable || model.folder == nil || model.scanning)
             .help(NSLocalizedString("Rescan", comment: ""))
         }
     }
@@ -112,30 +112,13 @@ struct DupesView: View {
     }
 
     private func pickFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = NSLocalizedString("Scan", comment: "")
-        if let folder = model.folder {
-            panel.directoryURL = URL(fileURLWithPath: folder)
-        }
-        guard CrashReporter.withoutAppHangTracking({ panel.runModal() }) == .OK,
-              let url = panel.url else { return }
-        model.scan(url.path)
+        ConductorScanStates.pickFolder(current: model.folder) { model.scan($0) }
     }
 
     // MARK: States
 
     private var conductorMissing: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "shippingbox").font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
-            Text(NSLocalizedString("The bundled burrow conductor is missing", comment: ""))
-                .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
-            Text(NSLocalizedString("Duplicate scanning runs through the bundled `burrow` CLI. This build shipped without it — a dev build without the vendor/burrow-cli submodule. Release builds include it.", comment: ""))
-                .font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
-                .multilineTextAlignment(.center).frame(maxWidth: 420)
-        }
+        ConductorScanStates.conductorMissing(NSLocalizedString("Duplicate scanning runs through the bundled `burrow` CLI. This build shipped without it — a dev build without the vendor/burrow-cli submodule. Release builds include it.", comment: ""))
     }
 
     private var idleState: some View {
@@ -176,11 +159,7 @@ struct DupesView: View {
     }
 
     private func errorState(_ message: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 22)).foregroundStyle(Brand.orange)
-            Text(message).font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
-                .multilineTextAlignment(.center).frame(maxWidth: 340)
-        }
+        ConductorScanStates.errorState(message)
     }
 
     private var cleanState: some View {
@@ -453,57 +432,32 @@ struct DupesView: View {
 // MARK: - Model
 
 @MainActor
-final class DupesModel: ObservableObject {
-    /// The chosen folder (absolute path). Scans re-run against this.
-    @Published var folder: String?
-    @Published var scanning = false
+final class DupesModel: ConductorScanModel<DupesReport> {
     @Published var deduping = false
-    @Published var report: DupesReport?
-    @Published var error: String?
     /// The Clean-review checklist state over the current report.
     @Published var selection = DupesSelection(report: DupesReport(groups: [], redundantBytes: 0))
     /// Which group cards are expanded (collapsed by default, like Clean's categories).
     @Published var openGroups: Set<String> = []
 
-    private let opId = UUID()
-    /// Monotonic token (same pattern as AnalyzeModel.scanGen): only the newest scan's
-    /// result may land.
-    private var scanGen = 0
-
-    // MARK: Breadcrumbs (Analyze's idiom over the scanned folder)
-
-    var crumbs: [(name: String, path: String)] {
-        guard let folder else { return [] }
-        let ns = folder as NSString
-        var paths: [String] = []
-        var current = ns as String
-        while current != "/" && !current.isEmpty {
-            paths.append(current)
-            current = (current as NSString).deletingLastPathComponent
-            if paths.count > 6 { break } // keep the bar sane on deep paths
-        }
-        return paths.reversed().map { p in
-            let abbrev = (p as NSString).abbreviatingWithTildeInPath
-            let name = abbrev == "~" ? "~" : (p as NSString).lastPathComponent
-            return (name: name, path: p)
-        }
+    /// `dupes` needs a subcommand (`group|dedupe|remove|link`) — a bare path errors with "needs a
+    /// subcommand" (`burrow-engine`'s `cli.rs::dupes`). `group` is the read-only report this scan
+    /// wants; see `dupes.golden.provenance.txt`, captured with argv `dupes group <path>`. The
+    /// envelope's `data` is fclones' group report, decoded by the pure DupesReport.parse.
+    init() {
+        super.init(command: Command(
+            name: "dupes",
+            arguments: { folder in ["group", folder ?? ""] },
+            timeout: 300,
+            parse: { DupesReport.parse($0) },
+            beginLabel: { name in String(format: NSLocalizedString("Finding duplicates in %@", comment: ""), name ?? "") },
+            successDetail: { r in String(format: NSLocalizedString("%d groups · %@", comment: ""),
+                                         r.groups.count, Fmt.bytes(r.redundantBytes)) },
+            unreadable: NSLocalizedString("burrow dupes returned an unreadable report", comment: "")))
     }
 
-    var canGoUp: Bool {
-        guard let folder else { return false }
-        return (folder as NSString).deletingLastPathComponent != folder
-            && folder != NSHomeDirectory() && folder != "/"
-    }
-
-    func goUp() {
-        guard let folder, canGoUp else { return }
-        scan((folder as NSString).deletingLastPathComponent)
-    }
-
-    func goToCrumb(_ idx: Int) {
-        let c = crumbs
-        guard idx < c.count, c[idx].path != folder else { return }
-        scan(c[idx].path)
+    override func didLoad(_ report: DupesReport) {
+        selection = DupesSelection(report: report)
+        openGroups = Set(report.groups.prefix(3).map(\.id)) // biggest wins start open
     }
 
     // MARK: Selection passthroughs (keep the view dumb)
@@ -517,63 +471,9 @@ final class DupesModel: ObservableObject {
         selection.toggleGroup(group)
     }
 
-    /// Re-run against the current folder (the toolbar's rescan button).
-    func rescan() {
-        guard let folder else { return }
-        scan(folder)
-    }
-
-    /// Scan `path` via the bundled conductor, off the main thread. The envelope's `data`
-    /// is fclones' group report, decoded by the pure DupesReport.parse.
-    ///
-    /// `dupes` needs a subcommand (`group|dedupe|remove|link`) — a bare path errors with "needs a
-    /// subcommand" (`burrow-engine`'s `cli.rs::dupes`). `group` is the read-only report this scan
-    /// wants; see `dupes.golden.provenance.txt`, captured with argv `dupes group <path>`.
-    func scan(_ path: String) {
-        folder = path
-        scanGen += 1
-        let gen = scanGen
-        scanning = true
-        error = nil
-        report = nil
-        let name = (path as NSString).lastPathComponent
-        OperationCenter.shared.begin(opId, label: String(format: NSLocalizedString("Finding duplicates in %@", comment: ""), name))
-        DispatchQueue.global(qos: .userInitiated).async {
-            let outcome: Result<DupesReport, Error>
-            do {
-                let envelope = try BurrowConductor.capture("dupes", ["group", path], timeout: 300)
-                guard let data = envelope.data, let parsed = DupesReport.parse(data) else {
-                    throw BurrowConductorError.engine(
-                        kind: "error",
-                        message: NSLocalizedString("burrow dupes returned an unreadable report", comment: ""))
-                }
-                outcome = .success(parsed)
-            } catch {
-                outcome = .failure(error)
-            }
-            Task { @MainActor in
-                guard gen == self.scanGen else { return }
-                self.scanning = false
-                switch outcome {
-                case .success(let r):
-                    self.report = r
-                    self.selection = DupesSelection(report: r)
-                    self.openGroups = Set(r.groups.prefix(3).map(\.id)) // biggest wins start open
-                    OperationCenter.shared.end(self.opId, success: true,
-                                               detail: String(format: NSLocalizedString("%d groups · %@", comment: ""),
-                                                              r.groups.count, Fmt.bytes(r.redundantBytes)))
-                case .failure(let e):
-                    self.error = e.localizedDescription
-                    OperationCenter.shared.end(self.opId, success: false,
-                                               detail: NSLocalizedString("scan failed", comment: ""))
-                }
-            }
-        }
-    }
-
     // MARK: Dedupe (the non-destructive act)
 
-    /// Run the conductor's dedupe PREVIEW (`dupes dedupe <dir>`, no --apply) and hand the
+    /// Run the engine's dedupe PREVIEW (`dupes dedupe <dir>`, no --apply) and hand the
     /// parsed plan to the caller on the main actor. nil = the preview itself failed
     /// (self.error carries the reason).
     func dedupePreview(_ completion: @escaping @MainActor (DedupePreview?) -> Void) {
@@ -584,7 +484,7 @@ final class DupesModel: ObservableObject {
             let preview: DedupePreview?
             var failure: String?
             do {
-                let envelope = try BurrowConductor.capture("dupes", ["dedupe", folder], timeout: 300)
+                let envelope = try BurrowEngine.capture("dupes", ["dedupe", folder], timeout: 300)
                 preview = envelope.data.flatMap { DedupePreview.parse($0) }
                 if preview == nil {
                     failure = NSLocalizedString("burrow returned an unreadable dedupe preview", comment: "")
@@ -614,7 +514,7 @@ final class DupesModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async {
             var failure: String?
             do {
-                _ = try BurrowConductor.capture("dupes", ["dedupe", folder, "--apply"], timeout: 600)
+                _ = try BurrowEngine.capture("dupes", ["dedupe", folder, "--apply"], timeout: 600)
             } catch {
                 failure = error.localizedDescription
             }

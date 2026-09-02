@@ -180,10 +180,10 @@ final class SnapshotProducer {
                             // streamer, so a version compare here would flip to "yes" the
                             // day it ships 1.0 and start asking a hard-erroring command for
                             // a stream. Both `supportsWatch()` and `statusWatch()` resolve
-                            // through the same `MoleCLI.findExecutable()`, so the binary
+                            // through the same `EngineCLI.findExecutable()`, so the binary
                             // asked is the binary spawned. Spawns a subprocess, so this
                             // runs off-main (the producer calls the factory inside `work`).
-                            MoleCLI.supportsWatch() ? MoEngine.shared.statusWatch() : nil
+                            EngineCLI.supportsWatch() ? EngineRunner.shared.statusWatch() : nil
                         })
         }
     }
@@ -489,19 +489,19 @@ struct MoCLIStatusSource: StatusSource {
         // Prefer the bundled conductor (burrow status --json): its envelope `data` is the same
         // status JSON the snapshot pipeline decodes + patches, and it runs the bundled engine
         // (no system mo needed). Fall back to the direct engine on any miss.
-        if BurrowConductor.isAvailable,
-           let envelope = try? BurrowConductor.capture("status", timeout: 8),
+        if BurrowEngine.isAvailable,
+           let envelope = try? BurrowEngine.capture("status", timeout: 8),
            let data = envelope.data,
            let json = String(data: data, encoding: .utf8) {
             return json
         }
-        let result = try MoEngine.shared.capture(
+        let result = try EngineRunner.shared.capture(
             MoCommand(target: .mo, args: ["status", "--json"], timeout: 8))
         // `stderr=` was empty on every engine failure (the reason is in the `ok:false` envelope
         // on stdout), so this NSError carried an exit code and nothing else into the log the one
         // time anyone would want to read it.
         guard result.exitCode == 0,
-              let json = BurrowEnvelope.payloadBytes(stdout: result.stdout)
+              let json = result.payload
                   .map({ String(decoding: $0, as: UTF8.self) }) else {
             let reason = BurrowEnvelope.failureReason(stdout: result.stdout, stderr: result.stderr)
                 .map { String($0.prefix(200)) } ?? "no error output"

@@ -354,14 +354,14 @@ final class MCPConductorToolsTests: XCTestCase {
                                            contents: Data("not a binary".utf8),
                                            attributes: [.posixPermissions: 0o644]),
             "the fixture must actually stage the file, or the assertions below prove nothing")
-        let saved = BurrowConductor.resourceDirectory
-        BurrowConductor.resourceDirectory = { dir }
+        let saved = BurrowEngine.resourceDirectory
+        BurrowEngine.resourceDirectory = { dir }
         defer {
-            BurrowConductor.resourceDirectory = saved
+            BurrowEngine.resourceDirectory = saved
             try? FileManager.default.removeItem(at: dir)
         }
 
-        XCTAssertNil(BurrowConductor.executableURL())
-        XCTAssertFalse(BurrowConductor.isAvailable)
+        XCTAssertNil(BurrowEngine.executableURL())
+        XCTAssertFalse(BurrowEngine.isAvailable)
     }
 }

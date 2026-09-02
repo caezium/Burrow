@@ -11,12 +11,12 @@
 //      command that ran and failed. Shared by the streaming runner
 //      (SystemProcessPort.finalEvent) and the one-shot broker, so it's
 //      table-tested exhaustively here.
-//    * `MoleCLI.elevatedScript` — the two-pass quoter whose output runs as
+//    * `EngineCLI.elevatedScript` — the two-pass quoter whose output runs as
 //      root inside `do shell script`. The injection cases at the bottom are
 //      the quoting that, if it broke, would delete the wrong files.
 //
 //  The scripted-fake broker tests that used to live here went with
-//  `MoleCLI.runElevated`/`runElevatedClassified`, deleted once the
+//  `EngineCLI.runElevated`/`runElevatedClassified`, deleted once the
 //  `mo touchid` setting (their only caller) was removed. `PrivilegeBroker`
 //  itself is still live — Connectivity's flush-DNS / renew-DHCP fixes use
 //  `SystemPrivilegeBroker.openElevated` — but it is constructed directly at
@@ -30,8 +30,8 @@ import Darwin
 final class PrivilegeBrokerTests: XCTestCase {
 
     override func tearDown() {
-        MoleCLI.discoveryCandidates = nil
-        MoleCLI.resetDiscoveryCache()
+        EngineCLI.discoveryCandidates = nil
+        EngineCLI.resetDiscoveryCache()
         super.tearDown()
     }
 
@@ -108,16 +108,16 @@ final class PrivilegeBrokerTests: XCTestCase {
     // MARK: - osascript spec quoting through the broker (injection cases)
     //
     // The string the broker builds runs as ROOT inside `do shell script …`.
-    // `SystemPrivilegeBroker` composes it via `MoleCLI.elevatedScript`; these
+    // `SystemPrivilegeBroker` composes it via `EngineCLI.elevatedScript`; these
     // assert the dangerous inputs ride INERT — the quoting that, if it broke,
     // would delete the wrong files. (The builder itself is unit-tested in
-    // MoleCLITests; here we pin the broker→builder wiring for real argv.)
+    // EngineCLITests; here we pin the broker→builder wiring for real argv.)
 
     func testElevatedScript_brokerComposesInertRootInvocation() {
         // A path with spaces + args with shell metacharacters: every element
         // single-quoted, the whole thing AppleScript-escaped.
         let command = fakeCommand(path: "/opt/home brew/bin/mo")
-        let script = MoleCLI.elevatedScript(command: command,
+        let script = EngineCLI.elevatedScript(command: command,
                                             args: ["clean", "path with 'quotes'", "$(rm -rf /)"])
         XCTAssertTrue(script.hasPrefix("do shell script \""))
         XCTAssertTrue(script.hasSuffix("\" with administrator privileges"))
@@ -130,7 +130,7 @@ final class PrivilegeBrokerTests: XCTestCase {
     }
 
     func testElevatedScript_neutralizesNewlineAndBacktick() {
-        let script = MoleCLI.elevatedScript(command: fakeCommand(path: "/usr/local/bin/mo"),
+        let script = EngineCLI.elevatedScript(command: fakeCommand(path: "/usr/local/bin/mo"),
                                             args: ["uninstall", "a\nb", "`whoami`"])
         XCTAssertTrue(script.contains("'`whoami`'"), "backticks inert in single quotes")
         // A newline survives inside the single-quoted arg (no statement break).

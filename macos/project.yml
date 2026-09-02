@@ -135,7 +135,7 @@ targets:
           # bundled binary serves every command (no separate engine dir, no conductor).
           #
           # The staged FILENAME is `burrow`, not `burrow-engine`, and that is deliberate:
-          # `BurrowConductor.executableURL()` resolves Resources/burrow, so keeping the name is what
+          # `BurrowEngine.executableURL()` resolves Resources/burrow, so keeping the name is what
           # lets every `capture()` call site stay unedited. See bundle-burrow.sh's header.
           #
           # Activates when a real burrow-engine checkout is present — a release/CI vendors it

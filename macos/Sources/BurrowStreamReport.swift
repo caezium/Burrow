@@ -82,9 +82,9 @@ enum BurrowStreamReport {
 
         // Nothing was NDJSON → parse the lines as mo's human text instead of returning a blank
         // report. That path is live, not hypothetical: `OperationFlow.start` only appends
-        // `--stream` when a conductor is bundled (`BurrowConductor.streamOverride`), and when one
-        // isn't, `resolveMo` can land on a legacy Homebrew `/opt/homebrew/bin/mo`
-        // (`MoleCLI.trustedExecutable`), which speaks the ➤/→ marker grammar `parseTaskReport`
+        // `--stream` when a conductor is bundled (`BurrowEngine.streamOverride`), and when one
+        // isn't, `resolveEngine` can land on a legacy Homebrew `/opt/homebrew/bin/mo`
+        // (`EngineCLI.trustedExecutable`), which speaks the ➤/→ marker grammar `parseTaskReport`
         // was written for. Putting the fallback in the reducer rather than in a view means the
         // result screen AND the completion notification (whose detail line is derived from this
         // same report, via `ToolOperation.finalDetail`) both get it.

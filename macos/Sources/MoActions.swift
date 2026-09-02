@@ -58,7 +58,7 @@ struct EngineTarget: Equatable {
         EngineTarget(path: path, isBundledEngine: false)
     }
 
-    /// Production resolution — the same pair of lookups `OperationFlow`'s `resolveMo` default
+    /// Production resolution — the same pair of lookups `OperationFlow`'s `resolveEngine` default
     /// uses, so a ticket and a streamed operation land on the same file: an elevated run never
     /// accepts a PATH hit (a user-writable directory could shadow the engine and be handed root),
     /// everything else uses the cached discovery.
@@ -67,9 +67,9 @@ struct EngineTarget: Equatable {
     /// construction, because `trustedExecutable()`/`findExecutable()` both consult
     /// `bundledExecutable()` first — one resolver, so they cannot drift.
     static func resolve(elevated: Bool) -> EngineTarget {
-        let resolved = elevated ? MoleCLI.trustedExecutable() : MoleCLI.findExecutable()
+        let resolved = elevated ? EngineCLI.trustedExecutable() : EngineCLI.findExecutable()
         return EngineTarget(path: resolved,
-                            isBundledEngine: resolved != nil && resolved == MoleCLI.bundledExecutable())
+                            isBundledEngine: resolved != nil && resolved == EngineCLI.bundledExecutable())
     }
 }
 
@@ -173,7 +173,7 @@ enum MoAction: Equatable {
             policy: .verifyUninstallMatch(expected: apps),
             command: ActionCommand(executable: target.path,
                                    args: target.isBundledEngine
-                                       ? BurrowConductor.engineArgv(fromMo: moArgs, assertDryRun: true)
+                                       ? BurrowEngine.engineArgv(fromMo: moArgs, assertDryRun: true)
                                        : moArgs,
                                    stdin: "", timeout: 120, elevated: false))
     }
@@ -223,7 +223,7 @@ struct ActionCommand: Equatable {
     var elevated: Bool
 
     /// What to spawn. `/usr/bin/false` for an unresolved binary reproduces exactly the
-    /// degradation `MoEngine.capture` already applies to a `.mo` target it can't resolve — a
+    /// degradation `EngineRunner.capture` already applies to a `.mo` target it can't resolve — a
     /// clean nonzero exit rather than a crash — without asking discovery a second question.
     var spawnPath: String { executable ?? "/usr/bin/false" }
 }
@@ -368,7 +368,7 @@ enum MoActions {
             // `action.argv(mode)` is mo-style — mo runs LIVE by default, `--dry-run` previews.
             // The engine inverts that (dry-run by default, `--apply` to run for real), so a
             // ticket bound for it is translated here, ONCE, for every surface and every mode
-            // alike — `BurrowConductor.engineArgv` is the same pure mapping the streaming GUI
+            // alike — `BurrowEngine.engineArgv` is the same pure mapping the streaming GUI
             // path uses, so there's exactly one place that knows the mo↔engine wire difference.
             //
             // TRANSLATE ONLY WHEN THE RESOLVED BINARY IS THE BUNDLED ENGINE. This is the same
@@ -381,7 +381,7 @@ enum MoActions {
             // `["clean"]`, minted for a PREVIEW because the engine's default is dry-run, is a
             // legacy `mo`'s LIVE clean. A preview that deletes is the highest-severity bug this
             // file can produce, so it may not depend on which build the code happens to be in.
-            args: target.isBundledEngine ? BurrowConductor.engineArgv(fromMo: moArgs) : moArgs,
+            args: target.isBundledEngine ? BurrowEngine.engineArgv(fromMo: moArgs) : moArgs,
             // mo uninstall is interactive ("Proceed? [y/N]" + "Enter confirm");
             // feed yes so a non-TTY run doesn't block forever. The gate +
             // preflight are the consent, not these answers.

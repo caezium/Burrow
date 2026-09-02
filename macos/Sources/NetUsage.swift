@@ -74,7 +74,7 @@ enum NetUsage {
             let r = c.rates; cacheLock.unlock(); return r
         }
         cacheLock.unlock()
-        let out = (try? MoEngine.shared.capture(
+        let out = (try? EngineRunner.shared.capture(
             MoCommand(target: .executable("/usr/bin/nettop"),
                       args: ["-P", "-x", "-d", "-s", "1", "-L", "2", "-J", "bytes_in,bytes_out"],
                       timeout: 8)))?.stdout ?? ""

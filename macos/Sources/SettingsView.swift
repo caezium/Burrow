@@ -126,7 +126,7 @@ struct SettingsView: View {
     @State private var aiOpenAIKey: String = Store.aiOpenAIKey
     @State private var moleVersion: String = "—"
     @State private var moleUpdating = false
-    @State private var engineUpdatePolicy: MoleCLI.EngineUpdatePolicy = .unavailable
+    @State private var engineUpdatePolicy: EngineCLI.EngineUpdatePolicy = .unavailable
     @State private var copiedConfig = false
     // The "Touch ID for sudo" row this branch was hardening against the repointed engine
     // ("unknown command: touchid" must not read as a false "Disabled") is gone entirely on
@@ -756,8 +756,8 @@ struct SettingsView: View {
     /// installed mo on the 1.4x line, which the number alone gives no way to tell apart.
     private func loadMoleVersion() {
         DispatchQueue.global(qos: .userInitiated).async {
-            let engine = MoleCLI.versionReport()
-            let policy = MoleCLI.currentEngineUpdatePolicy
+            let engine = EngineCLI.versionReport()
+            let policy = EngineCLI.currentEngineUpdatePolicy
             DispatchQueue.main.async {
                 // Same fallback string, and the same localization, as `AppDelegate.showAboutPanel`
                 // — the two rows report the identical fact one panel apart, and only this one was
@@ -793,8 +793,8 @@ struct SettingsView: View {
         guard !moleUpdating else { return }
         moleUpdating = true
         DispatchQueue.global(qos: .userInitiated).async {
-            let res = try? MoleCLI.run(args: ["update"], timeout: 600)
-            let newVersion = MoleCLI.versionReport()
+            let res = try? EngineCLI.run(args: ["update"], timeout: 600)
+            let newVersion = EngineCLI.versionReport()
             DispatchQueue.main.async {
                 moleUpdating = false
                 if let newVersion { moleVersion = newVersion.display }

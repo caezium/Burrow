@@ -41,7 +41,7 @@ final class MoInteractiveRunner: ObservableObject {
     let title: String
     private let subcommand: String
     /// The interactive PTY session. Production takes a fresh one from the
-    /// MoEngine facade (MoEngine.shared.interactive(), the real PTYTask); tests
+    /// EngineRunner facade (EngineRunner.shared.interactive(), the real PTYTask); tests
     /// inject a scripted FakePTY. Raw, escape-preserving output either way — the
     /// SelectionSession reducer parses Mole's redraw frames.
     private var pty: PTYPort
@@ -54,7 +54,7 @@ final class MoInteractiveRunner: ObservableObject {
     private var timer: DispatchSourceTimer?
 
     init(subcommand: String, title: String,
-         pty: PTYPort = MoEngine.shared.interactive(), tickInterval: TimeInterval = 0.06,
+         pty: PTYPort = EngineRunner.shared.interactive(), tickInterval: TimeInterval = 0.06,
          executablePath: String? = nil) {
         self.subcommand = subcommand
         self.title = title
@@ -79,7 +79,7 @@ final class MoInteractiveRunner: ObservableObject {
         publish()
         pty.onOutput = { [weak self] s in MainActor.assumeIsolated { self?.dispatch(.output(s)) } }
         pty.onExit = { [weak self] code in MainActor.assumeIsolated { self?.dispatch(.processExited(code)) } }
-        guard let mo = executablePath ?? MoleCLI.findExecutable() else {
+        guard let mo = executablePath ?? EngineCLI.findExecutable() else {
             phase = .failed("mo not found"); return
         }
         do { try pty.launch(mo, [subcommand]) }

@@ -12,7 +12,7 @@
 //
 //  ── Why the contract looks like this ────────────────────────────────────
 //  The old elevation path handed osascript a SHELL STRING built from an
-//  executable path plus argv (`MoleCLI.elevatedScript`). It was carefully
+//  executable path plus argv (`EngineCLI.elevatedScript`). It was carefully
 //  quoted and well tested, but its shape meant the privileged side had to
 //  trust whatever command the caller composed.
 //

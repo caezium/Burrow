@@ -30,7 +30,7 @@ struct PhotosView: View {
             toolbar.padding(.horizontal, 18).padding(.top, 4).padding(.bottom, 12)
             Rectangle().fill(Brand.hairline).frame(height: 1)
             ZStack {
-                if !BurrowConductor.isAvailable {
+                if !BurrowEngine.isAvailable {
                     conductorMissing
                 } else if model.scanning {
                     scanningProgress
@@ -85,14 +85,14 @@ struct PhotosView: View {
                     .foregroundStyle(Brand.textSecondary)
             }
             .buttonStyle(.plain)
-            .disabled(!BurrowConductor.isAvailable)
+            .disabled(!BurrowEngine.isAvailable)
             .help(NSLocalizedString("Choose a folder…", comment: ""))
             Button { model.rescan() } label: {
                 Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(model.folder == nil ? Brand.textTertiary.opacity(0.35) : Brand.textSecondary)
             }
             .buttonStyle(.plain)
-            .disabled(!BurrowConductor.isAvailable || model.folder == nil || model.scanning)
+            .disabled(!BurrowEngine.isAvailable || model.folder == nil || model.scanning)
             .help(NSLocalizedString("Rescan", comment: ""))
         }
     }
@@ -104,30 +104,13 @@ struct PhotosView: View {
     }
 
     private func pickFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = NSLocalizedString("Scan", comment: "")
-        if let folder = model.folder {
-            panel.directoryURL = URL(fileURLWithPath: folder)
-        }
-        guard CrashReporter.withoutAppHangTracking({ panel.runModal() }) == .OK,
-              let url = panel.url else { return }
-        model.scan(url.path)
+        ConductorScanStates.pickFolder(current: model.folder) { model.scan($0) }
     }
 
     // MARK: States
 
     private var conductorMissing: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "shippingbox").font(.system(size: 26)).foregroundStyle(Brand.textTertiary)
-            Text(NSLocalizedString("The bundled burrow conductor is missing", comment: ""))
-                .font(Brand.serif(17, .medium)).foregroundStyle(Brand.textPrimary)
-            Text(NSLocalizedString("Similar-photo scanning runs through the bundled `burrow` CLI. This build shipped without it — a dev build without the vendor/burrow-cli submodule. Release builds include it.", comment: ""))
-                .font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
-                .multilineTextAlignment(.center).frame(maxWidth: 420)
-        }
+        ConductorScanStates.conductorMissing(NSLocalizedString("Similar-photo scanning runs through the bundled `burrow` CLI. This build shipped without it — a dev build without the vendor/burrow-cli submodule. Release builds include it.", comment: ""))
     }
 
     private var idleState: some View {
@@ -168,11 +151,7 @@ struct PhotosView: View {
     }
 
     private func errorState(_ message: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 22)).foregroundStyle(Brand.orange)
-            Text(message).font(Brand.mono(11)).foregroundStyle(Brand.textSecondary)
-                .multilineTextAlignment(.center).frame(maxWidth: 340)
-        }
+        ConductorScanStates.errorState(message)
     }
 
     private func cleanState(_ report: PhotosReport) -> some View {
@@ -350,101 +329,18 @@ final class PhotoThumbs: @unchecked Sendable {
 
 // MARK: - Model
 
+/// Perceptual hashing is the slow part — hence the 600 s timeout (double the dupes pane's).
+/// The envelope's `data` is decoded by the pure PhotosReport.parse.
 @MainActor
-final class PhotosModel: ObservableObject {
-    /// The chosen folder (absolute path). Scans re-run against this.
-    @Published var folder: String?
-    @Published var scanning = false
-    @Published var report: PhotosReport?
-    @Published var error: String?
-
-    private let opId = UUID()
-    /// Monotonic token (same pattern as DupesModel.scanGen): only the newest
-    /// scan's result may land.
-    private var scanGen = 0
-
-    // MARK: Breadcrumbs (Analyze's idiom over the scanned folder)
-
-    var crumbs: [(name: String, path: String)] {
-        guard let folder else { return [] }
-        let ns = folder as NSString
-        var paths: [String] = []
-        var current = ns as String
-        while current != "/" && !current.isEmpty {
-            paths.append(current)
-            current = (current as NSString).deletingLastPathComponent
-            if paths.count > 6 { break } // keep the bar sane on deep paths
-        }
-        return paths.reversed().map { p in
-            let abbrev = (p as NSString).abbreviatingWithTildeInPath
-            let name = abbrev == "~" ? "~" : (p as NSString).lastPathComponent
-            return (name: name, path: p)
-        }
-    }
-
-    var canGoUp: Bool {
-        guard let folder else { return false }
-        return (folder as NSString).deletingLastPathComponent != folder
-            && folder != NSHomeDirectory() && folder != "/"
-    }
-
-    func goUp() {
-        guard let folder, canGoUp else { return }
-        scan((folder as NSString).deletingLastPathComponent)
-    }
-
-    func goToCrumb(_ idx: Int) {
-        let c = crumbs
-        guard idx < c.count, c[idx].path != folder else { return }
-        scan(c[idx].path)
-    }
-
-    /// Re-run against the current folder (the toolbar's rescan button).
-    func rescan() {
-        guard let folder else { return }
-        scan(folder)
-    }
-
-    /// Scan `path` via the bundled conductor, off the main thread. Perceptual
-    /// hashing is the slow part — hence the 600 s timeout (double the dupes
-    /// pane's). The envelope's `data` is decoded by the pure PhotosReport.parse.
-    func scan(_ path: String) {
-        folder = path
-        scanGen += 1
-        let gen = scanGen
-        scanning = true
-        error = nil
-        report = nil
-        let name = (path as NSString).lastPathComponent
-        OperationCenter.shared.begin(opId, label: String(format: NSLocalizedString("Comparing photos in %@", comment: ""), name))
-        DispatchQueue.global(qos: .userInitiated).async {
-            let outcome: Result<PhotosReport, Error>
-            do {
-                let envelope = try BurrowConductor.capture("photos", [path], timeout: 600)
-                guard let data = envelope.data, let parsed = PhotosReport.parse(data) else {
-                    throw BurrowConductorError.engine(
-                        kind: "error",
-                        message: NSLocalizedString("burrow photos returned an unreadable report", comment: ""))
-                }
-                outcome = .success(parsed)
-            } catch {
-                outcome = .failure(error)
-            }
-            Task { @MainActor in
-                guard gen == self.scanGen else { return }
-                self.scanning = false
-                switch outcome {
-                case .success(let r):
-                    self.report = r
-                    OperationCenter.shared.end(self.opId, success: true,
-                                               detail: String(format: NSLocalizedString("%d similar sets", comment: ""),
-                                                              r.groups.count))
-                case .failure(let e):
-                    self.error = e.localizedDescription
-                    OperationCenter.shared.end(self.opId, success: false,
-                                               detail: NSLocalizedString("scan failed", comment: ""))
-                }
-            }
-        }
+final class PhotosModel: ConductorScanModel<PhotosReport> {
+    init() {
+        super.init(command: Command(
+            name: "photos",
+            arguments: { folder in [folder ?? ""] },
+            timeout: 600,
+            parse: { PhotosReport.parse($0) },
+            beginLabel: { name in String(format: NSLocalizedString("Comparing photos in %@", comment: ""), name ?? "") },
+            successDetail: { r in String(format: NSLocalizedString("%d similar sets", comment: ""), r.groups.count) },
+            unreadable: NSLocalizedString("burrow photos returned an unreadable report", comment: "")))
     }
 }

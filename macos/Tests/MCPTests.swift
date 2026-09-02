@@ -288,7 +288,7 @@ final class MCPTests: XCTestCase {
     func testCleanupHistory_moAbsent_yieldsGracefulErrorObject() throws {
         // exit 127 = mo not found. Must be a valid object an agent can read,
         // never a throw.
-        let json = ToolCatalog.cleanupHistoryResult(exitCode: 127, stdout: "")
+        let json = ToolCatalog.cleanupHistoryResult(Captured(stdout: "", stderr: "", exitCode: 127))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertNotNil(obj["error"])
         XCTAssertEqual(obj["sessions"] as? [Any] != nil, true)
@@ -296,7 +296,7 @@ final class MCPTests: XCTestCase {
 
     func testCleanupHistory_moPresent_passesThroughItsJSON() throws {
         let molesJSON = #"{"sessions":[{"command":"clean","size":"1MB"}]}"#
-        let json = ToolCatalog.cleanupHistoryResult(exitCode: 0, stdout: "  \(molesJSON)\n")
+        let json = ToolCatalog.cleanupHistoryResult(Captured(stdout: "  \(molesJSON)\n", stderr: "", exitCode: 0))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         let sessions = try XCTUnwrap(obj["sessions"] as? [[String: Any]])
         XCTAssertEqual(sessions.first?["command"] as? String, "clean")
@@ -304,7 +304,7 @@ final class MCPTests: XCTestCase {
     }
 
     func testCleanupHistory_moPresentButEmpty_yieldsEmptySessions() throws {
-        let json = ToolCatalog.cleanupHistoryResult(exitCode: 0, stdout: "   \n")
+        let json = ToolCatalog.cleanupHistoryResult(Captured(stdout: "   \n", stderr: "", exitCode: 0))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertEqual((obj["sessions"] as? [Any])?.count, 0)
     }
@@ -317,7 +317,7 @@ final class MCPTests: XCTestCase {
 
     func testCleanupHistory_realEngineEnvelope_unwrapsSessionsToTopLevel() throws {
         let envelope = #"{"ok":true,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"history","data":{"logs":{"operations":"/Users/henry/Library/Logs/mole/operations.log","deletions":"/Users/henry/Library/Logs/mole/deletions.log"},"limit":2,"sessions":[{"command":"optimize","started_at":"2026-07-25 08:27:26","ended_at":"2026-07-25 08:27:30","items":22,"size":"0B","operation_count":0,"actions":{"removed":0,"trashed":0,"skipped":0,"failed":0,"rebuilt":0,"other":0}},{"command":"clean","started_at":"2026-07-25 08:25:50","ended_at":"2026-07-25 08:27:25","items":647,"size":"585.5MB","operation_count":162,"actions":{"removed":0,"trashed":0,"skipped":162,"failed":0,"rebuilt":0,"other":0}}],"deletions":[]}}"#
-        let json = ToolCatalog.cleanupHistoryResult(exitCode: 0, stdout: envelope)
+        let json = ToolCatalog.cleanupHistoryResult(Captured(stdout: envelope, stderr: "", exitCode: 0))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertNil(obj["ok"], "must be unwrapped, not the raw envelope")
         XCTAssertNil(obj["data"], "sessions belongs at the top level, not nested under data")
@@ -330,7 +330,7 @@ final class MCPTests: XCTestCase {
 
     func testCleanupHistory_engineErrorEnvelope_yieldsErrorObjectNotThePassthroughEnvelope() throws {
         let envelope = #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"history","error":{"kind":"error","message":"boom","platform":"macos"}}"#
-        let json = ToolCatalog.cleanupHistoryResult(exitCode: 0, stdout: envelope)
+        let json = ToolCatalog.cleanupHistoryResult(Captured(stdout: envelope, stderr: "", exitCode: 0))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertEqual(obj["error"] as? String, "boom")
         XCTAssertEqual((obj["sessions"] as? [Any])?.count, 0)
@@ -385,8 +385,7 @@ final class MCPTests: XCTestCase {
     /// so the claim is true — and the old rule (`exitCode == 0 && !reportsFailure`) said false,
     /// which is the wrong answer in the direction that matters.
     func testRealRunClaim_aPartialUninstallReportsThatItRan() {
-        let claim = ToolCatalog.realRunClaim(exitCode: 1, stdout: Self.applyPartialAcrossApps,
-                                             stderr: "")
+        let claim = ToolCatalog.realRunClaim(Captured(stdout: Self.applyPartialAcrossApps, stderr: "", exitCode: 1))
         XCTAssertFalse(BurrowEnvelope.reportsFailure(stdout: Self.applyPartialAcrossApps),
                        "the fixture is the trap: exit 1 over an ok:true envelope")
         XCTAssertTrue(claim.ran, "one of the two applications was deleted")
@@ -396,8 +395,7 @@ final class MCPTests: XCTestCase {
     /// which is what `failureReason`'s raw-stdout fallback returned, because a success envelope
     /// carries no `error.message` for it to classify.
     func testRealRunClaim_reportsThePerAppAccountNotTheEnvelopeItself() throws {
-        let claim = ToolCatalog.realRunClaim(exitCode: 1, stdout: Self.applyPartialAcrossApps,
-                                             stderr: "")
+        let claim = ToolCatalog.realRunClaim(Captured(stdout: Self.applyPartialAcrossApps, stderr: "", exitCode: 1))
         let error = try XCTUnwrap(claim.error)
         XCTAssertFalse(error.contains("\"burrow_cli\""),
                        "the error must not be the envelope document: \(error.prefix(120))")
@@ -413,7 +411,7 @@ final class MCPTests: XCTestCase {
             .replacingOccurrences(of: #""applications_removed":1"#, with: #""applications_removed":0"#)
             .replacingOccurrences(of: #""removed_count":2"#, with: #""removed_count":0"#)
             .replacingOccurrences(of: #""status":"removed""#, with: #""status":"refused""#)
-        let claim = ToolCatalog.realRunClaim(exitCode: 1, stdout: refusedBoth, stderr: "")
+        let claim = ToolCatalog.realRunClaim(Captured(stdout: refusedBoth, stderr: "", exitCode: 1))
         XCTAssertFalse(claim.ran)
         XCTAssertNotNil(claim.error)
     }
@@ -421,9 +419,9 @@ final class MCPTests: XCTestCase {
     /// Nothing about a legacy `mo` or a clean run changes: no envelope to decode, so the exit code
     /// still decides, and a zero exit is still a run.
     func testRealRunClaim_fallsBackToTheExitCodeWhenThereIsNoEngineOutcome() {
-        XCTAssertTrue(ToolCatalog.realRunClaim(exitCode: 0, stdout: "Removed 1 app", stderr: "").ran)
-        XCTAssertFalse(ToolCatalog.realRunClaim(exitCode: 1, stdout: "", stderr: "boom").ran)
-        XCTAssertEqual(ToolCatalog.realRunClaim(exitCode: 1, stdout: "", stderr: "boom").error, "boom")
+        XCTAssertTrue(ToolCatalog.realRunClaim(Captured(stdout: "Removed 1 app", stderr: "", exitCode: 0)).ran)
+        XCTAssertFalse(ToolCatalog.realRunClaim(Captured(stdout: "", stderr: "boom", exitCode: 1)).ran)
+        XCTAssertEqual(ToolCatalog.realRunClaim(Captured(stdout: "", stderr: "boom", exitCode: 1)).error, "boom")
     }
 
     // MARK: - Deletions log path (Fix 1, secondary check: `logs` sits under `data` in a real
@@ -453,7 +451,7 @@ final class MCPTests: XCTestCase {
         // `burrow-engine uninstall --list` finds no non-flag arg, so it answers its own "needs an
         // app bundle id" error envelope on STDOUT at exit 1 (never stderr) — captured verbatim.
         let stdout = #"{"ok":false,"burrow_cli":"0.1.0","engine":"burrow-engine","command":"uninstall","error":{"kind":"error","message":"uninstall needs an app bundle id (e.g. com.foo.Bar)","platform":"macos"}}"#
-        let json = ToolCatalog.listAppsToolResult(exitCode: 1, stdout: stdout, stderr: "")
+        let json = ToolCatalog.listAppsToolResult(Captured(stdout: stdout, stderr: "", exitCode: 1))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertNotNil(obj["error"], "must surface an explicit error")
         XCTAssertNil(obj["apps"], "must NOT carry an empty apps list next to the error — an agent "
@@ -461,7 +459,7 @@ final class MCPTests: XCTestCase {
     }
 
     func testListApps_moAbsent_yieldsExplicitErrorNoAppsKey() throws {
-        let json = ToolCatalog.listAppsToolResult(exitCode: 127, stdout: "", stderr: "")
+        let json = ToolCatalog.listAppsToolResult(Captured(stdout: "", stderr: "", exitCode: 127))
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertNotNil(obj["error"])
         XCTAssertNil(obj["apps"])
@@ -469,11 +467,11 @@ final class MCPTests: XCTestCase {
 
     func testListApps_realList_passesThroughVerbatim() {
         let stdout = #"[{"name":"Slack","bundle_id":"com.tinyspeck.slackmacgap","path":"/Applications/Slack.app","size":"250MB"}]"#
-        XCTAssertEqual(ToolCatalog.listAppsToolResult(exitCode: 0, stdout: stdout, stderr: ""), stdout)
+        XCTAssertEqual(ToolCatalog.listAppsToolResult(Captured(stdout: stdout, stderr: "", exitCode: 0)), stdout)
     }
 
     func testListApps_realListEmptyOutput_yieldsEmptyAppsObject() {
-        XCTAssertEqual(ToolCatalog.listAppsToolResult(exitCode: 0, stdout: "   ", stderr: ""), "{\"apps\":[]}")
+        XCTAssertEqual(ToolCatalog.listAppsToolResult(Captured(stdout: "   ", stderr: "", exitCode: 0)), "{\"apps\":[]}")
     }
 
     func testDeletedFiles_emptyLog_yieldsZeroCount() throws {
