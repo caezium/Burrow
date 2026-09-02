@@ -8,14 +8,19 @@
 //  are unchanged. The engine emits one JSON object per line:
 //
 //    clean live:    {"event":"removed","path":P,"bytes":N} | {"event":"failed",...} |
-//                   {"event":"protected",...}  then  {"event":"done","freed_bytes":N,
-//                   "freed_human":H,"removed":N,"failed":N,"protected":N}
+//                   {"event":"protected","path":P,"reason":R?}  then  {"event":"done",
+//                   "freed_bytes":N,"freed_human":H,"moved_to_trash_bytes":N,
+//                   "moved_to_trash_human":H,"removed":N,"failed":N,"protected":N}
 //    clean preview: {"event":"would_remove","path":P,"bytes":N}  then  {"event":"done",
 //                   "dry_run":true,"would_free_bytes":N,"would_free_human":H,"count":N}
-//    optimize live: {"event":"task","name":T,"ok":B,"error":E|null}  then  {"event":"done",
-//                   "ok":B,"tasks":N,"failed":N}
+//    optimize live: {"event":"task","name":T,"ok":B,"error":E|null[,"skipped":true,
+//                   "reason":R]}  then  {"event":"done","ok":B,"tasks":N,"failed":N}
 //    optimize prev: {"event":"would_run","name":T,"description":D}  then  {"event":"done",
 //                   "dry_run":true,"tasks":N}
+//
+//  `purge --stream` speaks exactly the clean vocabulary over build artifacts, and a reviewed
+//  `clean --apply --plan <file>` speaks it over the plan's paths (a path the engine refuses is a
+//  `protected` line with `reason:"not_a_clean_target"`), so one reducer serves all of them.
 //
 //  Parsed line-by-line with JSONSerialization (like BurrowEnvelope) — the reduce is called on the
 //  accumulated `[String]` after every streamed line (throttled) and once at exit. Output that
@@ -63,11 +68,23 @@ enum BurrowStreamReport {
             case "failed":
                 if let p = obj["path"] as? String { items.append(TaskItem(marker: .error, text: p)) }
             case "protected":
-                if let p = obj["path"] as? String { items.append(TaskItem(marker: .review, text: p)) }
+                // A refusal is never silently dropped: it lands in the report with the
+                // engine's reason when it gives one (`not_a_clean_target` for a plan path
+                // outside the clean roots), so the user can see WHAT was left and why.
+                if let p = obj["path"] as? String {
+                    items.append(TaskItem(marker: .review, text: protectedText(p, reason: obj["reason"] as? String)))
+                }
             case "task":
                 if let name = obj["name"] as? String {
                     let ok = obj["ok"] as? Bool ?? true
-                    items.append(TaskItem(marker: ok ? .ok : .error, text: name))
+                    if obj["skipped"] as? Bool == true {
+                        // Skipped is not failed: nothing was attempted. The engine says why
+                        // (`requires_admin` when an un-elevated run met a root-only task).
+                        items.append(TaskItem(marker: .info,
+                                              text: skippedText(name, reason: obj["reason"] as? String)))
+                    } else {
+                        items.append(TaskItem(marker: ok ? .ok : .error, text: name))
+                    }
                 }
             case "would_run":
                 if let name = obj["name"] as? String { items.append(TaskItem(marker: .action, text: name)) }
@@ -129,6 +146,30 @@ enum BurrowStreamReport {
 
     // MARK: - internals
 
+    /// "path — protected (reason)". Pure, so the wording is pinned by a test.
+    static func protectedText(_ path: String, reason: String?) -> String {
+        switch reason {
+        case nil, "":
+            return String(format: NSLocalizedString("%@ — protected", comment: "clean refusal"), path)
+        case "not_a_clean_target":
+            return String(format: NSLocalizedString("%@ — refused: not a clean target", comment: "plan refusal"), path)
+        case let r?:
+            return String(format: NSLocalizedString("%@ — protected (%@)", comment: "clean refusal with reason"), path, r)
+        }
+    }
+
+    /// "task — skipped (needs administrator)". Pure, so the wording is pinned by a test.
+    static func skippedText(_ name: String, reason: String?) -> String {
+        switch reason {
+        case "requires_admin":
+            return String(format: NSLocalizedString("%@ — skipped (needs administrator)", comment: "optimize skip"), name)
+        case nil, "":
+            return String(format: NSLocalizedString("%@ — skipped", comment: "optimize skip"), name)
+        case let r?:
+            return String(format: NSLocalizedString("%@ — skipped (%@)", comment: "optimize skip with reason"), name, r)
+        }
+    }
+
     private static func object(from line: String) -> [String: Any]? {
         let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.first == "{", let data = t.data(using: .utf8),
@@ -141,8 +182,21 @@ enum BurrowStreamReport {
     /// and optimize. `itemCount` is the number of accumulated item lines (fallback when a specific
     /// count field is absent).
     private static func makeSummary(from done: [String: Any], itemCount: Int) -> TaskSummary {
-        // Freed disk (live clean) vs would-free (preview) vs no size (optimize).
-        let freedHuman = done["freed_human"] as? String
+        // Freed disk (live clean) vs would-free (preview) vs no size (optimize). On the
+        // engine's default Trash path `freed_bytes` is 0 and the bytes are in
+        // `moved_to_trash_bytes`; a zero freed figure is dropped rather than rendered as
+        // "Cleaned 0B" beside the Trash figure. A live run that moved everything to the Trash
+        // therefore reads "1.2GB moved to Trash · 5 items", never "Cleaned 1.2GB".
+        let trashedBytes = intField(done, "moved_to_trash_bytes") ?? 0
+        let trashed = trashedBytes > 0
+            ? (done["moved_to_trash_human"] as? String ?? Fmt.bytes(Int64(trashedBytes)))
+            : ""
+        let freedHuman: String?
+        if let freed = intField(done, "freed_bytes") {
+            freedHuman = freed > 0 ? (done["freed_human"] as? String ?? Fmt.bytes(Int64(freed))) : nil
+        } else {
+            freedHuman = done["freed_human"] as? String
+        }
         let wouldFreeHuman = done["would_free_human"] as? String
         let space = freedHuman ?? wouldFreeHuman ?? ""
 
@@ -161,7 +215,7 @@ enum BurrowStreamReport {
         // reading. The engine doesn't emit that at all yet, so `freeChange` stays empty here; the
         // old human-text parser mapped its equivalent live-clean line to `space` for the same
         // reason (see `parseTaskReport`'s "Tracked cleanup:" handling).
-        return TaskSummary(space: space, items: items, categories: "")
+        return TaskSummary(space: space, items: items, categories: "", trashed: trashed)
     }
 
     /// Read an integer field regardless of whether JSONSerialization bridged it to Int or Double.

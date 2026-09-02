@@ -53,14 +53,21 @@ struct TaskSummary {
     let categories: String     // "20"
     var freeChange: String = "" // "+1.39GB" — real run only (disk freed)
     var freeNow: String = ""    // "2.50GB"  — real run only (free space after)
+    /// "1.2GB" — real run only: what went to the Trash rather than off the disk. The engine's
+    /// default removal is a Trash move, which frees nothing until the Trash empties, so this
+    /// is reported as "moved to Trash" and never folded into `space` ("Cleaned") — a run whose
+    /// every byte went to the Trash says so instead of claiming it cleaned them.
+    var trashed: String = ""
 
     /// One-line result the Clean done-banner AND a completion
     /// notification show: the real freed-space numbers when the engine
-    /// printed them, the tracked-cleanup size otherwise.
+    /// printed them, the tracked-cleanup size otherwise, and the Trash
+    /// figure separately whenever there is one.
     var completionLine: String {
         var parts: [String] = []
         if !freeChange.isEmpty { parts.append(String(format: NSLocalizedString("Freed %@", comment: ""), freeChange)) }
         else if !space.isEmpty { parts.append(String(format: NSLocalizedString("Cleaned %@", comment: ""), space)) }
+        if !trashed.isEmpty { parts.append(String(format: NSLocalizedString("%@ moved to Trash", comment: "clean summary"), trashed)) }
         if !freeNow.isEmpty { parts.append(String(format: NSLocalizedString("%@ free now", comment: ""), freeNow)) }
         if !items.isEmpty { parts.append(String(format: NSLocalizedString("%@ items", comment: ""), items)) }
         return parts.isEmpty ? NSLocalizedString("Done", comment: "") : parts.joined(separator: " · ")

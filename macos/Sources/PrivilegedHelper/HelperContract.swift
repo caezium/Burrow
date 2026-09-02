@@ -69,23 +69,38 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
     /// the user already understands, and the complete list.
     case readLoginItems
 
-    /// The engine argv for the operations that drive the bundled engine, or
-    /// nil for the ones that don't.
+    /// The engine argv for the operations that drive the bundled engine with a
+    /// FIXED command line, or nil for the ones that don't (the network fixes,
+    /// the login-items dump, and the reviewed clean — whose argv carries the
+    /// daemon's own plan file and is built in `steps`).
     ///
-    /// These reproduce what the GUI runs today through osascript — CleanView's
-    /// `["clean"]`, OptimizeView's `["optimize"]`, and the dry-run previews —
-    /// so the helper changes HOW the command is elevated, never WHAT runs.
+    /// Spelled in the ENGINE's convention, because that is what the daemon
+    /// runs: the bundled engine previews by default and needs `--apply` to
+    /// act, the inverse of mo. `--stream` is always on — the daemon relays the
+    /// engine's stdout line by line over XPC, so the GUI gets the same live
+    /// NDJSON feed an un-elevated run does — and `--dry-run` is stated on the
+    /// previews rather than inherited from the default, so a read-only run is
+    /// a fact on the wire.
     var engineArguments: [String]? {
         switch self {
-        case .scan: return ["clean", "--dry-run"]
-        case .clean: return ["clean"]
-        case .optimize: return ["optimize"]
-        case .optimizeScan: return ["optimize", "--dry-run"]
+        case .scan: return ["clean", "--dry-run", "--stream"]
+        case .clean: return ["clean", "--apply", "--stream"]
+        case .optimize: return ["optimize", "--apply", "--stream"]
+        case .optimizeScan: return ["optimize", "--dry-run", "--stream"]
         case .flushDNS, .renewDHCP, .readLoginItems, .cleanReviewed: return nil
         }
     }
 
-    /// Whether this operation needs a network interface name.
+    /// Whether the operation runs the bundled engine (so the daemon must
+    /// prepare its verified execution snapshot first) rather than a system
+    /// tool from the closed set.
+    var usesBundledEngine: Bool {
+        switch self {
+        case .scan, .clean, .optimize, .optimizeScan, .cleanReviewed: return true
+        case .flushDNS, .renewDHCP, .readLoginItems: return false
+        }
+    }
+
     var needsInterface: Bool { self == .renewDHCP }
 
     /// Whether this operation is driven by a reviewed path list. Exactly one
@@ -149,20 +164,42 @@ enum HelperOperation: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// Recognise an existing elevated call site's argv as a typed operation,
-    /// or `nil` if it isn't one of them.
+    /// Recognise an elevated call site's argv as a typed operation, or `nil`
+    /// if it isn't one of them.
     ///
-    /// This is the migration seam. The GUI still describes elevated work as
-    /// `["clean"]` / `["optimize"]` through `OperationFlow`, and this maps
-    /// those onto the helper WITHOUT letting anything else through: argv the
-    /// helper doesn't recognise returns nil and keeps the existing osascript
-    /// route, rather than being forwarded as some approximate operation.
+    /// This is the migration seam. `OperationFlow` still describes elevated
+    /// work as argv — the engine-convention argv `BurrowEngine.streamArgv` /
+    /// `engineArgv` produce: `["clean", "--apply", "--stream"]` for a live
+    /// clean, `["clean", "--stream"]` (or `["clean", "--dry-run", "--stream"]`)
+    /// for its preview, and the same shapes for optimize, with `--stream`
+    /// absent when the streaming switch is off. This maps exactly those onto
+    /// the helper WITHOUT letting anything else through: the verb must come
+    /// first, every flag must be one of the three the engine takes on these
+    /// commands, and `--apply` with `--dry-run` is a contradiction the engine
+    /// itself refuses. Anything else returns nil and keeps the existing
+    /// osascript route, rather than being forwarded as some approximate
+    /// operation.
+    ///
+    /// The engine's convention decides the mapping, never mo's: a bare
+    /// `["clean"]` is a PREVIEW here, because that is what the engine does
+    /// with it. Reading it as the live clean (as the first version of this
+    /// seam did, from mo's convention) would have had the daemon run the
+    /// engine's dry run and report a cleanup that removed nothing.
     init?(engineArguments: [String]) {
-        guard let match = HelperOperation.allCases.first(where: {
-            guard let candidate = $0.engineArguments else { return false }
-            return candidate == engineArguments
-        }) else { return nil }
-        self = match
+        guard let verb = engineArguments.first, ["clean", "optimize"].contains(verb) else { return nil }
+        let flags = engineArguments.dropFirst()
+        let allowed: Set<String> = ["--apply", "--dry-run", "--stream"]
+        guard flags.allSatisfy({ allowed.contains($0) }),
+              Set(flags).count == flags.count else { return nil }
+        let apply = flags.contains("--apply")
+        guard !(apply && flags.contains("--dry-run")) else { return nil }
+        switch (verb, apply) {
+        case ("clean", true): self = .clean
+        case ("clean", false): self = .scan
+        case ("optimize", true): self = .optimize
+        case ("optimize", false): self = .optimizeScan
+        default: return nil
+        }
     }
 }
 

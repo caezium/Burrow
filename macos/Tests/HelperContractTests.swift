@@ -303,19 +303,33 @@ final class HelperContractTests: XCTestCase {
 
     // MARK: - Fixed argv (the client contributes nothing)
     //
-    // These are the exact argv the GUI passes today through the osascript
-    // path (CleanView `["clean"]`, OptimizeView `["optimize"]`, previews with
-    // `--dry-run`). The helper reproduces them from the enum ALONE, so an
-    // attacker who fully controls the XPC payload still cannot add a flag.
+    // The daemon reproduces the engine argv from the enum ALONE, so an attacker
+    // who fully controls the XPC payload still cannot add a flag. It is spelled
+    // in the ENGINE's convention (preview by default, `--apply` to act) and is
+    // always streamed, because the daemon relays stdout live over XPC.
 
     func testEngineArguments_areFixedPerOperation() {
-        XCTAssertEqual(HelperOperation.scan.engineArguments, ["clean", "--dry-run"])
-        XCTAssertEqual(HelperOperation.clean.engineArguments, ["clean"])
-        XCTAssertEqual(HelperOperation.optimize.engineArguments, ["optimize"])
-        XCTAssertEqual(HelperOperation.optimizeScan.engineArguments, ["optimize", "--dry-run"])
+        XCTAssertEqual(HelperOperation.scan.engineArguments, ["clean", "--dry-run", "--stream"])
+        XCTAssertEqual(HelperOperation.clean.engineArguments, ["clean", "--apply", "--stream"])
+        XCTAssertEqual(HelperOperation.optimize.engineArguments, ["optimize", "--apply", "--stream"])
+        XCTAssertEqual(HelperOperation.optimizeScan.engineArguments, ["optimize", "--dry-run", "--stream"])
         // The network fixes don't drive the engine at all.
         XCTAssertNil(HelperOperation.flushDNS.engineArguments)
         XCTAssertNil(HelperOperation.renewDHCP.engineArguments)
+    }
+
+    /// The live operations act and the previews say so on the wire: `--apply` on
+    /// exactly the mutating engine operations, `--dry-run` on exactly the
+    /// previews, never both, never neither.
+    func testEngineArguments_applyExactlyWhenTheOperationMutates() {
+        for operation in HelperOperation.allCases {
+            guard let argv = operation.engineArguments else { continue }
+            XCTAssertEqual(argv.contains("--apply"), operation.mutatesDisk,
+                           "\(operation) must carry --apply iff it mutates")
+            XCTAssertEqual(argv.contains("--dry-run"), !operation.mutatesDisk,
+                           "\(operation) must state --dry-run iff it is a preview")
+            XCTAssertTrue(argv.contains("--stream"), "\(operation) relays a live stream")
+        }
     }
 
     /// argv goes to posix_spawn, never a shell — but a stray metacharacter

@@ -661,7 +661,7 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         // closed set; fixed argv either way.
         var engineSnapshot: HelperExecutableSnapshot?
         var enginePath: String?
-        if request.operation.engineArguments != nil {
+        if request.operation.usesBundledEngine {
             guard let snapshot = HelperEngine.executableSnapshot(teamID: teamID) else {
                 helperTrace("engine unavailable: signed execution snapshot could not be prepared")
                 return respond(.engineUnavailable)
