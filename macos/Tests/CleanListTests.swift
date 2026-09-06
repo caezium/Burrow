@@ -123,6 +123,18 @@ final class CleanListTests: XCTestCase {
         XCTAssertNil(report.list)
     }
 
+    func testSweepPreviewUsesExactBufferedCandidatesAndRefusesWrongCommand() {
+        for (command, collection) in [("purge", "artifacts"), ("installer", "installers")] {
+            let line = "{\"ok\":true,\"command\":\"\(command)\",\"data\":{\"dry_run\":true,\"\(collection)\":[{\"path\":\"/tmp/reviewed item\",\"size_bytes\":1234}],\"total_bytes\":1234}}"
+            let items = CleanList.fromEngineOutput([line], command: command)?.categories.flatMap(\.items)
+            XCTAssertEqual(items?.map(\.path), ["/tmp/reviewed item"])
+            XCTAssertEqual(items?.map(\.sizeBytes), [1234])
+            XCTAssertNil(CleanList.fromEngineOutput([line], command: "clean"))
+            XCTAssertNil(CleanList.fromEngineOutput([line.replacingOccurrences(of: "true", with: "1")], command: command))
+            XCTAssertNil(CleanList.fromEngineOutput([line, line], command: command))
+        }
+    }
+
     func testEnginePreview_emptyAndFailedScansNeverLoadAnOldList() {
         let responses = [
             #"{"event":"done","dry_run":true,"would_free_bytes":0,"would_free_human":"0B","count":0}"#,

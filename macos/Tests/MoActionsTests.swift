@@ -31,8 +31,8 @@ final class MoActionsTests: XCTestCase {
     // would be pinning the machine rather than the gate.
 
     private static let bundledPath = "/fake/bundled/burrow"
-    /// Where `EngineCLI.trustedExecutable()` lands when no engine is bundled — a real legacy `mo`
-    /// (mole 1.46.0 on the machine this was written on), which deletes by default.
+    /// Explicit legacy-engine fixture for injected resolution tests. A real legacy `mo`
+    /// deletes by default; `EngineCLI.trustedExecutable()` only accepts a bundled engine.
     private static let legacyMoPath = "/opt/homebrew/bin/mo"
 
     private func decide(_ action: MoAction, _ mode: RunMode, _ gate: ActionGate,

@@ -194,6 +194,36 @@ final class UninstallPreviewEngineEnvelopeTests: XCTestCase {
         XCTAssertFalse(preview.defaultTicked.contains(bundle))
     }
 
+    func testMismatchedApplicationPathsFailClosedForHandRemoval() throws {
+        let base = Self.brewCask.replacingOccurrences(of: #""action":"brew_zap","cask":"stats""#,
+                                                   with: #""action":"delete","cask":null"#)
+        let data = try XCTUnwrap(base.data(using: .utf8))
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        for mismatch in ["item", "application", "app", "missing-apps"] {
+            var object = original
+            var payload = try XCTUnwrap(object["data"] as? [String: Any])
+            var items = try XCTUnwrap(payload["items"] as? [[String: Any]])
+            var apps = try XCTUnwrap(payload["apps"] as? [[String: Any]])
+            switch mismatch {
+            case "item": items[0]["path"] = "/Applications/Different.app"
+            case "application":
+                var application = try XCTUnwrap(apps[0]["application"] as? [String: Any])
+                application["path"] = "/Applications/Different.app"
+                apps[0]["application"] = application
+            case "app": apps[0]["path"] = "/Applications/Different.app"
+            default: apps = []
+            }
+            payload["items"] = items; payload["apps"] = apps; object["data"] = payload
+            let text = try XCTUnwrap(String(data: JSONSerialization.data(withJSONObject: object), encoding: .utf8))
+            let preview = try XCTUnwrap(UninstallPreview.fromEngineEnvelope(text))
+            let bundle = try XCTUnwrap(items[0]["path"] as? String)
+            XCTAssertNotNil(preview.handRemovalRefusals[bundle], mismatch)
+            XCTAssertFalse(preview.defaultTicked.contains(bundle), mismatch)
+            XCTAssertEqual(preview.refusedAmong([bundle]).map(\.path), [bundle], mismatch)
+            XCTAssertTrue(preview.entries.filter { $0.kind != .application }.allSatisfy { preview.handRemovalRefusals[$0.path] == nil })
+        }
+    }
+
     /// An ordinary app is untouched by any of this — the rail only fires on the engine's own
     /// verdict, so a normal removal still ticks its bundle by default.
     func testFromEngineEnvelope_anOrdinaryBundleIsStillTickedByDefault() throws {

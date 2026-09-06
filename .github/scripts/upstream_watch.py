@@ -23,6 +23,7 @@ Env:
   GITHUB_REPOSITORY  owner/repo to file issues into
 """
 import argparse
+import html
 import json
 import os
 import re
@@ -30,6 +31,7 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / ".github" / "upstream-watch.json"
@@ -183,8 +185,11 @@ def do_releases(cfg):
                     continue
             except ValueError:
                 pass
-            marker = f"upstream-watch:RELEASE:{repo}:{tag}"
-            if marker in seen:
+            legacy_marker = f"upstream-watch:RELEASE:{repo}:{tag}"
+            # Preserve the complete raw tag as identity while keeping HTML-comment delimiters
+            # out of the marker. Accept exact old markers so existing issues stay deduplicated.
+            marker = f"upstream-watch:RELEASE-ID:{repo}:{quote(tag, safe='')}"
+            if any(f"<!-- {value} -->" in seen for value in (marker, legacy_marker)):
                 log(f"  = {tag} already tracked")
                 continue
             rel_name = rel.get("name") or ""
@@ -194,8 +199,11 @@ def do_releases(cfg):
             title = f"[{name}] {tag}"
             if rel_name and rel_name not in (tag, ""):
                 title += f" — {rel_name}"
+            # A Git tag may contain backticks: a fixed Markdown delimiter would let it close
+            # the span and make an embedded mention/reference active in the issue body.
+            displayed_tag = "<code>" + html.escape(tag) + "</code>"
             body = f"""<!-- {marker} -->
-**Upstream [`{name}`]({html_url}) released `{tag}`{pre}** on {pub[:10]}.
+**Upstream [`{name}`]({html_url}) released {displayed_tag}{pre}** on {pub[:10]}.
 
 Burrow drives `{name}` at runtime, so a new engine release can change behaviour, flags, output format, or the minimum supported version.
 
@@ -204,7 +212,7 @@ Burrow drives `{name}` at runtime, so a new engine release can change behaviour,
 - [ ] Bump Burrow's pinned / minimum `{name}` version?
 - [ ] Breaking change to any output the parser relies on?
 - [ ] New capability worth surfacing in the GUI or MCP tools?
-- [ ] Compat smoke-test against `{tag}`.
+- [ ] Compat smoke-test against {displayed_tag}.
 
 <details><summary>Upstream release notes</summary>
 

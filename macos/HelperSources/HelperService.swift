@@ -612,6 +612,14 @@ final class HelperService: NSObject, BurrowHelperProtocol {
             return respond(.rejected(rejection))
         }
 
+        // Gate 3 — freshness. Admit before identity/path inspection so a
+        // replay cannot repeatedly drive filesystem work in the root daemon.
+        // Invalid paths still fail before the authorization prompt.
+        guard replayGuard.admit(request.operationID) else {
+            helperTrace("request refused: replayed operation ID")
+            return respond(.rejected(.replayedOperationID))
+        }
+
         let invokingUser: HelperResolvedInvokingUser
         do {
             invokingUser = try HelperDaemonIdentityResolver.resolve(
@@ -648,13 +656,6 @@ final class HelperService: NSObject, BurrowHelperProtocol {
                 helperTrace("request refused: reviewed path rejected (\(rejection.rawValue))")
                 return respond(.rejected(.invalidReviewedPaths))
             }
-        }
-
-        // Gate 3 — freshness. One authorization buys exactly one operation, so
-        // a captured payload cannot be replayed for a second root run.
-        guard replayGuard.admit(request.operationID) else {
-            helperTrace("request refused: replayed operation ID")
-            return respond(.rejected(.replayedOperationID))
         }
 
         // Gate 4 — authorization. This is what raises the prompt, and it

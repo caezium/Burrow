@@ -141,7 +141,13 @@ enum BurrowEngine {
                                            message: "burrow \(command) produced no output (exit \(result.exitCode))")
         }
 
-        let envelope = try BurrowEnvelope.parse(result.stdout)
+        let envelope: BurrowEnvelope
+        do {
+            envelope = try BurrowEnvelope.parse(result.stdout)
+        } catch {
+            throw BurrowEngineError.engine(kind: ErrorKind.invalidOutput.rawValue,
+                                           message: error.localizedDescription)
+        }
         if !envelope.ok {
             throw BurrowEngineError.engine(
                 kind: envelope.error?.kind ?? ErrorKind.error.rawValue,

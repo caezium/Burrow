@@ -878,3 +878,4 @@
 "Large" = "크게";
 "Extra Large" = "아주 크게";
 "Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "앱 전체와 메뉴 막대 팝업의 텍스트와 아이콘 크기를 조절합니다. 재실행이 필요 없습니다. 메뉴 막대 항목 자체의 텍스트 크기는 '메뉴 막대'에서 위젯별로 따로 설정합니다.";
+"Release Notes" = "릴리스 노트";

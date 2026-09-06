@@ -28,7 +28,7 @@
     <a href="https://trendshift.io/repositories/47076" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/47076/weekly?language=Swift" alt="caezium%2FBurrow | Trendshift" width="250" height="55"/></a>
 </p>
 
-**Burrow puts everything your Mac needs in one free, native app: junk cleanup, dev-artifact purge, app uninstall with leftover removal, duplicate finding, safe maintenance, disk maps, and live system status — powered by one bundled engine binary ([burrow-engine](https://github.com/caezium/burrow-engine), FSL-1.1 — see [Attribution](#attribution--license)) whose commands mirror [Mole](https://github.com/tw93/Mole)'s `mo`, so there's nothing else to install. And it does what no other cleaner does: it keeps months of local metric history and runs a built-in MCP server, so AI agents like Claude Code, Codex, and Cursor can watch, query, and care for your Mac — every action consent-gated, audited, and reversible. Native on macOS, with a Windows preview under [`windows/`](windows/).**
+**Burrow puts everything your Mac needs in one free, native app: junk cleanup, dev-artifact purge, app uninstall with leftover removal, duplicate finding, safe maintenance, disk maps, and live system status — powered by one bundled engine binary ([burrow-engine](https://github.com/caezium/burrow-engine), FSL-1.1 — see [Attribution](#attribution--license)) whose commands mirror [Mole](https://github.com/tw93/Mole)'s `mo`, so there's nothing else to install. It keeps months of local metric history and runs a built-in MCP server, so AI agents like Claude Code, Codex, and Cursor can watch, query, and care for your Mac — actions are consent-gated and audited, and Trash-based removals remain recoverable until the Trash is emptied. Permanent deletion requires separate consent and cannot be undone. Native on macOS, with a Windows preview under [`windows/`](windows/).**
 
 Mac:
 ```sh
@@ -187,7 +187,7 @@ A live, glanceable read of your Mac's vitals, refreshed continuously:
 | | macOS | Windows |
 |---|---|---|
 | Status | **Stable** — flagship | **Preview** — checked in under `windows/` |
-| Engine | bundled MIT engine (a fork of `mo`, Go CLI); falls back to a system `mo` | bundled Mole/PowerShell engine plus Windows fallbacks where needed |
+| Engine | bundled Rust `burrow-engine` (FSL-1.1-ALv2), with a Mole-compatible command surface; source builds can use an external `mo` for nonprivileged operations | bundled Mole/PowerShell engine plus Windows fallbacks where needed |
 | UI | SwiftUI, translucent menu-bar app | WinUI 3 / .NET 8 |
 | Install | `brew install --cask caezium/tap/burrow` | build from source; unsigned preview artifacts via `windows/scripts/build-release.ps1` |
 | Source | [`macos/`](macos/) | [`windows/`](windows/) |
@@ -286,7 +286,7 @@ Everything is local and takes effect immediately unless noted:
 | **Menu-bar icon** | Show the menu-bar item, or run as a regular Dock app instead. |
 | **MCP / agent access** | Copyable stdio config + the tool list for Claude Code, Cursor, Codex, Cline, and any MCP client. |
 | **Local HTTP query server** | Optional loopback REST endpoints + port for dashboards/curl. On Windows, disabling this keeps the local `/mcp` bridge available for stdio MCP. |
-| **Engine** | Shows the active `burrow-engine` version. The bundled engine updates with signed Burrow releases; source builds using an external engine retain its updater. |
+| **Engine** | Shows the resolved engine's product name and version (`burrow-engine` in official builds, or an external `mo` in source builds). The bundled engine updates with signed Burrow releases; source builds using an external engine retain its updater. |
 
 ## Permissions & Full Disk Access
 

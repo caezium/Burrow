@@ -378,24 +378,28 @@ final class MCPConformanceTests: XCTestCase {
     }
 
     func testCancel_isTerminalAndSurvivesALateResult() throws {
-        let store = MCPTaskStore()
+        let queue = DispatchQueue(label: "burrow.test.cancelled-mcp-result")
+        let store = MCPTaskStore(queue: queue)
         let gate = DispatchSemaphore(value: 0)
+        let started = expectation(description: "work is already running")
         let record = store.start(label: "unit", progressToken: nil) { _ in
+            started.fulfill()
             gate.wait()
             return .success(["content": []])
         }
+        wait(for: [started], timeout: 5)
         XCTAssertTrue(store.cancel(record.taskId))
         XCTAssertEqual(store.get(record.taskId)?.status, "cancelled")
 
         gate.signal()   // let the work finish after the cancel
         // The late success must not resurrect a task the client was told
         // had already stopped.
-        let stillCancelled = expectation(description: "stays cancelled")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+        let finished = expectation(description: "late result was handled")
+        queue.async {
             XCTAssertEqual(store.get(record.taskId)?.status, "cancelled")
-            stillCancelled.fulfill()
+            finished.fulfill()
         }
-        wait(for: [stillCancelled], timeout: 5)
+        wait(for: [finished], timeout: 5)
     }
 
     func testUnknownTask_is32602() {

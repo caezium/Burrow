@@ -184,10 +184,15 @@ struct UninstallPreview: Equatable {
         // `UninstallGuard.decodePlan` rather than re-read here, so the review UI and the pre-flight
         // are looking at ONE decoding of the engine's verdict instead of two that can drift.
         var refusals: [String: String] = [:]
-        for app in UninstallGuard.decodePlan(payload).apps {
+        let apps = UninstallGuard.decodePlan(payload).apps
+        var matchedBundlePaths = Set<String>()
+        for app in apps {
             let bundle = app.application
             let path = bundle.path.isEmpty ? app.path : bundle.path
             guard !path.isEmpty else { continue }
+            // The duplicate path fields must identify the same bundle. A refusal indexed by
+            // a different path cannot authorize an application row for hand removal.
+            if app.path.isEmpty || app.path == path { matchedBundlePaths.insert(path) }
             if let refusal = bundle.refusal, !refusal.isEmpty {
                 refusals[path] = refusal
             } else if bundle.isHomebrewCask {
@@ -195,6 +200,9 @@ struct UninstallPreview: Equatable {
                     format: NSLocalizedString("Homebrew installed %1$@ — it has to be removed with `brew uninstall --cask --zap %2$@`. Trashing the app on its own would leave Homebrew still believing it's installed.", comment: "uninstall review"),
                     app.name, bundle.cask ?? app.name)
             }
+        }
+        for entry in entries where entry.kind == .application && !matchedBundlePaths.contains(entry.path) {
+            refusals[entry.path] = NSLocalizedString("Application paths in the uninstall preview do not match. Rescan before trying again.", comment: "uninstall path mismatch")
         }
         return UninstallPreview(appName: nil, totalText: payload["total_human"] as? String,
                                 entries: entries, handRemovalRefusals: refusals)

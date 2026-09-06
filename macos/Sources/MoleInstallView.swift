@@ -73,7 +73,7 @@ struct MoleInstallView: View {
         .padding(22)
         .frame(width: 460, height: 320)
         .background(Brand.base)
-        // Auto-detect the restored bundle or an external source-build engine.
+        // Auto-detect a restored bundle; source-build PATH discovery uses Recheck.
         // Polling stops as soon as the window closes.
         .onAppear { startAutoDetect() }
         .onDisappear { pollTimer?.invalidate(); pollTimer = nil }

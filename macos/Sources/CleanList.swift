@@ -58,7 +58,8 @@ struct CleanList: Equatable {
 
     /// The bundled engine publishes the preview on stdout and never writes the legacy list.
     /// Require its completed dry run so an interrupted scan cannot authorize a cleanup.
-    static func fromEngineOutput(_ lines: [String]) -> CleanList? {
+    static func fromEngineOutput(_ lines: [String], command: String = "clean") -> CleanList? {
+        guard ["clean", "purge", "installer"].contains(command) else { return nil }
         var categories: [Category] = []
         var seen = Set<String>()
         var summaryTotal: String?
@@ -89,7 +90,7 @@ struct CleanList: Equatable {
                           add(path: path, bytes: bytes, sizeText: nil,
                               category: NSLocalizedString("Cleanup", comment: "")) else { return nil }
                 case "done":
-                    guard object["dry_run"] as? Bool == true else { return nil }
+                    guard !completed, JSONScalar.boolean(object["dry_run"]) == true else { return nil }
                     completed = true
                     summaryTotal = object["would_free_human"] as? String
                     summaryCount = object["count"] as? Int
@@ -97,13 +98,15 @@ struct CleanList: Equatable {
                 default: return nil
                 }
             } else if object["ok"] != nil {
-                guard object["ok"] as? Bool == true,
-                      object["command"] as? String == "clean",
+                let collection = command == "clean" ? "items" : (command == "purge" ? "artifacts" : "installers")
+                let byteKey = command == "clean" ? "size" : "size_bytes"
+                guard !completed, JSONScalar.boolean(object["ok"]) == true,
+                      object["command"] as? String == command,
                       let payload = object["data"] as? [String: Any],
-                      payload["dry_run"] as? Bool == true,
-                      let items = payload["items"] as? [[String: Any]] else { return nil }
+                      JSONScalar.boolean(payload["dry_run"]) == true,
+                      let items = payload[collection] as? [[String: Any]] else { return nil }
                 for item in items {
-                    guard let path = item["path"] as? String, let bytes = item["size"] as? Int64,
+                    guard let path = item["path"] as? String, let bytes = item[byteKey] as? Int64,
                           add(path: path, bytes: bytes, sizeText: item["size_human"] as? String,
                               category: item["label"] as? String ?? NSLocalizedString("Cleanup", comment: ""))
                     else { return nil }

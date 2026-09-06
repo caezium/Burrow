@@ -55,6 +55,7 @@ final class CleanPlanFileTests: XCTestCase {
 
     func testRender_boundsTheCountToWhatTheHelperAccepts() {
         let many = (0..<(CleanPlanFile.maximumEntries + 1)).map { "/Users/h/Library/Caches/\($0)" }
+        XCTAssertNoThrow(try CleanPlanFile.render(paths: Array(many.prefix(CleanPlanFile.maximumEntries))))
         XCTAssertThrowsError(try CleanPlanFile.render(paths: many)) {
             XCTAssertEqual($0 as? CleanPlanFile.Rejection, .tooMany(CleanPlanFile.maximumEntries + 1))
         }

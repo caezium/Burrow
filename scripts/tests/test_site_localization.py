@@ -1,0 +1,120 @@
+"""Check browser-visible locale output, beyond generator reproducibility."""
+
+import importlib.util
+import json
+import re
+import unittest
+from collections import Counter
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import urlsplit
+
+
+ROOT = Path(__file__).resolve().parents[2]
+DOCS = ROOT / "docs"
+
+
+def load_script(name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+I18N = load_script("site-i18n")
+RELEASE = load_script("site-release")
+
+
+class Tags(HTMLParser):
+    def __init__(self, text):
+        super().__init__()
+        self.tags = []
+        self.feed(text)
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append((tag, dict(attrs)))
+
+
+class SiteLocalizationTests(unittest.TestCase):
+    def locale_pages(self):
+        for lang in I18N.LANGUAGES:
+            for name in I18N.PAGES:
+                path = DOCS / lang / name
+                yield path, path.read_text(encoding="utf-8")
+
+    def test_locale_css_assets_exist_at_the_requested_path(self):
+        for path, text in self.locale_pages():
+            urls = re.findall(r'''url\(["']?([^\s)"']+)["']?\)''', text)
+            fonts = [u for u in urls if "assets/fonts/" in u]
+            self.assertTrue(fonts, path)
+            for url in fonts:
+                base = DOCS if url.startswith("/") else path.parent
+                self.assertTrue((base / url.lstrip("/")).is_file(), (path, url))
+
+    def test_locale_open_graph_url_matches_its_own_canonical(self):
+        for path, text in self.locale_pages():
+            tags = Tags(text).tags
+            canonical = next(a["href"] for t, a in tags if t == "link" and a.get("rel") == "canonical")
+            og = next(a["content"] for t, a in tags if t == "meta" and a.get("property") == "og:url")
+            self.assertEqual(og, canonical, path)
+            self.assertIn(f"/{path.parent.name}/", canonical, path)
+
+    def test_language_links_only_advertise_generated_routes(self):
+        for path in DOCS.rglob("*.html"):
+            for tag, attrs in Tags(path.read_text(encoding="utf-8")).tags:
+                if tag not in {"a", "link"} or "hreflang" not in attrs:
+                    continue
+                url = urlsplit(attrs["href"])
+                if url.netloc and url.netloc != "burrow.computer":
+                    continue
+                route = DOCS / url.path.lstrip("/")
+                target = route / "index.html" if url.path.endswith("/") else route.with_suffix(".html")
+                self.assertTrue(target.is_file(), (path, attrs["href"]))
+
+    def test_document_ids_are_unique_and_section_links_survive(self):
+        for lang in ["", *I18N.LANGUAGES]:
+            path = DOCS / lang / "docs.html"
+            ids = [a["id"] for _, a in Tags(path.read_text()).tags if "id" in a]
+            self.assertEqual([x for x, n in Counter(ids).items() if n > 1], [], path)
+            self.assertIn("apps", ids)
+
+    def test_localized_counts_do_not_change_code_or_urls(self):
+        src = '<p><b>46,190</b></p><code>46,190</code><a href="https://example.org/46,190">link</a>'
+        for lang, expected in [("pt-BR", "46.190"), ("ru", "46\u00a0190"), ("fr", "46\u202f190")]:
+            page = I18N.render(src, {}, lang)
+            self.assertIn(f"<b>{expected}</b>", page)
+            self.assertIn("<code>46,190</code>", page)
+            self.assertIn('href="https://example.org/46,190"', page)
+
+    def test_css_rebasing_preserves_absolute_embedded_and_fragment_urls(self):
+        src = '''<style>a{src:url("assets/font.woff2")}b{src:url('https://example.org/f')}c{src:url(data:font/woff2;base64,AAAA)}d{src:url(/assets/f)}e{filter:url(#mask)}</style>'''
+        page = I18N.render(src, {}, "de")
+        self.assertIn('url("../assets/font.woff2")', page)
+        for untouched in ["url('https://example.org/f')", "url(data:font/woff2;base64,AAAA)", "url(/assets/f)", "url(#mask)"]:
+            self.assertIn(untouched, page)
+
+    def test_ports_explanation_is_a_complete_translation_unit(self):
+        sentence = next(b["p"] for s in json.loads((DOCS / "docs.json").read_text())["sections"]
+                        for b in s["body"] if "lsof" in b.get("p", ""))
+        self.assertNotIn("`", sentence)
+        for lang in ["de", "ja", "ko"]:
+            table = json.loads((DOCS / "i18n" / f"{lang}.json").read_text())
+            translated = table[sentence]
+            self.assertRegex(translated, r"[.。]$")
+            self.assertIn("lsof", translated)
+            self.assertIn(f"<p>{translated}</p>", (DOCS / lang / "docs.html").read_text())
+
+    def test_locale_markers_name_the_actual_generator(self):
+        for lang in I18N.LANGUAGES:
+            text = (DOCS / lang / "roadmap.html").read_text()
+            self.assertIn("Generated by scripts/site-i18n.py", text)
+            self.assertNotIn("GENERATED by scripts/site-release.py", text)
+
+    def test_both_generators_agree_on_available_translations(self):
+        self.assertEqual(set(I18N.LANGUAGES), set(RELEASE.SITE_LANGUAGES))
+        paths = {"" if p == "index.html" else Path(p).stem for p in I18N.PAGES}
+        self.assertEqual(paths, RELEASE.TRANSLATED_PATHS)
+
+
+if __name__ == "__main__":
+    unittest.main()

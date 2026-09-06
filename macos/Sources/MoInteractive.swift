@@ -180,9 +180,10 @@ enum MoTUI {
 /// owns its read loop and delivers output/exit on the main thread so the host
 /// reducer stays single-threaded. The only impure seam — kept tiny.
 final class PTYTask: PTYPort {
-    /// One launch's private state. Both callbacks close over their own instance,
-    /// so a handler still armed from an earlier child can never read the CURRENT
-    /// child's process, launch flag, or exit code.
+    /// One launch's main-thread-owned state. Callbacks carry only its id and
+    /// revalidate it on main, so a retired child's callback cannot read a new
+    /// child's state. Capturing the id also avoids retaining the Process
+    /// through its own termination handler.
     ///
     /// A rescan makes that concrete: it's only reachable from the chooser, where
     /// the old `mo` is still sitting at the selection screen, so `terminate()`
@@ -291,19 +292,18 @@ final class PTYTask: PTYPort {
                 // report the exit ourselves; otherwise the now-unstarved
                 // terminationHandler will.
                 h.readabilityHandler = nil
-                // This launch's own child and flag — never `current`'s, which
-                // after a rescan is a different process whose status says nothing
-                // about this EOF. Only a launched process has a valid exit code:
-                // if run() threw, didLaunch is false and reading terminationStatus
-                // would raise "task not launched" (#374).
-                if gen.didLaunch && !gen.child.isRunning {
-                    let code = gen.child.terminationStatus
-                    DispatchQueue.main.async { self.reportExitOnce(code, from: gen.id) }
+                // Launch state is written on main. Check it there after
+                // revalidating the generation: a failed launch has no status,
+                // and a retired launch no longer speaks for this task.
+                DispatchQueue.main.async {
+                    guard let live = self.current, live.id == id,
+                          live.didLaunch, !live.child.isRunning else { return }
+                    self.reportExitOnce(live.child.terminationStatus, from: id)
                 }
                 return
             }
             guard let s = String(data: d, encoding: .utf8) else { return }
-            DispatchQueue.main.async { self.deliverOutput(s, from: gen.id) }
+            DispatchQueue.main.async { self.deliverOutput(s, from: id) }
         }
         // Close the parent's slave fd whether or not the launch succeeds — on a
         // throw the child never starts, so nothing else would ever close it.
@@ -346,8 +346,8 @@ final class PTYTask: PTYPort {
     /// caller (issue #73 / Sentry BURROW-D: the 0.06 s selection-replay tick
     /// runs on the main queue). The serial queue preserves keystroke order;
     /// the captured handle keeps the fd alive for an in-flight write even if
-    /// `master` is swapped out underneath it — by a relaunch, or dropped by a
-    /// failed one. (`terminate()` only disarms the read handler; it leaves the
+    /// `master` is swapped out underneath it by a successful relaunch. A failed
+    /// launch preserves the previous master. (`terminate()` only disarms the read handler; it leaves the
     /// handle itself in place.) The master fd is otherwise
     /// only touched by the FileHandle read handler, and read/write on a pty are
     /// independent directions, so there's no fd race.

@@ -14,10 +14,16 @@ import XCTest
 final class FeatureFlagTests: XCTestCase {
     private var directory: URL!
     private var now: Date!
+    private var originalDefaults: UserDefaults!
+    private var suiteName: String!
 
     override func setUp() {
         super.setUp()
         FeatureFlags.resetForTesting()
+        originalDefaults = Store.d
+        suiteName = "burrow-feature-flags-\(UUID().uuidString)"
+        Store.d = UserDefaults(suiteName: suiteName)!
+        Store.telemetryEnabled = true
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("feature-flag-tests-\(UUID().uuidString)", isDirectory: true)
         now = Date()
@@ -25,6 +31,8 @@ final class FeatureFlagTests: XCTestCase {
 
     override func tearDown() {
         FeatureFlags.resetForTesting()
+        Store.d.removePersistentDomain(forName: suiteName)
+        Store.d = originalDefaults
         try? FileManager.default.removeItem(at: directory)
         super.tearDown()
     }
@@ -117,6 +125,13 @@ final class FeatureFlagTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: cacheURL().path))
     }
 
+    func testOptedOutLookupIgnoresAnyPreviouslyPopulatedSnapshot() {
+        FeatureFlags.apply([.aboutReleaseNotesLink: true], persistTo: nil)
+        Store.telemetryEnabled = false
+        XCTAssertFalse(FeatureFlags.isEnabled(.aboutReleaseNotesLink),
+                       "consent gates the read even before the cached snapshot is cleared")
+    }
+
     // A malformed cache (bad JSON, wrong version, wrong types, missing or
     // stale timestamp) discards the whole file; only a strict, fresh shape
     // decodes. This keeps a corrupt or malicious file from ever overriding
@@ -152,9 +167,29 @@ final class FeatureFlagTests: XCTestCase {
     }
 
     // The cache file is allowlist-sized by construction; anything bigger is
-    // corrupt or foreign and must be discarded before it is even read.
+    // corrupt or foreign and must be rejected without unbounded allocation.
     func testOversizedCacheFileIsDiscardedUnread() throws {
         try writeCache(Data(repeating: 0x20, count: FeatureFlags.maxCacheBytes + 1))
+        XCTAssertNil(FeatureFlags.loadCached(from: directory, now: now))
+    }
+
+    func testCacheReadRejectsNonRegularFilesWithoutBlocking() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        XCTAssertEqual(mkfifo(cacheURL().path, 0o600), 0)
+        XCTAssertNil(FeatureFlags.loadCached(from: directory, now: now))
+        try FileManager.default.removeItem(at: cacheURL())
+        try FileManager.default.createDirectory(at: cacheURL(), withIntermediateDirectories: true)
+        XCTAssertNil(FeatureFlags.loadCached(from: directory, now: now))
+    }
+
+    func testCacheAcceptsExactlyTheByteLimitAndRejectsOneMoreByte() throws {
+        let encoded = try XCTUnwrap(FeatureFlags.encodeCache([.aboutReleaseNotesLink: true], fetchedAt: now))
+        var padded = encoded
+        padded.append(Data(repeating: 0x20, count: FeatureFlags.maxCacheBytes - encoded.count))
+        try writeCache(padded)
+        XCTAssertEqual(FeatureFlags.loadCached(from: directory, now: now), [.aboutReleaseNotesLink: true])
+        padded.append(0x20)
+        try writeCache(padded)
         XCTAssertNil(FeatureFlags.loadCached(from: directory, now: now))
     }
 

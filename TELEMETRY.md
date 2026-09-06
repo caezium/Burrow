@@ -137,13 +137,15 @@ wrong-version files are discarded whole, and the conservative defaults stay
 in force until a later successful fetch rewrites it. An opted-out launch
 neither reads nor writes it, exactly like the event outbox.
 
-**Exposure event.** The first lookup of each flag per launch emits PostHog's
+**Exposure event.** The first eligible lookup of each flag per launch emits PostHog's
 native `$feature_flag_called` with exactly two feature-flag-specific
 properties — `$feature_flag` (the allowlisted key) and
 `$feature_flag_response` (boolean). PostHog's flag usage and rollout views
 only count exposures sent under these names. The usual telemetry super
 properties (app version, OS build, platform, locale, etc.) are also attached,
-just like any other event. Like every event it is dropped while opted out.
+just like any other event. A lookup is eligible only while telemetry is enabled
+and a usable release key is configured; earlier ineligible lookups do not consume
+the flag's exposure. Like every event it is dropped while opted out.
 
 **Failure model.** Opt-out, missing release key, network error, non-2xx
 status, malformed payload, or stale cache all fall back to local values. If a

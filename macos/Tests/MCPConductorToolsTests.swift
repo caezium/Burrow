@@ -124,8 +124,9 @@ final class MCPConductorToolsTests: XCTestCase {
         }
     }
 
-    /// The happy path: the engine receives `dupes group <dir> --json` — `group` spelled by the
-    /// tool, the directory verbatim, and the conductor's `--json` — nothing else.
+    /// Fixed `group` keeps this discovery tool read-only; fixed `--json` keeps
+    /// its response machine-readable. Caller input supplies only the directory,
+    /// so it cannot turn duplicate discovery into a deletion subcommand.
     func testDupes_existingAbsoluteDirectory_spawnsTheReadOnlyGroupSubcommand() throws {
         try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
             let json = try catalog.call(name: "burrow_dupes", arguments: ["paths": [tempDir.path]])

@@ -57,6 +57,11 @@ struct CleanHub: View {
             }
             if category == nil { chooser }
         }
+        .onChange(of: category) {
+            // A mounted pane may still own an editor even after it disappears.
+            // Retire that responder so typing follows the visible category.
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        }
     }
 
     private var backBar: some View {
@@ -137,6 +142,9 @@ private extension View {
     /// Keep a body mounted (so its @StateObject + in-flight run survive)
     /// while hiding it when its category isn't active.
     @ViewBuilder func hubVisible(_ visible: Bool) -> some View {
-        self.opacity(visible ? 1 : 0).allowsHitTesting(visible)
+        self.opacity(visible ? 1 : 0)
+            .allowsHitTesting(visible)
+            .disabled(!visible)
+            .accessibilityHidden(!visible)
     }
 }
