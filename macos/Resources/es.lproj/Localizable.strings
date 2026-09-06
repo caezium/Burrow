@@ -878,3 +878,4 @@
 "Large" = "Grande";
 "Extra Large" = "Extragrande";
 "Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "Escala el texto y los iconos en toda la app y en el panel de la barra de menús, sin necesidad de reiniciar. El elemento de la barra de menús conserva su propio tamaño de texto, configurado por widget en «Barra de menús».";
+"Release Notes" = "Notas de la versión";

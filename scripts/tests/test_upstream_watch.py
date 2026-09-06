@@ -17,6 +17,9 @@ itself parses them rather than to something looser that merely looks right.
 
 import importlib.util
 import unittest
+import json
+from unittest import mock
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -97,6 +100,27 @@ class NeutralizeTests(unittest.TestCase):
         # A span cannot cross a blank line, so this one never opened.
         self.assertQuoted("start `stray tick\n\nnew para @user here", "@user")
 
+    def test_unmatched_backtick_cannot_pair_with_an_inserted_quote(self):
+        self.assertEqual(neutralize("fix `formatter @user"),
+                         "fix &grave;formatter `@user`")
+
+    def test_escaped_backtick_does_not_hide_a_live_mention(self):
+        self.assertEqual(neutralize(r"escaped \`literal @user` end"),
+                         r"escaped \&grave;literal `@user`&grave; end")
+
+    def test_invalid_backtick_fence_info_does_not_hide_a_mention(self):
+        self.assertEqual(neutralize("```lang`invalid\n@user\n```"),
+                         "&grave;&grave;&grave;lang&grave;invalid\n`@user`\n&grave;&grave;&grave;")
+
+    def test_indented_fence_does_not_capture_an_unindented_mention(self):
+        self.assertQuoted("    ```\n@user\n    ```", "@user")
+
+    def test_code_span_does_not_cross_a_markdown_block_boundary(self):
+        for boundary in ("# heading", "> quote", "- item", "1. item", "<div>"):
+            with self.subTest(boundary=boundary):
+                self.assertQuoted(f"`before\n{boundary} @user\n`after", "@user")
+        self.assertQuoted("`before\n---\n@user\n`after", "@user")
+
     # --- quoting too much ----------------------------------------------------
 
     def test_fenced_blocks_are_left_alone(self):
@@ -115,6 +139,9 @@ class NeutralizeTests(unittest.TestCase):
 
     def test_equal_delimiter_run_is_a_span(self):
         self.assertUnchanged("``code @user`` more")
+
+    def test_code_span_with_a_shorter_internal_run_is_left_whole(self):
+        self.assertUnchanged("``code `literal @user`` more")
 
     def test_compare_urls_and_doc_anchors_stay_clickable(self):
         self.assertUnchanged("https://github.com/tw93/Mole/compare/v1...v2 and https://x.dev/d#s")
@@ -140,6 +167,33 @@ class NeutralizeTests(unittest.TestCase):
 
     def test_plain_text_is_untouched(self):
         self.assertUnchanged("Nothing here to quote at all.\n\nSecond paragraph.")
+
+
+class ReleaseMetadataTests(unittest.TestCase):
+    def generate(self, tag, seen=""):
+        release = {"tag_name": tag, "name": "Fixture release", "body": "ordinary notes",
+                   "published_at": datetime.now(timezone.utc).isoformat(),
+                   "html_url": "https://github.com/example/fixture/releases/latest"}
+        with mock.patch.object(watch, "gh_api", return_value=json.dumps([release])), \
+             mock.patch.object(watch, "ensure_label"), \
+             mock.patch.object(watch, "existing_bodies", return_value=seen), \
+             mock.patch.object(watch, "create_issue") as create, \
+             mock.patch.object(watch, "log"):
+            watch.do_releases({"engines": [{"repo": "example/fixture", "name": "Fixture", "label": "upstream"}]})
+            return create.call_args
+
+    def test_valid_tag_delimiters_cannot_escape_body_code_or_marker(self):
+        for tag in ["v1`(@octocat)`", "v1`-#123`", "v1-->(@octocat)"]:
+            title, body, _ = self.generate(tag).args
+            self.assertIn(tag, title, "GitHub titleHTML keeps title metadata literal")
+            self.assertIn("<code>" + watch.html.escape(tag) + "</code>", body)
+            self.assertNotIn(tag, body.splitlines()[0], "tag cannot close the hidden marker")
+            self.assertEqual(body.splitlines()[0].count("-->"), 1)
+            self.assertIsNone(self.generate(tag, seen=body))
+
+    def test_exact_legacy_marker_is_retained_but_tag_prefix_is_distinct(self):
+        self.assertIsNone(self.generate("v1", "<!-- upstream-watch:RELEASE:example/fixture:v1 -->"))
+        self.assertIsNotNone(self.generate("v1", "<!-- upstream-watch:RELEASE:example/fixture:v1.2 -->"))
 
 
 if __name__ == "__main__":

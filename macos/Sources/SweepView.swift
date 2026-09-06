@@ -9,11 +9,8 @@
 //  `BurrowStreamReport` reduces both; `installer` has no `--stream` in the engine and runs
 //  buffered, its one envelope line reduced by the same reducer.
 //
-//  This replaces the PTY checklist (`MoInteractiveView`) that drove mo's interactive TUI. The
-//  bundled engine is never interactive — it answers JSON — so that view had nothing to talk
-//  to. What is lost with it is per-project ticking: the engine has no way to purge a subset,
-//  so the preview IS the list and the real run removes all of it (to the Trash, the engine's
-//  default, so a mistake is recoverable).
+//  Confirmation pins the preview's paths and filesystem identities. The engine applies that
+//  exact plan, rechecking its own artifact/installer rules without scanning for new candidates.
 //
 
 import SwiftUI
@@ -65,21 +62,35 @@ enum SweepOperations {
                              reduce: { lines in
                                  let (groups, summary) = BurrowStreamReport.reduce(lines, title: title)
                                  let bytes = lines.reduce(Int64(0)) { $0 + BurrowStreamReport.streamedBytes($1) }
-                                 return (groups, summary, bytes)
+                                 return CleanDryReport(groups: groups, summary: summary, liveBytes: bytes, list: CleanList.fromEngineOutput(lines, command: cfg.command))
                              },
                              hudLine: { BurrowStreamReport.hudLine($0) })
     }
 
+    /// The engine has already classified these candidates. Pin their containing directories
+    /// here; the engine repeats its command-specific classification before applying the plan.
+    static func captureReview(_ list: CleanList) throws -> CleanupSnapshot {
+        let parents = Set(list.categories.flatMap(\.items).map {
+            URL(fileURLWithPath: $0.path).deletingLastPathComponent()
+        })
+        let snapshot = try CleanupSnapshot.capture(list: list, approvedRootURLs: Array(parents))
+        guard snapshot.skipped.isEmpty else { throw CleanupSnapshot.SnapshotError.staleOrChanged }
+        return snapshot
+    }
+
     /// The real run: mo-style `<cmd>` → the engine's `--apply` (+ `--stream` for purge). Not
     /// elevated — project trees and Downloads are the user's own — and to the Trash by default.
-    static func apply(_ cfg: SweepConfig) -> ToolOperation<TaskRunReport> {
+    static func apply(_ cfg: SweepConfig, plan: CleanupExecutionPlan,
+                      planFile: URL) -> ToolOperation<TaskRunReport> {
         let title = cfg.tool.title
         return ToolOperation(label: cfg.runLabel,
-                             arguments: [cfg.command],
+                             arguments: [cfg.command, "--plan", planFile.path],
+                             cleanupPlan: plan,
                              reduce: { BurrowStreamReport.reduce($0, title: title) },
                              hudLine: { BurrowStreamReport.hudLine($0) },
                              notifyOnEnd: true,
-                             finalDetail: { $0.summary?.completionLine ?? "" })
+                             finalDetail: { $0.summary?.completionLine ?? "" },
+                             finally: { try? FileManager.default.removeItem(at: planFile) })
     }
 }
 
@@ -87,6 +98,7 @@ struct SweepView: View {
     private let cfg: SweepConfig
     @StateObject private var dryFlow = OperationFlow<CleanDryReport>()
     @StateObject private var realFlow = OperationFlow<TaskRunReport>()
+    @State private var reviewSnapshot: CleanupSnapshot?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(_ cfg: SweepConfig) { self.cfg = cfg }
@@ -120,11 +132,17 @@ struct SweepView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: dryFlow.report?.list) { _, list in
+            // Capture once when the completed preview arrives. Re-reading at confirmation
+            // would authorize replacements made while the user was reviewing the list.
+            reviewSnapshot = list.flatMap { try? SweepOperations.captureReview($0) }
+        }
     }
 
     // MARK: - Scan
 
     private func startScan() {
+        reviewSnapshot = nil
         realFlow.reset()
         dryFlow.reset()
         dryFlow.start(SweepOperations.preview(cfg))
@@ -212,9 +230,9 @@ struct SweepView: View {
                     Spacer()
                     Button { confirmRemoval(count: items.count, bytes: foundBytes) } label: {
                         Text(String(format: NSLocalizedString("Move to Trash · %@", comment: "confirm pill"), Fmt.bytes(foundBytes)))
-                            .font(Brand.sans(13, .semibold)).foregroundStyle(.black)
+                            .font(Brand.sans(13, .semibold)).foregroundStyle(Brand.onInverse)
                             .padding(.horizontal, 20).padding(.vertical, 10)
-                            .background(Capsule().fill(Color.white))
+                            .background(Capsule().fill(Brand.inverse))
                     }
                     .buttonStyle(.plain)
                 }
@@ -246,8 +264,20 @@ struct SweepView: View {
         alert.addButton(withTitle: NSLocalizedString("Move to Trash", comment: ""))
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         guard alert.runModalQuiet() == .alertFirstButtonReturn else { return }
-        realFlow.reset()
-        realFlow.start(SweepOperations.apply(cfg))
+        do {
+            guard let snapshot = reviewSnapshot else { throw CleanupSnapshot.SnapshotError.staleOrChanged }
+            let paths = snapshot.list.categories.flatMap(\.items).map(\.path)
+            let plan = try snapshot.plan(selectedPaths: paths)
+            let file = try plan.writePlanFile()
+            realFlow.reset()
+            realFlow.start(SweepOperations.apply(cfg, plan: plan, planFile: file))
+        } catch {
+            let refusal = NSAlert()
+            refusal.messageText = NSLocalizedString("The reviewed files changed", comment: "")
+            refusal.informativeText = String(format: NSLocalizedString("Nothing was cleaned. Rescan before trying again. (%@)", comment: ""), error.localizedDescription)
+            refusal.alertStyle = .warning
+            refusal.runModalQuiet()
+        }
     }
 
     // MARK: - Real run

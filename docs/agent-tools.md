@@ -97,7 +97,8 @@ Every actuating call is recorded to Burrow's audit log, so the user can see what
 and `burrow_agent_audit` reads that log back, so you can see it too.
 
 **How these differ from the app.** Over MCP every tool is one buffered call: the engine's
-`{ok, data|error}` envelope, passed through. The app itself runs the engine's live paths —
+`{ok, data|error}` envelope is decoded, with its `data` returned on success and
+its error classified as an MCP tool failure. The app itself runs the engine's live paths —
 `status --watch` (one long-lived stream feeding the dashboard and the history these tools read),
 `analyze --progress` (the treemap fills as the walk runs), `clean|optimize|purge --stream`
 (one NDJSON line per item, live even when elevated), and a reviewed clean that writes the

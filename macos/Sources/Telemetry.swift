@@ -33,6 +33,7 @@ enum Telemetry {
     }
 
     private static let stateLock = NSLock()
+    private static let flagRefreshGate = FeatureFlagRefreshGate()
     private static let workQueue = DispatchQueue(
         label: "dev.caezium.Burrow.telemetry.posthog",
         qos: .utility
@@ -47,7 +48,8 @@ enum Telemetry {
         configuration.httpCookieAcceptPolicy = .never
         configuration.httpShouldSetCookies = false
         configuration.urlCache = nil
-        return URLSession(configuration: configuration)
+        return URLSession(configuration: configuration,
+                          delegate: TelemetryRedirectDelegate(), delegateQueue: nil)
     }()
 
     private static var started = false
@@ -127,12 +129,16 @@ enum Telemetry {
     /// Records a fixed-name product event. Properties are sanitized before any
     /// background work; callers must bucket sizes/counts/durations first.
     static func capture(_ event: String, _ props: [String: Any] = [:]) {
-        guard DiagnosticPrivacy.isSafeIdentifier(event), isEnabled else { return }
+        guard isAllowedEventName(event), isEnabled else { return }
         let sanitized = DiagnosticPrivacy.sanitize(props)
         guard let delivery = activeDeliveryConfiguration() else { return }
 
         CrashReporter.breadcrumb(event, category: "product", data: sanitized)
         enqueue(.event(event, sanitized), using: delivery)
+    }
+
+    static func isAllowedEventName(_ event: String) -> Bool {
+        event == "$feature_flag_called" || DiagnosticPrivacy.isSafeIdentifier(event)
     }
 
     /// Semantic navigation only. `$screen` contains a fixed pane name, never a
@@ -153,16 +159,28 @@ enum Telemetry {
 
     // MARK: - Opt-out toggle
 
-    /// Applies the shared switch immediately. A launch that begins opted out
+    /// Applies the shared switch synchronously. A launch that begins opted out
     /// performs no PostHog request. When an enabled user turns it off, one final
     /// fixed opt-out event is queued before all subsequent events are rejected.
     static func setEnabled(_ enabled: Bool) {
+        stateLock.lock()
         let previous = isEnabled
-        guard previous != enabled else { return }
+        guard previous != enabled else {
+            stateLock.unlock()
+            return
+        }
 
-        isEnabled = enabled
+        // Serialize the consent change with cache I/O and request admission.
+        // Invalidating the generation also rejects a pre-opt-out response
+        // after a later opt-in; a copied Bool cannot distinguish those sessions.
+        flagRefreshGate.invalidate {
+            isEnabled = enabled
+            if !enabled { FeatureFlags.apply([:], persistTo: nil) }
+        }
+        let delivery = started ? deliveryConfiguration : nil
+        stateLock.unlock()
         CrashReporter.setEnabled(enabled)
-        guard let delivery = configuredDelivery() else { return }
+        guard let delivery else { return }
 
         if enabled {
             capture("telemetry_opt_in_changed", ["enabled": true])
@@ -220,16 +238,16 @@ enum Telemetry {
         return deliveryConfiguration
     }
 
-    /// Whether a feature-flag exposure would actually be queued. Used by
-    /// `FeatureFlags` to commit an exposure key only when the event is
-    /// admitted; otherwise the key stays eligible for a later lookup.
-    static var canCapture: Bool { activeDeliveryConfiguration() != nil }
-
-    private static func configuredDelivery() -> DeliveryConfiguration? {
+    /// Claiming a once-per-launch exposure and admitting its event share the
+    /// consent lock, so an opted-out lookup cannot consume the exposure key.
+    static func captureFeatureFlagExposure(key: FeatureFlags.Key, value: Bool, claim: () -> Bool) {
         stateLock.lock()
         defer { stateLock.unlock() }
-        guard started else { return nil }
-        return deliveryConfiguration
+        guard started, isEnabled, let delivery = deliveryConfiguration,
+              claim() else { return }
+        enqueue(.event("$feature_flag_called", [
+            "$feature_flag": key.rawValue, "$feature_flag_response": value,
+        ]), using: delivery)
     }
 
     private static func enqueue(_ signal: Signal, using delivery: DeliveryConfiguration) {
@@ -410,7 +428,7 @@ enum Telemetry {
         if statusCode == 408 || statusCode == 425 || statusCode == 429 || statusCode >= 500 {
             return .retry
         }
-        // Redirects have already been followed by URLSession. Any remaining
+        // Only same-authority HTTPS redirects may be followed. Any remaining
         // 3xx/4xx is a permanent payload/auth/configuration rejection; keeping
         // it would retry forever and eventually crowd out useful new events.
         return .discard
@@ -485,63 +503,60 @@ enum Telemetry {
     /// event delivery, so flags add no timer, no retry loop, and no extra
     /// concurrency; the next launch is the backoff.
     private static func refreshFeatureFlags(using delivery: DeliveryConfiguration) {
+        let generation = flagRefreshGate.currentGeneration
         workQueue.async {
-            // Re-check at execution time: an opt-out that raced this block
-            // must neither read the flag cache nor contact PostHog.
-            guard isEnabled else { return }
-            if let cached = FeatureFlags.loadCachedIfEnabled(
-                isEnabled: isEnabled,
-                directory: FeatureFlags.defaultCacheDirectory()
-            ) {
-                FeatureFlags.apply(cached, persistTo: nil)
-            }
-
-            // The decide request is the smallest possible: the project key
-            // and the same anonymous distinct id events already use. No
-            // person properties, no groups, no locale — the response is
-            // filtered down to the boolean allowlist in `FeatureFlags`
-            // regardless of what PostHog returns.
-            guard let decide = decideEndpoint(on: delivery.host) else { return }
-            let payload: [String: Any] = [
-                "api_key": delivery.projectKey,
-                "distinct_id": resolveDistinctID(projectKey: delivery.projectKey),
-            ]
-            guard JSONSerialization.isValidJSONObject(payload),
-                  let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
-
-            var request = URLRequest(url: decide)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 10
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
-            request.setValue("Burrow/\(RuntimeEnvironment.current.appVersion)", forHTTPHeaderField: "User-Agent")
-            request.httpBody = body
-
-            let requestID = UUID()
-            deliveries.enter()
-            let task = session.dataTask(with: request) { data, response, error in
-                let status = (response as? HTTPURLResponse)?.statusCode
-                let disposition = deliveryDisposition(statusCode: status, hasTransportError: error != nil)
-                workQueue.async {
-                    inFlightTasks.removeValue(forKey: requestID)
-                    // Re-check the gate at completion: an opt-out that raced
-                    // the response must neither mutate nor persist flags.
-                    guard isEnabled, disposition == .delivered, let data,
-                          let decoded = try? JSONSerialization.jsonObject(with: data),
-                          let object = decoded as? [String: Any],
-                          let rawFlags = object["featureFlags"] as? [String: Any] else {
-                        deliveries.leave()
-                        return
-                    }
-                    FeatureFlags.apply(
-                        FeatureFlags.sanitizeRemoteFlags(rawFlags),
-                        persistTo: FeatureFlags.defaultCacheDirectory()
-                    )
-                    deliveries.leave()
+            flagRefreshGate.perform(ifCurrent: generation, isEnabled: { isEnabled }) {
+                if let cached = FeatureFlags.loadCachedIfEnabled(
+                    isEnabled: isEnabled,
+                    directory: FeatureFlags.defaultCacheDirectory()
+                ) {
+                    FeatureFlags.apply(cached, persistTo: nil)
                 }
+
+                // The decide request is the smallest possible: the project key
+                // and the same anonymous distinct id events already use. No
+                // person properties, no groups, no locale — the response is
+                // filtered down to the boolean allowlist in `FeatureFlags`
+                // regardless of what PostHog returns.
+                guard let decide = decideEndpoint(on: delivery.host) else { return }
+                let payload: [String: Any] = [
+                    "api_key": delivery.projectKey,
+                    "distinct_id": resolveDistinctID(projectKey: delivery.projectKey),
+                ]
+                guard JSONSerialization.isValidJSONObject(payload),
+                      let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+
+                var request = URLRequest(url: decide)
+                request.httpMethod = "POST"
+                request.timeoutInterval = 10
+                request.cachePolicy = .reloadIgnoringLocalCacheData
+                request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+                request.setValue("Burrow/\(RuntimeEnvironment.current.appVersion)", forHTTPHeaderField: "User-Agent")
+                request.httpBody = body
+
+                let requestID = UUID()
+                deliveries.enter()
+                let task = session.dataTask(with: request) { data, response, error in
+                    let status = (response as? HTTPURLResponse)?.statusCode
+                    let disposition = deliveryDisposition(statusCode: status, hasTransportError: error != nil)
+                    workQueue.async {
+                        inFlightTasks.removeValue(forKey: requestID)
+                        defer { deliveries.leave() }
+                        guard disposition == .delivered, let data,
+                              let decoded = try? JSONSerialization.jsonObject(with: data),
+                              let object = decoded as? [String: Any],
+                              let rawFlags = object["featureFlags"] as? [String: Any] else { return }
+                        flagRefreshGate.perform(ifCurrent: generation, isEnabled: { isEnabled }) {
+                            FeatureFlags.apply(
+                                FeatureFlags.sanitizeRemoteFlags(rawFlags),
+                                persistTo: FeatureFlags.defaultCacheDirectory()
+                            )
+                        }
+                    }
+                }
+                inFlightTasks[requestID] = task
+                task.resume()
             }
-            inFlightTasks[requestID] = task
-            task.resume()
         }
     }
 
@@ -645,5 +660,52 @@ enum Telemetry {
             for: .applicationSupportDirectory,
             in: .userDomainMask
         ).first
+    }
+}
+
+/// Admission covers the side effect, not just a preceding Boolean check.
+/// Invalidating waits for an admitted effect to finish and retires its token,
+/// so responses from before opt-out cannot repopulate a later opt-in session.
+final class FeatureFlagRefreshGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var generation: UInt64 = 0
+
+    var currentGeneration: UInt64 {
+        lock.lock(); defer { lock.unlock() }
+        return generation
+    }
+
+    func invalidate(_ change: () -> Void) {
+        lock.lock(); defer { lock.unlock() }
+        generation &+= 1
+        change()
+    }
+
+    func perform(ifCurrent expected: UInt64, isEnabled: () -> Bool, _ effect: () -> Void) {
+        lock.lock(); defer { lock.unlock() }
+        guard generation == expected, isEnabled() else { return }
+        effect()
+    }
+}
+
+/// A redirect must not forward the anonymous identifier or project key to a
+/// different authority, or downgrade the HTTPS guarantee at the endpoint.
+final class TelemetryRedirectDelegate: NSObject, URLSessionTaskDelegate {
+    static func permits(from original: URL?, to destination: URL?) -> Bool {
+        guard let original, let destination,
+              original.scheme?.lowercased() == "https",
+              destination.scheme?.lowercased() == "https",
+              let host = original.host?.lowercased(),
+              destination.host?.lowercased() == host,
+              (destination.port ?? 443) == (original.port ?? 443),
+              destination.user == nil, destination.password == nil else { return false }
+        return true
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(Self.permits(from: task.originalRequest?.url, to: request.url) ? request : nil)
     }
 }

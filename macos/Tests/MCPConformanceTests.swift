@@ -378,24 +378,28 @@ final class MCPConformanceTests: XCTestCase {
     }
 
     func testCancel_isTerminalAndSurvivesALateResult() throws {
-        let store = MCPTaskStore()
+        let queue = DispatchQueue(label: "burrow.test.cancelled-mcp-result")
+        let store = MCPTaskStore(queue: queue)
         let gate = DispatchSemaphore(value: 0)
+        let started = expectation(description: "work is already running")
         let record = store.start(label: "unit", progressToken: nil) { _ in
+            started.fulfill()
             gate.wait()
             return .success(["content": []])
         }
+        wait(for: [started], timeout: 5)
         XCTAssertTrue(store.cancel(record.taskId))
         XCTAssertEqual(store.get(record.taskId)?.status, "cancelled")
 
         gate.signal()   // let the work finish after the cancel
         // The late success must not resurrect a task the client was told
         // had already stopped.
-        let stillCancelled = expectation(description: "stays cancelled")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+        let finished = expectation(description: "late result was handled")
+        queue.async {
             XCTAssertEqual(store.get(record.taskId)?.status, "cancelled")
-            stillCancelled.fulfill()
+            finished.fulfill()
         }
-        wait(for: [stillCancelled], timeout: 5)
+        wait(for: [finished], timeout: 5)
     }
 
     func testUnknownTask_is32602() {
@@ -403,6 +407,22 @@ final class MCPConformanceTests: XCTestCase {
                        MCPProtocol.ErrorCode.invalidParams)
         XCTAssertEqual(errorCode(call("tasks/cancel", ["taskId": "nope"])),
                        MCPProtocol.ErrorCode.invalidParams)
+    }
+
+    func testCancellingAQueuedTaskPreventsItsWorkFromStarting() {
+        let queue = DispatchQueue(label: "burrow.test.queued-mcp")
+        queue.suspend()
+        let store = MCPTaskStore(queue: queue)
+        var executions = 0
+        let record = store.start(label: "queued action", progressToken: nil) { _ in
+            executions += 1
+            return .success(["content": []])
+        }
+        XCTAssertTrue(store.cancel(record.taskId))
+        queue.resume()
+        queue.sync {}
+        XCTAssertEqual(executions, 0, "a cancelled queued action must never start its engine command")
+        XCTAssertEqual(store.get(record.taskId)?.status, MCPTaskStore.Status.cancelled)
     }
 
     func testProgressNotification_onlyWithAProgressToken() throws {
@@ -506,6 +526,19 @@ final class MCPConformanceTests: XCTestCase {
         XCTAssertEqual(structured["blocked"] as? Bool, true)
         XCTAssertEqual(structured["ran"] as? Bool, false)
         XCTAssertNotNil(structured["reason"] as? String, "the refusal has to say why")
+        XCTAssertEqual(r["isError"] as? Bool, true, "clients must see a tool failure when the action is blocked")
+    }
+
+    func testFailedToolPayloadsAreMarkedAsErrorsForSyncAndTaskResults() {
+        for payload in [#"{"error":"engine unavailable"}"#, #"{"exit_code":1,"output":"denied"}"#,
+                        #"{"ok":false,"error":{"message":"refused"}}"#, #"{"timed_out":true}"#] {
+            let result = MCPServer.callToolBody(name: "burrow_evict", text: payload, isError: false)
+            XCTAssertEqual(result["isError"] as? Bool, true, payload)
+            XCTAssertNotNil(result["structuredContent"], "failure details must stay available")
+        }
+        let success = MCPServer.callToolBody(name: "burrow_evict", text: #"{"dry_run":true,"items":[]}"#,
+                                            isError: false)
+        XCTAssertNil(success["isError"])
     }
 
     func testMRTRAnswer_cannotUnlockAnUninstall() throws {

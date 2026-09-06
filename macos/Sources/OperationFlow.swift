@@ -77,7 +77,7 @@ enum FeatureOperationFailurePolicy {
 
 enum FeatureOperationTelemetry {
     static func feature<Report: Sendable>(for operation: ToolOperation<Report>) -> String? {
-        if operation.cleanupPlan != nil { return "clean" }
+        if operation.cleanupPlan != nil, operation.arguments.first == "clean" { return "clean" }
         guard case .mo = operation.executable,
               let command = operation.arguments.first,
               ["clean", "optimize"].contains(command) else { return nil }
@@ -560,7 +560,6 @@ struct SystemProcessPort: ProcessPort {
             // somebody else's blocking read.
             let killQ = DispatchQueue(label: "dev.caezium.burrow.opflow.kill")
             var tailTimer: DispatchSourceTimer?
-            var killTimer: DispatchSourceTimer?
             // Both of these belong to streamQ ALONE. The tail timer fires on
             // the main run loop, so if it opened, read, or closed the handle
             // itself it would be racing the termination handler doing the same
@@ -667,7 +666,6 @@ struct SystemProcessPort: ProcessPort {
 
                 t.terminationHandler = { proc in
                     child.reaped(status: proc.terminationStatus)
-                    killTimer?.cancel()
                     streamQ.async {
                         tail.cancel()
                         // Claim the handle before the final read so a timer
@@ -737,13 +735,7 @@ struct SystemProcessPort: ProcessPort {
                 // Armed only after a successful spawn (a suspended source
                 // must never be cancelled/deallocated).
                 if let timeout = spec.timeout {
-                    let k = DispatchSource.makeTimerSource(queue: killQ)
-                    k.schedule(deadline: .now() + timeout, repeating: .never)
-                    k.setEventHandler {
-                        child.killEscalating(on: killQ, because: "it outlived its \(timeout)s timeout")
-                    }
-                    k.resume()
-                    killTimer = k
+                    child.armTimeout(timeout, on: killQ)
                     // One breadcrumb up front: if a run ever wedges again, a log
                     // that says "timeout armed" and nothing else means the timer
                     // itself never fired, which is a very different bug from a
@@ -776,7 +768,7 @@ struct SystemProcessPort: ProcessPort {
                         }
                     }
                     group.notify(queue: streamQ) {
-                        killTimer?.cancel()
+                        child.cancelTimeout()
                         // This used to be `t.waitUntilExit()` then
                         // `t.terminationStatus`, and THAT is what hung the
                         // 29-minute CI run: with both pipes at EOF and
@@ -951,8 +943,29 @@ struct SystemProcessPort: ProcessPort {
         private var stopReadingAt: DispatchTime?
         private var stopReason = ""
         private var didFinish = false
+        private var killTimer: DispatchSourceTimer?
 
         init(name: String) { self.name = name }
+
+        /// Installation and cancellation share the child lifecycle lock: an
+        /// instant exit must not race a timer assigned after the reap callback.
+        func armTimeout(_ timeout: TimeInterval, on queue: DispatchQueue) {
+            cond.lock(); defer { cond.unlock() }
+            guard !didReap, !didFinish else { return }
+            let timer = DispatchSource.makeTimerSource(queue: queue)
+            timer.schedule(deadline: .now() + timeout, repeating: .never)
+            timer.setEventHandler { [weak self] in
+                self?.killEscalating(on: queue, because: "it outlived its \(timeout)s timeout")
+            }
+            timer.resume()
+            killTimer = timer
+        }
+
+        func cancelTimeout() {
+            cond.lock(); defer { cond.unlock() }
+            killTimer?.cancel()
+            killTimer = nil
+        }
 
         func spawned(_ process: Process) {
             cond.lock(); defer { cond.unlock() }
@@ -971,6 +984,8 @@ struct SystemProcessPort: ProcessPort {
             didReap = true
             self.status = status
             process = nil
+            killTimer?.cancel()
+            killTimer = nil
             armReadDeadline(reason: "exited")
             cond.broadcast()
             cond.unlock()

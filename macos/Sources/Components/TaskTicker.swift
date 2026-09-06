@@ -57,6 +57,7 @@ struct TaskTickerView: View {
     let accent: Color
     var headline: String
 
+    @ObservedObject private var typeScale = TypeScale.shared
     @State private var pulsing = false
     @State private var pinnedToBottom = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -89,7 +90,7 @@ struct TaskTickerView: View {
             // Fixed-height scrollable panel, pinned to bottom.
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 4) {
+                    LazyVStack(alignment: .leading, spacing: Brand.scaled(4)) {
                         ForEach(Array(state.completed.enumerated()), id: \.offset) { _, completion in
                             HStack(alignment: .firstTextBaseline, spacing: 7) {
                                 markerGlyph(completion.marker)
@@ -104,10 +105,10 @@ struct TaskTickerView: View {
                         }
                         Color.clear.frame(height: 1).id("TICKER_BOTTOM")
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .padding(.horizontal, 14).padding(.vertical, Brand.scaled(10))
                 }
                 .scrollIndicators(.hidden)
-                .frame(height: CGFloat(Self.visibleRows) * 19 + 20)
+                .frame(height: Brand.scaled(CGFloat(Self.visibleRows) * 19 + 20))
                 .frame(maxWidth: 460)
                 .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Brand.insetFill))
                 .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(Brand.hairline, lineWidth: 1))

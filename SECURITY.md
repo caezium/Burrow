@@ -6,11 +6,14 @@ whose command surface is modelled on the [`mo` (Mole)](https://github.com/tw93/M
 CLI. Starting with 0.11.0, official releases must pass Developer ID signing and
 Apple notarization before they can publish. This page is the honest account of
 what the app does, what touches the network, and how it handles admin rights,
-so you can decide before you run it. The actual cleaning/scanning is done by
-that bundled engine (see [NOTICE](NOTICE) for its license and for the MIT
+so you can decide before you run it. Official macOS releases route engine-backed
+cleaning and scanning through that bundled engine (see [NOTICE](NOTICE) for its license and for the MIT
 `fclones` sidecar). Its [source](https://github.com/caezium/burrow-engine) is
 publicly available under FSL-1.1-ALv2, alongside the Swift that gates every
-call to the signed binary inside the app.
+call to the signed binary inside the app. Source builds can resolve an external
+`mo` for nonprivileged operations; elevated operations require the engine inside
+the current app bundle. Some tools also use native macOS APIs directly, including
+moving reviewed files to the Trash.
 
 ## Code signing
 

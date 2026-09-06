@@ -878,3 +878,4 @@
 "Large" = "大";
 "Extra Large" = "特大";
 "Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "アプリ全体とメニューバーのポップアップの文字とアイコンを拡大縮小します。再起動は不要です。メニューバー項目自体の文字サイズは「メニューバー」でウィジェットごとに個別に設定します。";
+"Release Notes" = "リリースノート";

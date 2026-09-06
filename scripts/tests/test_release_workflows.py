@@ -88,6 +88,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertLess(upload, download)
         self.assertLess(download, publish)
 
+    def test_windows_release_tests_checked_out_commit_before_publishing(self) -> None:
+        workflow = (WORKFLOWS / "windows-release.yml").read_text(encoding="utf-8")
+        gate_start = workflow.index("- name: Test release commit")
+        publish_start = workflow.index("- name: Publish (telemetry keys baked from secrets)")
+        upload_start = workflow.index("- name: Upload published app")
+        gate = workflow[gate_start:publish_start]
+
+        self.assertLess(gate_start, publish_start)
+        self.assertLess(publish_start, upload_start)
+        self.assertIn(r"dotnet test .\Tests\BurrowWin.Tests\BurrowWin.Tests.csproj", gate)
+        self.assertNotIn("--no-build", gate)
+        self.assertNotIn("continue-on-error", gate)
+        self.assertNotIn("if:", gate)
+        self.assertIn('"$env:BUILD_CONFIGURATION"', gate)
+
     def test_release_stays_draft_until_downloaded_artifact_passes_trust_checks(self) -> None:
         workflow = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
 
@@ -187,8 +202,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertNotIn("git config --global", text)
             self.assertNotIn("ENGINE_PAT", text)
             self.assertNotIn("insteadOf", text)
-        self.assertNotIn("GIT_CONFIG_COUNT", workflow)
-        self.assertNotIn("CARGO_NET_GIT_FETCH_WITH_CLI", workflow)
+            self.assertNotIn("GIT_CONFIG_COUNT", text)
+            self.assertNotIn("CARGO_NET_GIT_FETCH_WITH_CLI", text)
         self.assertIn("GIT_TERMINAL_PROMPT: \"0\"", workflow)
         build_start = workflow.index("- name: Build + stage burrow conductor")
         build_end = workflow.index("- name: Telemetry key presence")
@@ -196,7 +211,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(build_step.count("clone --quiet https://github.com/caezium/burrow-cli.git"), 1)
         self.assertIn("exit 1", build_step)
         # The publish output is hard-asserted, never warned about.
-        self.assertIn('Assets\\burrow.exe missing', workflow)
+        self.assertIn('verify-mole-runtime.ps1', workflow)
+        self.assertIn(r'-Conductor .\artifacts\release-publish\Assets\burrow.exe', workflow)
+        verifier = (ROOT / 'windows' / 'scripts' / 'verify-mole-runtime.ps1').read_text(encoding='utf-8')
+        self.assertIn('throw "Bundled conductor is missing:', verifier)
 
         for name, text in (("windows-release.yml", workflow), ("windows-ci.yml", windows_ci)):
             for line in text.splitlines():
@@ -208,6 +226,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
                     r"uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+$",
                     f"{name}: unpinned action: {stripped}",
                 )
+
+    def test_windows_maintenance_sources_and_imports_are_checked_before_upload(self) -> None:
+        release = (WORKFLOWS / "windows-release.yml").read_text(encoding="utf-8")
+        ci = (WORKFLOWS / "windows-ci.yml").read_text(encoding="utf-8")
+        verifier = (ROOT / "windows/scripts/verify-mole-runtime.ps1").read_text(encoding="utf-8")
+        for command in ("clean", "optimize"):
+            path = f"bin/{command}.ps1"
+            self.assertTrue((ROOT / "windows/Assets/Mole" / path).is_file())
+            self.assertIn(path, verifier)
+        self.assertIn("Parser]::ParseFile", verifier)
+        for workflow in (release, ci):
+            self.assertIn("test-mole-runtime.ps1", workflow)
+            self.assertIn("verify-mole-runtime.ps1", workflow)
+        self.assertLess(release.index("test-mole-runtime.ps1"), release.index("- name: Publish ("))
+        self.assertLess(release.index("verify-mole-runtime.ps1"), release.index("- name: Upload published app"))
 
     def test_release_notes_are_validated_before_sparkle_embeds_them(self) -> None:
         workflow = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")

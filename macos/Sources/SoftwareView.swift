@@ -1348,8 +1348,8 @@ final class SoftwareModel: ObservableObject {
     /// again, with the corrected sentence, rather than getting `--zap` after being promised the
     /// Trash.
     ///
-    /// `thenTrash` is the reviewed-subset work, deliberately deferred to here: it runs once the
-    /// dry run has confirmed the set, so an abort really does mean nothing was removed.
+    /// `thenTrash` runs after the engine succeeds, so cancelling authentication or failing to
+    /// launch cannot leave subset files removed behind a report that nothing happened.
     private func engineUninstall(_ targets: [InstalledApp], arguments: [String],
                                  promised: [String: UninstallGuard.Mechanism],
                                  thenTrash subsets: [InstalledApp],
@@ -1482,11 +1482,6 @@ final class SoftwareModel: ObservableObject {
                 }
             }
 
-            // Past every gate: the subsets Burrow trashes itself go now, not before the dry run.
-            if !subsets.isEmpty {
-                DispatchQueue.main.sync { MainActor.assumeIsolated { self.trashSubsets(subsets) } }
-            }
-
             // Verified. HOW the apply runs is the dry run's call (`UninstallGuard.elevation`):
             // a bundle the invoking user cannot write needs administrator rights, and the only
             // honest way to give it those is the same elevation Clean/Optimize use — macOS asks
@@ -1594,6 +1589,12 @@ final class SoftwareModel: ObservableObject {
                     alert.runModalQuiet()
                 }
                 return
+            }
+
+            // Authentication, launch and the engine's own outcome can still fail after preview.
+            // Only a completed successful engine run authorizes the remaining subset stage.
+            if !subsets.isEmpty {
+                DispatchQueue.main.sync { MainActor.assumeIsolated { self.trashSubsets(subsets) } }
             }
 
             let (parsed, unavailable) = Self.fetch()

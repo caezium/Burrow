@@ -35,6 +35,7 @@ final class LocalizationTests: XCTestCase {
         "Everything's up to date",
         "Update all",
         "Check for Updates",
+        "Release Notes",
         "Download Latest Version",
         "Update external engine",
         "Update Burrow to get the current bundled engine.",

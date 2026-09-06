@@ -878,3 +878,4 @@
 "Large" = "Groß";
 "Extra Large" = "Extragroß";
 "Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "Skaliert Text und Symbole in der gesamten App und im Menüleisten-Popup – ohne Neustart. Das Menüleisten-Element selbst behält seine eigene Textgröße, die pro Widget unter „Menüleiste“ eingestellt wird.";
+"Release Notes" = "Versionshinweise";

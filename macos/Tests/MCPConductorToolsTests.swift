@@ -36,6 +36,7 @@ final class MCPConductorToolsTests: XCTestCase {
 
     override func tearDown() {
         server = nil
+        catalog = nil
         db = nil
         try? FileManager.default.removeItem(at: tempDir)
     }
@@ -123,8 +124,9 @@ final class MCPConductorToolsTests: XCTestCase {
         }
     }
 
-    /// The happy path: the engine receives `dupes group <dir> --json` — `group` spelled by the
-    /// tool, the directory verbatim, and the conductor's `--json` — nothing else.
+    /// Fixed `group` keeps this discovery tool read-only; fixed `--json` keeps
+    /// its response machine-readable. Caller input supplies only the directory,
+    /// so it cannot turn duplicate discovery into a deletion subcommand.
     func testDupes_existingAbsoluteDirectory_spawnsTheReadOnlyGroupSubcommand() throws {
         try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
             let json = try catalog.call(name: "burrow_dupes", arguments: ["paths": [tempDir.path]])
@@ -134,6 +136,31 @@ final class MCPConductorToolsTests: XCTestCase {
     }
 
     // MARK: - burrow_evict: the one actuating tool on this seam, gated like the action tools
+
+    func testMutationSwitchesRequireJSONBooleansBeforeDispatch() throws {
+        let saved = Store.d
+        Store.d = UserDefaults(suiteName: StoreTests.scratchSuite)!
+        Store.d.removePersistentDomain(forName: StoreTests.scratchSuite)
+        defer { Store.d.removePersistentDomain(forName: StoreTests.scratchSuite); Store.d = saved }
+        try ConductorBundleFixture.withConductor(present: true, stub: ConductorBundleFixture.argvEchoStub) {
+            for tool in ToolCatalog.auditedTools {
+                for literal in ["1", "0", "\"true\"", "null"] {
+                    let data = Data("{\"confirm\":\(literal)}".utf8)
+                    var args = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+                    args["paths"] = [tempDir.path]
+                    args["apps"] = ["com.example.review-fixture"]
+                    XCTAssertThrowsError(try catalog.call(name: tool, arguments: args), "\(tool): \(literal)") { error in
+                        guard case MCPToolError.badArguments = error else {
+                            return XCTFail("expected bad arguments, got \(error)")
+                        }
+                    }
+                }
+            }
+            let data = Data(#"{"apps":["com.example.review-fixture"],"permanent":1,"confirm":false}"#.utf8)
+            let args = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+            XCTAssertThrowsError(try catalog.call(name: "burrow_uninstall", arguments: args))
+        }
+    }
 
     func testEvict_isAuditedAndDeclaresPathsRequired() throws {
         XCTAssertTrue(ToolCatalog.auditedTools.contains("burrow_evict"), "evict mutates; it must leave an audit row")

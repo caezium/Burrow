@@ -1160,9 +1160,23 @@ SOFTWARE_LD = json.dumps({
 
 def render_docs(data, stars=None):
     toc, secs = [], []
+    used_ids = {sec["id"] for sec in data["sections"]}
+
+    def unique_heading(match):
+        original = match.group(2)
+        candidate = original
+        suffix = 2
+        while candidate in used_ids:
+            candidate = f"{original}-{suffix}"
+            suffix += 1
+        used_ids.add(candidate)
+        return match.group(1) + candidate + match.group(3)
+
     for sec in data["sections"]:
         toc.append(f'      <a href="#{sec["id"]}">{esc(sec["title"])}</a>')
         blocks = "\n".join(blog_block(b) for b in sec["body"])
+        # Preserve section deep links when a subheading has the same slug.
+        blocks = re.sub(r'(<h[2-6] id=")([^"]+)(")', unique_heading, blocks)
         secs.append(f'    <section class="dsec" id="{sec["id"]}">\n'
                     f'      <h2>{esc(sec["title"])}</h2>\n{blocks}\n    </section>')
     nav = "\n".join(toc)
@@ -1214,10 +1228,13 @@ SITE_LANGUAGES = {
     "ja": "日本語", "de": "Deutsch", "fr": "Français",
     "es": "Español", "ko": "한국어", "pt-BR": "Português (Brasil)",
 }
+TRANSLATED_PATHS = {"", "docs", "compare", "roadmap", "releases"}
 
 
 def lang_picker(page_path):
     """The English page's language menu, marked so site-i18n.py can swap it."""
+    if page_path not in TRANSLATED_PATHS:
+        return ""
     items = [f'<a href="/{page_path}" hreflang="en" aria-current="page">English</a>']
     items += [f'<a href="/{code}/{page_path}" hreflang="{code}">{name}</a>'
               for code, name in SITE_LANGUAGES.items()]
@@ -1230,8 +1247,9 @@ def lang_alternates(page_path):
     """hreflang links pairing the English page with its translated copies."""
     rows = [f'<link rel="alternate" hreflang="x-default" href="{SITE}/{page_path}">',
             f'<link rel="alternate" hreflang="en" href="{SITE}/{page_path}">']
-    rows += [f'<link rel="alternate" hreflang="{code}" href="{SITE}/{code}/{page_path}">'
-             for code in SITE_LANGUAGES]
+    if page_path in TRANSLATED_PATHS:
+        rows += [f'<link rel="alternate" hreflang="{code}" href="{SITE}/{code}/{page_path}">'
+                 for code in SITE_LANGUAGES]
     return "\n".join(rows)
 
 def render_sitemap(posts):

@@ -13,6 +13,7 @@
 //
 
 import Foundation
+import Darwin
 
 enum FeatureFlags {
 
@@ -66,6 +67,7 @@ enum FeatureFlags {
     /// a flag that flips mid-session becomes visible the next time that
     /// view rebuilds — these are rollout switches, not live remotes.
     static func isEnabled(_ key: Key) -> Bool {
+        guard Telemetry.isEnabled else { return defaults[key] ?? false }
         lock.lock()
         let value = snapshot[key] ?? defaults[key] ?? false
         lock.unlock()
@@ -80,12 +82,10 @@ enum FeatureFlags {
     /// before `start()`, or without a release key, the lookup remains
     /// eligible so a later enabled session can emit the exposure.
     private static func expose(_ key: Key, value: Bool) {
-        guard Telemetry.canCapture else { return }
-        lock.lock()
-        let alreadyReported = !exposedThisLaunch.insert(key).inserted
-        lock.unlock()
-        guard !alreadyReported else { return }
-        Telemetry.capture("$feature_flag_called", ["$feature_flag": key.rawValue, "$feature_flag_response": value])
+        Telemetry.captureFeatureFlagExposure(key: key, value: value) {
+            lock.lock(); defer { lock.unlock() }
+            return exposedThisLaunch.insert(key).inserted
+        }
     }
 
     // MARK: - Remote payload filter
@@ -97,7 +97,7 @@ enum FeatureFlags {
         guard let raw else { return [:] }
         var accepted: [Key: Bool] = [:]
         for key in Key.allCases {
-            if let value = raw[key.rawValue] as? Bool {
+            if let value = JSONScalar.boolean(raw[key.rawValue]) {
                 accepted[key] = value
             }
         }
@@ -118,15 +118,15 @@ enum FeatureFlags {
         return try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
     }
 
-    /// Strict decode: exact version, allowlisted boolean flags, and a
-    /// timestamp no older than `maxCacheAge`. Anything else — malformed
-    /// JSON, wrong types, unknown keys, a missing or stale timestamp —
-    /// discards the whole cache, so a corrupt file can only ever produce
-    /// the conservative defaults.
+    /// The envelope and known flags are strict: malformed JSON, a wrong
+    /// version, an invalid known value, or a missing/stale timestamp discards
+    /// the cache. Unknown keys are ignored so a cache from a newer build can
+    /// still serve the valid allowlisted booleans this build understands.
     static func decodeCache(_ data: Data, now: Date) -> [Key: Bool]? {
         guard let decoded = try? JSONSerialization.jsonObject(with: data),
               let object = decoded as? [String: Any],
               (object["version"] as? Int) == 1,
+              JSONScalar.boolean(object["version"]) == nil,
               let fetchedAt = (object["fetched_at"] as? String)
                   .flatMap(timestampFormatter.date(from:)),
               fetchedAt <= now,
@@ -135,23 +135,29 @@ enum FeatureFlags {
 
         var flags: [Key: Bool] = [:]
         for key in Key.allCases {
-            if let value = values[key.rawValue] as? Bool {
-                flags[key] = value
-            }
+            guard let rawValue = values[key.rawValue] else { continue }
+            guard let value = JSONScalar.boolean(rawValue) else { return nil }
+            flags[key] = value
         }
         return flags
     }
 
     /// Reads the on-disk cache. `nil` means "no usable cache" (absent,
     /// oversized, corrupt, or stale); callers leave defaults in place.
-    /// The file's size is checked before a single byte is read.
+    /// Open once and bound the read itself: replacing or growing a pathname
+    /// after a size check must never turn a tiny cache into unbounded I/O.
     static func loadCached(from directory: URL, now: Date) -> [Key: Bool]? {
         let fileURL = directory.appendingPathComponent(cacheFileName)
-        guard let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
-              values.isRegularFile == true,
-              let size = values.fileSize,
-              (1 ... maxCacheBytes).contains(size),
-              let data = try? Data(contentsOf: fileURL) else { return nil }
+        let descriptor = open(fileURL.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
+        guard descriptor >= 0 else { return nil }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        defer { try? handle.close() }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0,
+              info.st_mode & S_IFMT == S_IFREG,
+              (1 ... Int64(maxCacheBytes)).contains(info.st_size),
+              let data = try? handle.read(upToCount: maxCacheBytes + 1),
+              !data.isEmpty, data.count <= maxCacheBytes else { return nil }
         return decodeCache(data, now: now)
     }
 

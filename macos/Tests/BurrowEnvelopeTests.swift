@@ -13,6 +13,19 @@ import XCTest
 @testable import Burrow
 
 final class BurrowEnvelopeTests: XCTestCase {
+    func testCaptureClassifiesMalformedOutputFromBundledEngine() throws {
+        for output in ["not-json", "[]"] {
+            try ConductorBundleFixture.withConductor(present: true, stub: "printf '%s' '\(output)'") {
+                XCTAssertThrowsError(try BurrowEngine.capture("status", timeout: 2)) { error in
+                    guard case BurrowEngineError.engine(let kind, _) = error else {
+                        return XCTFail("expected a classified engine error, got \(error)")
+                    }
+                    XCTAssertEqual(kind, ErrorKind.invalidOutput.rawValue)
+                }
+            }
+        }
+    }
+
 
     // MARK: envelope parsing
 

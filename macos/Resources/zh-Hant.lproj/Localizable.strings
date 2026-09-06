@@ -863,3 +863,4 @@
 "Large" = "大";
 "Extra Large" = "特大";
 "Scales text and icons across the whole app and the menu-bar popup — no relaunch needed. The menu-bar item itself keeps its own per-widget text size, set under Menu Bar." = "縮放整個應用程式與選單列彈出視窗中的文字和圖示，無需重新啟動。選單列項目本身的文字大小仍在「選單列」設定中按元件單獨調整。";
+"Release Notes" = "版本說明";

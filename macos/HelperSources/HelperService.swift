@@ -567,6 +567,10 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         reply(Self.build)
     }
 
+    func helperStatus(withReply reply: @escaping (Data) -> Void) {
+        reply((try? JSONEncoder().encode(HelperStatus.current(build: Self.build))) ?? Data())
+    }
+
     func cancelOperation(operationID: String, withReply reply: @escaping (Bool) -> Void) {
         // Cancellation stops work; it never starts any, so it needs no
         // authorization of its own. But it is still bound to the invoking
@@ -608,6 +612,14 @@ final class HelperService: NSObject, BurrowHelperProtocol {
             return respond(.rejected(rejection))
         }
 
+        // Gate 3 — freshness. Admit before identity/path inspection so a
+        // replay cannot repeatedly drive filesystem work in the root daemon.
+        // Invalid paths still fail before the authorization prompt.
+        guard replayGuard.admit(request.operationID) else {
+            helperTrace("request refused: replayed operation ID")
+            return respond(.rejected(.replayedOperationID))
+        }
+
         let invokingUser: HelperResolvedInvokingUser
         do {
             invokingUser = try HelperDaemonIdentityResolver.resolve(
@@ -627,6 +639,9 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         // the invoking user's own trees.
         var reviewedPaths: [String] = []
         if request.operation.needsReviewedPaths {
+            guard request.reviewedSelection?.matches(paths: request.reviewedPaths) == true else {
+                return respond(.exited(ElevatedExitCode.boundaryCheckFailed))
+            }
             let decision = HelperReviewedPathPolicy.validate(
                 paths: request.reviewedPaths,
                 roots: HelperReviewedCleanup.approvedRoots(for: invokingUser),
@@ -641,13 +656,6 @@ final class HelperService: NSObject, BurrowHelperProtocol {
                 helperTrace("request refused: reviewed path rejected (\(rejection.rawValue))")
                 return respond(.rejected(.invalidReviewedPaths))
             }
-        }
-
-        // Gate 3 — freshness. One authorization buys exactly one operation, so
-        // a captured payload cannot be replayed for a second root run.
-        guard replayGuard.admit(request.operationID) else {
-            helperTrace("request refused: replayed operation ID")
-            return respond(.rejected(.replayedOperationID))
         }
 
         // Gate 4 — authorization. This is what raises the prompt, and it
@@ -687,6 +695,9 @@ final class HelperService: NSObject, BurrowHelperProtocol {
         // of the run.
         var reviewedPlanFile: URL?
         if request.operation.needsReviewedPaths {
+            guard request.reviewedSelection?.matches(paths: reviewedPaths) == true else {
+                return respond(.exited(ElevatedExitCode.boundaryCheckFailed))
+            }
             do {
                 reviewedPlanFile = try HelperReviewedCleanup.writePlanFile(paths: reviewedPaths)
             } catch {

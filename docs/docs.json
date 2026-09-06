@@ -79,7 +79,7 @@
         { "h3": "History" },
         { "p": "Every sample Status takes lands in a local SQLite file. Scrub from five minutes out to ninety days, with peak-per-process tables for the moments the fans actually spun up. Nothing is uploaded." },
         { "h3": "Ports" },
-        { "p": "Every listening port with the process behind it, its binary path, and its owning user, refreshed live. Answers \"what is holding 3000\" without reaching for `lsof`." },
+        { "p": "Every listening port with the process behind it, its binary path, and its owning user, refreshed live. Answers \"what is holding 3000\" without reaching for lsof." },
         { "h3": "Network" },
         { "p": "Live throughput per interface and per process. Unlike Activity Monitor's cumulative totals, this is a rate, so the process saturating your connection right now is the one at the top." },
         { "h3": "Get Online" },
