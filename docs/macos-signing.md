@@ -12,6 +12,13 @@ stapled ticket, strict code-signature verification, and Gatekeeper assessment;
 then signs and verifies both the update ZIP and appcast with Sparkle Ed25519.
 Only then can it publish a GitHub release or update Homebrew.
 
+The engine source is fetched from the public
+[caezium/burrow-engine](https://github.com/caezium/burrow-engine) repository at
+the `macos/vendor/burrow-engine` gitlink. Source reads require no GitHub PAT or
+credential rewrite, and the published source has no private Cargo git
+dependencies. This does not change the signing, notarization, Sparkle or
+Homebrew write credentials required above.
+
 ## 1. Create the certificate signing request
 
 Follow Apple’s
@@ -341,17 +348,17 @@ The live `caezium/homebrew-tap` cask is 0.11.1 with the same ZIP SHA, has
 signing, notarization, stapling, Gatekeeper, Sparkle verification, and GitHub
 publication, then its final tap push received HTTP 403 because the build step's
 global GitHub URL rewrite made Git authenticate with `ENGINE_PAT` instead of
-the valid `TAP_PAT`. That engine token is deliberately scoped only to the
-private engine repository. The cask was repaired with the owner credential at
+the valid `TAP_PAT`. That engine token was scoped only to the then-private
+engine repository. The cask was repaired with the owner credential at
 tap commit
 `9a2357bf9419b9e39836cd69391dfa2a5d5bd421`. The first corrections in
 [#324](https://github.com/caezium/Burrow/pull/324) and
 [#326](https://github.com/caezium/Burrow/pull/326) proved that Git's dry run and
 a same-SHA ref update both return false positives. The current verifier pushes,
 verifies, and removes a unique temporary ref through Git itself, exercising the
-release's actual authentication path. The engine rewrite is now process-scoped,
-and the tap step uses an isolated Git configuration so the two credentials
-cannot cross. The stored `TAP_PAT` then passed a
+release's actual authentication path. Source fetching now uses the public
+engine repository without an engine token, and the tap step retains its
+isolated Git configuration. The stored `TAP_PAT` then passed a
 [real Git push-and-delete credential check](https://github.com/caezium/Burrow/actions/runs/30766229249),
 so it does not need rotation. Require that manual workflow to pass before every
 tag.

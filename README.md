@@ -309,8 +309,9 @@ handles this honestly:
 - **macOS 14+**
 - **No separate engine install.** Burrow bundles its own engine
   (`burrow-engine`, one FSL-1.1 binary) and runs it directly. _(Building from
-  source? The engine is staged from the private `macos/vendor/burrow-engine`
-  submodule; without access to it, Burrow falls back to a system `mo` —
+  source? The engine is staged from the public `macos/vendor/burrow-engine`
+  submodule, with no GitHub read token required. Without an initialized engine
+  submodule, Burrow falls back to a system `mo` —
   `brew install mole` — with mo's own argv conventions.)_
 
 ### Windows preview
@@ -403,7 +404,7 @@ unsigned Inno Setup installer, creates a portable ZIP fallback, writes
 ## Security & trust
 
 Burrow drives one bundled engine binary, `burrow-engine` (FSL-1.1-ALv2; its
-source is private, so what ships is the signed binary inside the app — see
+source is publicly available and the signed binary ships inside the app — see
 [Attribution](#attribution--license)), plus an MIT `fclones` sidecar for
 duplicate finding. The honest privacy picture:
 
@@ -588,7 +589,7 @@ and spawns the bundled binary and parses its envelope, `EngineRunner` is the
 one capture/stream/PTY facade, `EngineCLI` is discovery plus the elevated
 `do shell script` builder, and `MoActions` is the single gate that mints every
 destructive run for the GUI and the MCP server alike. A source build without
-the private engine submodule falls back to a system `mo`, whose argv is the
+an initialized engine submodule falls back to a system `mo`, whose argv is the
 inverse of the engine's (mo runs live by default; the engine previews by
 default and needs `--apply`) — `BurrowEngine.engineArgv` is the one
 translation, applied only when the resolved binary is the bundled engine.
@@ -614,10 +615,11 @@ separately licensed binaries — the full notices are in [NOTICE](NOTICE):
 
 - **`burrow-engine`** (`Contents/Resources/burrow`) is © 2026 caezium, licensed
   under the **Functional Source License 1.1, ALv2 future license**
-  (FSL-1.1-ALv2). Its source lives in the private
+  (FSL-1.1-ALv2). Its source lives in the public
   [caezium/burrow-engine](https://github.com/caezium/burrow-engine) repository,
   vendored as a submodule and built into a single universal binary at release
-  time; only the built binary ships. Its command surface (`clean`, `optimize`,
+  time; the binary ships with its license and dependency notices under
+  `Contents/Resources/licenses/burrow-engine/`. Its command surface (`clean`, `optimize`,
   `uninstall`, `analyze`, `status`, …) is modelled on **Mole CLI** (`mo`), which
   is © [tw93](https://github.com/tw93/Mole), MIT — Burrow no longer bundles a
   fork of Mole's code.
