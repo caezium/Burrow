@@ -45,6 +45,8 @@ jobs:
       # Every action is pinned to a commit SHA (supply-chain hygiene), matching ci.yml; the
       # version comment is what a reviewer bumps, the SHA is what actually runs.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
@@ -54,43 +56,38 @@ jobs:
       # Build the FSL `burrow` conductor at its pinned submodule commit and stage it into Assets\
       # so the csproj bundles it (its Content Include is conditional on Exists). windows-latest
       # ships a Rust toolchain; the submodule is cloned fresh (checkout doesn't recurse
-      # submodules), authenticated with ENGINE_PAT.
-      #
-      # burrow-cli is PRIVATE (verified 2026-07-25) — there is no unauthenticated fallback worth
-      # trying first. An unauthenticated clone here always 403s and only wastes a round-trip
-      # before falling through to the same authenticated clone below, so go straight there.
+      # submodules). The public source snapshot is fetched over HTTPS without a read token.
       #
       # A failed build here FAILS THE STEP — it used to be a try/catch that downgraded any
       # failure to a `::warning::` and kept going, the exact silent-degradation shape that has
       # already shipped a broken release for this project once (see release.yml's engine-fetch
       # step, fixed the same way). The "Verify the bundled conductor + engine" step further down
       # would likely still catch a missing burrow.exe, but that's a second line of defense, not a
-      # reason to let this step swallow the REAL error (an expired ENGINE_PAT, a git/cargo
-      # failure) behind a generic warning and ~10 more minutes of restore/publish before the
+      # reason to let this step swallow a git/cargo failure behind a generic warning and
+      # ~10 more minutes of restore/publish before the
       # release fails anyway.
       - name: Build + stage burrow conductor
         working-directory: ${{ github.workspace }}
         shell: pwsh
         env:
-          ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
-          # burrow-cli now depends on the PRIVATE burrow-engine crate over git; fetch it via the
-          # git CLI so the url.insteadOf token below applies.
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not $env:ENGINE_PAT) {
-            Write-Host "::error::ENGINE_PAT is not set. burrow-cli is PRIVATE and has no unauthenticated fallback. Add/refresh the secret (Settings > Secrets and variables > Actions)."
+          $gitlink = git ls-tree HEAD windows/vendor/burrow-cli
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::could not read the windows/vendor/burrow-cli gitlink (exit $LASTEXITCODE)."
             exit 1
           }
-          $sha = (git ls-tree HEAD windows/vendor/burrow-cli).Split()[2]
-          if (-not $sha) {
+          $entry = [regex]::Match([string]$gitlink, '^160000 commit ([0-9a-f]{40})\s')
+          if (-not $entry.Success) {
             Write-Host "::error::no gitlink for windows/vendor/burrow-cli in HEAD (.gitmodules / the submodule entry may be missing). Failing the build — there is no conductor to stage without it."
             exit 1
           }
+          $sha = $entry.Groups[1].Value
           $dest = Join-Path $env:RUNNER_TEMP 'burrow-cli'
-          git -c "url.https://x-access-token:$($env:ENGINE_PAT)@github.com/.insteadOf=https://github.com/" clone --quiet https://github.com/caezium/burrow-cli.git $dest
+          git clone --quiet https://github.com/caezium/burrow-cli.git $dest
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::clone of caezium/burrow-cli failed (exit $LASTEXITCODE). Most likely ENGINE_PAT is missing, expired, or not scoped to grant read on this repo."
+            Write-Host "::error::clone of public caezium/burrow-cli failed (exit $LASTEXITCODE)."
             exit 1
           }
           git -C $dest -c advice.detachedHead=false checkout --quiet $sha
@@ -98,26 +95,52 @@ jobs:
             Write-Host "::error::cloned caezium/burrow-cli, but commit $sha does not exist on any branch there."
             exit 1
           }
-          # cargo build fetches the private burrow-engine crate over git — authorize github.com
-          # for the CLI fetcher through a PROCESS-SCOPED rewrite (GIT_CONFIG_COUNT/KEY/VALUE are
-          # read by git from the environment and written nowhere), the same shape release.yml
-          # used for its conductor build. It used to be a GLOBAL url.insteadOf rewrite, which
-          # persisted the token in the runner's ~/.gitconfig for every later step in the job —
-          # none of them should ever authenticate as the engine token. The variables are
-          # removed again in `finally` so even a later step in THIS shell would not inherit them.
-          try {
-            $env:GIT_CONFIG_COUNT = '1'
-            $env:GIT_CONFIG_KEY_0 = "url.https://x-access-token:$($env:ENGINE_PAT)@github.com/.insteadOf"
-            $env:GIT_CONFIG_VALUE_0 = 'https://github.com/'
-            cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
-            $cargoExit = $LASTEXITCODE
-          } finally {
-            Remove-Item Env:GIT_CONFIG_COUNT, Env:GIT_CONFIG_KEY_0, Env:GIT_CONFIG_VALUE_0 -ErrorAction SilentlyContinue
+          $notices = @('LICENSE.md', 'NOTICE', 'THIRD-PARTY-LICENSES.md')
+          foreach ($notice in ($notices + @('LICENSES/cargo-packages.json'))) {
+            $sourceNotice = Join-Path $dest $notice
+            if (-not (Test-Path -LiteralPath $sourceNotice -PathType Leaf) -or
+                (Get-Item -LiteralPath $sourceNotice).Length -eq 0) {
+              throw "Required CLI license notice is missing or empty: $notice"
+            }
           }
+          $inventory = Get-Content -LiteralPath (Join-Path $dest 'LICENSES/cargo-packages.json') -Raw
+          $packages = @($inventory | ConvertFrom-Json)
+          if (-not $inventory.TrimStart().StartsWith('[') -or $packages.Count -eq 0) {
+            throw 'CLI Cargo notice inventory is empty or invalid'
+          }
+          foreach ($package in $packages) {
+            if ($package.texts -isnot [array] -or $package.texts.Count -eq 0) {
+              throw 'CLI Cargo package has no license notices'
+            }
+            foreach ($text in $package.texts) {
+              $relative = [string]$text.file
+              if (-not $relative.StartsWith('LICENSES/cargo/', [StringComparison]::Ordinal) -or
+                  $relative.Contains('\') -or ($relative.Split('/') -contains '..')) {
+                throw "Invalid CLI Cargo notice path: $relative"
+              }
+              $sourceNotice = Join-Path $dest $relative
+              if (-not (Test-Path -LiteralPath $sourceNotice -PathType Leaf) -or
+                  (Get-Item -LiteralPath $sourceNotice).Length -eq 0) {
+                throw "Required CLI license notice is missing or empty: $relative"
+              }
+            }
+          }
+          # The public CLI snapshot has no private Cargo git dependencies.
+          cargo build --release --manifest-path (Join-Path $dest 'Cargo.toml')
+          $cargoExit = $LASTEXITCODE
           if ($cargoExit -ne 0) {
             Write-Host "::error::cargo build of burrow-cli failed (exit $cargoExit)."
             exit 1
           }
+          $licenseDest = 'windows/Assets/licenses/burrow-cli'
+          if (Test-Path -LiteralPath $licenseDest) {
+            Remove-Item -LiteralPath $licenseDest -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $licenseDest -Force | Out-Null
+          foreach ($notice in $notices) {
+            Copy-Item -LiteralPath (Join-Path $dest $notice) -Destination (Join-Path $licenseDest $notice) -Force
+          }
+          Copy-Item -LiteralPath (Join-Path $dest 'LICENSES') -Destination (Join-Path $licenseDest 'LICENSES') -Recurse
           Copy-Item (Join-Path $dest 'target\release\burrow.exe') 'windows\Assets\burrow.exe' -Force
           Write-Host "staged burrow.exe @ $($sha.Substring(0,7))"
 

@@ -10,11 +10,12 @@
 # exactly what lets every `capture()` call site stay unedited.
 #
 # The GUI shells out to this ONE bundled binary (`burrow <cmd> --json`) for the stable Burrow
-# envelope, and `clean --stream` / `optimize --stream` for the live NDJSON progress feed. The MIT
-# `burrow-engine` does all the work natively (analyze/status/clean/optimize/uninstall/net/
+# envelope, and `clean --stream` / `optimize --stream` for the live NDJSON progress feed. The
+# FSL-1.1-ALv2 `burrow-engine` does the work natively (analyze/status/clean/optimize/uninstall/net/
 # orphans/slim-check/evict/dupes/photos/history/purge/installer), so there is no separate engine
-# dir or conductor — this single binary serves every command. Only the built binary travels — no
-# Rust source ships. `dupes` shells the sibling-bundled Resources/fclones via $BURROW_FCLONES.
+# dir or conductor — this single binary serves every command. The binary and its applicable
+# license notices travel together; no Rust source ships. `dupes` shells the sibling-bundled
+# Resources/fclones via $BURROW_FCLONES.
 #
 # Usage: bundle-burrow.sh <BURROW_ENGINE_SRC> <RESOURCES_DIR>
 #   BURROW_ENGINE_SRC  a burrow-engine checkout (has Cargo.toml with the `burrow-engine` binary)
@@ -24,6 +25,41 @@ set -euo pipefail
 SRC="${1:?burrow-engine source dir required}"
 RESOURCES="${2:?resources dir required}"
 OUT="$RESOURCES/burrow"
+LICENSE_OUT="$RESOURCES/licenses/burrow-engine"
+
+# Preserve the source snapshot's notice layout so its relative license links work
+# inside the app. Refuse an incomplete payload before building or replacing the engine.
+for notice in LICENSE.md THIRD-PARTY-NOTICES.md LICENSES/Mole-MIT.txt \
+  LICENSES/Stats-MIT.txt LICENSES/fclones-MIT.txt LICENSES/cargo-packages.json; do
+  if [ ! -s "$SRC/$notice" ]; then
+    echo "error: required engine license notice missing or empty: $notice" >&2
+    exit 1
+  fi
+done
+python3 - "$SRC" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1])
+try:
+    packages = json.loads((source / "LICENSES/cargo-packages.json").read_text())
+    if not isinstance(packages, list) or not packages:
+        raise ValueError("Cargo notice inventory is empty or invalid")
+    for package in packages:
+        texts = package["texts"]
+        if not isinstance(texts, list) or not texts:
+            raise ValueError("Cargo package has no license notices")
+        for text in texts:
+            relative = Path(text["file"])
+            if relative.parts[:2] != ("LICENSES", "cargo") or ".." in relative.parts:
+                raise ValueError(f"invalid Cargo notice path: {relative}")
+            notice = source / relative
+            if not notice.is_file() or notice.stat().st_size == 0:
+                raise ValueError(f"required Cargo license notice missing or empty: {relative}")
+except (OSError, ValueError, KeyError, TypeError) as error:
+    sys.exit(f"error: incomplete engine license payload: {error}")
+PY
 
 command -v cargo >/dev/null 2>&1 || {
   echo "error: cargo not found — cannot build burrow-engine (install Rust, or omit the vendor/burrow-engine submodule to fall back to a system engine)"
@@ -50,6 +86,12 @@ X=x86_64-apple-darwin
 # Stage + sign the engine so the app's own signature validates (--deep). Uses the build's resolved
 # identity when run as a build phase, else ad-hoc ('-').
 mkdir -p "$RESOURCES"
+# Replace only this generated notice directory so incremental builds cannot retain
+# licenses or unrelated files from an older payload. Copy notices before the new binary.
+rm -rf "$LICENSE_OUT"
+mkdir -p "$LICENSE_OUT"
+cp "$SRC/LICENSE.md" "$SRC/THIRD-PARTY-NOTICES.md" "$LICENSE_OUT/"
+cp -R "$SRC/LICENSES" "$LICENSE_OUT/LICENSES"
 cp "$SRC/target/release/burrow-engine-universal" "$OUT"
 chmod +x "$OUT"
 

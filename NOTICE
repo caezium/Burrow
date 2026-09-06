@@ -8,8 +8,9 @@ burrow-engine (Resources/burrow)
     Copyright 2026 caezium
     Licensed under the Functional Source License, Version 1.1, ALv2 Future
     License (FSL-1.1-ALv2). Source: https://github.com/caezium/burrow-engine
-    (private; vendored as the macos/vendor/burrow-engine submodule and built
-    into a single binary by macos/scripts/bundle-burrow.sh).
+    (public; vendored as the macos/vendor/burrow-engine submodule and built
+    into a single binary by macos/scripts/bundle-burrow.sh). The full engine
+    license and dependency notices ship in Resources/licenses/burrow-engine/.
 
 fclones (Resources/fclones)
     Copyright (c) 2020-2024 Piotr Kołaczkowski
@@ -35,4 +36,5 @@ fclones (Resources/fclones)
     SOFTWARE.
 
 The Windows preview bundles the `burrow` conductor (caezium/burrow-cli,
-FSL-1.1-ALv2, Copyright 2026 caezium) the same way.
+FSL-1.1-ALv2, Copyright 2026 caezium), with its license and notices under
+Assets/licenses/burrow-cli/.

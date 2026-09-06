@@ -69,3 +69,7 @@ macos/vendor/.sparkle-cache/
 
 # Internal planning docs — kept local, not published
 plans/
+
+# Runtime binary and license payload staged by windows-release.yml.
+/windows/Assets/burrow.exe
+/windows/Assets/licenses/burrow-cli/

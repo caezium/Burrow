@@ -2,6 +2,13 @@
 
 Burrow Windows preview releases follow the upstream Burrow install rhythm: package manager first, direct download as a fallback.
 
+The manual `windows-release.yml` workflow builds the conductor from the pinned
+`windows/vendor/burrow-cli` gitlink. It reads the public
+[caezium/burrow-cli](https://github.com/caezium/burrow-cli) source over HTTPS
+without a GitHub read token or credential rewrite; the published source has no
+private Cargo git dependencies. Missing pins and clone, checkout, build or
+staging failures stop the release before an artifact is uploaded.
+
 ## Local Release
 
 ```powershell
