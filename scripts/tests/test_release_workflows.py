@@ -157,135 +157,47 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('push --quiet origin ":$probe_ref"', verifier)
         self.assertNotIn('push --dry-run origin "HEAD:$probe_ref"', verifier)
 
-    def test_release_does_not_leak_engine_credentials_into_tap_push(self) -> None:
+    def test_release_reads_public_sources_without_affecting_tap_credentials(self) -> None:
         workflow = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
-        tap_start = workflow.index(
-            "- name: Bump Homebrew cask in caezium/homebrew-tap"
-        )
+        tap_start = workflow.index("- name: Bump Homebrew cask in caezium/homebrew-tap")
         tap_step = workflow[tap_start:]
+        checkout_start = workflow.index("- uses: actions/checkout@")
+        checkout_step = workflow[checkout_start : workflow.index("- name:", checkout_start)]
 
-        # `persist-credentials: false` has to be on the CHECKOUT, not merely somewhere in the
-        # file — a bare `assertIn` over the whole workflow passes even if the flag drifts onto
-        # an unrelated step and the checkout starts leaving GITHUB_TOKEN in .git/config for the
-        # tap push to reuse. Pin it to the one `actions/checkout` step this job runs.
+        self.assertIn("persist-credentials: false", checkout_step)
+        self.assertEqual(workflow.count("- uses: actions/checkout@"), 1)
+        self.assertNotIn("actions/checkout@", tap_step)
+        self.assertNotIn("ENGINE_PAT", workflow)
+        self.assertNotIn("insteadOf", workflow)
+        self.assertNotIn("CARGO_NET_GIT_FETCH_WITH_CLI", workflow)
+        self.assertIn('export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/burrow-tap-gitconfig"', tap_step)
+        self.assertIn('(cd "$RUNNER_TEMP" && git clone', tap_step)
+        self.assertIn('cd "$TAP_DIR"', tap_step)
+        self.assertIn("GH_TOKEN: ${{ secrets.TAP_PAT }}", tap_step)
+        self.assertIn("GIT_TERMINAL_PROMPT: \"0\"", workflow)
+
+    def test_windows_release_reads_public_sources_and_pins_actions(self) -> None:
+        workflow = (WORKFLOWS / "windows-release.yml").read_text(encoding="utf-8")
+        windows_ci = (WORKFLOWS / "windows-ci.yml").read_text(encoding="utf-8")
         checkout_start = workflow.index("- uses: actions/checkout@")
         checkout_step = workflow[checkout_start : workflow.index("- name:", checkout_start)]
         self.assertIn("persist-credentials: false", checkout_step)
-        self.assertEqual(
-            workflow.count("- uses: actions/checkout@"),
-            1,
-            "a second checkout step would need its own persist-credentials assertion",
-        )
-        # The tap is `git clone`d rather than checked out, so it never inherits the runner's
-        # credentials; what it must not do is install a global rewrite that would.
-        self.assertNotIn("git config --global url.", workflow)
-        self.assertNotIn("actions/checkout@", tap_step)
 
-        # This used to assert `export GIT_CONFIG_COUNT=1` in the build step: a
-        # process-scoped URL rewrite, so ENGINE_PAT could reach the private
-        # burrow-engine crate during the conductor's cargo build without becoming
-        # the credential the later Homebrew push used. The repoint deleted the
-        # conductor, and burrow-engine's own Cargo.toml has no git dependencies,
-        # so there is nothing left in the build that needs to authenticate to
-        # GitHub. Not having the token in the step at all is strictly stronger
-        # than scoping the rewrite, so that is what gets pinned now.
-        build_start = workflow.index("- name: Build (Release)")
-        build_end = workflow.index(
-            "- name: Verify the bundled engine made it into the app"
-        )
-        build_step = workflow[build_start:build_end]
-        self.assertNotIn(
-            "ENGINE_PAT: ${{ secrets.ENGINE_PAT }}",
-            build_step,
-            "the release build must not receive the engine token at all",
-        )
-        self.assertNotIn("CARGO_NET_GIT_FETCH_WITH_CLI", build_step)
-
-        # Neither the checkout nor the tap push may receive the engine token — INCLUDING by
-        # inheritance, which a per-step search cannot see. A workflow- or job-level `env:` block
-        # is handed to every step in the job, so ENGINE_PAT declared there would reach the tap
-        # push while each step's own text stayed clean. Step-level `env:` sits at 8 spaces here;
-        # anything shallower is an outer block.
-        for name, step in (("checkout", checkout_step), ("tap push", tap_step)):
-            self.assertNotIn(
-                "ENGINE_PAT", step, f"the {name} step must not see the engine token"
-            )
-        self.assertEqual(
-            workflow.count("ENGINE_PAT: ${{ secrets.ENGINE_PAT }}"),
-            1,
-            "the engine token belongs to the fetch step alone",
-        )
-        lines = workflow.splitlines()
-        for i, line in enumerate(lines):
-            stripped = line.lstrip()
-            indent = len(line) - len(stripped)
-            if stripped != "env:" or indent >= 8:
-                continue  # step-scoped: reaches only its own step
-            # An outer `env:` IS inherited by every step in the job, so what matters is
-            # whether it carries the token — not that it exists. A job-level block of
-            # ordinary config (EXPECTED_TEAM_ID) is fine and release.yml has one.
-            body = []
-            for nxt in lines[i + 1 :]:
-                if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= indent:
-                    break
-                body.append(nxt)
-            self.assertNotIn(
-                "ENGINE_PAT",
-                "\n".join(body),
-                "an inherited workflow- or job-level `env:` reaches every step, including "
-                f"the tap push — keep the engine token step-scoped: {body!r}",
-            )
-
-        # ENGINE_PAT survives only in the fetch step, where every use is scoped
-        # to one `git -c` invocation that writes no config anywhere.
-        for line in workflow.splitlines():
-            if "insteadOf" in line:
-                self.assertIn('git -c "url.', line)
-        self.assertIn(
-            'export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/burrow-tap-gitconfig"',
-            tap_step,
-        )
-        self.assertIn('(cd "$RUNNER_TEMP" && git clone', tap_step)
-        self.assertIn('cd "$TAP_DIR"', tap_step)
-
-    def test_windows_release_scopes_engine_credentials_and_pins_actions(self) -> None:
-        workflow = (WORKFLOWS / "windows-release.yml").read_text(encoding="utf-8")
-        windows_ci = (WORKFLOWS / "windows-ci.yml").read_text(encoding="utf-8")
-
-        # The engine token may never be written to persistent git config: a `--global`
-        # rewrite outlives the step that set it and becomes the credential every later
-        # step (and every later `git` invocation) silently uses.
         for text in (workflow, windows_ci):
             self.assertNotIn("git config --global", text)
-        # ENGINE_PAT is used exactly two ways, both process-scoped: a `git -c` on the one
-        # clone, and the GIT_CONFIG_* environment for the one cargo build — removed again in
-        # `finally` so nothing after the build inherits it.
-        for line in workflow.splitlines():
-            if "insteadOf" in line and not line.strip().startswith("#"):
-                self.assertTrue(
-                    'git -c "url.' in line or "GIT_CONFIG_KEY_0" in line,
-                    f"unscoped credential rewrite: {line.strip()}",
-                )
+            self.assertNotIn("ENGINE_PAT", text)
+            self.assertNotIn("insteadOf", text)
+        self.assertNotIn("GIT_CONFIG_COUNT", workflow)
+        self.assertNotIn("CARGO_NET_GIT_FETCH_WITH_CLI", workflow)
+        self.assertIn("GIT_TERMINAL_PROMPT: \"0\"", workflow)
         build_start = workflow.index("- name: Build + stage burrow conductor")
         build_end = workflow.index("- name: Telemetry key presence")
         build_step = workflow[build_start:build_end]
-        self.assertIn("$env:GIT_CONFIG_COUNT = '1'", build_step)
-        self.assertIn("Remove-Item Env:GIT_CONFIG_COUNT, Env:GIT_CONFIG_KEY_0, Env:GIT_CONFIG_VALUE_0", build_step)
-        self.assertEqual(
-            workflow.count("ENGINE_PAT: ${{ secrets.ENGINE_PAT }}"),
-            1,
-            "the engine token belongs to the conductor build step alone",
-        )
-        # burrow-cli is private: exactly one clone, authenticated, and the run fails closed
-        # when the token is absent — no unauthenticated first attempt to mask a 403.
         self.assertEqual(build_step.count("clone --quiet https://github.com/caezium/burrow-cli.git"), 1)
-        self.assertIn("if (-not $env:ENGINE_PAT)", build_step)
         self.assertIn("exit 1", build_step)
         # The publish output is hard-asserted, never warned about.
         self.assertIn('Assets\\burrow.exe missing', workflow)
 
-        # Every action in both Windows workflows is pinned to a commit SHA with a version
-        # comment, like ci.yml — a floating major tag is whatever the publisher pushes next.
         for name, text in (("windows-release.yml", workflow), ("windows-ci.yml", windows_ci)):
             for line in text.splitlines():
                 stripped = line.strip()

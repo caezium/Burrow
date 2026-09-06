@@ -120,26 +120,21 @@ jobs:
       # broken release shipped from this pipeline before (a private-repo 403 silently produced an
       # app with nothing bundled, and the run stayed green).
       #
-      # caezium/burrow-engine is PRIVATE — verified live 2026-07-25 (the workflow used to assume
-      # this repo's predecessor needed no auth; that was true of the old burrow-digger, not of
-      # this one). So there is no unauthenticated attempt to try first; ENGINE_PAT is required.
+      # The public source snapshot is fetched over HTTPS without a read token. A missing
+      # gitlink, unavailable repository, or unpublished pinned commit still fails the release.
       - name: Fetch bundled burrow-engine (outside the work tree)
         env:
-          ENGINE_PAT: ${{ secrets.ENGINE_PAT }}
+          GIT_TERMINAL_PROMPT: "0"
         run: |
-          SHA="$(git ls-tree HEAD macos/vendor/burrow-engine | awk '{print $3}')"
+          set -euo pipefail
+          SHA="$(git ls-tree HEAD macos/vendor/burrow-engine | awk '$1 == "160000" && $2 == "commit" {print $3}')"
           DEST="$RUNNER_TEMP/burrow-engine"
-          if [ -z "$SHA" ]; then
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::no gitlink for macos/vendor/burrow-engine in HEAD (.gitmodules / the submodule entry may be missing). Failing the release — there is no engine to bundle without it."
             exit 1
           fi
-          if [ -z "$ENGINE_PAT" ]; then
-            echo "::error::ENGINE_PAT is not set. caezium/burrow-engine is PRIVATE and has no unauthenticated fallback. Add/refresh the secret (Settings > Secrets and variables > Actions) and confirm it grants read on caezium/burrow-engine specifically — a PAT scoped only to the old burrow-digger/burrow-cli repos will not work here."
-            exit 1
-          fi
-          if ! git -c "url.https://x-access-token:${ENGINE_PAT}@github.com/.insteadOf=https://github.com/" \
-                 clone --quiet https://github.com/caezium/burrow-engine.git "$DEST"; then
-            echo "::error::clone of caezium/burrow-engine failed. Most likely ENGINE_PAT is missing, expired, or not scoped to grant read on this repo. Failing the release rather than shipping without the bundled engine."
+          if ! git clone --quiet https://github.com/caezium/burrow-engine.git "$DEST"; then
+            echo "::error::clone of public caezium/burrow-engine failed. Failing the release rather than shipping without the bundled engine."
             exit 1
           fi
           if ! git -C "$DEST" -c advice.detachedHead=false checkout --quiet "$SHA"; then
@@ -206,14 +201,8 @@ jobs:
         run: |
           # scripts/release.sh forwards BURROW_ENGINE_SRC (set in GITHUB_ENV by the fetch step
           # above) into xcodebuild, which macos/project.yml's bundle phase reads to cargo-build
-          # the already-fetched checkout in place. burrow-engine's own Cargo.toml has exactly one
-          # dependency (crates.io `image`) and no git dependencies, so — unlike the old
-          # burrow-cli-depends-on-burrow-engine-over-git arrangement this replaces — no further
-          # GitHub auth is needed here; ENGINE_PAT's job ended at the fetch step above. That is
-          # also why the GIT_CONFIG_COUNT URL rewrite main added here is gone rather than kept:
-          # it existed only so cargo could reach the private burrow-engine crate during the
-          # conductor build, and there is no conductor build left to do it for. Nothing in this
-          # step authenticates to GitHub now, so it cannot shadow TAP_PAT later either.
+          # the already-fetched checkout in place. The public engine snapshot has no private
+          # Cargo git dependencies, so the build needs no source-read token or Git URL rewrite.
           #
           # Sentry and Sparkle are vendored as checksum-pinned local frameworks
           # (scripts/fetch-{sentry,sparkle}.sh), so SwiftPM has no binary artifacts left to

@@ -42,6 +42,7 @@
          `windows-ci` build (which doesn't stage it) stays green; the app then falls back to the
          direct engine. burrow-engine.cmd (the entrypoint burrow resolves) rides the Assets\Mole\** glob. -->
     <Content Include="Assets\burrow.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\burrow.exe')" />
+    <Content Include="Assets\licenses\burrow-cli\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('Assets\licenses\burrow-cli')" />
     <Content Include="Assets\mo.cmd" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\mo.cmd')" />
     <Content Include="Assets\mole.ps1" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\mole.ps1')" />
     <Content Include="Assets\Mole\**\*.*" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Mole')" />
